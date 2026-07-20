@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "backend",
+    "desktop",
+    "mobile/shared-ffi",
+    "shared/crypto",
+    "shared/protocol",
+    "shared/storage",
+]
+
+[patch.crates-io]
+# Add local crate path overrides here if needed
