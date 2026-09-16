@@ -1,0 +1,27 @@
+[package]
+name = "qurb-storage"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+# Local storage: content-defined chunking, an encrypted content-addressable
+# store, and the SQLite index that tracks which chunks belong to which files.
+#
+# See ../../docs/CODEBASE.md for how this fits into the system.
+
+[dependencies]
+anyhow.workspace = true
+blake3.workspace = true
+fastcdc.workspace = true
+memmap2.workspace = true
+
+qurb-sync = { path = "../sync" }
+rusqlite = { version = "0.32", features = ["bundled"] }
+zstd = "0.13"
+chacha20poly1305 = "0.10"
+rand = "0.8"
+thiserror = "2"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"

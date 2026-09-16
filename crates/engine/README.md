@@ -1,0 +1,139 @@
+# qurb-engine
+
+Joins the filesystem watcher to the store. The watcher says something changed;
+the store can save and remove files. This crate holds the decisions in between.
+
+```
+startup ──► reconcile   walk the disk, compare with the index,
+                        store what is new, tombstone what is gone
+
+running ──► apply       act on settled changes from the watcher
+
+overflow ─► reconcile   the event stream stopped describing reality,
+                        so fall back to comparing everything
+```
+
+## Two rules that shape everything here
+
+**A file is not re-read unless it looks different.** The watcher delivers
+changes at least once ([decision 0008](../../docs/decisions/0008-watcher-delivery-guarantee.md))
+and reconciliation revisits every file, so the same path arrives repeatedly with
+nothing changed. Comparing size and modification time against the index first
+turns that from a full read into a stat.
+
+Measured on a real directory — 2437 files, 979 MiB:
+
+| run | result | elapsed |
+|---|---|---|
+| first | 2437 stored | 12.96s |
+| second | 2437 unchanged | 0.03s |
+
+**One bad file must not stop the others.** A file with no read permission, or
+one deleted between being reported and being read, is recorded in
+`SyncStats::failures` and the run continues. An engine that aborts on the first
+failure leaves everything else unsynced for a reason the user cannot see.
+
+## The mtime heuristic, stated plainly
+
+Matching size and modification time is taken as proof that content is unchanged.
+That is not strictly true: a file edited in place, keeping its exact length,
+within the same timestamp tick would slip through.
+
+The window is small, and the alternative is reading every file on every
+reconciliation — the difference above between 0.03 seconds and 13. rsync and git
+make the same trade. The backstop is `Store::verify`, which re-reads everything
+and is meant to run occasionally rather than per change.
+
+## Removal is resolved against the index
+
+The watcher reports that a path is gone. It cannot say whether it was a file or
+a directory, because there is nothing left to inspect.
+
+So the question is turned around: instead of asking the filesystem what was
+removed, the engine asks the index what it knew about at or under that path.
+`Db::live_paths_under` answers it, and every match is tombstoned.
+
+## Comparing with another device
+
+[`qurb-sync`](../sync/) decides what should happen when two devices disagree.
+The `peer` module carries it out.
+
+```
+tree()          what this device would tell a peer it has, tombstones included
+plan_against()  qurb_sync::reconcile, given the peer's tree
+apply_plan()    do the local half, fetching content it does not already hold
+```
+
+Content is requested **by hash, not by path**
+([decision 0010](../../docs/decisions/0010-content-by-hash.md)). The content a
+plan calls for often lives under a different name on the device that has it —
+that is exactly what a conflict rename produces — so asking by path would fail
+where asking by content succeeds. It also makes renames and copies free: the
+engine checks whether any live path already holds those bytes before asking
+anyone for them.
+
+`ContentSource` is the seam where the network will go. Everything above it is
+finished; below it there is one implementation that reads another local store,
+which is what the two-device tests and the `sync_pair` example use.
+
+### Vectors and the fast path must not fight
+
+`apply_plan` writes a file to disk. A reconciliation then walks that same file.
+If it stamped it as a *local* change, the adopted version would become
+concurrent with the peer's own copy and the next exchange would raise a conflict
+over a file that had just synced successfully — forever.
+
+What prevents it is `apply_plan` recording the modification time the file
+actually ended up with, so the size-and-mtime fast path recognises its own work.
+Three tests pin this: for adopted files, adopted tombstones, and conflict files.
+
+## Repairing damage
+
+`Engine::repair` discards chunks that verification found missing or corrupt and
+refetches them from a peer. Possible only because content is addressed by hash:
+a damaged chunk is not a lost chunk, and the hash says exactly what is wanted.
+
+The refetched bytes are verified before being written. The peer is not trusted —
+writing unverified bytes over a file already known to be damaged would turn a
+detectable problem into an undetectable one.
+
+## Applying a plan: additions before removals
+
+A rename arrives as a set of additions and a set of deletions. Applying them in
+path order made the cost depend on the alphabet: renaming `project` to `archive`
+found the content still on disk and moved nothing, while renaming it to
+`renamed` deleted the old paths first and re-transferred the entire tree.
+
+Additions now run first, and content is looked up by hash across all paths
+including tombstoned ones — a deleted file's chunks survive the retention
+window, and "do we have these bytes?" is a question about chunks rather than
+names.
+
+## Trying it
+
+```bash
+cargo run --release --example sync_once -- ~/Documents /tmp/qurb-store
+```
+
+Two directories against each other, as two devices:
+
+```bash
+cargo run --release --example sync_pair -- /tmp/dev-a /tmp/dev-b
+```
+
+Run it twice on the same pair. The second run should store nothing and finish
+almost instantly.
+
+## Not yet built
+
+- **Vector clocks and peer sync.** This engine syncs a directory into a local
+  store. Nothing talks to another device yet.
+- **Parallelism.** Files are processed one at a time. The measured 979 MiB in
+  13 seconds is roughly 75 MiB/s through the full pipeline — chunking, zstd,
+  encryption, and thousands of small writes — against 665 MiB/s for chunking
+  alone. Initial import of a large library is the case that will need this.
+- **Backpressure.** A huge batch of changes is applied in one pass with no
+  bound on how long that takes.
+- **Moves.** A renamed file is stored again under its new path and tombstoned
+  under the old one, rather than recognised as the same content moving. The
+  chunks are deduplicated, so the cost is a re-read rather than re-storage.
