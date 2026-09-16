@@ -1,0 +1,16 @@
+# Rust
+/target/
+**/target/
+*.pdb
+
+# Spike scratch output
+/experiments/**/scratch/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
