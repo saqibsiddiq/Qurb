@@ -127,13 +127,34 @@ impl Directory {
         outbox: Outbox,
     ) -> Vec<Presence> {
         let members = self.groups.entry(group).or_default();
-        members.insert(member, Member { endpoints, outbox });
+        members.insert(member, Member { endpoints: endpoints.clone(), outbox });
 
-        members
+        let others: Vec<Presence> = members
             .iter()
             .filter(|(id, _)| **id != member)
             .map(|(id, m)| Presence { member: *id, endpoints: m.endpoints.clone() })
-            .collect()
+            .collect();
+
+        // Tell everyone already here that this one has arrived.
+        //
+        // Without it the server knows the moment a device appears and tells
+        // only that device. Everyone else has to discover it by asking, and a
+        // peer that asks on a backoff -- which grows precisely because the
+        // absent device keeps being absent -- will not be asking during the few
+        // seconds a phone is awake. Measured before this existed: a laptop
+        // retrying every 120s against a phone announcing for 25s never met it.
+        let arrival = FromServer::Appeared {
+            peer: Presence { member, endpoints },
+        };
+        for (id, m) in members.iter() {
+            if *id != member {
+                // A send failure means that member's connection has gone; the
+                // reader task will clean it up. Nothing to do here.
+                let _ = m.outbox.send(arrival.clone());
+            }
+        }
+
+        others
     }
 
     fn leave(&mut self, group: GroupId, member: MemberId) {

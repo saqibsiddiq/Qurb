@@ -66,6 +66,18 @@ pub enum FromServer {
     /// Someone in your group wants to reach you.
     ConnectRequest { from: MemberId, endpoints: Endpoints },
 
+    /// Someone in your group has just announced themselves.
+    ///
+    /// Sent to the members who were already connected, which is the half that
+    /// used to be missing: the server knew the moment a device appeared and
+    /// told only the device itself. Everyone else had to find out by asking,
+    /// and a peer that asks on a backoff will not be asking at the moment a
+    /// phone is briefly awake.
+    ///
+    /// Carries the same `Presence` a `Peers` entry does, so a recipient can act
+    /// on it without a second round trip.
+    Appeared { peer: Presence },
+
     /// Both sides are ready. Punch now.
     ///
     /// Sent to both at the same moment, which is the entire reason this is a

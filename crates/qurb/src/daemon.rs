@@ -180,6 +180,7 @@ impl Daemon {
         .context("watching the directory")?;
 
         let mut peers = Peers::new(trusted);
+        let mut arrivals = connector.arrivals();
         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
 
         let mut timer = tokio::time::interval(SWEEP_INTERVAL);
@@ -240,6 +241,28 @@ impl Daemon {
                 peer = peers.next_change() => {
                     tracing::debug!(peer = %peer.short(), "peer reports a change");
                     self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
+                }
+
+                // A peer has just become reachable.
+                //
+                // This is what makes syncing with a phone work. A phone is
+                // announced only while it is awake -- twenty-odd seconds in a
+                // background window -- and a daemon that discovers it by
+                // retrying on a backoff is not asking during those seconds.
+                // Worse, the backoff grows *because* the phone keeps being
+                // absent, so the two drift further apart the longer it goes on.
+                // Measured before this existed: a laptop retrying every 120s
+                // never once caught a phone announcing for 25s.
+                //
+                // The backoff is cleared as well as the sync triggered: the
+                // device is demonstrably there, so the reason for waiting has
+                // gone.
+                Ok(member) = arrivals.recv() => {
+                    if let Some(peer) = peers.member(&self.master, member) {
+                        tracing::info!(peer = %peer.short(), "peer appeared; syncing now");
+                        peers.ready_now(peer);
+                        self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
+                    }
                 }
             }
         }
@@ -359,6 +382,30 @@ impl Peers {
             changes: mpsc::unbounded_channel(),
             watching: std::collections::HashSet::new(),
         }
+    }
+
+    /// Which trusted peer a rendezvous identifier belongs to.
+    ///
+    /// The identifier is blinded — derived from the master key and the peer's
+    /// fingerprint — so the rendezvous service cannot link it to a device, and
+    /// neither can anyone without the key. Recovering the fingerprint means
+    /// re-deriving the identifier for each peer we trust and looking for a
+    /// match. That is a handful of hashes against a list of a person's own
+    /// devices, not a search.
+    fn member(&self, master: &MasterKey, id: qurb_signal::MemberId) -> Option<Fingerprint> {
+        self.known
+            .iter()
+            .copied()
+            .find(|f| *qurb_signal::MemberId::derive(master, f.as_bytes()).as_bytes() == *id.as_bytes())
+    }
+
+    /// Forget any waiting period for this peer.
+    ///
+    /// Called when a peer is known to be reachable, which makes the reason for
+    /// waiting obsolete. Without it a device that has just announced itself
+    /// would still be ignored for up to two minutes.
+    fn ready_now(&mut self, peer: Fingerprint) {
+        self.backoff.remove(&peer);
     }
 
     /// Wait until some peer reports a change.

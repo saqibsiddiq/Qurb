@@ -40,11 +40,22 @@ async fn join(url: &str, master: &MasterKey, fingerprint: [u8; 32], port: u16) -
 
 /// Wait for a particular message, so a test fails with "never arrived" rather
 /// than hanging.
+/// The next message, skipping arrival notices.
+///
+/// `Appeared` is unsolicited and can land between any request and its reply —
+/// it is sent to everyone already in a group whenever someone else joins. A
+/// test waiting for a punch instruction or a refusal is not interested, and
+/// treating the first message as the answer made several of them fail the day
+/// arrivals started being broadcast. Tests that *are* about arrivals read the
+/// stream directly.
 async fn expect(client: &mut SignalClient, what: &str) -> FromServer {
-    match tokio::time::timeout(Duration::from_secs(5), client.next()).await {
-        Ok(Some(message)) => message,
-        Ok(None) => panic!("the connection closed while waiting for {what}"),
-        Err(_) => panic!("{what} never arrived"),
+    loop {
+        match tokio::time::timeout(Duration::from_secs(5), client.next()).await {
+            Ok(Some(FromServer::Appeared { .. })) => continue,
+            Ok(Some(message)) => return message,
+            Ok(None) => panic!("the connection closed while waiting for {what}"),
+            Err(_) => panic!("{what} never arrived"),
+        }
     }
 }
 
@@ -377,4 +388,62 @@ async fn an_oversized_message_does_not_reach_the_parser() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     let mut device = join(&url, &master, [1; 32], 4001).await;
     assert!(device.peers().await.is_ok(), "the server stopped serving after an oversized message");
+}
+
+/// A device already connected is told when another one announces.
+///
+/// The half that used to be missing. The server knew the moment a device
+/// appeared and told only that device; everyone else had to discover it by
+/// asking. A peer that asks on a backoff — which grows precisely because the
+/// absent device keeps being absent — will not be asking during the twenty-odd
+/// seconds a phone is awake in a background window. Measured before this
+/// existed: a laptop retrying every 120s never once caught a phone announcing
+/// for 25s.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_existing_member_is_told_when_a_peer_appears() {
+    let (server, url) = server().await;
+    let _ = &server;
+
+    let group = GroupId::from_bytes([9; 32]);
+    let first = MemberId::from_bytes([1; 32]);
+    let second = MemberId::from_bytes([2; 32]);
+
+    let mut a = SignalClient::connect(&url, group, first, endpoints(7001)).await.unwrap();
+    // Its own view of the group, which is empty.
+    assert!(matches!(a.next().await, Some(FromServer::Peers { .. })));
+
+    let _b = SignalClient::connect(&url, group, second, endpoints(7002)).await.unwrap();
+
+    // The first device is told, without having asked.
+    let told = tokio::time::timeout(Duration::from_secs(5), a.next())
+        .await
+        .expect("no arrival within five seconds");
+
+    match told {
+        Some(FromServer::Appeared { peer }) => {
+            assert_eq!(peer.member, second);
+            // The addresses come with it, so acting on the news needs no
+            // second round trip.
+            assert!(!peer.endpoints.candidates().is_empty(), "no addresses came with the arrival");
+        }
+        other => panic!("expected Appeared, got {other:?}"),
+    }
+}
+
+/// The device announcing is not told about itself.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_is_not_told_about_its_own_arrival() {
+    let (server, url) = server().await;
+    let _ = &server;
+
+    let group = GroupId::from_bytes([11; 32]);
+    let only = MemberId::from_bytes([3; 32]);
+
+    let mut a = SignalClient::connect(&url, group, only, endpoints(7003)).await.unwrap();
+    assert!(matches!(a.next().await, Some(FromServer::Peers { .. })));
+
+    // Nothing else should arrive. A device that woke itself up on its own
+    // announcement would sync in a loop.
+    let extra = tokio::time::timeout(Duration::from_millis(500), a.next()).await;
+    assert!(extra.is_err(), "it was told about itself: {extra:?}");
 }

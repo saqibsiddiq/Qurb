@@ -36,7 +36,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 /// How long to wait for a peer to answer a request to connect.
 const RENDEZVOUS_TIMEOUT: Duration = Duration::from_secs(20);
@@ -62,6 +62,14 @@ pub struct Connector {
     relay: Option<RelayPath>,
     /// Commands for the one task that owns the signalling connection.
     signal: mpsc::UnboundedSender<Command>,
+    /// Peers the rendezvous service says have just appeared.
+    ///
+    /// The point of it: a device that is only briefly awake -- a phone in a
+    /// background sync window -- is announced for seconds at a time, and a peer
+    /// that discovers it by polling on a backoff will almost never be asking
+    /// during one. Being told means acting inside the window rather than
+    /// hoping to coincide with it.
+    arrivals: broadcast::Sender<MemberId>,
 }
 
 /// What the signalling task is asked to do.
@@ -146,9 +154,16 @@ impl Connector {
         // it breaks is the case with no STUN: two devices on a network with no
         // route to the internet, which is exactly when a local address is the
         // only one there is.
+        // Capacity is small because a listener only needs to know that
+        // *something* arrived; a lagging receiver missing an older arrival
+        // loses nothing it cannot rediscover on its next sweep.
+        let (arrivals, _) = broadcast::channel(16);
+
         let endpoints = Endpoints { public, local: vec![nat::dialable(local)] };
         let signal_url = signal_url.into();
         let signal_url: String = signal_url;
+
+        let arrivals_tx = arrivals.clone();
 
         // One connection, held for the life of the device, owned by one task.
         //
@@ -173,9 +188,24 @@ impl Connector {
             endpoints.clone(),
             endpoint.clone(),
             identity.clone(),
+            arrivals_tx,
         ));
 
-        Ok(Self { endpoint, identity, master, endpoints, relay, signal })
+        Ok(Self { endpoint, identity, master, endpoints, relay, signal, arrivals })
+    }
+
+    /// Listen for peers announcing themselves to the rendezvous service.
+    ///
+    /// Each item is the rendezvous identifier of a device that has just become
+    /// reachable. Translate it with [`MemberId::derive`] against the
+    /// fingerprints you care about — the identifier is blinded, so the service
+    /// cannot link it to a device and neither can a listener without the master
+    /// key.
+    ///
+    /// A late subscriber misses earlier arrivals, which is deliberate: this is
+    /// a nudge to try now, not a log to be replayed.
+    pub fn arrivals(&self) -> broadcast::Receiver<MemberId> {
+        self.arrivals.subscribe()
     }
 
     /// Reach a peer through the relay without trying a direct path first.
@@ -340,6 +370,7 @@ async fn run_signalling(
     endpoints: Endpoints,
     endpoint: quinn::Endpoint,
     identity: Identity,
+    arrivals_tx: broadcast::Sender<MemberId>,
 ) {
     let mut waiting: HashMap<MemberId, oneshot::Sender<Result<Endpoints>>> = HashMap::new();
 
@@ -393,6 +424,12 @@ async fn run_signalling(
                 }
 
                 Some(FromServer::Peers { .. }) => {}
+
+                Some(FromServer::Appeared { peer }) => {
+                    // No receivers is the ordinary case -- nothing is obliged
+                    // to care -- so a send error is not a problem.
+                    let _ = arrivals_tx.send(peer.member);
+                }
 
                 None => {
                     for (_, reply) in waiting.drain() {

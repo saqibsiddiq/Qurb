@@ -62,6 +62,29 @@ enumerate that group's addresses. `SignalClient::connect` refuses a plain
 `ws://` URL to anywhere but the local machine; `connect_insecure` exists for
 tests and says what it is.
 
+## Arrivals are pushed, not polled
+
+When a device announces itself, every other member of its group is told, with
+the addresses attached so acting on the news needs no second round trip.
+
+This was the half that was missing, and it is what makes syncing with a phone
+work at all. The server always knew the moment a device appeared — it told only
+that device. Everyone else had to discover it by asking, and a peer that asks on
+a backoff will not be asking during the twenty-odd seconds a phone is awake in a
+background window. Worse, the backoff grows *because* the phone keeps being
+absent, so the two drift further apart the longer it goes on.
+
+Measured before this existed: a laptop retrying every 120 seconds against a
+phone announcing for 25 never once caught it, across repeated attempts. With the
+push, the daemon logs `peer appeared; syncing now` within a second and the
+transfer completes inside the phone's window.
+
+The notice carries a blinded `MemberId`, not a fingerprint, so the service still
+cannot tell which device arrived — see
+[decision 0016](../../docs/decisions/0016-what-signalling-learns.md). A
+recipient recovers the fingerprint by re-deriving the identifier for each peer
+it already trusts, which is a handful of hashes against a person's own devices.
+
 ## Not yet built
 
 - **Serving TLS itself.** Termination is currently a reverse proxy's job.
