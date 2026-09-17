@@ -11,8 +11,9 @@ should be reflected here in the same piece of work that changes it.
 **Last verified against the code:** 2026-09-17, during Phase 5 — the whole file
 checked against the source, not just the sections that changed. Phases 0–2 are
 complete. Phase 3 is built and its kill criterion is unmeasured, for want of a
-second machine. Phase 4 has a daemon and nothing graphical. Phase 5 builds for
-Android and has never run on a phone.
+second machine. Phase 4 has a daemon and nothing graphical. Phase 5 runs on an
+Android emulator, where it pairs and syncs, with no app around it, no ARM build
+ever executed, and no iOS at all.
 
 ---
 
