@@ -21,8 +21,8 @@ record](../roadmap.md).
 | a sync that fits a background window | ✅ `sync_within(seconds)` |
 | the key kept outside the app's files | ✅ Android Keystore, verified on a device |
 | **an Android app** | ✅ [`android/`](../../android/) — installs, sets up, syncs |
-| background scheduling in the app | ⬜ `syncWithin` exists; nothing schedules it |
-| a FileProvider | ⬜ the files are invisible to the rest of the phone |
+| syncing unattended | ✅ WorkManager, every 15 minutes |
+| the files visible to other apps | ✅ a DocumentsProvider, verified in Files |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
 433 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
@@ -363,6 +363,61 @@ ciphertext and its IV sit in SharedPreferences and the AES key that opens them
 lives in the Keystore, where the app cannot read it. Force-stopping and
 relaunching reopens the store, so the round trip works and not merely the write.
 
+### Syncing without being asked
+
+`SyncWorker` is the half of [decision
+0020](../decisions/0020-sync-takes-a-deadline.md) that Rust cannot do.
+`sync_within(seconds)` makes a sync that ends when its window does; the worker
+decides when to ask for a window and what to tell the system afterwards.
+
+WorkManager rather than an alarm or a foreground service: an alarm survives
+neither Doze nor a reboot, and a foreground service means a permanent
+notification plus, since Android 14, a declared type that "syncing files" does
+not cleanly fit.
+
+The outcomes are mapped deliberately. Running out of time is a *retry*, so
+another window comes sooner than the next period. **Nothing answering is also a
+retry, not a failure** — on a phone the other device being asleep is the
+ordinary case, and the exponential backoff is what stops that from becoming a
+battery drain. A locked keystore is a failure, because retrying in fifteen
+minutes reaches the same conclusion.
+
+Fifteen minutes is not a choice: it is the shortest period WorkManager accepts,
+and asking for less silently becomes fifteen anyway. In practice it is a floor
+rather than a promise, since Doze batches background work and an idle phone may
+go hours between runs. The app says so rather than implying otherwise.
+
+The first version was silent, which for background work is a defect rather than
+an omission: nobody is watching when it runs, so with no trace there is no way
+to tell a sync that works from one that has quietly stopped — and quietly
+stopping is the failure mode a sync app actually dies of. It now logs and
+records its last result.
+
+### The files, from the rest of the phone
+
+`QurbDocumentsProvider` puts qurb in the system file picker and the Files app.
+Without it the synced directory is private to the app, which makes a file sync
+product no other app can open.
+
+Verified on a device, from DocumentsUI's own log:
+
+```
+Matched roots: [... Root{authority=com.qurb.documents, rootId=qurb,
+title=qurb} @ content://com.qurb.documents/root/qurb]
+```
+
+Browsing it shows folders and files with sizes and dates, and the breadcrumb
+works into nested folders. Querying the provider from a shell is refused with a
+`SecurityException`, which is correct — only the system's DocumentsUI may open
+it.
+
+Read-only. `openDocument` accepts mode `r` and nothing else, because supporting
+writes means deciding what a partial write means to a sync engine mid-transfer.
+`deleteDocument` and `renameDocument` are absent for a sharper reason: a
+deletion here becomes a tombstone that propagates to every device, and letting a
+file manager do that by accident is not a risk worth taking before there is any
+undo.
+
 ## What is not verified
 
 The honest state of this phase.
@@ -383,14 +438,15 @@ whether it clears that ceiling in practice is unknown.
 now compiled and run by a real app; the Swift ones are generated and checked as
 text by a test, and nothing has put them through a Swift toolchain.
 
-**Background scheduling is half-built.** `sync_within(seconds)` is the Rust side
-and it works, and the app calls it from a button. Nothing *schedules* it:
-`WorkManager` on Android, `BGTaskScheduler` on iOS, and the policy about when to
-ask for a window at all, do not exist.
+**Background sync has never been observed happening on its own.** The worker is
+scheduled, and it was verified by running one through WorkManager rather than by
+calling the engine directly — so the path is the same one the schedule uses. What
+has not been watched is a phone left alone for a day, syncing on Android's
+timetable. That takes a day and a phone nobody is using.
 
-**The app has never run unattended.** Syncing happens when someone presses Sync
-with the app in front of them. What the platform does to it in the background —
-and what that costs in battery — is unmeasured.
+**Battery is unmeasured.** The whole design of `sync_within` is about not
+spending more of a window than granted, and nothing has measured what a sync
+actually costs in power.
 
 ## Kill criterion
 

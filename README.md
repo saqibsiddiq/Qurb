@@ -205,11 +205,14 @@ contract is tested against a fake, and no platform implements it yet.
 
 **There is an Android app** — [`android/`](android/). It installs, sets up an
 identity, keeps the key in the Android Keystore where the app itself cannot read
-it, lists files, pairs with a computer and syncs. The APK is 21 MB.
+it, pairs with a computer, and syncs — on a button, and on its own every fifteen
+minutes through WorkManager. The synced files appear in the system file picker
+and the Files app. The APK is 22 MB.
 
-Not built: a desktop interface, installers, signed updates, background
-scheduling on the phone, a FileProvider, and iOS — which needs a Mac. Nothing
-syncs unattended yet: on the phone it happens when someone presses Sync.
+Not built: a desktop interface, installers, signed updates, and iOS — which
+needs a Mac. Nobody has yet watched a phone sync for a day, so what Android
+grants the background worker in practice, and what it costs in battery, is
+unmeasured.
 
 **Phase 1 is complete.** Its kill criterion — syncing 100,000 files cleanly —
 was run and passed: 4.40 GiB between two devices with every correctness check

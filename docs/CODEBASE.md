@@ -324,7 +324,10 @@ qurb/
 │
 ├── android/               The Android app. Kotlin over the FFI, no sync logic.
 │   └── app/src/main/java/com/qurb/
-│                          AndroidKeyStore.kt — the platform half of decision 0021
+│                          AndroidKeyStore.kt  the platform half of decision 0021
+│                          SyncWorker.kt       background sync, on WorkManager
+│                          QurbDocumentsProvider.kt
+│                                              the files, in the system picker
 │
 ├── scripts/
 │   ├── android-app.sh     build the app: libraries, bindings, then Gradle
@@ -617,17 +620,20 @@ syncs. Building it found a bug nothing else could: UniFFI keeps only the *last*
 so eight methods were missing from the generated Kotlin and Swift while every
 Rust test passed.
 
-**Nothing runs unattended, and there is no iOS.** Syncing happens when someone
-presses a button with the app in front of them; what the platform does to a
-backgrounded process, and what it costs in battery, is unmeasured. iOS needs
-Xcode, which needs a Mac. See
+The app syncs on its own through WorkManager, every fifteen minutes when
+Android allows it, and a `DocumentsProvider` puts the synced files in the
+system file picker and the Files app.
+
+**Unwatched behaviour and iOS are what remain.** The background worker is
+scheduled and was verified by running one through WorkManager, but a phone left
+alone for a day — syncing on Android's timetable, at some cost in battery — has
+never been observed. iOS needs Xcode, which needs a Mac. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ### Designed but not built
 
-An iOS app, background scheduling, a FileProvider, per-file keys, key rotation,
-relay selection and quotas, accounts and billing, the desktop UI, selective
-sync, search, updates.
+An iOS app, per-file keys, key rotation, relay selection and quotas, accounts
+and billing, the desktop UI, selective sync, updates.
 
 ### The gaps that matter most
 
@@ -639,9 +645,9 @@ Three things are known-missing rather than merely unbuilt:
    promise. Choosing which compromise to make is better done on paper now than
    under pressure from an upset user later. Still undecided.
 
-13. **Nothing syncs by itself on a phone.** There is an Android app and it
-   syncs when told to. No background scheduling exists, so a phone left alone
-   does not stay in step — which is most of what a sync product is for.
+13. **Nobody has watched a phone sync for a day.** The background worker is
+   scheduled and runs when asked; what Android actually grants it over a day,
+   and what that costs in battery, is unmeasured.
 
 14. **Two kill criteria remain unmeasured**, both for want of hardware rather
    than for want of code: Phase 3's direct-connection rate needs a second

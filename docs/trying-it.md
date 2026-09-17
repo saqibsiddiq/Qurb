@@ -164,6 +164,9 @@ script says so if it cannot find them.
 On first launch it offers to create an identity or restore from 24 words. The
 key goes into the Android Keystore, where the app itself cannot read it.
 
+The synced files also appear in the Files app, under **qurb**. Menu →
+**Background sync** shows what the scheduler is doing and when it last ran.
+
 To sync with a computer, the phone needs a rendezvous service to find it
 through. There is no hosted one, so run one:
 
@@ -181,12 +184,12 @@ listening has punched nothing.
 
 ## 7. What you cannot test yet
 
-- **Unattended sync.** On the phone, syncing happens when someone presses the
-  button. Nothing schedules it, so a phone left alone does not stay in step.
+- **A day of unattended sync.** The background worker is scheduled and runs
+  when asked, but nobody has left a phone alone for a day to see what Android
+  actually grants it, or what that costs in battery. If you try it, menu →
+  **Background sync** records the last run.
 - **iOS, at all.** Building it needs Xcode, which needs a Mac. The Swift
   bindings generate and have never been compiled.
-- **Seeing the files from elsewhere on the phone.** Without a FileProvider the
-  synced directory is private to the app, so its own screen is the only view.
 - **Battery.** `syncWithin(seconds)` is built for short background windows and
   nothing has measured what a sync actually costs.
 
