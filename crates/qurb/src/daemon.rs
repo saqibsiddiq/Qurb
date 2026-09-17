@@ -115,6 +115,13 @@ impl Daemon {
             failures = initial.failures.len(),
             "reconciled"
         );
+        if initial.collided > 0 {
+            tracing::warn!(
+                count = initial.collided,
+                "files skipped: their names differ only in how the text is encoded, \
+                 and this device's index cannot tell them apart"
+            );
+        }
         report_collisions(&engine);
 
         let connector = Arc::new(

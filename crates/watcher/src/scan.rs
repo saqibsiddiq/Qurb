@@ -58,15 +58,77 @@ pub fn scan(root: &Path, ignore: &IgnoreRules) -> Result<Vec<ScanEntry>> {
         });
     }
 
-    out.sort_by(|a, b| a.logical.cmp(&b.logical));
+    // Sorted by logical path, then by the name on disk. The second key only
+    // matters when two files normalise to the same logical path, and there it
+    // matters a great deal: without it the tie falls to directory-read order,
+    // which differs between machines, and two devices resolving the same
+    // collision would keep different files.
+    out.sort_by(|a, b| a.logical.cmp(&b.logical).then_with(|| prefer(a).cmp(&prefer(b))));
     Ok(out)
 }
 
-/// Path relative to the root, with forward slashes.
+/// Sort key that puts the already-normalised spelling first.
 ///
-/// The separator is normalised because the logical path is what gets stored in
-/// the index and sent to peers. A file synced from Windows as `notes\a.txt`
-/// must be the same file on Linux, not a second one.
+/// Among filenames that normalise to the same logical path, the one that is
+/// already in that form is the one to keep: it is what every other device will
+/// produce for this path, and what a filesystem that does not decompose will
+/// store unchanged. Remaining ties fall back to byte order, which is arbitrary
+/// but identical everywhere.
+fn prefer(entry: &ScanEntry) -> (bool, &Path) {
+    let name = entry.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    (normalize(name) != name, entry.path.as_path())
+}
+
+/// Entries whose distinct filenames normalise to one logical path.
+///
+/// Only possible on a filesystem that keeps the spellings apart — `café`
+/// written two ways is two files on Linux and one on macOS. Since the index is
+/// keyed by the normalised path it can hold only one of them, so indexing both
+/// would silently drop whichever was written second, and syncing them would
+/// make the two devices disagree about which content that path has.
+///
+/// Reported rather than resolved: renaming a user's file is not the watcher's
+/// decision. The caller drops the extra entries and tells the user.
+///
+/// Takes a slice ordered as [`scan`] returns it, and preserves that order
+/// within each group — so the entry to keep is the first, and every device
+/// keeping the first keeps the same one.
+pub fn normalization_collisions(entries: &[ScanEntry]) -> Vec<Vec<ScanEntry>> {
+    let mut groups: Vec<Vec<ScanEntry>> = Vec::new();
+    for window in entries.chunk_by(|a, b| a.logical == b.logical) {
+        // Same logical path from the same file is not a collision; it cannot
+        // happen from one walk, but a caller may concatenate scans.
+        let distinct: Vec<_> = {
+            let mut seen: Vec<&PathBuf> = Vec::new();
+            window
+                .iter()
+                .filter(|e| {
+                    if seen.contains(&&e.path) {
+                        false
+                    } else {
+                        seen.push(&e.path);
+                        true
+                    }
+                })
+                .cloned()
+                .collect()
+        };
+        if distinct.len() > 1 {
+            groups.push(distinct);
+        }
+    }
+    groups
+}
+
+/// Path relative to the root, with forward slashes and NFC text.
+///
+/// Both normalisations exist for one reason: the logical path is what gets
+/// stored in the index and sent to peers, so two devices looking at the same
+/// file must produce the same string. A file synced from Windows as
+/// `notes\a.txt` must be the same file on Linux, not a second one — and a file
+/// named `café` must be the same file on macOS, which is the harder case.
+///
+/// See [`normalize`] for why the Unicode half matters.
 pub fn logical_path(root: &Path, path: &Path) -> Option<String> {
     let rel = path.strip_prefix(root).ok()?;
     let mut parts = Vec::new();
@@ -79,7 +141,72 @@ pub fn logical_path(root: &Path, path: &Path) -> Option<String> {
     if parts.is_empty() {
         return None;
     }
-    Some(parts.join("/"))
+    Some(normalize(&parts.join("/")))
+}
+
+/// Put text in Normalization Form C, the composed form.
+///
+/// `é` can be written two ways: one code point (U+00E9), or `e` followed by a
+/// combining acute accent (U+0301). They look identical and mean the same
+/// thing, but they are different strings and therefore different filenames.
+///
+/// Filesystems disagree about which to keep. Linux and Windows store whatever
+/// bytes they are given. macOS and iOS decompose on the way in, so a file
+/// created as NFC is read back as NFD.
+///
+/// Without this, syncing `café` from Linux to a Mac would go: the Mac writes
+/// the NFC name, the filesystem stores NFD, the Mac's next scan sees a path it
+/// has no record of, reports the NFC one deleted and the NFD one created, and
+/// sends both back. Linux, which keeps the two apart, ends up with two files.
+/// Then it happens again. The bug duplicates files without limit and looks,
+/// from the outside, like sync losing its mind.
+///
+/// NFC is the canonical form here because it is what the web and most sources
+/// of filenames already use, so on Linux and Windows this costs a scan and
+/// changes nothing.
+pub fn normalize(path: &str) -> String {
+    // Worth checking first: `is_nfc_quick` answers `Yes` from an ASCII prefix
+    // without allocating, which is the overwhelmingly common case.
+    match unicode_normalization::is_nfc_quick(path.chars()) {
+        unicode_normalization::IsNormalized::Yes => path.to_string(),
+        _ => unicode_normalization::UnicodeNormalization::nfc(path.chars()).collect(),
+    }
+}
+
+/// Whether `dir` is on a filesystem that renames `café` behind your back.
+///
+/// Probed rather than assumed, for the same reason as case sensitivity: this is
+/// a property of the filesystem, not the operating system. HFS+ and APFS
+/// decompose; ext4, NTFS and most network mounts do not; and a Mac can have any
+/// of them mounted at once.
+pub fn decomposes_unicode(dir: &Path) -> bool {
+    // U+00E9, composed. If the filesystem decomposes, it will be stored as
+    // `e` + U+0301 and the composed name will no longer be found.
+    let composed = dir.join(".qurb-nfc-probe-caf\u{e9}");
+
+    let _ = std::fs::remove_file(&composed);
+    if std::fs::write(&composed, b"probe").is_err() {
+        return false;
+    }
+
+    // Read the directory back rather than asking for the file by name: macOS
+    // accepts either spelling when opening, and answers the question we did not
+    // ask. What it stored is what the listing says.
+    let decomposed = std::fs::read_dir(dir)
+        .map(|entries| {
+            entries.flatten().any(|e| {
+                let name = e.file_name();
+                let Some(name) = name.to_str() else { return false };
+                name.starts_with(".qurb-nfc-probe-") && name != ".qurb-nfc-probe-caf\u{e9}"
+            })
+        })
+        .unwrap_or(false);
+
+    let _ = std::fs::remove_file(&composed);
+    // Removed by its decomposed name too, in case that is the only one that
+    // matches on a filesystem which stored it that way.
+    let _ = std::fs::remove_file(dir.join(".qurb-nfc-probe-cafe\u{301}"));
+    decomposed
 }
 
 pub(crate) fn mtime_ns(meta: &std::fs::Metadata) -> i64 {

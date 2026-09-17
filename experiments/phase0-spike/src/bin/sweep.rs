@@ -67,10 +67,10 @@ fn main() -> Result<()> {
         let unique = counts.len() as u64;
         let stored: u64 = sizes.values().map(|&v| v as u64).sum();
         let dedup_pct = if total > 0 { (1.0 - stored as f64 / total as f64) * 100.0 } else { 0.0 };
-        let mean = if nchunks > 0 { total / nchunks } else { 0 };
+        let mean = total.checked_div(nchunks).unwrap_or(0);
 
         // Index cost extrapolated to a 1 TiB library at this mean chunk size.
-        let chunks_per_tib = if mean > 0 { (1u64 << 40) / mean } else { 0 };
+        let chunks_per_tib = (1u64 << 40).checked_div(mean).unwrap_or(0);
         let index_per_tib = chunks_per_tib * INDEX_BYTES_PER_CHUNK;
 
         // What a 1 KiB edit in the middle of a file costs to resend: one chunk,

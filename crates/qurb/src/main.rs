@@ -296,6 +296,24 @@ fn status(root: &Path) -> Result<()> {
             println!("    {}", group.join("  "));
         }
     }
+
+    // Accented names written two different ways. Only visible on a filesystem
+    // that keeps them apart -- which is to say, only on the device where they
+    // can still be renamed.
+    let ignore = qurb_watcher::IgnoreRules::new().with_store_dir(store_dir(root));
+    if let Ok(entries) = qurb_watcher::scan(root, &ignore) {
+        let groups = qurb_watcher::normalization_collisions(&entries);
+        if !groups.is_empty() {
+            println!("\n  warning: these names are the same text written two ways, so");
+            println!("  only the first of each is synced. Rename the others to fix it:");
+            for group in groups {
+                println!("    keeping  {}", group[0].path.display());
+                for other in &group[1..] {
+                    println!("    skipping {}", other.path.display());
+                }
+            }
+        }
+    }
     Ok(())
 }
 

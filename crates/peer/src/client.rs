@@ -132,12 +132,34 @@ impl PeerClient {
         content: [u8; 32],
         size: u64,
     ) -> Result<Vec<u8>> {
+        let mut out = Vec::with_capacity(size as usize);
+        self.fetch_content_into(local, content, &mut out).await?;
+        Ok(out)
+    }
+
+    /// Rebuild a file, writing it out a chunk at a time.
+    ///
+    /// The streaming form of [`fetch_content`](Self::fetch_content). Peak memory
+    /// is one chunk rather than the whole file, which is the difference between
+    /// working and being killed inside an iOS FileProvider extension.
+    ///
+    /// The whole-file check can only happen after the last byte is written, so
+    /// write somewhere temporary and move it once this returns. Content that
+    /// failed verification has still been written by then.
+    pub async fn fetch_content_into(
+        &self,
+        local: &Store,
+        content: [u8; 32],
+        out: &mut (impl std::io::Write + Send),
+    ) -> Result<u64> {
         let hash = blake3::Hash::from(content);
         let Some(chunks) = self.manifest(content).await? else {
             return Err(Error::ContentUnavailable { hash: hash.to_hex().to_string() });
         };
 
-        let mut out = Vec::with_capacity(size as usize);
+        let mut whole = blake3::Hasher::new();
+        let mut written = 0u64;
+
         for chunk_hash in chunks {
             let chunk = blake3::Hash::from(chunk_hash);
 
@@ -160,13 +182,19 @@ impl PeerClient {
                 }
                 fetched
             };
-            out.extend_from_slice(&bytes);
+
+            whole.update(&bytes);
+            out.write_all(&bytes).map_err(|e| Error::Io {
+                path: "the destination".into(),
+                source: e,
+            })?;
+            written += bytes.len() as u64;
         }
 
-        if blake3::hash(&out) != hash {
+        if whole.finalize() != hash {
             return Err(Error::ContentMismatch { hash: hash.to_hex().to_string() });
         }
-        Ok(out)
+        Ok(written)
     }
 
     async fn request(&self, request: Request) -> Result<Response> {

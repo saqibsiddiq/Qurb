@@ -151,6 +151,45 @@ impl Store {
         }
     }
 
+    /// Take on a version whose content is already written at `source`.
+    ///
+    /// The streaming counterpart of [`adopt`](Self::adopt): the file is mapped
+    /// rather than read into memory, so peak heap does not depend on its size.
+    /// The caller has usually just written it chunk by chunk, and handing back
+    /// a buffer it never needed would undo the point of doing so.
+    pub fn adopt_file(
+        &mut self,
+        version: &FileVersion,
+        source: &Path,
+        mtime_ns: i64,
+    ) -> Result<PutStats> {
+        let file = std::fs::File::open(source).map_err(|e| Error::io(source, e))?;
+        let meta = file.metadata().map_err(|e| Error::io(source, e))?;
+
+        if meta.len() == 0 {
+            let manifest = chunker::chunk_bytes(&[]);
+            return self.put_manifest(
+                &version.path,
+                &manifest,
+                &[],
+                mtime_ns,
+                Stamp::Remote(version),
+                Payloads::TrustIndex,
+            );
+        }
+
+        let mmap = unsafe { memmap2::Mmap::map(&file) }.map_err(|e| Error::io(source, e))?;
+        let manifest = chunker::chunk_bytes(&mmap);
+        self.put_manifest(
+            &version.path,
+            &manifest,
+            &mmap,
+            mtime_ns,
+            Stamp::Remote(version),
+            Payloads::TrustIndex,
+        )
+    }
+
     /// Record a version vector without touching content.
     ///
     /// The case this exists for: two devices reached the same bytes
@@ -349,6 +388,43 @@ impl Store {
         Ok(stats)
     }
 
+    /// Write a stored file's contents to `out`, a chunk at a time.
+    ///
+    /// Peak memory is one chunk — at most 2 MiB — however large the file is.
+    /// That matters more than it sounds: an iOS FileProvider extension runs
+    /// under a ceiling in the tens of megabytes, so a path that assembles a
+    /// whole file in memory works on a desktop and is killed on a phone.
+    ///
+    /// Verification is the same as [`read_file`](Self::read_file): every chunk
+    /// against its own hash, and the whole against the file hash. The second is
+    /// not redundant — correct chunks in the wrong order would pass the first.
+    ///
+    /// The whole-file check necessarily comes after the last byte has been
+    /// written, so a caller streaming to a destination that matters should
+    /// write somewhere temporary and move it once this returns.
+    pub fn read_file_into(&self, logical_path: &str, out: &mut impl std::io::Write) -> Result<u64> {
+        let file = self
+            .db
+            .file_by_path(logical_path)?
+            .filter(|f| f.deleted_at.is_none())
+            .ok_or_else(|| Error::NotFound { path: logical_path.to_string() })?;
+
+        let mut whole = blake3::Hasher::new();
+        let mut written = 0u64;
+
+        for hash in self.db.chunk_hashes_for(file.id)? {
+            let plaintext = self.read_chunk(&hash)?;
+            whole.update(&plaintext);
+            out.write_all(&plaintext).map_err(|e| Error::io(logical_path, e))?;
+            written += plaintext.len() as u64;
+        }
+
+        if whole.finalize() != file.content_hash {
+            return Err(Error::ChunkCorrupt { hash: file.content_hash.to_hex().to_string() });
+        }
+        Ok(written)
+    }
+
     /// Reassemble a stored file, verifying it end to end.
     ///
     /// Every chunk is checked against its own hash, and the reassembled whole
@@ -500,6 +576,43 @@ impl Store {
             return Err(Error::ChunkCorrupt { hash: content.to_hex().to_string() });
         }
         Ok(Some(out))
+    }
+
+    /// Stream content this device holds, by hash rather than by name.
+    ///
+    /// Returns `None` without writing anything when the content is not here, so
+    /// a caller can fall back to fetching it. Verifies the result against the
+    /// hash asked for — but only once the last byte has been written, so a
+    /// caller must not treat the destination as finished until this returns.
+    pub fn read_content_into(
+        &self,
+        content: &blake3::Hash,
+        out: &mut impl std::io::Write,
+    ) -> Result<Option<u64>> {
+        let Some(chunks) = self.chunk_hashes_for_content(content)? else {
+            return Ok(None);
+        };
+        // Checked before anything is written, so the caller's `None` really does
+        // mean nothing happened.
+        for chunk in &chunks {
+            if !self.has_chunk(chunk)? {
+                return Ok(None);
+            }
+        }
+
+        let mut whole = blake3::Hasher::new();
+        let mut written = 0u64;
+        for chunk in chunks {
+            let plaintext = self.read_chunk(&chunk)?;
+            whole.update(&plaintext);
+            out.write_all(&plaintext).map_err(|e| Error::io("<destination>", e))?;
+            written += plaintext.len() as u64;
+        }
+
+        if whole.finalize() != *content {
+            return Err(Error::ChunkCorrupt { hash: content.to_hex().to_string() });
+        }
+        Ok(Some(written))
     }
 
     /// Whether this device holds a chunk, in the index and on disk both.

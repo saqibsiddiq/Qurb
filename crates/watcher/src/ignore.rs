@@ -24,8 +24,23 @@ const IGNORED_DIRS: &[&str] = &[".git", ".svn", ".hg", ".bzr", "node_modules", "
 const IGNORED_NAMES: &[&str] = &[".DS_Store", "Thumbs.db", "desktop.ini"];
 
 /// Suffixes marking work in progress.
-const IGNORED_SUFFIXES: &[&str] =
-    &[".tmp", ".temp", ".swp", ".swx", ".part", ".partial", ".crdownload", ".download", "~"];
+///
+/// `.incoming` is ours: a file arriving from a peer is assembled beside its
+/// destination and moved into place once verified. Without this line the
+/// watcher would index the half-written file, then see it vanish at the rename,
+/// and send both the phantom and its deletion to every other device.
+const IGNORED_SUFFIXES: &[&str] = &[
+    ".tmp",
+    ".temp",
+    ".swp",
+    ".swx",
+    ".part",
+    ".partial",
+    ".crdownload",
+    ".download",
+    ".incoming",
+    "~",
+];
 
 /// Prefixes marking work in progress: Emacs lock files, Office lock files,
 /// LibreOffice lock files, and our own interrupted chunk writes.
@@ -166,5 +181,14 @@ mod tests {
         let r = rules();
         assert!(!r.is_ignored(Path::new("/home/u/sync/tmp-notes.txt")));
         assert!(!r.is_ignored(Path::new("/home/u/sync/git-guide.md")));
+    }
+
+    /// The staging name the engine writes must be one the watcher skips. These
+    /// live in different crates, so nothing but this test connects them.
+    #[test]
+    fn staging_files_are_ignored() {
+        let rules = IgnoreRules::new();
+        assert!(rules.is_ignored(Path::new("/tree/.report.pdf.incoming")));
+        assert!(!rules.is_ignored(Path::new("/tree/report.pdf")));
     }
 }

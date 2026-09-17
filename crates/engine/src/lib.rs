@@ -51,6 +51,9 @@ pub struct SyncStats {
     /// Paths tombstoned.
     pub deleted: usize,
     pub bytes_written: u64,
+    /// Files skipped because a differently-spelled file already claimed their
+    /// logical path. See [`Engine::reconcile`].
+    pub collided: usize,
     /// Per-file failures. The run continued past each of these.
     pub failures: Vec<FileFailure>,
 }
@@ -181,7 +184,38 @@ impl Engine {
             return Ok(stats);
         }
 
-        let entries = qurb_watcher::scan(&self.root, &self.ignore)?;
+        let mut entries = qurb_watcher::scan(&self.root, &self.ignore)?;
+
+        // Filenames that differ on disk but mean the same path once normalised
+        // -- `café` spelled two ways, which Linux keeps apart and macOS does
+        // not. The index is keyed by the normalised path and can hold only one,
+        // so indexing both would silently drop whichever came second and leave
+        // the two devices disagreeing about that path's contents.
+        //
+        // The already-normalised spelling wins, and byte order breaks any
+        // remaining tie -- see `qurb_watcher::scan`. It has to be a rule that
+        // depends only on the filenames, because two devices resolving this
+        // separately must reach the same answer. The rest are skipped and
+        // counted; renaming a user's file is not a decision to make for them.
+        let collisions = qurb_watcher::normalization_collisions(&entries);
+        if !collisions.is_empty() {
+            let mut skip: Vec<PathBuf> = Vec::new();
+            for group in &collisions {
+                let kept = &group[0];
+                for other in &group[1..] {
+                    tracing::warn!(
+                        logical = %kept.logical,
+                        kept = %kept.path.display(),
+                        skipped = %other.path.display(),
+                        "two filenames normalise to one path; syncing only the first"
+                    );
+                    skip.push(other.path.clone());
+                }
+            }
+            stats.collided = skip.len();
+            entries.retain(|e| !skip.contains(&e.path));
+        }
+
         let mut on_disk = Vec::with_capacity(entries.len());
 
         // Two passes, because they cost completely different things.

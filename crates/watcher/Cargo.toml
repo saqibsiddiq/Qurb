@@ -18,6 +18,7 @@ notify = "8"
 walkdir = "2"
 thiserror = "2"
 tracing = "0.1"
+unicode-normalization = "0.1.25"
 
 [dev-dependencies]
 tempfile = "3"

@@ -39,5 +39,8 @@ pub mod watcher;
 pub use debounce::{Change, ChangeKind, DebounceConfig, Debouncer};
 pub use error::{Error, Result};
 pub use ignore::IgnoreRules;
-pub use scan::{case_collisions, is_case_insensitive, logical_path, scan, ScanEntry};
+pub use scan::{
+    case_collisions, decomposes_unicode, is_case_insensitive, logical_path, normalization_collisions,
+    normalize, scan, ScanEntry,
+};
 pub use watcher::{Event, Watcher};

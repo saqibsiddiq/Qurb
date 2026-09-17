@@ -17,6 +17,7 @@
 use crate::{Engine, Error, Result};
 use qurb_storage::Store;
 use qurb_sync::{Action, Content, FileVersion};
+use std::io::Write;
 use std::path::Path;
 
 
@@ -29,6 +30,18 @@ use std::path::Path;
 pub trait ContentSource {
     /// Produce the bytes with this BLAKE3 hash.
     fn fetch(&mut self, hash: &[u8; 32], size: u64) -> Result<Vec<u8>>;
+
+    /// Write those bytes out instead of returning them.
+    ///
+    /// The default assembles the whole thing first, which is correct and costs
+    /// memory proportional to the file. A source that can stream should say so
+    /// by overriding this — on a phone the difference is whether a large file
+    /// syncs at all.
+    fn fetch_into(&mut self, hash: &[u8; 32], size: u64, out: &mut dyn Write) -> Result<u64> {
+        let bytes = self.fetch(hash, size)?;
+        out.write_all(&bytes).map_err(|e| Error::Io { path: "the destination".into(), source: e })?;
+        Ok(bytes.len() as u64)
+    }
 }
 
 /// A source that has nothing, for plans expected not to need content.
@@ -56,13 +69,34 @@ impl<'a> StoreSource<'a> {
 
 impl ContentSource for StoreSource<'_> {
     fn fetch(&mut self, hash: &[u8; 32], _size: u64) -> Result<Vec<u8>> {
+        Ok(self.store.read_file(&self.path_for(hash)?)?)
+    }
+
+    fn fetch_into(&mut self, hash: &[u8; 32], _size: u64, out: &mut dyn Write) -> Result<u64> {
+        let path = self.path_for(hash)?;
+        Ok(self.store.read_file_into(&path, &mut Adapter(out))?)
+    }
+}
+
+impl StoreSource<'_> {
+    fn path_for(&self, hash: &[u8; 32]) -> Result<String> {
         let hash = blake3::Hash::from(*hash);
-        let path = self
-            .store
+        self.store
             .db()
             .live_path_with_content(&hash)?
-            .ok_or_else(|| Error::ContentUnavailable { hash: hex(hash.as_bytes()) })?;
-        Ok(self.store.read_file(&path)?)
+            .ok_or_else(|| Error::ContentUnavailable { hash: hex(hash.as_bytes()) })
+    }
+}
+
+/// Lets a `&mut dyn Write` satisfy an `impl Write` parameter.
+struct Adapter<'a>(&'a mut dyn Write);
+
+impl Write for Adapter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
     }
 }
 
@@ -214,43 +248,70 @@ impl Engine {
                     }
                 }
 
-                // Prefer content already on this device. A renamed or copied
-                // file, or one that arrived by another route, is already here
-                // under some name, and fetching it again would be pure waste.
-                //
-                // Asked by hash rather than by live path: a rename arrives as
-                // additions and deletions applied in path order, so the old path
-                // may already be tombstoned by the time the new one is written.
-                // Its chunks are still on disk, and they are what matters.
-                let bytes = match self.store().read_content(&blake3::Hash::from(*hash))? {
-                    Some(held) => held,
-                    None => {
-                        stats.fetched += 1;
-                        source.fetch(hash, *size)?
+                // A replica holds content without a tree, so there is nowhere
+                // to write and nothing to stream to. It still has to avoid
+                // holding the file in memory, which is what `adopt` would do,
+                // so it takes the buffered path only because there is no file
+                // to map -- a gap worth closing when replicas meet large files.
+                if self.role().is_replica() {
+                    let bytes = match self.store().read_content(&blake3::Hash::from(*hash))? {
+                        Some(held) => held,
+                        None => {
+                            stats.fetched += 1;
+                            source.fetch(hash, *size)?
+                        }
+                    };
+                    self.store_mut().adopt(version, Some(&bytes), version.modified_at)?;
+                    return Ok(());
+                }
+
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)
+                        .map_err(|e| Error::Io { path: parent.to_path_buf(), source: e })?;
+                }
+
+                // Written beside the destination and moved into place, for two
+                // reasons. Content is only verified once its last byte has
+                // arrived, so writing straight to the destination would put
+                // unverified bytes where the user can see them. And a transfer
+                // interrupted halfway would otherwise leave a truncated file
+                // that looks complete.
+                let staging = staging_path(&path);
+                let written = {
+                    let mut file = std::fs::File::create(&staging)
+                        .map_err(|e| Error::Io { path: staging.clone(), source: e })?;
+
+                    // Prefer content already on this device. A renamed or copied
+                    // file, or one that arrived by another route, is already
+                    // here under some name.
+                    //
+                    // Asked by hash rather than by live path: a rename arrives
+                    // as additions and deletions applied in path order, so the
+                    // old path may already be tombstoned by the time the new one
+                    // is written. Its chunks are still on disk.
+                    match self.store().read_content_into(
+                        &blake3::Hash::from(*hash),
+                        &mut file,
+                    )? {
+                        Some(bytes) => bytes,
+                        None => {
+                            stats.fetched += 1;
+                            source.fetch_into(hash, *size, &mut file)?
+                        }
                     }
                 };
+                let _ = written;
 
-                if self.role().is_replica() {
-                    // Storage only. Materialising the file as well would cost
-                    // roughly twice the space for a copy nobody reads, and
-                    // would make a filesystem the replica does not really have
-                    // authoritative for what it holds.
-                    self.store_mut().adopt(version, Some(&bytes), version.modified_at)?;
-                } else {
-                    if let Some(parent) = path.parent() {
-                        std::fs::create_dir_all(parent)
-                            .map_err(|e| Error::Io { path: parent.to_path_buf(), source: e })?;
-                    }
-                    std::fs::write(&path, &bytes)
-                        .map_err(|e| Error::Io { path: path.clone(), source: e })?;
+                std::fs::rename(&staging, &path).map_err(|e| {
+                    let _ = std::fs::remove_file(&staging);
+                    Error::Io { path: path.clone(), source: e }
+                })?;
 
-                    // Record the modification time the file actually ended up
-                    // with, so the engine's size-and-mtime fast path recognises
-                    // it and does not immediately re-read what it just wrote.
-                    let mtime =
-                        std::fs::metadata(&path).ok().map(|m| mtime_ns(&m)).unwrap_or(0);
-                    self.store_mut().adopt(version, Some(&bytes), mtime)?;
-                }
+                // Record the modification time the file actually ended up with,
+                // so the engine's size-and-mtime fast path recognises it and
+                // does not immediately re-read what it just wrote.
+                let mtime = std::fs::metadata(&path).ok().map(|m| mtime_ns(&m)).unwrap_or(0);
+                self.store_mut().adopt_file(version, &path, mtime)?;
             }
         }
         Ok(())
@@ -284,6 +345,19 @@ fn prune_empty_parents(removed: &Path, root: &Path) {
             None => return,
         }
     }
+}
+
+/// Where a file is assembled before being moved into place.
+///
+/// Beside the destination rather than in a temporary directory, so the move is
+/// a rename within one filesystem and therefore atomic. Across filesystems it
+/// would be a copy, which reintroduces the half-written file this avoids.
+fn staging_path(destination: &Path) -> std::path::PathBuf {
+    let name = destination
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "incoming".to_string());
+    destination.with_file_name(format!(".{name}.incoming"))
 }
 
 fn mtime_ns(meta: &std::fs::Metadata) -> i64 {
