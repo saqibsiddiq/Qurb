@@ -40,5 +40,5 @@ pub mod vault;
 pub use error::{Error, Result};
 pub use master::{DerivedKey, MasterKey, Purpose};
 pub use phrase::RecoveryPhrase;
-pub use protection::{keystore_available, Protection};
+pub use protection::{keystore_available, Protection, SecretStore};
 pub use vault::{Opened, Vault};

@@ -15,6 +15,10 @@
 //!   and, on a locked machine, unreadable.
 //! - [`Protection::Passphrase`] — the key wrapped with one only the user knows.
 //!   The only option that survives someone taking the disk *and* the session.
+//! - [`Protection::Platform`] — the key held by something the caller supplies.
+//!   For phones, where the keystore is Keychain or the Android Keystore and
+//!   neither is reachable from Rust: the app implements [`SecretStore`] and
+//!   this uses it.
 //!
 //! None of them help while the daemon is running and holding the key in memory.
 //! That is what it means to be a program that can decrypt your files.
@@ -33,6 +37,37 @@ pub enum Protection {
     Keystore,
     /// Wrapped with a passphrase.
     Passphrase,
+    /// Held by a [`SecretStore`] the caller supplies.
+    ///
+    /// Exists because a phone's keystore is not reachable from Rust. Android's
+    /// is a Java API needing a `Context`, and iOS's needs entitlements that
+    /// belong to an app bundle. Both are a few lines from the platform side and
+    /// unreachable from here, so the platform side provides them.
+    Platform,
+}
+
+/// Somewhere outside this process that can keep a small secret.
+///
+/// Implemented by the platform — Android Keystore, iOS Keychain — and passed in.
+/// The secret is the master key itself rather than something wrapping it: both
+/// platforms handle small secrets well, and a wrapping layer would mean running
+/// a key-derivation function at every launch for no gain, since the stored value
+/// would already be full-entropy.
+///
+/// Implementations must be safe to call from any thread. They are called while
+/// the vault is being read, which on a phone is during app launch.
+pub trait SecretStore: Send + Sync {
+    /// Keep `secret` under `label`, replacing anything already there.
+    fn put(&self, label: &str, secret: &[u8]) -> Result<()>;
+
+    /// Retrieve what was kept, or `None` if nothing was.
+    ///
+    /// `None` rather than an error for "not there": a first launch asks before
+    /// anything has been stored, and that is not a failure.
+    fn get(&self, label: &str) -> Result<Option<Vec<u8>>>;
+
+    /// Forget it. Removing something already absent must succeed.
+    fn remove(&self, label: &str) -> Result<()>;
 }
 
 impl Protection {
@@ -41,6 +76,7 @@ impl Protection {
             Protection::File => "file",
             Protection::Keystore => "keystore",
             Protection::Passphrase => "passphrase",
+            Protection::Platform => "platform",
         }
     }
 
@@ -58,6 +94,7 @@ impl std::str::FromStr for Protection {
             "file" => Ok(Protection::File),
             "keystore" => Ok(Protection::Keystore),
             "passphrase" => Ok(Protection::Passphrase),
+            "platform" => Ok(Protection::Platform),
             other => Err(Error::UnknownProtection { name: other.to_string() }),
         }
     }
@@ -69,6 +106,7 @@ pub(crate) const MAGIC: &[u8; 4] = b"QRBK";
 pub(crate) const FORMAT_FILE: u8 = 1;
 pub(crate) const FORMAT_KEYSTORE: u8 = 2;
 pub(crate) const FORMAT_PASSPHRASE: u8 = 3;
+pub(crate) const FORMAT_PLATFORM: u8 = 4;
 
 /// What the key is filed under in the operating system's store.
 const KEYSTORE_SERVICE: &str = "qurb";
@@ -94,6 +132,43 @@ const LANES: u32 = 4;
 ///
 /// Keyed by path so that two stores on one machine — a personal one and a test
 /// one — do not fight over the same entry.
+/// The label a vault's key is stored under.
+///
+/// Derived from the vault's path so two stores on one device do not collide,
+/// and stable across launches because an app's private directory is.
+pub(crate) fn platform_label(vault: &Path) -> String {
+    format!("qurb:{}", vault.to_string_lossy())
+}
+
+pub(crate) fn platform_put(store: &dyn SecretStore, vault: &Path, key: &MasterKey) -> Result<()> {
+    store.put(&platform_label(vault), key.as_bytes())
+}
+
+pub(crate) fn platform_get(store: &dyn SecretStore, vault: &Path) -> Result<MasterKey> {
+    let secret = store.get(&platform_label(vault))?.ok_or_else(|| Error::Keystore {
+        detail: "the platform keystore has no key for this vault".into(),
+    })?;
+
+    if secret.len() != 32 {
+        // Zeroed before reporting: whatever it is, it was meant to be a key.
+        let mut secret = secret;
+        secret.zeroize();
+        return Err(Error::Keystore {
+            detail: "the stored key is not what we wrote".into(),
+        });
+    }
+
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&secret);
+    let mut secret = secret;
+    secret.zeroize();
+    Ok(MasterKey::from_bytes(bytes))
+}
+
+pub(crate) fn platform_remove(store: &dyn SecretStore, vault: &Path) -> Result<()> {
+    store.remove(&platform_label(vault))
+}
+
 pub(crate) fn keystore_put(vault: &Path, key: &MasterKey) -> Result<()> {
     let entry = keystore_entry(vault)?;
     let encoded = hex(key.as_bytes());

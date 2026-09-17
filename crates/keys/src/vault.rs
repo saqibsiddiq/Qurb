@@ -22,7 +22,10 @@
 use crate::error::{Error, Result};
 use crate::master::MasterKey;
 use crate::phrase::RecoveryPhrase;
-use crate::protection::{self, Protection, FORMAT_FILE, FORMAT_KEYSTORE, FORMAT_PASSPHRASE, MAGIC};
+use crate::protection::{
+    self, Protection, SecretStore, FORMAT_FILE, FORMAT_KEYSTORE, FORMAT_PASSPHRASE, FORMAT_PLATFORM,
+    MAGIC,
+};
 use std::path::{Path, PathBuf};
 
 const FILE_LEN: usize = 4 + 1 + 32;
@@ -55,12 +58,27 @@ impl Opened {
 
 pub struct Vault {
     path: PathBuf,
+    /// Supplied by the caller, for [`Protection::Platform`].
+    ///
+    /// Absent on a desktop, where the keystore is reachable directly. Present
+    /// on a phone, where it is the app's implementation of Keychain or the
+    /// Android Keystore.
+    store: Option<std::sync::Arc<dyn SecretStore>>,
 }
 
 impl Vault {
     /// The vault at `<dir>/master.key`.
     pub fn at(dir: &Path) -> Self {
-        Self { path: dir.join("master.key") }
+        Self { path: dir.join("master.key"), store: None }
+    }
+
+    /// The same vault, able to use a platform keystore.
+    ///
+    /// Required before [`Protection::Platform`] will work, and harmless
+    /// otherwise: a vault kept any other way ignores it.
+    pub fn using(mut self, store: std::sync::Arc<dyn SecretStore>) -> Self {
+        self.store = Some(store);
+        self
     }
 
     pub fn path(&self) -> &Path {
@@ -106,6 +124,7 @@ impl Vault {
             FORMAT_FILE => Ok(Protection::File),
             FORMAT_KEYSTORE => Ok(Protection::Keystore),
             FORMAT_PASSPHRASE => Ok(Protection::Passphrase),
+            FORMAT_PLATFORM => Ok(Protection::Platform),
             found => Err(Error::UnsupportedFormat { path: self.path.clone(), found }),
         }
     }
@@ -121,7 +140,21 @@ impl Vault {
                     .map_err(|e| Error::Io { path: self.path.clone(), source: e })?;
                 protection::unwrap(&bytes, passphrase)
             }
+            Protection::Platform => protection::platform_get(self.store()?, &self.path),
         }
+    }
+
+    /// The platform store, or a message saying which call was missing.
+    ///
+    /// A vault kept this way is unreadable without it, and the mistake -- opening
+    /// with `Vault::at` where the app meant `Vault::at(..).using(..)` -- is easy
+    /// and produces a key that cannot be found rather than one that is wrong.
+    fn store(&self) -> Result<&dyn SecretStore> {
+        self.store.as_deref().ok_or_else(|| Error::Keystore {
+            detail: "this vault is kept in the platform keystore, but none was supplied \
+                     -- open it with `Vault::at(dir).using(store)`"
+                .into(),
+        })
     }
 
     /// Change how the key is kept, without changing the key.
@@ -145,6 +178,9 @@ impl Vault {
         // Only now that the key is safely somewhere else.
         if from == Protection::Keystore && to != Protection::Keystore {
             protection::keystore_remove(&self.path)?;
+        }
+        if from == Protection::Platform && to != Protection::Platform {
+            protection::platform_remove(self.store()?, &self.path)?;
         }
         Ok(())
     }
@@ -243,6 +279,17 @@ impl Vault {
             Protection::Passphrase => {
                 let passphrase = passphrase.ok_or(Error::PassphraseRequired)?;
                 protection::wrap(key, passphrase)?
+            }
+            Protection::Platform => {
+                // Stored first, for the same reason as the desktop keystore: a
+                // marker file with no key behind it is a clear failure, while a
+                // key in a keystore that nothing points at is litter nobody
+                // will ever find to clean up.
+                protection::platform_put(self.store()?, &self.path, key)?;
+                let mut bytes = Vec::with_capacity(5);
+                bytes.extend_from_slice(MAGIC);
+                bytes.push(FORMAT_PLATFORM);
+                bytes
             }
         };
 
@@ -354,8 +401,12 @@ mod tests {
         // wrong, and a device that then cannot read its own data.
         let dir = tempfile::tempdir().unwrap();
         let vault = Vault::at(dir.path());
+        // Anchored past the last format rather than to one of them, so adding a
+        // format moves the "future" and this keeps testing what it names. It
+        // was `FORMAT_PASSPHRASE + 1` and started failing the day
+        // `FORMAT_PLATFORM` took that number -- which is the test working.
         let mut bytes = MAGIC.to_vec();
-        bytes.push(FORMAT_PASSPHRASE + 1);
+        bytes.push(FORMAT_PLATFORM + 1);
         bytes.extend_from_slice(&[0u8; 32]);
         std::fs::write(vault.path(), &bytes).unwrap();
 

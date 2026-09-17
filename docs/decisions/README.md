@@ -47,3 +47,4 @@ is worth more than a tidy directory.
 | [0018](0018-file-contents-never-cross-the-ffi.md) | File contents never cross the FFI | Accepted |
 | [0019](0019-filenames-are-nfc.md) | Filenames are normalised to NFC | Accepted |
 | [0020](0020-sync-takes-a-deadline.md) | Sync takes a deadline, and running out is not an error | Accepted |
+| [0021](0021-the-platform-supplies-the-keystore.md) | On mobile, the app supplies the keystore | Accepted — unimplemented |

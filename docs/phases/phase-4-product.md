@@ -22,7 +22,7 @@ warns is not the fun part and is a full quarter.
 | observability | ◐ structured logs, nothing more |
 | the interface | ⬜ not started |
 
-420 tests pass across ten crates; clippy is clean.
+433 tests pass across ten crates; clippy is clean.
 
 ## Protecting the key at rest
 

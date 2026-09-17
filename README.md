@@ -144,7 +144,7 @@ directory behind it.
 Built and tested in [`crates/keys`](crates/keys/): a 256-bit master key, HKDF
 derivation of one key per purpose, and a 24-word BIP-39 recovery phrase — tested
 end to end, so the words on a piece of paper genuinely turn back into the user's
-files. 427 tests across ten crates, clippy clean.
+files. 433 tests across ten crates, clippy clean.
 
 A directory syncs into a local store — on 2437 real files (979 MiB), 12.96s for
 the first pass and 0.03s for the second. **Two devices now sync over a real
@@ -186,7 +186,7 @@ and syncs — with `syncWithin(seconds)`, because both platforms kill background
 work that outstays its window.
 
 **It runs on Android.** `./scripts/android-test.sh` pushes the test binaries to
-a device and runs them: 420 of the 427 pass there, QUIC handshakes and hole
+a device and runs them: 426 of the 433 pass there, QUIC handshakes and hole
 punching included. Receiving a 512 MiB file on the device grows the heap by
 5 MiB.
 

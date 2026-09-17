@@ -45,7 +45,7 @@ product means losing their data. The `bip39` crate supplies the canonical list
 and checksum, and a test pins a known phrase against a known key so a change of
 library cannot silently change what a phrase means.
 
-## Three ways to keep the key
+## Four ways to keep the key
 
 They defend against different things, and the difference is worth stating
 because a user reading "end-to-end encrypted" will assume the strongest.
@@ -55,6 +55,7 @@ because a user reading "end-to-end encrypted" will assume the strongest.
 | `file` | other users of the machine | yes |
 | `keystore` | anyone reading the disk while it is locked | yes |
 | `passphrase` | anyone who takes the disk *and* the session | no |
+| `platform` | whatever the caller's store defends against | yes |
 
 **File** is what was there before, and remains the default: a headless machine
 may have neither a keystore nor anybody to type a passphrase, and a device that
@@ -69,11 +70,24 @@ XChaCha20-Poly1305 with the header authenticated so a salt cannot be swapped in
 from another file. It is the only option that survives a stolen disk, and the
 only one that stops a device starting on its own.
 
+**Platform** is for phones, where neither of the above works. Android's keystore
+is a Java API needing a `Context` and iOS's Keychain needs entitlements from an
+app bundle, so neither is reachable from Rust. The caller implements
+[`SecretStore`] and passes it to `Vault::at(dir).using(store)`; what it defends
+against is entirely a property of that implementation. See
+[decision 0021](../../docs/decisions/0021-the-platform-supplies-the-keystore.md)
+and [`qurb-mobile`](../mobile-ffi/), which wraps it as a UniFFI callback
+interface.
+
+A vault kept this way and opened without the store fails saying so. It does not
+fall back to the file, because there is no key in the file.
+
 The recovery phrase is unaffected by any of this. Two different secrets protect
 the same key and neither interferes with the other: the phrase recovers the key,
 the passphrase guards the copy on this disk.
 
-**None of them help while the daemon is running and holding the key in memory.**
+**None of them help while the process is running and holding the key in
+memory.**
 That is what it means to be a program that can decrypt your files.
 
 ## Testing
@@ -100,6 +114,9 @@ cargo run -p qurb-keys --example enrol -- /tmp/device-a
   against a cross-platform library and tested here against the Secret Service on
   Linux. Keychain and the Credential Manager are exercised by nothing, and a
   claim about them would be a guess.
+- **Any real `SecretStore`.** `Protection::Platform` is tested against a fake,
+  which checks this side of the boundary and says nothing about whether the
+  Android Keystore or the iOS Keychain behave as documented.
 - **Key rotation.** Changing the master key means re-encrypting every chunk, and
   there is no mechanism for it.
 - **Per-file keys.** The architecture describes deriving a key per file so that

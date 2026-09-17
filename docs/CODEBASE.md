@@ -432,7 +432,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-427 tests pass across ten crates on Linux, 420 of them on Android; clippy is
+433 tests pass across ten crates on Linux, 426 of them on Android; clippy is
 clean.
 
 **Two devices now sync over a real network connection**, converging through
@@ -582,7 +582,7 @@ finds the other device through the rendezvous service, connects over QUIC and
 syncs — all through that surface.
 
 **It runs on a device.** `./scripts/android-test.sh` pushes the test binaries
-with `adb` and runs them: on an Android 14 emulator all 34 pass, 420 tests,
+with `adb` and runs them: on an Android 14 emulator all 35 pass, 426 tests,
 including the real QUIC handshakes and hole punching. Receiving a 512 MiB file
 there grows the heap by 5 MiB.
 

@@ -16,15 +16,15 @@ record](../roadmap.md).
 | Kotlin and Swift bindings generate | ✅ `./scripts/mobile-bindings.sh` |
 | files without holding them in memory | ✅ measured on the device: 512 MiB → 5 MiB |
 | filenames that survive macOS and iOS | ✅ NFC normalisation |
-| **running on an actual device** | ✅ **420 tests pass on Android 14** |
+| **running on an actual device** | ✅ **426 tests pass on Android 14** |
 | pairing and syncing from the phone | ✅ end to end, over QUIC |
 | a sync that fits a background window | ✅ `sync_within(seconds)` |
 | iOS build | ⬜ blocked: needs Xcode, which needs a Mac |
 | background scheduling | ⬜ the Rust half is done; the platform half is not |
-| Keychain and Android Keystore | ⬜ not started |
+| the key kept outside the app's files | ◐ contract built and tested; no platform implementation |
 | an app | ⬜ not started |
 
-427 tests pass across ten crates on Linux, 420 of them on Android; clippy is
+433 tests pass across ten crates on Linux, 426 of them on Android; clippy is
 clean.
 
 ## What the library costs
@@ -112,8 +112,8 @@ pushes them with `adb`, and runs them. There is no app, no Gradle and no JVM
 involved: the FFI is a C ABI, and a test binary exercises the same Rust an app
 would reach through it.
 
-On an Android 14 (API 34) x86_64 emulator, all 34 binaries pass — 420 tests in
-69 seconds. The networking crates are included deliberately: they open real
+On an Android 14 (API 34) x86_64 emulator, all 35 binaries pass — 426 tests in
+around 70 seconds. The networking crates are included deliberately: they open real
 sockets, complete a real QUIC handshake and punch through to each other on
 loopback. Excluding them would have meant the answer to "does it work on
 Android?" quietly left out the interesting half.
@@ -236,6 +236,42 @@ measures.
 new tests would contact Google's and Cloudflare's STUN servers on every `cargo
 test` — slow, broken offline, and telling a third party the address of every
 machine that runs the suite.
+
+## Keeping the key off the disk
+
+The desktop can put the master key in Keychain, DPAPI or the Secret Service
+through one crate. A phone cannot: Android's keystore is a Java API needing a
+`Context`, and iOS's needs entitlements that belong to an app bundle. Both are a
+few lines from the platform side and unreachable from Rust.
+
+So the app supplies it. `qurb-keys` gains a `SecretStore` trait and a
+`Protection::Platform` that uses it; `qurb-mobile` exposes that as a UniFFI
+callback interface, which generates a Kotlin `interface KeyStore` and a Swift
+`protocol KeyStore`. Two traits rather than one because `qurb-keys` is used by
+the daemon, the CLI and the tests, none of which should know that a phone
+exists.
+
+What is stored is the key itself, 32 bytes, rather than something wrapping it.
+Both platforms handle small secrets well, and a wrapping layer would mean
+running Argon2id at every app launch to derive a key from a value that is
+already full entropy — a second of phone CPU for nothing.
+
+Tested against a fake keystore, which checks the contract rather than the
+platforms: that the key reaches the store and *not* the vault file, that it
+comes back on a second open, that two stores on one device get separate slots,
+that a keystore which refuses produces an error rather than a panic across the
+FFI boundary, and that opening without the keystore says what is missing rather
+than looking like corruption.
+
+Adding it broke a test, correctly. `a_newer_format_is_refused_rather_than_misread`
+wrote format byte `FORMAT_PASSPHRASE + 1` to check that a file from the future is
+refused rather than guessed at — and `FORMAT_PLATFORM` then took that number, so
+the "future" format became a real one. The test now anchors to the last format
+rather than to a particular one.
+
+**The platform implementations do not exist.** The contract is built and tested
+and nothing fills it in. `crates/mobile-ffi/README.md` has a starting point for
+each platform; neither has been compiled.
 
 ## What is not verified
 

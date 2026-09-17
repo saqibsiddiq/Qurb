@@ -45,7 +45,7 @@ is the property that matters.
 
 Builds the test binaries for Android, pushes them with `adb`, runs them. No app,
 no Gradle, no JVM: the FFI is a C ABI, and a test binary exercises the same Rust
-an app calls through it. On an Android 14 emulator all 34 binaries pass — 420
+an app calls through it. On an Android 14 emulator all 35 binaries pass — 426
 tests, including the QUIC handshakes and hole punching.
 
 This is the only thing that answers "does it work on Android?".
@@ -129,24 +129,93 @@ kept as text for logs.
 
 ## Key protection on a phone
 
-The desktop offers three options — a file, the OS keystore, or a passphrase.
-Here the vault is an owner-only file inside the app's private storage, and
-`Qurb::open` takes `null` for the passphrase.
+The master key is 32 bytes that decrypt everything the user owns. Three ways to
+keep it, in increasing order of what they defend against:
 
-That is weaker than it sounds on a desktop and stronger than it sounds here. An
-app's private directory is enforced by the kernel, not by convention, and on
-both platforms it is encrypted at rest by the device's own lock screen. The
-realistic attacker against a phone is someone holding the phone, and they are
-stopped by the lock screen rather than by anything this crate does.
+| | defends against |
+|---|---|
+| a file in app-private storage | other apps, enforced by the kernel |
+| a passphrase | someone with the unlocked phone |
+| **the platform keystore** | reading the disk, and a locked phone |
 
-The gap is a phone with no passcode set, where file-based protection provides
-nothing. Passing a passphrase to `Qurb.open` works today and is the answer until
-Keychain and Android Keystore are wired up — see below.
+The keystore is the one to use, and it needs the app's help: Android's is a Java
+API needing a `Context`, and iOS's needs entitlements belonging to an app
+bundle. Neither is reachable from Rust. So the app implements `KeyStore` and
+passes it in:
+
+```kotlin
+val setup = createProtected(root, myKeyStore)   // first launch
+val qurb = Qurb.openProtected(root, myKeyStore, Settings())
+```
+
+Whatever is chosen is recorded in the vault, and `protectionOf(root)` reports
+it. Opening a keystore-protected vault *without* the keystore fails saying so
+rather than falling back — a silent fallback would mean reading a key that is
+not there and reporting something less useful.
+
+### Android
+
+`EncryptedSharedPreferences` is the short version, and on a device with a secure
+element the key backing it never leaves the hardware:
+
+```kotlin
+class AndroidKeyStore(context: Context) : KeyStore {
+    private val prefs = EncryptedSharedPreferences.create(
+        context, "qurb-keys",
+        MasterKey.Builder(context).setKeyScheme(AES256_GCM).build(),
+        AES256_SIV, AES256_GCM,
+    )
+
+    override fun put(label: String, secret: ByteArray) {
+        prefs.edit().putString(label, Base64.encodeToString(secret, NO_WRAP)).apply()
+    }
+    override fun get(label: String): ByteArray? =
+        prefs.getString(label, null)?.let { Base64.decode(it, NO_WRAP) }
+    override fun remove(label: String) {
+        prefs.edit().remove(label).apply()
+    }
+}
+```
+
+### iOS
+
+`kSecAttrAccessibleWhenUnlockedThisDeviceOnly` is the important part: unreadable
+while the phone is locked, and it does not travel to a backup or another device.
+A key that syncs to iCloud Keychain would defeat the point of the phrase.
+
+```swift
+final class IOSKeyStore: KeyStore {
+    func put(label: String, secret: Data) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: label,
+        ]
+        SecItemDelete(query as CFDictionary)
+        var add = query
+        add[kSecValueData as String] = secret
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        guard SecItemAdd(add as CFDictionary, nil) == errSecSuccess else {
+            throw QurbError.Other(detail: "could not write to the keychain")
+        }
+    }
+    // get and remove follow the same shape; return nil on errSecItemNotFound
+    // rather than throwing -- a first launch asks before anything is stored.
+}
+```
+
+### What none of it does
+
+Nothing here helps while the app is running and holding the key in memory. That
+is what it means to be a program that can decrypt your files. The keystore
+protects a phone that is off, locked, or being read by something that is not
+this app.
 
 ## Not built yet
 
-- **Keychain and Android Keystore.** The `keyring` crate the desktop uses does
-  not cover mobile; both platforms need their own binding through this crate.
+- **Keychain and Android Keystore, actually implemented.** The `KeyStore`
+  contract exists and is tested against a fake. Neither platform's real
+  implementation has been written or run — the snippets above are a starting
+  point, not tested code.
 - **Background scheduling.** `syncWithin` is the Rust half. The platform half —
   `WorkManager`, `BGTaskScheduler`, and deciding when to ask for a window at
   all — needs an app to live in.

@@ -167,7 +167,7 @@ correct and cost more than expected: the receive path held whole files, which a
 FileProvider extension would not survive, and fixing it changed the engine
 rather than anything mobile-specific.
 
-The engine now runs on Android and syncs there — 420 tests pass on a device, and
+The engine now runs on Android and syncs there — 426 tests pass on a device, and
 receiving a 512 MiB file costs 5 MiB of heap. What does not exist is an app, on
 either platform, and iOS has not been built at all. The prediction about
 `BGTaskScheduler` is answered on the Rust side by a sync that takes a deadline,

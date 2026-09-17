@@ -159,6 +159,77 @@ pub struct Usage {
     pub on_disk: u64,
 }
 
+// ---------------------------------------------------------------------------
+// Key protection
+// ---------------------------------------------------------------------------
+
+/// Somewhere the platform can keep the master key.
+///
+/// Implemented in Kotlin or Swift, because neither platform's keystore is
+/// reachable from Rust: Android's is a Java API needing a `Context`, and iOS's
+/// needs entitlements belonging to an app bundle. Both are a few lines on their
+/// own side and impossible on this one.
+///
+/// What it keeps is 32 bytes — the master key itself, not something wrapping
+/// it. Both platforms handle small secrets well, and a wrapping layer would
+/// mean running a key-derivation function at every launch for nothing, since
+/// the stored value is already full entropy.
+///
+/// Implementations are called from whatever thread opens the vault, which on a
+/// phone is during app launch. They must be safe to call from any thread.
+///
+/// # What this is worth
+///
+/// On Android, a key in the Keystore is held by hardware the app cannot read
+/// directly, and on a device with a secure element it never enters the app's
+/// memory in exportable form. On iOS, Keychain items marked
+/// `WhenUnlockedThisDeviceOnly` are unreadable while the phone is locked and do
+/// not travel to a backup.
+///
+/// Neither helps while the app is running and holding the key. That is what it
+/// means to be a program that can decrypt your files.
+#[uniffi::export(with_foreign)]
+pub trait KeyStore: Send + Sync {
+    /// Keep `secret` under `label`, replacing anything already there.
+    fn put(&self, label: String, secret: Vec<u8>) -> Result<(), QurbError>;
+
+    /// Return what was kept, or `None` if nothing was.
+    ///
+    /// `None` rather than an error: a first launch asks before anything has
+    /// been stored, and that is not a failure.
+    fn get(&self, label: String) -> Result<Option<Vec<u8>>, QurbError>;
+
+    /// Forget it. Removing something already absent must succeed.
+    fn remove(&self, label: String) -> Result<(), QurbError>;
+}
+
+/// Adapts a platform [`KeyStore`] to what `qurb-keys` expects.
+///
+/// Two traits rather than one because `qurb-keys` must not depend on UniFFI:
+/// the key layer is used by the daemon, the tests and the CLI, none of which
+/// have any business knowing that a phone exists.
+struct PlatformStore(Arc<dyn KeyStore>);
+
+impl qurb_keys::SecretStore for PlatformStore {
+    fn put(&self, label: &str, secret: &[u8]) -> qurb_keys::Result<()> {
+        self.0
+            .put(label.to_string(), secret.to_vec())
+            .map_err(|e| qurb_keys::Error::Keystore { detail: e.to_string() })
+    }
+
+    fn get(&self, label: &str) -> qurb_keys::Result<Option<Vec<u8>>> {
+        self.0
+            .get(label.to_string())
+            .map_err(|e| qurb_keys::Error::Keystore { detail: e.to_string() })
+    }
+
+    fn remove(&self, label: &str) -> qurb_keys::Result<()> {
+        self.0
+            .remove(label.to_string())
+            .map_err(|e| qurb_keys::Error::Keystore { detail: e.to_string() })
+    }
+}
+
 /// Where the services are, and what this device calls itself.
 ///
 /// Every field has a working default, so an app that does not care can pass
@@ -251,9 +322,27 @@ pub struct Qurb {
 /// app-private storage.
 #[uniffi::export]
 pub fn create(root: String) -> Result<Setup, QurbError> {
+    create_protected(root, None)
+}
+
+/// Set up a new device, keeping the key in the platform's keystore.
+///
+/// The arrangement to prefer on a phone. Without a `keystore` the key sits in
+/// an owner-only file inside the app's private directory — which the kernel
+/// enforces, and which is worth nothing on a device with no passcode.
+///
+/// Whatever is chosen here is recorded in the vault, so [`Qurb::open`] must be
+/// given the same keystore afterwards. Opening without it fails saying so
+/// rather than silently falling back, because a silent fallback would mean
+/// reading a key that is not there.
+#[uniffi::export]
+pub fn create_protected(
+    root: String,
+    keystore: Option<Arc<dyn KeyStore>>,
+) -> Result<Setup, QurbError> {
     let root = PathBuf::from(root);
     let store_dir = store_dir(&root);
-    let vault = Vault::at(&store_dir);
+    let vault = vault_at(&store_dir, keystore.as_ref());
 
     if vault.exists() {
         return Err(QurbError::Other {
@@ -264,7 +353,12 @@ pub fn create(root: String) -> Result<Setup, QurbError> {
     std::fs::create_dir_all(&store_dir)
         .map_err(|e| QurbError::Storage { detail: e.to_string() })?;
 
-    match vault.open_or_create()? {
+    let protection = match keystore {
+        Some(_) => qurb_keys::Protection::Platform,
+        None => qurb_keys::Protection::File,
+    };
+
+    match vault.open_or_create_with(protection, None)? {
         qurb_keys::Opened::Created { phrase, .. } => {
             Ok(Setup { recovery_phrase: phrase.to_string() })
         }
@@ -284,6 +378,16 @@ pub fn create(root: String) -> Result<Setup, QurbError> {
 /// encrypted.
 #[uniffi::export]
 pub fn restore(root: String, phrase: String) -> Result<(), QurbError> {
+    restore_protected(root, phrase, None)
+}
+
+/// Restore from a phrase, keeping the key in the platform's keystore.
+#[uniffi::export]
+pub fn restore_protected(
+    root: String,
+    phrase: String,
+    keystore: Option<Arc<dyn KeyStore>>,
+) -> Result<(), QurbError> {
     let root = PathBuf::from(root);
     let store_dir = store_dir(&root);
 
@@ -293,8 +397,32 @@ pub fn restore(root: String, phrase: String) -> Result<(), QurbError> {
     std::fs::create_dir_all(&store_dir)
         .map_err(|e| QurbError::Storage { detail: e.to_string() })?;
 
-    Vault::at(&store_dir).restore(&phrase)?;
+    let protection = match keystore {
+        Some(_) => qurb_keys::Protection::Platform,
+        None => qurb_keys::Protection::File,
+    };
+
+    vault_at(&store_dir, keystore.as_ref()).restore_with(&phrase, protection, None)?;
     Ok(())
+}
+
+/// How a vault's key is kept, for a device already set up.
+#[uniffi::export]
+pub fn protection_of(root: String) -> Result<String, QurbError> {
+    let vault = Vault::at(&store_dir(Path::new(&root)));
+    if !vault.exists() {
+        return Err(QurbError::NotSetUp { detail: format!("{root} has no vault") });
+    }
+    Ok(vault.protection()?.as_str().to_string())
+}
+
+/// A vault, with the platform keystore attached if there is one.
+fn vault_at(store_dir: &Path, keystore: Option<&Arc<dyn KeyStore>>) -> Vault {
+    let vault = Vault::at(store_dir);
+    match keystore {
+        Some(store) => vault.using(Arc::new(PlatformStore(Arc::clone(store)))),
+        None => vault,
+    }
 }
 
 /// Whether this directory has been set up.
@@ -316,6 +444,21 @@ impl Qurb {
         Self::open_with(root, passphrase, Settings::default())
     }
 
+    /// Open a vault whose key is in the platform's keystore.
+    ///
+    /// The `keystore` must be the same one the device was set up with. There is
+    /// no fallback: a vault recorded as platform-protected and opened without
+    /// one fails saying so, because the alternative is reading a key that is
+    /// not there and reporting something less clear.
+    #[uniffi::constructor]
+    pub fn open_protected(
+        root: String,
+        keystore: Arc<dyn KeyStore>,
+        settings: Settings,
+    ) -> Result<Self, QurbError> {
+        Self::open_inner(root, None, settings, Some(keystore))
+    }
+
     /// Open, choosing where the services are and what this device is called.
     ///
     /// Separate from [`open`](Self::open) because most callers want the
@@ -327,8 +470,24 @@ impl Qurb {
         passphrase: Option<String>,
         settings: Settings,
     ) -> Result<Self, QurbError> {
+        Self::open_inner(root, passphrase, settings, None)
+    }
+
+}
+
+/// Not exported. `#[uniffi::export]` takes every function in the block it is
+/// applied to, and a constructor with four arguments — one of them an optional
+/// callback interface — is not a shape worth putting in front of an app. The
+/// three exported constructors above are.
+impl Qurb {
+    fn open_inner(
+        root: String,
+        passphrase: Option<String>,
+        settings: Settings,
+        keystore: Option<Arc<dyn KeyStore>>,
+    ) -> Result<Self, QurbError> {
         let store_dir = store_dir(Path::new(&root));
-        let vault = Vault::at(&store_dir);
+        let vault = vault_at(&store_dir, keystore.as_ref());
 
         if !vault.exists() {
             return Err(QurbError::NotSetUp { detail: format!("{root} has no vault") });
