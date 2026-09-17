@@ -150,8 +150,6 @@ almost instantly.
 
 ## Not yet built
 
-- **Vector clocks and peer sync.** This engine syncs a directory into a local
-  store. Nothing talks to another device yet.
 - **Parallelism.** Files are processed one at a time. The measured 979 MiB in
   13 seconds is roughly 75 MiB/s through the full pipeline — chunking, zstd,
   encryption, and thousands of small writes — against 665 MiB/s for chunking
@@ -160,4 +158,5 @@ almost instantly.
   bound on how long that takes.
 - **Moves.** A renamed file is stored again under its new path and tombstoned
   under the old one, rather than recognised as the same content moving. The
-  chunks are deduplicated, so the cost is a re-read rather than re-storage.
+  chunks are deduplicated and a peer adopting the rename finds the content
+  already on disk, so the cost is a local re-read rather than a transfer.

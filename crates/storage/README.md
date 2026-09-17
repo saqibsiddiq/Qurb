@@ -110,14 +110,14 @@ clock, or a touched file would start beating a peer's genuinely newer version.
 
 ## Not yet built
 
-- **Key management.** `ChunkKey` is supplied by the caller. Deriving it from a
-  master secret and a recovery phrase comes later; that will not change the
-  bytes on disk, which is why the format was settled first. See
-  [decision 0007](../../docs/decisions/0007-chunk-format.md).
-- **Concurrency.** One connection, one writer. `gc` already takes SQLite's write
-  lock for its deletions, which is what will make it safe against a concurrent
-  writer, but that path has not been exercised.
-- **Vector clocks, tombstone propagation, peer sync.** This crate is local-only.
+- **Key storage.** `ChunkKey` is supplied by the caller and
+  [`qurb-keys`](../keys/) derives it from a master secret with a recovery
+  phrase. What is missing is protecting that master secret at rest: it lives in
+  an owner-only file rather than the platform keystore.
+- **Parallel writing.** One connection, one writer. Concurrent access is
+  exercised — the collector runs against a live writer in `tests/concurrency.rs`
+  — but nothing writes in parallel, and a cold index of 100k files takes four
+  minutes largely because of it.
 - **Streaming reads.** `read_file` builds the whole file in memory. Fine for the
   desktop, not acceptable inside an iOS FileProvider extension, which will need
   a chunk-at-a-time API.

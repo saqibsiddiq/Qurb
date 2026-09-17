@@ -86,9 +86,6 @@ it.
 
 ## Not yet built
 
-- **The wire format.** Exchanging state with a real peer belongs to the
-  protocol crate. Vectors encode and decode, and
-  [`qurb-storage`](../storage/) persists them, but nothing sends them anywhere.
 - **Move detection.** A rename is a delete plus an add, so a renamed large file
   transfers again rather than being recognised as the file it already is.
 - **Directory-level operations.** Deleting a directory arrives as one removal

@@ -8,8 +8,9 @@ goes deeper on one topic; this file is the map.
 It is a **living document**. Anything that changes how the system fits together
 should be reflected here in the same piece of work that changes it.
 
-**Last verified against the code:** 2026-09-16, during Phase 3. Phases 0–2
-complete and pairing built; NAT traversal, signalling and relays remain.
+**Last verified against the code:** 2026-09-17, during Phase 4. Phases 0–2 are
+complete; Phase 3 is built but its kill criterion is unmeasured; Phase 4 has a
+daemon and nothing graphical.
 
 ---
 

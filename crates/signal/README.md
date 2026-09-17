@@ -65,11 +65,11 @@ tests and says what it is.
 ## Not yet built
 
 - **Serving TLS itself.** Termination is currently a reverse proxy's job.
-- **Rate limiting and abuse controls.** Anyone can open a connection and
-  announce into a group they invent.
+- **Abuse controls beyond the basics.** There are limits on connections, group
+  size, message rate and message size, and none of them survive an attacker with
+  many addresses. That needs infrastructure this service does not have.
 - **Persistence.** The directory is in memory, so a restart makes every device
   re-announce. Acceptable for a rendezvous point; not for anything else.
 - **Horizontal scaling.** One process holds every connection, so devices must
   reach the same instance to find each other.
-- **Wiring into the engine.** The pieces — discovery, punching, rendezvous —
-  exist separately. Nothing yet sequences them into "try direct, fall back".
+
