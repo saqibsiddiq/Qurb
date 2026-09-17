@@ -165,8 +165,13 @@ deliberately beats discovering it in month fifteen.
 **Started, against the recommendation below.** The memory-ceiling prediction was
 correct and cost more than expected: the receive path held whole files, which a
 FileProvider extension would not survive, and fixing it changed the engine
-rather than anything mobile-specific. The engine now cross-compiles for all four
-Android architectures and has never run on a phone. See
+rather than anything mobile-specific.
+
+The engine now runs on Android and syncs there — 420 tests pass on a device, and
+receiving a 512 MiB file costs 5 MiB of heap. What does not exist is an app, on
+either platform, and iOS has not been built at all. The prediction about
+`BGTaskScheduler` is answered on the Rust side by a sync that takes a deadline,
+and untested everywhere else. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ---

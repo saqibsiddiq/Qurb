@@ -35,6 +35,15 @@ Measured on Linux 7.2.2 (CachyOS), release build, warm cache, as growth in
 | 256 MiB | 256 MiB of heap | 0 MiB |
 | 1024 MiB | 1024 MiB of heap | 1 MiB |
 
+And on an Android 14 emulator, receiving over a real QUIC connection rather than
+reading from a local store — which is the case that actually matters:
+
+| file | heap |
+|---|---|
+| 32 MiB | 4 MiB |
+| 128 MiB | 4 MiB |
+| 512 MiB | 5 MiB |
+
 Both shapes are kept in `crates/engine/examples/peak_memory.rs` so the
 comparison stays checkable rather than becoming a claim in this document.
 
@@ -91,8 +100,20 @@ profiling on a real device says the extra write matters.
   The buffering ones remain because tests and the replica path use them.
 - `ContentSource::fetch_into` has a default implementation that buffers, so a
   source that cannot stream still compiles. A source that can stream overrides
-  it. This is a seam where a future mistake is silent — a new source that
-  forgets to override gets correctness and loses the ceiling — and is the main
-  thing to watch when adding one.
+  it. This is a seam where a mistake is silent — a source that forgets to
+  override gets correctness and loses the ceiling.
+
+  **That happened, in the same week this was written.** `NetworkSource` — the
+  one that matters, since it is how a phone receives a file — implemented only
+  `fetch` and inherited the buffering default. The network path held whole files
+  in memory for a release, and nothing failed, because buffering is correct and
+  merely expensive.
+
+  The lesson is not "write a better warning": the warning was here, in this
+  document, and it did not help. A default that is correct and slow cannot be
+  caught by review or by the compiler. It is caught by measuring, which is now
+  what `crates/mobile-ffi/tests/syncing.rs` does — receiving a 128 MiB file and
+  failing if the heap grows by more than a fixed bound. Any future source that
+  forgets the override fails that test.
 - The memory promise is asserted by a test in `crates/mobile-ffi`, not by a
   comment. A change that reintroduces buffering fails rather than ships.

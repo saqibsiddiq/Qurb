@@ -298,7 +298,7 @@ qurb/
 │   │   └── src/source.rs    plugs the client into the engine
 │   │
 │   ├── mobile-ffi/        The engine, as a phone can call it.
-│   │   └── src/lib.rs       UniFFI surface; no sync logic of its own
+│   │   └── src/lib.rs       UniFFI surface: files, pairing, bounded sync
 │   │
 │   ├── keys/              The root secret and the way back to it.
 │   │   ├── src/master.rs    HKDF derivation, one key per purpose
@@ -323,6 +323,7 @@ qurb/
 │
 ├── scripts/
 │   ├── android-build.sh   cross-compile the engine for all four Android ABIs
+│   ├── android-test.sh    run the test suite on a device, over adb
 │   └── mobile-bindings.sh generate the Kotlin and Swift bindings
 │
 ├── experiments/
@@ -431,7 +432,8 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-420 tests pass across ten crates; clippy is clean.
+427 tests pass across ten crates on Linux, 420 of them on Android; clippy is
+clean.
 
 **Two devices now sync over a real network connection**, converging through
 concurrent edits, deletions and resurrections, with both sides computing the
@@ -571,12 +573,21 @@ updates, and an app on either phone.
 | QUIC transport | 287 MiB/s loopback |
 | NAT classification | home network is cone NAT; more networks still to test |
 
-### Prepared for mobile (Phase 5, in progress)
+### Running on Android (Phase 5, in progress)
 
 The engine cross-compiles for all four Android architectures, and
-[`crates/mobile-ffi`](../crates/mobile-ffi/) generates Kotlin and Swift
-bindings from it. Two problems mobile exposed were fixed in the core, because
-both were core problems that a desktop merely tolerates:
+[`crates/mobile-ffi`](../crates/mobile-ffi/) gives it a surface a phone can
+call, generating Kotlin and Swift from the Rust. A phone pairs out of band,
+finds the other device through the rendezvous service, connects over QUIC and
+syncs — all through that surface.
+
+**It runs on a device.** `./scripts/android-test.sh` pushes the test binaries
+with `adb` and runs them: on an Android 14 emulator all 34 pass, 420 tests,
+including the real QUIC handshakes and hole punching. Receiving a 512 MiB file
+there grows the heap by 5 MiB.
+
+Three problems mobile exposed were fixed in the core, because all three were
+core problems that a desktop merely tolerates:
 
 - **Whole files no longer pass through memory.** Adopting a 1 GiB file grew the
   heap by 1024 MiB and now grows it by 1. An iOS FileProvider extension is
@@ -585,10 +596,14 @@ both were core problems that a desktop merely tolerates:
 - **Filenames are normalised to NFC.** macOS and iOS decompose names on the way
   in, which made a synced `café` look deleted-and-recreated on every scan and
   duplicated it without limit.
+- **`Connector::start` announced `0.0.0.0`** — true about a socket bound to
+  every interface, and useless to a peer. Hidden until now because every test
+  binds `127.0.0.1` explicitly and STUN normally supplies an address that works
+  instead; it broke two devices on a network with no route to the internet.
 
-**Nothing has run on a phone.** The libraries build and export the right
-symbols; they have never been loaded by an Android or iOS process, and iOS has
-not been built at all because that needs a Mac. See
+**No real phone, and no iOS.** Everything on-device ran on an x86_64 emulator,
+which imposes none of a phone's memory pressure or battery behaviour and never
+suspends the process. iOS needs Xcode, which needs a Mac. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ### Designed but not built
@@ -607,14 +622,14 @@ Three things are known-missing rather than merely unbuilt:
    promise. Choosing which compromise to make is better done on paper now than
    under pressure from an upset user later. Still undecided.
 
-13. **The phone cannot sync.** `qurb-peer` cross-compiles for Android, but the
-   FFI exposes no pairing and no transfer. What exists makes a phone a local
-   encrypted file store — a real thing, and not what the project is for.
+13. **No app, on either platform.** The engine runs on Android and syncs, but
+   nothing a person can install exists. The generated Kotlin and Swift have
+   never been through their own toolchains, let alone onto a screen.
 
 14. **Two kill criteria remain unmeasured**, both for want of hardware rather
    than for want of code: Phase 3's direct-connection rate needs a second
    machine on a different network, and Phase 5's battery-and-survival test needs
-   a phone. Neither can be closed on this machine.
+   a real phone. An emulator answers neither.
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:
@@ -679,6 +694,11 @@ cargo test --workspace
 ```bash
 # Generate the Kotlin and Swift a phone would call
 ./scripts/mobile-bindings.sh
+```
+
+```bash
+# Run the test suite on a connected Android device or emulator
+./scripts/android-test.sh x86_64
 ```
 
 The Android build needs the NDK, because SQLite is C. The script looks for one

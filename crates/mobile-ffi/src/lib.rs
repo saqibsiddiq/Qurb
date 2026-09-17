@@ -6,8 +6,8 @@
 //! [`qurb_engine`] — because logic that lives behind an FFI boundary is logic
 //! that cannot be tested from the rest of the workspace.
 //!
-//! Three constraints shape it, and all three come from the platforms rather
-//! than from taste.
+//! Four constraints shape it, and all four come from the platforms rather than
+//! from taste.
 //!
 //! **Memory.** An iOS FileProvider extension is killed at a ceiling in the tens
 //! of megabytes. So nothing here returns a file's contents. [`Qurb::export`]
@@ -18,6 +18,10 @@
 //! **Threading.** The engine takes `&mut self`, so one lock guards it. Calls
 //! block; the platform side is expected to make them off the main thread, which
 //! both Kotlin coroutines and Swift's async do naturally.
+//!
+//! **Time.** Both platforms grant background work a window and kill anything
+//! that outstays one, so the entry point that matters is not "sync" but
+//! [`Qurb::sync_within`] — sync for at most this long, and stop cleanly.
 //!
 //! **Errors.** A Rust error chain does not survive the crossing. Everything
 //! becomes [`QurbError`], flat and matchable, with the detail kept as text.

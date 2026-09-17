@@ -14,16 +14,18 @@ record](../roadmap.md).
 | the core cross-compiles for Android | ✅ all four architectures |
 | an FFI a phone can call | ✅ [`qurb-mobile`](../../crates/mobile-ffi/) |
 | Kotlin and Swift bindings generate | ✅ `./scripts/mobile-bindings.sh` |
-| files without holding them in memory | ✅ measured, 1024 MiB → 1 MiB |
+| files without holding them in memory | ✅ measured on the device: 512 MiB → 5 MiB |
 | filenames that survive macOS and iOS | ✅ NFC normalisation |
-| running on an actual device | ⬜ **not done — no device or emulator here** |
+| **running on an actual device** | ✅ **420 tests pass on Android 14** |
+| pairing and syncing from the phone | ✅ end to end, over QUIC |
+| a sync that fits a background window | ✅ `sync_within(seconds)` |
 | iOS build | ⬜ blocked: needs Xcode, which needs a Mac |
-| networking from the phone | ⬜ compiles, not exposed |
-| background sync | ⬜ not started |
+| background scheduling | ⬜ the Rust half is done; the platform half is not |
 | Keychain and Android Keystore | ⬜ not started |
 | an app | ⬜ not started |
 
-420 tests pass across ten crates; clippy is clean.
+427 tests pass across ten crates on Linux, 420 of them on Android; clippy is
+clean.
 
 ## What the library costs
 
@@ -63,6 +65,19 @@ file:
 | 256 MiB | 256 MiB of heap | 0 MiB |
 | 1024 MiB | 1024 MiB of heap | 1 MiB |
 
+And, later, on the Android emulator itself — a file arriving over a real QUIC
+connection from another device rather than read from a local store:
+
+| file received over the network | heap |
+|---|---|
+| 32 MiB | 4 MiB |
+| 128 MiB | 4 MiB |
+| 512 MiB | 5 MiB |
+
+A half-gigabyte file costs 5 MiB. That is the number the FileProvider concern
+was always about, and it is now measured on the platform rather than argued from
+a desktop.
+
 `RssAnon` rather than total resident size, on purpose. A memory-limited platform
 counts *dirty* pages against a process; pages backed by a file on disk are clean
 and the kernel can drop them under pressure. Measuring the total counts both
@@ -89,6 +104,37 @@ That required the watcher to learn the staging name. Without it the half-written
 file would be indexed as a real one, its rename read as a deletion, and both the
 phantom and its removal sent to every other device. A test in `ignore.rs` ties
 the two crates together, since nothing else does.
+
+## Running it on Android
+
+`./scripts/android-test.sh` builds the test binaries for an Android target,
+pushes them with `adb`, and runs them. There is no app, no Gradle and no JVM
+involved: the FFI is a C ABI, and a test binary exercises the same Rust an app
+would reach through it.
+
+On an Android 14 (API 34) x86_64 emulator, all 34 binaries pass — 420 tests in
+69 seconds. The networking crates are included deliberately: they open real
+sockets, complete a real QUIC handshake and punch through to each other on
+loopback. Excluding them would have meant the answer to "does it work on
+Android?" quietly left out the interesting half.
+
+Two things failed on the first attempt, and both were the harness rather than
+the code:
+
+- The crash tests spawn `crash_writer` and kill it with a real `SIGKILL`. The
+  script pushed test binaries and not examples, so all five failed looking for
+  a helper that was not on the device.
+- The script piped each binary's output into `grep -q`, which exits on its
+  first match and closes the pipe. Most of the results were lost *and* the run
+  still reported a pass — the worse of the two failure modes, since a suite
+  that reports green while showing nothing is indistinguishable from one that
+  works.
+
+What this does not establish: the emulator is x86_64, so the ARM64 build that
+ships to real phones is still only compiled and never run. The emulator also
+does not impose a real phone's memory pressure, thermal limits or battery
+behaviour, and it never suspends the process the way a backgrounded app is
+suspended.
 
 ## Filenames that mean the same thing
 
@@ -124,9 +170,9 @@ and byte order breaks anything left.
 
 ## The FFI
 
-[`crates/mobile-ffi`](../../crates/mobile-ffi/) — about 350 lines, no sync logic
-of its own. Logic behind an FFI boundary is logic the rest of the workspace
-cannot test, so there is none there.
+[`crates/mobile-ffi`](../../crates/mobile-ffi/) — no sync logic of its own.
+Logic behind an FFI boundary is logic the rest of the workspace cannot test, so
+there is none there: everything delegates to `qurb-engine` and `qurb-peer`.
 
 UniFFI generates both languages from the Rust, including the doc comments, which
 means the Kotlin and Swift carry the same explanations as the source rather than
@@ -145,31 +191,87 @@ when you use an API rather than design it:
   photo's worth of space. True of the disk, false of the library, and precisely
   backwards for a screen whose job is to show what deduplication saved.
 
+### Syncing, and what it turned up
+
+The phone pairs out of band, finds the other device through the rendezvous
+service, connects over QUIC and syncs — all through the FFI, with a test that
+checks the file arrives byte-exact rather than that the calls returned `Ok`.
+
+The mobile-shaped entry point is `sync_within(seconds)`. Both platforms grant
+background work a window and kill anything that outstays one, so "sync until
+finished" is how an app loses its background privileges. Running out of time is
+reported, not raised: each file is committed as it lands, so a pass that stops
+early leaves work done rather than work lost. A connector is built per pass
+rather than kept, because a phone's address changes every time it moves between
+Wi-Fi and cellular.
+
+Two defects fell out of this, both outside the new code and both invisible until
+something used the library the way a phone does.
+
+**`Connector::start` announced `0.0.0.0`.** It passed `socket.local_addr()`
+straight into the endpoints it advertised, and a socket bound to every interface
+reports `0.0.0.0:port` — true about the socket, useless to a peer, which has no
+"here" to resolve it against. The identical mistake was found and fixed in
+pairing invites earlier; it survived here because every existing test binds
+`127.0.0.1` explicitly, and in ordinary use STUN supplies a public address that
+works instead. What it broke is the case with no STUN: two devices on a network
+with no route to the internet, which is exactly when the local address is the
+only one there is.
+
+**`NetworkSource` was not streaming.** It implemented only the buffering half of
+`ContentSource` and inherited the trait's default for the streaming half — and
+that default buffers. So the network path, the one a phone uses to receive a
+large file, held the whole file in memory however carefully the layers beneath
+it streamed. Nothing failed, because buffering is correct and merely expensive.
+
+That second one is worth dwelling on. [Decision
+0018](../decisions/0018-file-contents-never-cross-the-ffi.md) names this exact
+hazard — "a new source that forgets to override gets correctness and loses the
+ceiling" — and it was then made by the same hand that wrote the warning, in the
+same week. A default implementation that is correct and slow is a default that
+nothing will ever catch. The answer was not a better comment but a test that
+measures.
+
+**STUN discovery is now a setting.** It had been unconditional, which meant the
+new tests would contact Google's and Cloudflare's STUN servers on every `cargo
+test` — slow, broken offline, and telling a third party the address of every
+machine that runs the suite.
+
 ## What is not verified
 
 The honest state of this phase.
 
-**Nothing here has run on a phone.** The Android libraries build for all four
-architectures and `libqurb_mobile.so` exports the expected 27 UniFFI symbols,
-which is real evidence that the toolchain and the FFI scaffolding are right. It
-is not evidence that the code runs under Android's libc, its filesystem
-semantics, its background-execution rules, or its memory limits. This machine
-has no device connected, no emulator installed, and no `qemu-user` to run the
-binaries under. The gap closes with an emulator or a phone and not before.
+**No real phone.** Everything on-device ran on an x86_64 emulator. The ARM64
+library that would ship is compiled and never executed, and an emulator imposes
+none of a phone's memory pressure, thermal limits or battery behaviour. It also
+never suspends the process the way a backgrounded app is suspended, which is the
+single most important thing about running on a phone.
 
 **iOS has not been built at all.** It needs Xcode, which needs a Mac. The
 `staticlib` crate type is declared and the Swift bindings generate, so the
-preparation is done; the build is not.
+preparation is done; the build is not. Nothing about iOS in this document is
+measured — the memory work was done *because* of the FileProvider ceiling, and
+whether it clears that ceiling in practice is unknown.
 
-**The phone cannot sync.** `qurb-peer` cross-compiles, but nothing in the FFI
-exposes pairing or transfer. Today this crate makes the phone a local encrypted
-file store, which is a real thing and not the thing the project is for.
+**No app, either platform.** The FFI is exercised by Rust tests calling the same
+functions the generated Kotlin and Swift expose. The bindings themselves have
+never been compiled by a Kotlin or Swift toolchain, let alone run.
+
+**Background scheduling is half-built.** `sync_within(seconds)` is the Rust side
+and it works. The platform side — `WorkManager` on Android, `BGTaskScheduler` on
+iOS, and the policy about when to ask for a window — does not exist.
 
 ## Kill criterion
 
 From the roadmap: *sync that works on a phone without destroying the battery, or
-without the platform killing it.* Unmeasurable here for the same reason as the
-rest — no device. It stays open.
+without the platform killing it.*
+
+**Still open, and now open for a narrower reason.** The half about the platform
+killing it is partly answered: `sync_within` exists precisely so a pass ends
+when the window does, and a pass that runs out of time reports it rather than
+failing. What is unmeasured is everything about a real device — battery cost,
+what happens across a suspend, and whether a FileProvider extension survives its
+ceiling. That needs hardware and an app.
 
 Phase 3's kill criterion (≥70% direct connections) also remains open, waiting on
 a second machine on a different network. See
@@ -184,9 +286,27 @@ a second machine on a different network. See
   worth nothing on a phone with no passcode. A passphrase works today.
 - **Selective sync.** A phone cannot hold a desktop's library, so it will need
   to choose what to keep locally and fetch the rest on demand. That is a design
-  question, not a coding one, and it has not been answered.
-- **Background sync.** Both platforms schedule background work on their own
-  terms and kill anything that outstays its welcome. Platform-side work.
+  question, not a coding one, and it has not been answered. The machinery is
+  half there — a storage-only replica can already hold a subset via
+  `PinSet::under` — but deciding *what* a phone keeps, and what happens when a
+  user opens something it does not have, is untouched.
+- **Two phones that are both asleep.** Sync needs both devices awake and
+  announced at the same moment, because a QUIC handshake's opening packets are
+  the hole punch. Two desktops manage this by being on all the time. Two phones,
+  each awake for a few seconds a day at the platform's discretion, may simply
+  never meet. This is the strongest argument for a storage-only replica in the
+  picture, and it is the reason the roadmap plans iOS as a good viewer rather
+  than a peer equal to a desktop.
+- **Background scheduling.** `sync_within` is the Rust half and it works. The
+  platform half — `WorkManager`, `BGTaskScheduler`, and the policy about when
+  to ask for a window at all — is platform-side work that needs an app to live
+  in.
+- **Upgrading a relayed connection back to direct.** Inherited from Phase 3 and
+  worse on a phone, which changes network several times a day: a connection that
+  fell back to the relay while on cellular stays relayed after it reaches Wi-Fi.
+  Since a per-pass connector is built fresh each time, the next pass does get a
+  fresh chance — so on mobile this is less severe than on the desktop daemon,
+  which holds one connector for hours.
 - **Conflict resolution on a small screen.** The engine never discards an edit,
   so conflicts appear as extra files. On a desktop that is tolerable. On a phone
   it is confusing, and nothing has been designed for it.

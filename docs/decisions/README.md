@@ -46,3 +46,4 @@ is worth more than a tidy directory.
 | [0017](0017-relay.md) | The relay carries datagrams, not messages | Accepted |
 | [0018](0018-file-contents-never-cross-the-ffi.md) | File contents never cross the FFI | Accepted |
 | [0019](0019-filenames-are-nfc.md) | Filenames are normalised to NFC | Accepted |
+| [0020](0020-sync-takes-a-deadline.md) | Sync takes a deadline, and running out is not an error | Accepted |

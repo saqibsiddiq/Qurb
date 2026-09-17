@@ -16,7 +16,7 @@ A number without its conditions is not evidence.
 | [2](phase-2-correctness.md) | Adversarial correctness | ✅ complete — 4 defects found |
 | [3](phase-3-networking.md) | Networking at scale | 🔨 built — kill criterion unmeasured |
 | [4](phase-4-product.md) | Desktop product | 🔨 in progress — the daemon runs |
-| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — builds, never run on a phone |
+| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — syncs on Android, no app |
 | 6 | Commercial | not started |
 
 Phase definitions and kill criteria: [../roadmap.md](../roadmap.md).

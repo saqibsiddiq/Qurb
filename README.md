@@ -10,8 +10,8 @@ management, verified at 100,000 files and hardened against crashes, wrong
 clocks, long absences, damaged disks and hostile peers. Phase 3 built pairing,
 NAT traversal, a rendezvous service and a relay — its kill criterion, how often
 the direct path works, needs a second machine and is still unmeasured. Phase 4
-has a daemon and no interface. Phase 5 cross-compiles the engine for Android
-and has never run on a phone.
+has a daemon and no interface. Phase 5 runs the engine on Android, where it
+pairs and syncs — on an emulator, with no app around it and no iOS build.
 
 ---
 
@@ -144,7 +144,7 @@ directory behind it.
 Built and tested in [`crates/keys`](crates/keys/): a 256-bit master key, HKDF
 derivation of one key per purpose, and a 24-word BIP-39 recovery phrase — tested
 end to end, so the words on a piece of paper genuinely turn back into the user's
-files. 420 tests across ten crates, clippy clean.
+files. 427 tests across ten crates, clippy clean.
 
 A directory syncs into a local store — on 2437 real files (979 MiB), 12.96s for
 the first pass and 0.03s for the second. **Two devices now sync over a real
@@ -180,15 +180,26 @@ had missed, including an invite that offered `0.0.0.0` as an address — true, a
 impossible to connect to.
 
 Built and tested in [`crates/mobile-ffi`](crates/mobile-ffi/): the surface a
-phone calls, generating Kotlin and Swift from the Rust. The engine
-cross-compiles for all four Android architectures. Mobile also forced two fixes
-in the core — files no longer pass through memory whole (adopting a 1 GiB file
-grew the heap by 1024 MiB and now grows it by 1), and filenames are normalised
-to NFC, without which a `café` synced to a Mac duplicates itself without limit.
+phone calls, generating Kotlin and Swift from the Rust. A phone pairs out of
+band, finds the other device through the rendezvous service, connects over QUIC
+and syncs — with `syncWithin(seconds)`, because both platforms kill background
+work that outstays its window.
 
-Not built: an interface of any kind, installers, signed updates, Keychain and
-Android Keystore, and syncing from a phone — which compiles but is not exposed.
-Nothing has run on a phone.
+**It runs on Android.** `./scripts/android-test.sh` pushes the test binaries to
+a device and runs them: 420 of the 427 pass there, QUIC handshakes and hole
+punching included. Receiving a 512 MiB file on the device grows the heap by
+5 MiB.
+
+Mobile also forced three fixes in the core: files no longer pass through memory
+whole (adopting a 1 GiB file grew the heap by 1024 MiB and now grows it by 1);
+filenames are normalised to NFC, without which a `café` synced to a Mac
+duplicates itself without limit; and the connector no longer advertises
+`0.0.0.0` as its address, which broke two devices on a network with no route to
+the internet.
+
+Not built: an app of any kind, an interface, installers, signed updates,
+Keychain and Android Keystore. Everything on-device ran on an emulator, and iOS
+has not been built at all — that needs a Mac.
 
 **Phase 1 is complete.** Its kill criterion — syncing 100,000 files cleanly —
 was run and passed: 4.40 GiB between two devices with every correctness check
