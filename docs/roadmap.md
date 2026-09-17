@@ -169,10 +169,16 @@ rather than anything mobile-specific.
 
 The engine now runs on a real phone and syncs there — 426 tests pass on a Galaxy
 S23, and receiving a 512 MiB file over the network costs 6 MiB of heap. There is
-an Android app, with the key in the Android Keystore. What does not exist is an app, on
-either platform, and iOS has not been built at all. The prediction about
-`BGTaskScheduler` is answered on the Rust side by a sync that takes a deadline,
-and untested everywhere else. See
+an Android app, with the key in the Android Keystore, syncing in the background
+through WorkManager and showing its files in the system picker. A phone and a
+laptop sync in both directions, verified on hardware.
+
+What does not exist is iOS, in any form. The prediction about `BGTaskScheduler`
+is answered on the Rust side by a sync that takes a deadline, and is untested on
+Apple's. The recommendation to cut mobile from year one was not taken, and the
+honest accounting is that it cost roughly what the roadmap said it would — the
+memory ceiling was real, and most of the work was in the engine rather than in
+anything mobile-specific. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ---

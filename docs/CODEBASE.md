@@ -8,11 +8,12 @@ goes deeper on one topic; this file is the map.
 It is a **living document**. Anything that changes how the system fits together
 should be reflected here in the same piece of work that changes it.
 
-**Last verified against the code:** 2026-09-17, during Phase 5 — the whole file
+**Last verified against the code:** 2026-09-18, during Phase 5 — the whole file
 checked against the source, not just the sections that changed. Phases 0–2 are
 complete. Phase 3 is built and its kill criterion is unmeasured, for want of a
-second machine. Phase 4 has a daemon and nothing graphical. Phase 5 runs on an
-Galaxy S23, where it pairs and syncs, with no app around it and no iOS at all.
+second *network*. Phase 4 has a daemon and nothing graphical. Phase 5 has an
+Android app on a real phone that syncs with a laptop in both directions; iOS is
+untouched.
 
 ---
 
@@ -224,6 +225,13 @@ on two different networks — see
 Step 11 is where the chunking finally pays off. Inserting 16 bytes at the front
 of a 200 MB file moved **248 KiB** over the wire — one chunk, 0.1% of the file —
 where fixed-size blocks would have re-sent all 190 MiB.
+
+**How the other device finds out.** Steps 10 and 11 need both devices reachable
+at the same moment, and a phone is awake only in short bursts. The rendezvous
+service therefore *pushes*: when a device announces itself, everyone else in its
+group is told at once, with addresses attached. A peer that had to poll would
+not be asking during the twenty seconds a phone is up — see
+[decisions/0022](decisions/0022-the-service-announces-arrivals.md).
 
 **Ordering matters at step 7 and 8, and not in the obvious way.** The payload is
 written and fsynced *before* the index records that it exists. A crash between
@@ -441,7 +449,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-433 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
+439 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
 clippy is clean.
 
 **Two devices now sync over a real network connection**, converging through
@@ -624,10 +632,19 @@ The app syncs on its own through WorkManager, every fifteen minutes when
 Android allows it, and a `DocumentsProvider` puts the synced files in the
 system file picker and the Files app.
 
+**A real phone and a real laptop sync both ways**, verified on hardware: a
+4.7 MB photo crossed from a Galaxy S23 to a laptop, byte-identical by SHA-256.
+Getting there found five more defects that no test could have caught, because
+each needed two machines and a router — most importantly that the rendezvous
+service knew the moment a device appeared and told nobody, which made sync
+one-directional in practice while looking symmetrical in design
+([decision 0022](decisions/0022-the-service-announces-arrivals.md)).
+
 **Unwatched behaviour and iOS are what remain.** The background worker is
-scheduled and was verified by running one through WorkManager, but a phone left
-alone for a day — syncing on Android's timetable, at some cost in battery — has
-never been observed. iOS needs Xcode, which needs a Mac. See
+scheduled and was verified through WorkManager, but a phone left alone for a
+day — syncing on Android's timetable, at some cost in battery — has never been
+observed, and everything verified so far was on one phone, one laptop and one
+network. iOS needs Xcode, which needs a Mac. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ### Designed but not built
@@ -647,7 +664,8 @@ Three things are known-missing rather than merely unbuilt:
 
 13. **Nobody has watched a phone sync for a day.** The background worker is
    scheduled and runs when asked; what Android actually grants it over a day,
-   and what that costs in battery, is unmeasured.
+   and what that costs in battery, is unmeasured. Everything verified on
+   hardware so far was one phone and one laptop on one home network.
 
 14. **Two kill criteria remain unmeasured**, both for want of hardware rather
    than for want of code: Phase 3's direct-connection rate needs a second
@@ -727,6 +745,11 @@ cargo test --workspace
 ./scripts/android-test.sh x86_64
 ```
 
+```bash
+# Build the app, and put it on a connected phone
+./scripts/android-app.sh install
+```
+
 The Android build needs the NDK, because SQLite is C. The script looks for one
 and says where to get it if there is none. Nothing else in the tree needs a
 cross-compiler.
@@ -774,11 +797,14 @@ Then the layers, bottom to top:
     [crates/relay/README.md](../crates/relay/README.md) — the two services, and
     what each is deliberately unable to learn.
 15. [crates/mobile-ffi/README.md](../crates/mobile-ffi/README.md) — the surface
-    a phone calls, and the three platform constraints that shaped it.
+    a phone calls, and the four platform constraints that shaped it.
+16. [android/README.md](../android/README.md) — the app, and the three things
+    about Android that dictated its shape: the keystore, the 16 KB page size,
+    and a background scheduler that decides when you run.
 
 And when you want to close the measurements still outstanding:
 
-16. [measuring-connectivity.md](measuring-connectivity.md) — how to measure the
+17. [measuring-connectivity.md](measuring-connectivity.md) — how to measure the
     direct-connection rate, which is the number the relay bill depends on. The
     other open measurement, whether sync survives a phone's battery and its
     platform's patience, needs a device — see

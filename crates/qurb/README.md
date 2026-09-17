@@ -6,6 +6,7 @@ The program a person runs. Everything else in this repository is a library.
 qurb init <dir>                  set up a device and create a key
 qurb enrol <dir> "<24 words>"    set up a device with an existing key
 qurb pair <dir>                  show a code and wait for a device to join
+                                 (the code lasts five minutes, then it stops)
 qurb join <dir> <code>           join a device that is showing a code
 qurb run <dir>                   watch, sync, and keep running
 qurb status <dir>                what this device holds and trusts

@@ -23,9 +23,10 @@ record](../roadmap.md).
 | **an Android app** | ✅ [`android/`](../../android/) — installs, sets up, syncs |
 | syncing unattended | ✅ WorkManager, every 15 minutes |
 | the files visible to other apps | ✅ a DocumentsProvider, verified in Files |
+| **a phone syncing with a laptop, both ways** | ✅ verified on hardware |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-433 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
+439 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
 clippy is clean.
 
 ## What the library costs
@@ -418,50 +419,149 @@ deletion here becomes a tombstone that propagates to every device, and letting a
 file manager do that by accident is not a risk worth taking before there is any
 undo.
 
+## Putting a phone and a laptop together
+
+The app existed, the engine ran on hardware, and both had been tested against
+themselves. Putting a real phone and a real laptop on one network found five
+more things — none of which any test had caught, because each needed two
+machines, a router, and a person trying to use them.
+
+### `qurb pair` waited forever on a dead invite
+
+Found on a terminal that had been sitting for two and a half hours, still
+printing `Waiting...` under a code that had stopped working five minutes in.
+Worse than failing, because the person reading the code aloud has no way to know
+it is dead.
+
+Two causes, and the first is the interesting one. `wait` took `now` as a
+parameter and checked `is_expired(now)` *inside* the accept loop — so the clock
+it compared against was captured before the wait began, and the check could
+never fire however long the wait lasted. It was dead code that looked like a
+safeguard. Nothing else bounded the loop, so with nobody connecting it blocked
+until the process was killed.
+
+The wait is now bounded by the invite's remaining lifetime, computed from the
+caller's clock so it stays injectable for tests. Both new tests *hang* against
+the old code rather than failing, which is the shape of the bug.
+
+### 16 KB page alignment
+
+Android 15 introduced devices with 16 KB memory pages, and a library whose LOAD
+segments are aligned to the old 4 KB will not load on one **at all**. Rust
+defaults to 4 KB. The app installed, warned on the Galaxy S23, and would have
+failed outright on a 16 KB device.
+
+`-Wl,-z,max-page-size=16384` in both Android scripts; the segments went from
+`0x1000` to `0x4000` and `zipalign -c -P 16` verifies the APK. JNA was already
+at `0x10000`, which satisfies the requirement — a larger alignment is a valid
+one.
+
+Only a real device surfaced this. The emulator never complained.
+
+### The toolbar was under the status bar
+
+Android 15 draws apps edge to edge whether they ask or not, and the app never
+handled window insets. The toolbar sat beneath the status bar: it looked wrong,
+and the overflow button's top half was unreachable because taps in that strip go
+to the status bar instead.
+
+Invisible in a screenshot until you try to press something — which is how it was
+found, after several attempts at opening a menu that would not open. The first
+fix padded the toolbar, which pushes its contents down inside a box that does not
+grow, so the title clipped instead. The padding belongs on the `AppBarLayout`.
+
+### Errors that read like a struct dump
+
+UniFFI generates `message = "detail=${detail}"`, so every dialog led with a field
+name: `detail=connection lost: timed out`. `QurbException.readable()` replaces
+it, and pairs each case with the first thing worth trying — a timeout on a home
+network almost always means a firewall dropping UDP, and a rule that allows ping
+will still drop it, so the message says so. That was the actual cause here.
+
+### A hole punch that cried wolf
+
+The one that cost the most time, and the lesson is about logging rather than
+networking.
+
+`knock` opens a handshake it *wants* to fail: the packets are the entire point,
+and it pins its own fingerprint so nothing can complete. Every punch therefore
+logged `WARN rejected an unrecognised peer` — which reads exactly like a device
+being refused for real.
+
+It sent an investigation through the peers table, the certificate on the phone,
+and a BLAKE3 hash of that certificate to prove it matched what the laptop
+trusted, while the actual failure sat two lines above at `DEBUG`. The rejection
+is now `TRACE` when it is expected, and the genuine warning carries the full
+fingerprints on both sides — the four-byte short form cannot show a mismatch
+that starts later, which is precisely the case the message needs to prove.
+
+**A log line's severity is an assertion.** A `WARN` that fires on a successful
+code path trains people to ignore warnings, and costs more than the silence
+would have.
+
+### And the one that made sync one-directional
+
+See [decision 0022](../decisions/0022-the-service-announces-arrivals.md). The
+rendezvous service knew the moment a device appeared and told only that device,
+so a phone awake for twenty-odd seconds could never be found by a laptop polling
+on a two-minute backoff. Sync worked one way and appeared symmetrical in design.
+
+Measured: a laptop retrying every 120s against a phone announcing for 25s never
+once caught it. After the fix, `peer appeared; syncing now` within a second, and
+a 4.7 MB photo crossed inside the window, byte-identical by SHA-256.
+
 ## What is not verified
 
 The honest state of this phase.
 
-**No real phone.** Everything on-device ran on an x86_64 emulator. The ARM64
-library that would ship is compiled and never executed, and an emulator imposes
-none of a phone's memory pressure, thermal limits or battery behaviour. It also
-never suspends the process the way a backgrounded app is suspended, which is the
-single most important thing about running on a phone.
-
-**iOS has not been built at all.** It needs Xcode, which needs a Mac. The
-`staticlib` crate type is declared and the Swift bindings generate, so the
-preparation is done; the build is not. Nothing about iOS in this document is
-measured — the memory work was done *because* of the FileProvider ceiling, and
-whether it clears that ceiling in practice is unknown.
-
-**No iOS app, and the Swift has never been compiled.** The Kotlin bindings are
-now compiled and run by a real app; the Swift ones are generated and checked as
-text by a test, and nothing has put them through a Swift toolchain.
+**iOS, entirely.** It needs Xcode, which needs a Mac. The `staticlib` crate type
+is declared, the Swift bindings generate, and a test checks their text — but
+nothing has put them through a Swift toolchain, there is no app, and no iOS
+device has run any of this. Nothing about iOS in this document is measured. The
+memory work was done *because* of the FileProvider ceiling; whether it clears
+that ceiling in practice is unknown.
 
 **Background sync has never been observed happening on its own.** The worker is
-scheduled, and it was verified by running one through WorkManager rather than by
-calling the engine directly — so the path is the same one the schedule uses. What
-has not been watched is a phone left alone for a day, syncing on Android's
+scheduled and was verified by running one through WorkManager rather than by
+calling the engine directly — so the path is the same one the schedule uses.
+What has not been watched is a phone left alone for a day, syncing on Android's
 timetable. That takes a day and a phone nobody is using.
 
 **Battery is unmeasured.** The whole design of `sync_within` is about not
 spending more of a window than granted, and nothing has measured what a sync
 actually costs in power.
 
+**One phone, one laptop, one network.** Everything verified on hardware was
+verified on a single Galaxy S23 and a single Linux laptop on one home Wi-Fi
+network, with the rendezvous service running on that laptop. Nothing has been
+tried across networks, through carrier-grade NAT, over cellular, or against a
+hosted service — which is also why Phase 3's kill criterion is still open.
+
+**The sync was hand-driven.** A person pressed Sync, or a script did. The
+end-to-end path of "change a file and have it appear elsewhere without anyone
+asking" has been seen once, on the laptop's arrival-triggered sweep, not run for
+long enough to call reliable.
+
 ## Kill criterion
 
 From the roadmap: *sync that works on a phone without destroying the battery, or
 without the platform killing it.*
 
-**Still open, and now open for a narrower reason.** The half about the platform
-killing it is partly answered: `sync_within` exists precisely so a pass ends
-when the window does, and a pass that runs out of time reports it rather than
-failing. What is unmeasured is everything about a real device — battery cost,
-what happens across a suspend, and whether a FileProvider extension survives its
-ceiling. That needs hardware and an app.
+**Still open, and now open for a much narrower reason.** There is a real phone
+running a real app that syncs with a laptop in both directions, and
+`sync_within` exists precisely so a pass ends when its window does. What remains
+unmeasured is *cost over time*: battery across a day, what Android actually
+grants the worker rather than what it was asked for, and what happens across a
+suspend. Closing it needs a phone left alone for a day, not more code.
 
-Phase 3's kill criterion (≥70% direct connections) also remains open, waiting on
-a second machine on a different network. See
+The iOS half of the criterion — whether a FileProvider extension survives its
+memory ceiling — is untouched, and the memory work that exists was done on its
+behalf without ever being tested against it.
+
+Phase 3's kill criterion (≥70% direct connections) also remains open. Today's
+work was two devices on *one* home network, which says nothing about the rate
+across different ones — and a phone on cellular, behind carrier-grade NAT, is
+exactly the hard case that number is about. See
 [measuring-connectivity.md](../measuring-connectivity.md).
 
 ## Deliberately left undone

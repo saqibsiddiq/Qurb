@@ -147,9 +147,10 @@ keep the output. Re-run that one binary with `STRIP=0` to get symbols in the
 backtrace.
 
 What this does *not* test, on any device: the tests run from `/data/local/tmp`
-as a shell user on a plugged-in, awake phone. An installed app that the system
-has backgrounded lives under quite different rules, and none of that is measured
-because there is no app.
+as a shell user on a plugged-in, awake phone. The app (section 6) lives under
+quite different rules once the system has backgrounded it, and none of that —
+battery, suspension, what Android actually grants a background worker — is
+measured.
 
 ## 6. The Android app
 
@@ -180,14 +181,27 @@ phone with the code it prints. Press **Sync** on both.
 
 Both devices have to be awake and running at the same moment — a QUIC
 handshake's opening packets are the hole punch, so a device that is only
-listening has punched nothing.
+listening has punched nothing. The rendezvous service tells each side the
+instant the other appears, so "at the same moment" means overlapping at all,
+not being lucky with timing.
+
+If pairing times out, the usual cause is a firewall on the computer: sync is
+UDP, and a rule that allows ping will still drop it. On Linux:
+
+```bash
+sudo ufw allow from 192.168.0.0/16 to any proto udp
+```
 
 ## 7. What you cannot test yet
 
 - **A day of unattended sync.** The background worker is scheduled and runs
   when asked, but nobody has left a phone alone for a day to see what Android
   actually grants it, or what that costs in battery. If you try it, menu →
-  **Background sync** records the last run.
+  **Background sync** records the last run. This is the single most useful
+  thing left to measure.
+- **A second network.** Everything verified so far was one phone and one laptop
+  on one home Wi-Fi. A phone on cellular, behind carrier-grade NAT, is the hard
+  case Phase 3's direct-connection rate is actually about.
 - **iOS, at all.** Building it needs Xcode, which needs a Mac. The Swift
   bindings generate and have never been compiled.
 - **Battery.** `syncWithin(seconds)` is built for short background windows and

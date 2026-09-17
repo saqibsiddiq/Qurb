@@ -9,9 +9,9 @@ sync end to end over QUIC with encryption, conflict resolution and key
 management, verified at 100,000 files and hardened against crashes, wrong
 clocks, long absences, damaged disks and hostile peers. Phase 3 built pairing,
 NAT traversal, a rendezvous service and a relay — its kill criterion, how often
-the direct path works, needs a second machine and is still unmeasured. Phase 4
-has a daemon and no interface. Phase 5 runs the engine on Android, where it
-pairs and syncs — on an emulator, with no app around it and no iOS build.
+the direct path works, needs a second *network* and is still unmeasured. Phase 4
+has a daemon and no interface. Phase 5 has an Android app: a real phone and a
+real laptop sync in both directions, verified on hardware. iOS is untouched.
 
 ---
 
@@ -146,7 +146,7 @@ directory behind it.
 Built and tested in [`crates/keys`](crates/keys/): a 256-bit master key, HKDF
 derivation of one key per purpose, and a 24-word BIP-39 recovery phrase — tested
 end to end, so the words on a piece of paper genuinely turn back into the user's
-files. 433 tests across ten crates, clippy clean.
+files. 439 tests across ten crates, clippy clean.
 
 A directory syncs into a local store — on 2437 real files (979 MiB), 12.96s for
 the first pass and 0.03s for the second. **Two devices now sync over a real
@@ -209,8 +209,16 @@ it, pairs with a computer, and syncs — on a button, and on its own every fifte
 minutes through WorkManager. The synced files appear in the system file picker
 and the Files app. The APK is 22 MB.
 
+**A real phone and a real laptop sync both ways.** A 4.7 MB photo crossed from a
+Galaxy S23 to a laptop, byte-identical by SHA-256. Getting there found five
+defects no test could have caught, because each needed two machines and a
+router — chief among them that the rendezvous service knew the moment a device
+appeared and told nobody, which made sync one-directional in practice while
+looking symmetrical in design.
+
 Not built: a desktop interface, installers, signed updates, and iOS — which
-needs a Mac. Nobody has yet watched a phone sync for a day, so what Android
+needs a Mac. Everything verified on hardware was one phone and one laptop on one
+network, and nobody has yet watched a phone sync for a day, so what Android
 grants the background worker in practice, and what it costs in battery, is
 unmeasured.
 
