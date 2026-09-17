@@ -87,6 +87,23 @@ What prevents it is `apply_plan` recording the modification time the file
 actually ended up with, so the size-and-mtime fast path recognises its own work.
 Three tests pin this: for adopted files, adopted tombstones, and conflict files.
 
+## Storing many files at once
+
+Reconciliation makes two passes, because they cost completely different things.
+Deciding whether a file changed is a stat and an index lookup — 100k of them take
+about a second. Storing one that did change is a read, a chunking pass,
+compression, encryption and an fsync, most of which is waiting.
+
+So the decision is made in order, and the storing is handed to workers, each with
+its own connection to the same store. SQLite still permits one writer at a time,
+but those transactions are short and everything around them is not.
+
+Measured on 20,000 files: **487 files/s with one worker, 830–888 with four.**
+The gain is from overlapping waits rather than from computation — chunking,
+hashing and encryption together are under a tenth of the time — which is why it
+stops improving once the disk has enough requests in flight. Eight workers were
+no better than four.
+
 ## Repairing damage
 
 `Engine::repair` discards chunks that verification found missing or corrupt and
@@ -150,10 +167,6 @@ almost instantly.
 
 ## Not yet built
 
-- **Parallelism.** Files are processed one at a time. The measured 979 MiB in
-  13 seconds is roughly 75 MiB/s through the full pipeline — chunking, zstd,
-  encryption, and thousands of small writes — against 665 MiB/s for chunking
-  alone. Initial import of a large library is the case that will need this.
 - **Backpressure.** A huge batch of changes is applied in one pass with no
   bound on how long that takes.
 - **Moves.** A renamed file is stored again under its new path and tombstoned

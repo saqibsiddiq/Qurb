@@ -278,7 +278,16 @@ fn open(root: &Path, master: &MasterKey) -> Result<(Engine, Identity), Box<dyn s
     let store = Store::open(&store_dir, chunk_key(master))?;
     let identity = Identity::load_or_create(&store_dir)?;
     let ignore = IgnoreRules::new().with_store_dir(&store_dir);
-    Ok((Engine::new(root, store, ignore), identity))
+    let mut engine = Engine::new(root, store, ignore);
+
+    // So a run can be compared against itself with threading off, rather than
+    // against a number written down on a different day.
+    if let Ok(workers) = std::env::var("QURB_WORKERS") {
+        if let Ok(workers) = workers.parse::<usize>() {
+            engine.set_workers(workers);
+        }
+    }
+    Ok((engine, identity))
 }
 
 fn first_few(failures: &[qurb_engine::FileFailure]) -> Vec<String> {

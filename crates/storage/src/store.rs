@@ -70,6 +70,17 @@ impl Store {
         Ok(Self { cas, db, key })
     }
 
+    /// Where this store lives, so another handle can be opened on it.
+    pub fn root(&self) -> &Path {
+        // The CAS sits directly under the store root.
+        self.cas.root().parent().expect("the chunk store has a parent")
+    }
+
+    /// The key this store was opened with.
+    pub fn chunk_key(&self) -> ChunkKey {
+        self.key.clone()
+    }
+
     pub fn db(&self) -> &Db {
         &self.db
     }
