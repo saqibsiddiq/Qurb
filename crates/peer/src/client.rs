@@ -100,6 +100,21 @@ impl PeerClient {
         }
     }
 
+    /// Wait until the peer's state differs from `since`.
+    ///
+    /// Returns where the peer has got to, both when something changed and when
+    /// the wait ran out — either way the answer is what to pass next time.
+    ///
+    /// This is what turns polling into being told. A device holding this open
+    /// costs one idle stream and learns of a change within a round trip,
+    /// instead of up to a whole polling interval later.
+    pub async fn wait_for_change(&self, since: u64) -> Result<u64> {
+        match self.request(Request::Changes { since }).await? {
+            Response::Changed { generation } => Ok(generation),
+            other => Err(unexpected("change notification", &other)),
+        }
+    }
+
     /// Rebuild a file, taking only the chunks this device does not already have.
     ///
     /// This is where the chunking finally pays off across the network. A large
@@ -177,6 +192,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Chunk(_) => "chunk",
         Response::NotFound => "not-found",
         Response::Paired { .. } => "pairing reply",
+        Response::Changed { .. } => "change notification",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }
 }

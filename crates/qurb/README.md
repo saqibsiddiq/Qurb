@@ -39,6 +39,27 @@ necessary: it is how they learn each other's network identity, and it happens
 out of band because someone able to change what is on your screen has already
 won.
 
+## How news travels
+
+A device holds one request open against each peer — "tell me when your state
+differs from this" — and the answer arrives when it does. An edit reaches
+another device in about 400ms, most of which is the watcher deliberately waiting
+to see whether the file is still being written.
+
+It does not break the rule that a peer can ask and never tell: the device that
+wants to know is the one asking, and the answer simply arrives later than usual.
+
+A counter rather than a flag, because a flag can be missed — a peer told
+"something changed" cannot tell a notification it has already acted on from a
+new one. It says what it last saw instead, and gets an immediate answer if
+anything has happened since. The counter need not survive a restart: a peer
+holding a number from before sees one that does not match, which is exactly the
+right conclusion.
+
+A sweep every two minutes covers what being told cannot — a notification lost
+with a dropped connection, a peer that was unreachable when it changed, a
+machine coming back from sleep.
+
 ## The services
 
 `qurb signal` introduces devices and tells both to punch at the same moment. It
@@ -65,10 +86,6 @@ setting that silently does nothing is a bad afternoon.
 
 ## What it does not do yet
 
-- **Push.** A device syncs when *it* changes something, or every ten seconds. An
-  edit made elsewhere arrives when this device next asks, so up to ten seconds
-  late. The right fix is a peer asking to be told — which keeps the rule that a
-  peer can ask and never tell — and it is not built.
 - **Notice new pairings while running.** The guest list is read at startup, so a
   device paired afterwards needs a restart.
 - **Run as a service.** No unit file, no launch agent, no Windows service.

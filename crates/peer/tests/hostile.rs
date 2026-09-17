@@ -73,6 +73,11 @@ fn start_hostile(
                         }
                         // Pairing has its own listener; this one never serves it.
                         (_, Request::Pair { .. }) => Some(Response::NotFound.encode()),
+                        // A hostile peer that claims to have changed, endlessly,
+                        // can waste our time and nothing else.
+                        (_, Request::Changes { .. }) => {
+                            Some(Response::Changed { generation: u64::MAX }.encode())
+                        }
                     };
 
                     match reply {

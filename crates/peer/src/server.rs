@@ -13,11 +13,74 @@ use qurb_storage::Store;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub struct PeerServer {
     endpoint: quinn::Endpoint,
     stats: Arc<ServerStats>,
 }
+
+/// How far this device's state has got.
+///
+/// A counter rather than a flag, because a flag can be missed: a peer told
+/// "something changed" has no way to tell a notification it already acted on
+/// from a new one. With a counter it says what it last saw, and the answer is
+/// immediate if anything has happened since.
+///
+/// It need not survive a restart. A peer holding a number from before will see
+/// one that does not match, which is exactly the right conclusion — the device
+/// it was watching has been away, and its state may well have moved.
+#[derive(Debug, Default)]
+pub struct Generation {
+    value: std::sync::atomic::AtomicU64,
+    changed: tokio::sync::Notify,
+}
+
+impl Generation {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub fn current(&self) -> u64 {
+        self.value.load(Ordering::Relaxed)
+    }
+
+    /// Say that something changed, and wake everyone waiting.
+    pub fn bump(&self) {
+        self.value.fetch_add(1, Ordering::Relaxed);
+        self.changed.notify_waiters();
+    }
+
+    /// Wait until the value differs from `since`, or until `timeout`.
+    ///
+    /// Any difference counts, not only an increase, so a restarted peer is told
+    /// to look rather than waiting for a counter that began again to overtake
+    /// one it remembers.
+    async fn wait_past(&self, since: u64, timeout: Duration) -> u64 {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            let now = self.current();
+            if now != since {
+                return now;
+            }
+            // Registered before the check below, so a change between the two
+            // wakes this rather than being missed.
+            let notified = self.changed.notified();
+            if self.current() != since {
+                return self.current();
+            }
+            if tokio::time::timeout_at(deadline, notified).await.is_err() {
+                return self.current();
+            }
+        }
+    }
+}
+
+/// How long to hold a request open before answering anyway.
+///
+/// Long enough that an idle pair exchanges almost nothing; short enough that a
+/// connection which has quietly died is noticed rather than waited on for ever.
+const CHANGES_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// What this server has done since it started.
 ///
@@ -83,15 +146,24 @@ impl PeerServer {
     /// Storage reads are synchronous and can take milliseconds, so they run
     /// inside [`tokio::task::block_in_place`], which needs the multi-threaded
     /// scheduler. The same constraint the engine has.
+    /// Serve, without telling anyone when this device changes.
+    ///
+    /// Peers fall back to asking periodically, which works and is slower.
     pub async fn serve(&self, store: Arc<Mutex<Store>>) {
+        self.serve_with(store, Generation::new()).await
+    }
+
+    /// Serve, and answer "tell me when you change" from `generation`.
+    pub async fn serve_with(&self, store: Arc<Mutex<Store>>, generation: Arc<Generation>) {
         while let Some(incoming) = self.endpoint.accept().await {
             let store = Arc::clone(&store);
             let stats = Arc::clone(&self.stats);
+            let generation = Arc::clone(&generation);
             tokio::spawn(async move {
                 match incoming.await {
                     Ok(connection) => {
                         tracing::debug!(peer = %connection.remote_address(), "peer connected");
-                        serve_connection(connection, store, stats).await;
+                        serve_connection_inner(connection, store, stats, generation).await;
                     }
                     // A failed handshake is the normal outcome for an
                     // unrecognised peer, and is not worth more than a debug line.
@@ -121,13 +193,24 @@ pub fn trusted_fingerprints(store: &Store) -> Result<Vec<Fingerprint>> {
 /// Exists because hole punching requires the endpoint to be constructed from an
 /// existing socket, which [`PeerServer::bind`] cannot do.
 pub async fn serve_connection_for_test(connection: quinn::Connection, store: Arc<Mutex<Store>>) {
-    serve_connection(connection, store, Arc::new(ServerStats::default())).await
+    serve_connection_inner(connection, store, Arc::new(ServerStats::default()), Generation::new())
+        .await
 }
 
-async fn serve_connection(
+/// Serve one connection, telling peers about changes to `generation`.
+pub async fn serve_connection(
+    connection: quinn::Connection,
+    store: Arc<Mutex<Store>>,
+    generation: Arc<Generation>,
+) {
+    serve_connection_inner(connection, store, Arc::new(ServerStats::default()), generation).await
+}
+
+async fn serve_connection_inner(
     connection: quinn::Connection,
     store: Arc<Mutex<Store>>,
     stats: Arc<ServerStats>,
+    generation: Arc<Generation>,
 ) {
     // One request per bidirectional stream, served concurrently. This is the
     // property QUIC was chosen for: a large chunk in flight does not hold up
@@ -135,8 +218,9 @@ async fn serve_connection(
     while let Ok((send, recv)) = connection.accept_bi().await {
         let store = Arc::clone(&store);
         let stats = Arc::clone(&stats);
+        let generation = Arc::clone(&generation);
         tokio::spawn(async move {
-            if let Err(e) = serve_request(send, recv, store, stats).await {
+            if let Err(e) = serve_request(send, recv, store, stats, generation).await {
                 tracing::debug!(error = %e, "request failed");
             }
         });
@@ -148,14 +232,22 @@ async fn serve_request(
     mut recv: quinn::RecvStream,
     store: Arc<Mutex<Store>>,
     stats: Arc<ServerStats>,
+    generation: Arc<Generation>,
 ) -> Result<()> {
     let raw = recv.read_to_end(MAX_MESSAGE).await?;
     let request = Request::decode(&raw)?;
 
-    let response = tokio::task::block_in_place(|| {
-        let store = store.lock().expect("store mutex poisoned");
-        answer(&store, &request)
-    })?;
+    // Handled here rather than in `answer`, because it is the one request that
+    // waits: holding the store's lock while doing so would stop this device
+    // getting on with anything.
+    let response = if let Request::Changes { since } = request {
+        Response::Changed { generation: generation.wait_past(since, CHANGES_TIMEOUT).await }
+    } else {
+        tokio::task::block_in_place(|| {
+            let store = store.lock().expect("store mutex poisoned");
+            answer(&store, &request)
+        })?
+    };
 
     match &response {
         Response::Tree(_) => stats.trees_served.fetch_add(1, Ordering::Relaxed),
@@ -164,7 +256,7 @@ async fn serve_request(
             stats.bytes_served.fetch_add(bytes.len() as u64, Ordering::Relaxed);
             stats.chunks_served.fetch_add(1, Ordering::Relaxed)
         }
-        Response::NotFound | Response::Paired { .. } => 0,
+        Response::NotFound | Response::Paired { .. } | Response::Changed { .. } => 0,
     };
 
     let encoded = response.encode();
@@ -190,6 +282,9 @@ fn answer(store: &Store, request: &Request) -> Result<Response> {
         // certificates. This one only ever talks to devices already trusted, so
         // a pairing request here is either a mistake or a probe.
         Request::Pair { .. } => Response::NotFound,
+
+        // Handled before the store is locked, since it waits.
+        Request::Changes { .. } => unreachable!("answered without locking the store"),
 
         Request::Chunk { hash } => {
             let hash = blake3::Hash::from(*hash);

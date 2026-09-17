@@ -561,14 +561,14 @@ accounts and billing, the desktop UI, both mobile clients, search, updates.
 
 Two things are known-missing rather than merely unbuilt:
 
-1. **Protecting the master key at rest.** It lives in a file readable only by
+12. **Protecting the master key at rest.** It lives in a file readable only by
    its owner, which defends against other users on the machine and against
    nothing that can read the disk. The platform keystore — Keychain, DPAPI,
    Secret Service — is three separate integrations and is not built. **The
    largest security gap in the project**, and one a user reading "end-to-end
    encrypted" would reasonably assume was already closed.
 
-2. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
+13. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
    consumer product in this space eventually adds some escape hatch — social
    recovery, an escrowed key, a printed kit — and each trades away part of the
    promise. Choosing which compromise to make is better done on paper now than
@@ -645,22 +645,33 @@ tmpfs that the 2 GiB synthetic corpus will fill.
 5. [architecture.md](architecture.md) — the full target design.
 6. [decisions/](decisions/) — read these when you want to know *why*, or when
    you are about to change something and want to know what it would break.
-7. [crates/storage/README.md](../crates/storage/README.md) — the two invariants
-   the storage layer is built around.
-8. The storage source, in this order: `store.rs` (the API and the ordering
-   rules), `db.rs` (reference counting), then `gc.rs`.
+7. [crates/qurb/README.md](../crates/qurb/README.md) — the commands, and what
+   the daemon does not do yet. The quickest way to see the shape of the whole
+   thing is to run it.
+
+Then the layers, bottom to top:
+
+8. [crates/storage/README.md](../crates/storage/README.md) — the two invariants
+   the storage layer is built around. Then its source, in this order:
+   `store.rs`, `db.rs`, `gc.rs`.
 9. [crates/watcher/README.md](../crates/watcher/README.md) — the four silent
    failure modes filesystem watching has to prevent.
-10. [crates/engine/README.md](../crates/engine/README.md) — how a change becomes
-    work, and the one heuristic the engine leans on.
-11. [crates/sync/README.md](../crates/sync/README.md) — why concurrency means
+10. [crates/sync/README.md](../crates/sync/README.md) — why concurrency means
     conflict, and why convergence is a different property from correctness.
-12. [crates/peer/README.md](../crates/peer/README.md) — what actually crosses
-    the wire, and what pinned identity does and does not protect.
-13. [crates/keys/README.md](../crates/keys/README.md) — why a lost phrase is
+11. [crates/engine/README.md](../crates/engine/README.md) — how a change becomes
+    work, and the one heuristic the engine leans on.
+12. [crates/keys/README.md](../crates/keys/README.md) — why a lost phrase is
     unrecoverable, and what the key file does and does not defend against.
-14. [crates/qurb/README.md](../crates/qurb/README.md) — the commands, and what
-    the daemon does not do yet.
+13. [crates/peer/README.md](../crates/peer/README.md) — what actually crosses
+    the wire, and what pinned identity does and does not protect.
+14. [crates/signal/README.md](../crates/signal/README.md) and
+    [crates/relay/README.md](../crates/relay/README.md) — the two services, and
+    what each is deliberately unable to learn.
+
+And when you want to close the one measurement still outstanding:
+
+15. [measuring-connectivity.md](measuring-connectivity.md) — how to measure the
+    direct-connection rate, which is the number the relay bill depends on.
 
 ---
 

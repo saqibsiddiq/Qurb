@@ -44,6 +44,16 @@ pub enum Request {
     Manifest { content: [u8; 32] },
     /// One chunk's plaintext.
     Chunk { hash: [u8; 32] },
+    /// Tell me when your tree changes.
+    ///
+    /// The reply comes when the peer's state has moved past `since`, or after a
+    /// while with the current value if nothing happens.
+    ///
+    /// This does not break the rule that a peer can ask and never tell. The
+    /// device that wants to know is the one asking; the answer simply arrives
+    /// later than usual. A peer still cannot make anything happen here.
+    Changes { since: u64 },
+
     /// Ask to be trusted, presenting the token from an out-of-band invite.
     ///
     /// The device id and name are claims; the fingerprint that ends up trusted
@@ -65,18 +75,26 @@ pub enum Response {
     NotFound,
     /// Pairing accepted, with the accepting device's own identity.
     Paired { device_id: [u8; 32], name: String },
+
+    /// Where the peer's state has got to.
+    ///
+    /// Returned both when something changed and when the wait timed out, since
+    /// the asking device wants the current value either way.
+    Changed { generation: u64 },
 }
 
 const TAG_TREE: u8 = 1;
 const TAG_MANIFEST: u8 = 2;
 const TAG_CHUNK: u8 = 3;
 const TAG_PAIR: u8 = 4;
+const TAG_CHANGES: u8 = 5;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
 const STATUS_CHUNK: u8 = 3;
 const STATUS_NOT_FOUND: u8 = 4;
 const STATUS_PAIRED: u8 = 5;
+const STATUS_CHANGED: u8 = 6;
 
 impl Request {
     pub fn encode(&self) -> Vec<u8> {
@@ -90,6 +108,10 @@ impl Request {
             Request::Chunk { hash } => {
                 out.push(TAG_CHUNK);
                 out.extend_from_slice(hash);
+            }
+            Request::Changes { since } => {
+                out.push(TAG_CHANGES);
+                out.extend_from_slice(&since.to_le_bytes());
             }
             Request::Pair { token, device_id, name } => {
                 out.push(TAG_PAIR);
@@ -107,6 +129,7 @@ impl Request {
             TAG_TREE => Request::Tree,
             TAG_MANIFEST => Request::Manifest { content: r.hash()? },
             TAG_CHUNK => Request::Chunk { hash: r.hash()? },
+            TAG_CHANGES => Request::Changes { since: r.u64()? },
             TAG_PAIR => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
@@ -124,6 +147,10 @@ impl Response {
         let mut out = Vec::new();
         match self {
             Response::NotFound => out.push(STATUS_NOT_FOUND),
+            Response::Changed { generation } => {
+                out.push(STATUS_CHANGED);
+                out.extend_from_slice(&generation.to_le_bytes());
+            }
             Response::Paired { device_id, name } => {
                 out.push(STATUS_PAIRED);
                 out.extend_from_slice(device_id);
@@ -156,6 +183,7 @@ impl Response {
         let mut r = Reader::new(bytes);
         let response = match r.u8()? {
             STATUS_NOT_FOUND => Response::NotFound,
+            STATUS_CHANGED => Response::Changed { generation: r.u64()? },
             STATUS_PAIRED => {
                 Response::Paired { device_id: r.hash()?, name: r.name()? }
             }

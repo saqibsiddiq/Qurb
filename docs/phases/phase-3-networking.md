@@ -423,7 +423,10 @@ to punch.
 ## Still to do
 
 - **Measuring the kill criterion.** Everything needed now exists, including a
-  daemon that can be run on a second machine, and it remains unmeasured. `netcheck` classifies one network at a time; the real figure needs
+  daemon for a second machine and `qurb netcheck` for the quick first pass. The
+  method is written down in
+  [measuring-connectivity.md](../measuring-connectivity.md); it needs two
+  machines on two genuinely different networks and so cannot be done from here. `netcheck` classifies one network at a time; the real figure needs
   two devices on two genuinely different networks — cellular, office, café —
   trying to reach each other. This cannot be done from one machine, and until it
   is, the direct-connection rate is a guess. It is also the number the relay bill

@@ -13,6 +13,7 @@ warns is not the fun part and is a full quarter.
 | a daemon that runs | ✅ [`qurb`](../../crates/qurb/) |
 | the commands around it | ✅ init, enrol, pair, join, run, status, verify, config |
 | running the services | ✅ `qurb signal`, `qurb relay` |
+| push, rather than polling | ✅ ~430ms, measured |
 | onboarding and the recovery phrase | ◐ works, in a terminal |
 | installers | ⬜ not started |
 | signed updates with rollback | ⬜ not started |
@@ -64,14 +65,28 @@ seconds to a two-minute cap. Simultaneous startup went from 120 seconds to **9**
 ### An edit took thirty seconds to cross
 
 A device syncs when *it* changes something, or when its timer fires. An edit made
-on the laptop therefore reaches the desktop only when the desktop next asks.
+on the laptop therefore reached the desktop only when the desktop next asked.
 
-Shortening the interval to ten seconds makes it tolerable and is not a fix. The
-real answer is for a peer to be told — which can be done without breaking the
-rule that **a peer can ask and never tell**: a device asks "let me know when you
-change", and the reply arrives whenever that happens. That is a long-lived stream
-and a change signal the serving side does not have, and it is the next thing
-worth building here.
+**Now fixed.** A device holds one request open against each peer — "tell me when
+your state differs from this" — and the answer arrives when it does.
+
+Measured, two devices on this machine, the same edit three times: **433ms, 432ms,
+431ms**, against up to ten seconds before. Most of what remains is the watcher
+deliberately waiting to see whether the file is still being written, which is a
+floor worth having rather than latency to remove. Thirty seconds of complete
+idleness produced no log activity at all, so the responsiveness is not bought
+with chatter.
+
+It does not break the rule that **a peer can ask and never tell**: the device
+that wants to know is the one asking, and the answer simply arrives later than
+usual. A peer still cannot make anything happen.
+
+A counter rather than a flag, because a flag can be missed — a peer told
+"something changed" cannot distinguish a notification it has already acted on
+from a new one. It says what it last saw, and gets an immediate answer if
+anything has happened since. The counter deliberately does not survive a restart:
+a peer holding a number from before sees one that does not match, concludes the
+device it was watching has been away, and looks. Which is right.
 
 ## What running it confirmed
 
@@ -83,7 +98,6 @@ reports everything agrees.
 
 ## Still to do
 
-- **Push, rather than polling.** As above.
 - **Noticing a device paired while running.** The guest list is read at startup.
 - **Running as a service** — a systemd unit, a launch agent, a Windows service.
 - **Installers**, and the update mechanism with rollback.

@@ -27,12 +27,15 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::mpsc;
 
-/// How often to ask peers whether anything changed.
+/// How often to sync regardless of whether anything appeared to change.
 ///
-/// Long enough not to be chatter, short enough that a file edited on a laptop
-/// arrives on the desktop before anyone wonders where it is.
-const POLL_INTERVAL: Duration = Duration::from_secs(30);
+/// A device is *told* when a peer changes, so this is no longer how news
+/// travels — it is the backstop for the cases being told cannot cover: a
+/// notification lost with a dropped connection, a peer that was unreachable
+/// when it changed, or a machine coming back from sleep.
+const SWEEP_INTERVAL: Duration = Duration::from_secs(120);
 
 /// How long to wait before the first retry after failing to reach a peer.
 ///
@@ -134,6 +137,11 @@ impl Daemon {
             "listening"
         );
 
+        // How far this device's own state has got. Peers hold a request open
+        // against it, so they hear about a change within a round trip rather
+        // than whenever they next think to ask.
+        let generation = qurb_peer::Generation::new();
+
         // Serve peers on every path we have. A device unreachable by relay is
         // unreachable by anyone whose direct attempt failed.
         let served = Arc::new(Mutex::new(self.open_store()?));
@@ -142,12 +150,15 @@ impl Daemon {
             .flatten()
         {
             let store = Arc::clone(&served);
+            let generation = Arc::clone(&generation);
             tokio::spawn(async move {
                 while let Some(incoming) = endpoint.accept().await {
                     let store = Arc::clone(&store);
+                    let generation = Arc::clone(&generation);
                     tokio::spawn(async move {
                         if let Ok(connection) = incoming.await {
-                            qurb_peer::server::serve_connection_for_test(connection, store).await;
+                            qurb_peer::server::serve_connection(connection, store, generation)
+                                .await;
                         }
                     });
                 }
@@ -162,9 +173,9 @@ impl Daemon {
         .context("watching the directory")?;
 
         let mut peers = Peers::new(trusted);
-        self.sync_all(&mut engine, &connector, &mut peers).await;
+        self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
 
-        let mut timer = tokio::time::interval(POLL_INTERVAL);
+        let mut timer = tokio::time::interval(SWEEP_INTERVAL);
         timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
@@ -182,6 +193,8 @@ impl Daemon {
                                         deleted = stats.deleted,
                                         "local changes"
                                     );
+                                    // Anyone holding a request open hears now.
+                                    generation.bump();
                                 }
                                 for failure in &stats.failures {
                                     tracing::warn!(
@@ -193,7 +206,7 @@ impl Daemon {
                             }
                             Err(e) => tracing::error!(error = %e, "applying changes failed"),
                         }
-                        self.sync_all(&mut engine, &connector, &mut peers).await;
+                        self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
 
                     Some(Event::RescanRequired) => {
@@ -201,7 +214,8 @@ impl Daemon {
                         if let Err(e) = tokio::task::block_in_place(|| engine.reconcile()) {
                             tracing::error!(error = %e, "reconciling failed");
                         }
-                        self.sync_all(&mut engine, &connector, &mut peers).await;
+                        generation.bump();
+                        self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
 
                     None => {
@@ -211,14 +225,27 @@ impl Daemon {
                 },
 
                 _ = timer.tick() => {
-                    self.sync_all(&mut engine, &connector, &mut peers).await;
+                    self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
+                }
+
+                // A peer said it changed. This is how news travels now; the
+                // timer above is only the backstop.
+                peer = peers.next_change() => {
+                    tracing::debug!(peer = %peer.short(), "peer reports a change");
+                    self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                 }
             }
         }
     }
 
     /// Pull from every peer we can reach.
-    async fn sync_all(&self, engine: &mut Engine, connector: &Connector, peers: &mut Peers) {
+    async fn sync_all(
+        &self,
+        engine: &mut Engine,
+        connector: &Connector,
+        peers: &mut Peers,
+        generation: &Arc<qurb_peer::Generation>,
+    ) {
         for peer in peers.ready() {
             match self.sync_one(engine, connector, peers, peer).await {
                 Ok(moved) => {
@@ -231,6 +258,8 @@ impl Daemon {
                     }
                     if moved > 0 {
                         tracing::info!(peer = %peer.short(), files = moved, "synced");
+                        // What arrived from one peer is news for the others.
+                        generation.bump();
                     }
                 }
                 Err(e) => {
@@ -256,6 +285,7 @@ impl Daemon {
             None => {
                 let client = Arc::new(connector.reach(peer).await?);
                 peers.connected(peer, Arc::clone(&client));
+                peers.watch(peer, Arc::clone(&client));
                 client
             }
         };
@@ -303,11 +333,69 @@ struct Peers {
     /// starting up should be retried in seconds, and one that is switched off
     /// should be left alone.
     backoff: HashMap<Fingerprint, (tokio::time::Instant, Duration)>,
+    /// Peers reporting that they have changed.
+    ///
+    /// One task per connected peer holds a request open and sends down this
+    /// channel when it is answered. The daemon waits on the receiving end, so a
+    /// change on any peer wakes it within a round trip.
+    changes: (mpsc::UnboundedSender<Fingerprint>, mpsc::UnboundedReceiver<Fingerprint>),
+    /// Which peers already have a watcher, so one is not started twice.
+    watching: std::collections::HashSet<Fingerprint>,
 }
 
 impl Peers {
     fn new(known: Vec<Fingerprint>) -> Self {
-        Self { known, connections: HashMap::new(), backoff: HashMap::new() }
+        Self {
+            known,
+            connections: HashMap::new(),
+            backoff: HashMap::new(),
+            changes: mpsc::unbounded_channel(),
+            watching: std::collections::HashSet::new(),
+        }
+    }
+
+    /// Wait until some peer reports a change.
+    ///
+    /// Never returns when no peer is connected, which is right: there is
+    /// nothing to hear, and the sweep timer covers it.
+    async fn next_change(&mut self) -> Fingerprint {
+        match self.changes.1.recv().await {
+            Some(peer) => peer,
+            // The sender is held by this struct, so this cannot happen -- but
+            // returning would busy-loop the select, so wait instead.
+            None => std::future::pending().await,
+        }
+    }
+
+    /// Hold a request open against a peer, reporting whenever it is answered.
+    fn watch(&mut self, peer: Fingerprint, client: Arc<PeerClient>) {
+        if !self.watching.insert(peer) {
+            return;
+        }
+        let announce = self.changes.0.clone();
+        tokio::spawn(async move {
+            let mut seen = 0u64;
+            loop {
+                match client.wait_for_change(seen).await {
+                    Ok(generation) => {
+                        // Report even when the wait merely timed out: it costs
+                        // one comparison at the other end and covers the case
+                        // where a notification was lost with a connection.
+                        seen = generation;
+                        if announce.send(peer).is_err() {
+                            return;
+                        }
+                    }
+                    // The connection has gone. The daemon will notice when it
+                    // next tries to sync, and start a new watcher then.
+                    Err(_) => return,
+                }
+            }
+        });
+    }
+
+    fn stop_watching(&mut self, peer: Fingerprint) {
+        self.watching.remove(&peer);
     }
 
     /// Peers worth trying now.
@@ -330,6 +418,7 @@ impl Peers {
 
     fn disconnected(&mut self, peer: Fingerprint) {
         self.connections.remove(&peer);
+        self.stop_watching(peer);
     }
 
     fn succeeded(&mut self, peer: Fingerprint) {
@@ -338,6 +427,7 @@ impl Peers {
 
     fn failed(&mut self, peer: Fingerprint) {
         self.connections.remove(&peer);
+        self.stop_watching(peer);
         let wait = match self.backoff.get(&peer) {
             Some((_, previous)) => (*previous * 2).min(MAX_RETRY),
             None => FIRST_RETRY,

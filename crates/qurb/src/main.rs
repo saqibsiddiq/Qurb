@@ -31,6 +31,7 @@ Running the services yourself:
 
   qurb signal [addr]                  the rendezvous service (default :9000)
   qurb relay [addr]                   the relay (default :9001)
+  qurb netcheck                       what this network will let you do
 
 Settings live in <dir>/.qurb/config and can be edited by hand.
 ";
@@ -79,6 +80,7 @@ fn run() -> Result<()> {
         "config" => configure(&directory(&args)?, &args[2..]),
         "signal" => block_on(signal(args.get(1).cloned())),
         "relay" => block_on(relay(args.get(1).cloned())),
+        "netcheck" => netcheck(),
         "-h" | "--help" | "help" => {
             print!("{USAGE}");
             Ok(())
@@ -353,6 +355,79 @@ fn configure(root: &Path, settings: &[String]) -> Result<()> {
 
     config.save(&store_dir)?;
     println!("saved to {}", Config::path(&store_dir).display());
+    Ok(())
+}
+
+/// Classify the router between this machine and the internet.
+///
+/// Whether devices can reach each other directly, or whether their traffic has
+/// to be paid for on a relay. Worth running on every network that matters —
+/// home, phone hotspot, office, café — because the worst answer is the one that
+/// sets the bill.
+fn netcheck() -> Result<()> {
+    use qurb_peer::nat::{self, NatBehaviour};
+
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").context("opening a socket")?;
+    println!("local   {}", socket.local_addr()?);
+    println!();
+
+    // One socket for every query: the question is whether the external address
+    // depends on who is being asked, which cannot be answered by asking one
+    // server or by asking from two sockets.
+    let mut servers = Vec::new();
+    for name in nat::DEFAULT_STUN_SERVERS {
+        use std::net::ToSocketAddrs;
+        match name.to_socket_addrs() {
+            Ok(mut addrs) => match addrs.find(|a| a.is_ipv4()) {
+                Some(addr) => servers.push((name, addr)),
+                None => println!("  {name:<28} no IPv4 address"),
+            },
+            Err(e) => println!("  {name:<28} could not resolve: {e}"),
+        }
+    }
+
+    let mut seen = Vec::new();
+    for (name, addr) in &servers {
+        match nat::reflexive_address(&socket, *addr, std::time::Duration::from_secs(3)) {
+            Ok(public) => {
+                println!("  {name:<28} -> {public}");
+                seen.push(public);
+            }
+            Err(e) => println!("  {name:<28} -> no answer: {e}"),
+        }
+    }
+
+    let behaviour = match seen.len() {
+        0 => NatBehaviour::Blocked,
+        1 => NatBehaviour::Inconclusive,
+        _ if seen.windows(2).all(|w| w[0] == w[1]) => NatBehaviour::EndpointIndependent,
+        _ => NatBehaviour::Symmetric,
+    };
+
+    println!();
+    match behaviour {
+        NatBehaviour::EndpointIndependent => {
+            println!("This network allows direct connections.");
+            println!("  The same external address whoever is asked, so the router's mapping");
+            println!("  does not depend on the destination and hole punching should work.");
+        }
+        NatBehaviour::Symmetric => {
+            println!("This network needs a relay.");
+            println!("  A different external port per destination, so the address a peer");
+            println!("  learns is not the address it can reach. One end like this is");
+            println!("  survivable if the other is not; two is not.");
+        }
+        NatBehaviour::Blocked => {
+            println!("Nothing answered — UDP may be blocked outbound.");
+            println!("  Every connection from here would need a relay. Worth retrying:");
+            println!("  an outage looks exactly the same.");
+        }
+        NatBehaviour::Inconclusive => {
+            println!("Inconclusive — only one server answered.");
+            println!("  One answer cannot say whether the mapping depends on the");
+            println!("  destination. Retry.");
+        }
+    }
     Ok(())
 }
 
