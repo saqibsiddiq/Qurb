@@ -392,6 +392,19 @@ fn protect(root: &Path, how: Option<&str>) -> Result<()> {
         );
     }
 
+    // `platform` parses, because the vault format has it, and means nothing
+    // here: it exists for phones, where the key is held by an app-supplied
+    // store because neither Android's keystore nor iOS's Keychain is reachable
+    // from Rust. Left to itself this would fail deep inside the vault with a
+    // message about a store that was not supplied, which is true and unhelpful.
+    if wanted == Protection::Platform {
+        bail!(
+            "`platform` is for phones, where an app supplies the keystore. \
+             On a desktop use `keystore`, which is the same idea through the \
+             operating system's own store."
+        );
+    }
+
     let current_passphrase = if current.needs_passphrase() {
         Some(prompt_passphrase("Current passphrase: ")?)
     } else {

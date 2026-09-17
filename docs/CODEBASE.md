@@ -579,7 +579,10 @@ The engine cross-compiles for all four Android architectures, and
 [`crates/mobile-ffi`](../crates/mobile-ffi/) gives it a surface a phone can
 call, generating Kotlin and Swift from the Rust. A phone pairs out of band,
 finds the other device through the rendezvous service, connects over QUIC and
-syncs — all through that surface.
+syncs — all through that surface, with `sync_within(seconds)` because both
+platforms kill background work that outstays its window. The master key can be
+handed to the platform's own keystore, which the app supplies because neither
+Android's nor iOS's is reachable from Rust.
 
 **It runs on a device.** `./scripts/android-test.sh` pushes the test binaries
 with `adb` and runs them: on an Android 14 emulator all 35 pass, 426 tests,
@@ -601,16 +604,20 @@ core problems that a desktop merely tolerates:
   binds `127.0.0.1` explicitly and STUN normally supplies an address that works
   instead; it broke two devices on a network with no route to the internet.
 
-**No real phone, and no iOS.** Everything on-device ran on an x86_64 emulator,
-which imposes none of a phone's memory pressure or battery behaviour and never
-suspends the process. iOS needs Xcode, which needs a Mac. See
+**No ARM, no real phone, no iOS.** Everything on-device ran on an x86_64
+emulator; emulator 37.x refuses an ARM image on an x86_64 host, so the build
+that ships to phones is compiled and never run — which matters because BLAKE3
+takes a different path on ARM and ARM's memory model is weaker than x86's. An
+emulator also imposes none of a phone's memory pressure or battery behaviour and
+never suspends the process. iOS needs Xcode, which needs a Mac. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ### Designed but not built
 
-Keychain and Android Keystore, per-file keys, relay selection and quotas,
-accounts and billing, the desktop UI, both mobile apps, syncing from a phone at
-all, search, updates.
+An app on either phone, per-file keys, key rotation, relay selection and quotas,
+accounts and billing, the desktop UI, selective sync, search, updates. The
+mobile keystore has a contract and a test but no implementation on either
+platform.
 
 ### The gaps that matter most
 
@@ -762,7 +769,10 @@ And when you want to close the measurements still outstanding:
 
 ## 8. Conventions
 
-- **Rust** for anything on a device: engine, storage, crypto, networking.
+- **Rust** for anything on a device: engine, storage, crypto, networking. That
+  includes the phones — [`crates/mobile-ffi`](../crates/mobile-ffi/) is the
+  only place platform languages appear, and it is a seam rather than a second
+  implementation.
 - **Go** for cloud services, when they exist.
 - Decisions go in `docs/decisions/`, numbered, never deleted. If a decision is
   reversed, the old file gets a status line pointing at its replacement. The

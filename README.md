@@ -197,9 +197,14 @@ duplicates itself without limit; and the connector no longer advertises
 `0.0.0.0` as its address, which broke two devices on a network with no route to
 the internet.
 
-Not built: an app of any kind, an interface, installers, signed updates,
-Keychain and Android Keystore. Everything on-device ran on an emulator, and iOS
-has not been built at all — that needs a Mac.
+The master key can be handed to the platform's own keystore, which the app
+supplies because neither Android's nor iOS's is reachable from Rust — the
+contract is tested against a fake, and no platform implements it yet.
+
+Not built: an app of any kind, an interface, installers, signed updates.
+Everything on-device ran on an **x86_64** emulator — the ARM build that would
+ship to a phone is compiled and never run, because the emulator refuses an ARM
+image on an x86 host. iOS has not been built at all; that needs a Mac.
 
 **Phase 1 is complete.** Its kill criterion — syncing 100,000 files cleanly —
 was run and passed: 4.40 GiB between two devices with every correctness check

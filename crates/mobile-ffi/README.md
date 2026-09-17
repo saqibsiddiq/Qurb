@@ -228,7 +228,11 @@ this app.
 - **The generated bindings, compiled.** The Kotlin and Swift are exercised only
   as the Rust functions underneath them. Neither has been through a Kotlin or
   Swift toolchain.
-- **A real phone.** Everything on-device ran on an x86_64 emulator, which
-  imposes none of a phone's memory pressure, thermal limits or battery
-  behaviour — and never suspends the process the way a backgrounded app is
-  suspended. See `docs/phases/phase-5-mobile.md`.
+- **ARM64, executed.** Everything on-device ran on an x86_64 emulator. Emulator
+  37.x refuses an `arm64-v8a` image on an x86_64 host, so there is no way to run
+  the shipping build here. BLAKE3 takes a different code path on ARM and ARM's
+  memory model is weaker than x86's, so the concurrency in this workspace has
+  never been exercised where it is most likely to break.
+- **A real phone.** An emulator imposes none of a device's memory pressure,
+  thermal limits or battery behaviour, and never suspends the process the way a
+  backgrounded app is suspended. See `docs/phases/phase-5-mobile.md`.

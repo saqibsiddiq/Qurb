@@ -130,11 +130,31 @@ the code:
   that reports green while showing nothing is indistinguishable from one that
   works.
 
-What this does not establish: the emulator is x86_64, so the ARM64 build that
-ships to real phones is still only compiled and never run. The emulator also
-does not impose a real phone's memory pressure, thermal limits or battery
-behaviour, and it never suspends the process the way a backgrounded app is
-suspended.
+### What this does not establish
+
+**ARM64 has never been executed.** The emulator is x86_64, and the build that
+would ship to a real phone is compiled and never run. This was attempted: an
+`arm64-v8a` system image downloads and creates an AVD, and the emulator then
+refuses it outright —
+
+    Avd's CPU Architecture 'arm64' is not supported by the QEMU2 emulator
+    on x86_64 host. System image must match the host architecture.
+
+Emulator 37.x dropped cross-architecture emulation, so there is no route to
+running ARM64 on this machine. That matters more than it might sound.
+Architecture-independent Rust is architecture-independent, but two things are
+not: BLAKE3 takes a different code path on ARM (NEON rather than AVX2), and
+ARM's memory model is weaker than x86's, so a concurrency bug that x86 hides can
+appear there. The workspace has real concurrency — a garbage collector running
+against a live writer, a worker pool with a connection each — and none of it has
+been exercised under a weak memory model.
+
+Closing this needs an ARM machine: a phone, a Raspberry Pi, an ARM CI runner, or
+an Apple Silicon Mac.
+
+**The emulator is not a phone.** It imposes none of a real device's memory
+pressure, thermal limits or battery behaviour, and it never suspends the process
+the way a backgrounded app is suspended.
 
 ## Filenames that mean the same thing
 
