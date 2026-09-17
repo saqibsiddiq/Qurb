@@ -409,7 +409,7 @@ async fn run_signalling(
 
 /// Start a handshake and abandon it. Its packets are the punch.
 fn knock(endpoint: &quinn::Endpoint, identity: &Identity, candidate: SocketAddr) {
-    let Ok(config) = tls::client_config(identity, identity.fingerprint()) else { return };
+    let Ok(config) = tls::punch_config(identity, identity.fingerprint()) else { return };
     if let Ok(connecting) = endpoint.connect_with(config, candidate, "qurb-device") {
         tokio::spawn(async move {
             // It will fail: we pinned our own fingerprint, which the peer does

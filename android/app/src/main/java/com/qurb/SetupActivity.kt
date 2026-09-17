@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.qurb.databinding.ActivitySetupBinding
 import kotlinx.coroutines.launch
+import uniffi.qurb_mobile.QurbException
 
 /**
  * First launch: make a key, or bring one over from another device.
@@ -125,7 +126,7 @@ class SetupActivity : AppCompatActivity() {
     private fun fail(title: String, e: Exception) {
         MaterialAlertDialogBuilder(this)
             .setTitle(title)
-            .setMessage(e.message ?: e.toString())
+            .setMessage(if (e is QurbException) e.readable() else e.message ?: e.toString())
             .setPositiveButton("OK", null)
             .show()
     }

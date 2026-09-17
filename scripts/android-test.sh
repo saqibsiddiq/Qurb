@@ -47,6 +47,9 @@ upper=$(echo "$TARGET" | tr 'a-z-' 'A-Z_')
 export "CC_${TARGET//-/_}=$BIN/$CLANG$API-clang"
 export "AR_${TARGET//-/_}=$BIN/llvm-ar"
 export "CARGO_TARGET_${upper}_LINKER=$BIN/$CLANG$API-clang"
+# 16 KB pages, matching scripts/android-build.sh so the binaries under test
+# are aligned the same way the shipped library is.
+export "CARGO_TARGET_${upper}_RUSTFLAGS=-C link-arg=-Wl,-z,max-page-size=16384"
 
 # /data/local/tmp rather than /sdcard: the latter is mounted noexec, and the
 # failure ("Permission denied" on a file that is plainly executable) sends you

@@ -72,6 +72,17 @@ for target in "${!CLANG[@]}"; do
     export "AR_${target//-/_}=$BIN/llvm-ar"
     export "CARGO_TARGET_${upper}_LINKER=$BIN/$prefix-clang"
 
+    # 16 KB page alignment.
+    #
+    # Android 15 introduced devices with 16 KB memory pages, and a library
+    # whose LOAD segments are aligned to the old 4 KB will not load on one at
+    # all. Rust's default is 4 KB, so without this the app installs, warns on
+    # newer hardware, and fails outright on a 16 KB device. Found by installing
+    # on a Galaxy S23 running Android 16, which put the warning on screen.
+    #
+    # Harmless on 4 KB devices: a larger alignment is still a valid one.
+    export "CARGO_TARGET_${upper}_RUSTFLAGS=-C link-arg=-Wl,-z,max-page-size=16384"
+
     echo "=== $target"
     args=()
     for c in "${CRATES[@]}"; do args+=(-p "$c"); done

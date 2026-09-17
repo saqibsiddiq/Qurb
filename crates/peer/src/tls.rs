@@ -25,6 +25,10 @@ use std::sync::Arc;
 
 pub const ALPN: &[u8] = b"qurb/0";
 
+fn hex(bytes: &[u8; 32]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 fn provider() -> Arc<CryptoProvider> {
     Arc::new(rustls::crypto::ring::default_provider())
 }
@@ -34,6 +38,15 @@ fn provider() -> Arc<CryptoProvider> {
 struct Pinned {
     allowed: Vec<Fingerprint>,
     provider: Arc<CryptoProvider>,
+    /// Whether a rejection here is expected.
+    ///
+    /// Hole punching opens a handshake it *wants* to fail: the packets are the
+    /// point, and it pins its own fingerprint so nothing can complete. Without
+    /// this flag every punch logs `WARN rejected an unrecognised peer`, which
+    /// reads exactly like a device being refused for real — and sent one
+    /// investigation chasing a trust bug that did not exist while the actual
+    /// failure sat two lines above in DEBUG.
+    expect_rejection: bool,
 }
 
 impl Pinned {
@@ -42,7 +55,19 @@ impl Pinned {
         if self.allowed.contains(&fingerprint) {
             Ok(())
         } else {
-            tracing::warn!(peer = %fingerprint.short(), "rejected an unrecognised peer");
+            if self.expect_rejection {
+                tracing::trace!(peer = %fingerprint.short(), "punch handshake refused, as intended");
+            } else {
+                // The full values, not the short form. A short form that matches
+                // one in the list while the full fingerprints differ is exactly
+                // the case this message has to be able to show.
+                tracing::warn!(
+                    peer = %fingerprint.short(),
+                    presented = %hex(fingerprint.as_bytes()),
+                    allowed = ?self.allowed.iter().map(|f| hex(f.as_bytes())).collect::<Vec<_>>(),
+                    "rejected an unrecognised peer"
+                );
+            }
             Err(rustls::Error::General("peer certificate is not pinned".into()))
         }
     }
@@ -231,7 +256,7 @@ pub fn pairing_server_config(identity: &Identity) -> Result<quinn::ServerConfig>
 
 /// Accept connections only from `allowed`.
 pub fn server_config(identity: &Identity, allowed: &[Fingerprint]) -> Result<quinn::ServerConfig> {
-    let pinned = Pinned { allowed: allowed.to_vec(), provider: provider() };
+    let pinned = Pinned { allowed: allowed.to_vec(), provider: provider(), expect_rejection: false };
 
     let mut tls = rustls::ServerConfig::builder_with_provider(provider())
         .with_protocol_versions(&[&rustls::version::TLS13])
@@ -259,7 +284,24 @@ pub fn server_config(identity: &Identity, allowed: &[Fingerprint]) -> Result<qui
 
 /// Connect only to the peer with this fingerprint.
 pub fn client_config(identity: &Identity, expected: Fingerprint) -> Result<quinn::ClientConfig> {
-    let pinned = Pinned { allowed: vec![expected], provider: provider() };
+    client_config_inner(identity, expected, false)
+}
+
+/// A client config for a handshake that is meant to fail.
+///
+/// Used only by hole punching, which connects in order to send packets and
+/// pins a fingerprint nothing can present. Identical to
+/// [`client_config`] except that it does not report the refusal as a problem.
+pub fn punch_config(identity: &Identity, expected: Fingerprint) -> Result<quinn::ClientConfig> {
+    client_config_inner(identity, expected, true)
+}
+
+fn client_config_inner(
+    identity: &Identity,
+    expected: Fingerprint,
+    expect_rejection: bool,
+) -> Result<quinn::ClientConfig> {
+    let pinned = Pinned { allowed: vec![expected], provider: provider(), expect_rejection };
 
     let mut tls = rustls::ClientConfig::builder_with_provider(provider())
         .with_protocol_versions(&[&rustls::version::TLS13])

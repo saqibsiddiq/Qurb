@@ -25,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.FileEntry
+import uniffi.qurb_mobile.QurbException
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
@@ -354,7 +355,10 @@ class MainActivity : AppCompatActivity() {
     private fun fail(title: String, e: Exception) {
         MaterialAlertDialogBuilder(this)
             .setTitle(title)
-            .setMessage(e.message ?: e.toString())
+            // `readable()` rather than `e.message`: UniFFI generates
+            // "detail=${detail}", which puts a struct field name in front of
+            // the user, and the detail alone rarely says what to try next.
+            .setMessage(if (e is QurbException) e.readable() else e.message ?: e.toString())
             .setPositiveButton("OK", null)
             .show()
     }
