@@ -11,6 +11,9 @@ import android.view.ViewGroup
 import android.widget.EditText
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -54,6 +57,7 @@ class MainActivity : AppCompatActivity() {
         views = ActivityMainBinding.inflate(layoutInflater)
         setContentView(views.root)
         setSupportActionBar(views.toolbar)
+        insetContent()
 
         views.files.layoutManager = LinearLayoutManager(this)
         views.files.adapter = files
@@ -66,6 +70,37 @@ class MainActivity : AppCompatActivity() {
         views.sync.setOnClickListener { sync() }
         views.add.setOnClickListener { picker.launch(arrayOf("*/*")) }
         views.refresh.setOnRefreshListener { refresh() }
+    }
+
+    /**
+     * Keep the toolbar and the buttons out from under the system bars.
+     *
+     * Android 15 draws apps edge to edge whether they ask or not, so without
+     * this the toolbar sits beneath the status bar — which looks wrong and,
+     * worse, makes the overflow button half unreachable because taps in that
+     * strip go to the status bar instead. The bug is invisible on a screenshot
+     * until you try to press something.
+     */
+    private fun insetContent() {
+        ViewCompat.setOnApplyWindowInsetsListener(views.root) { _, windowInsets ->
+            val bars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            // Padded on the bar rather than the toolbar. Padding the toolbar
+            // pushes its contents down inside a box that does not grow, so the
+            // title clips and the overflow button is squashed against the edge.
+            views.appbar.updatePadding(top = bars.top)
+            views.files.updatePadding(bottom = bars.bottom + FAB_CLEARANCE)
+
+            // The floating buttons sit above the gesture bar rather than under it.
+            listOf(views.add, views.sync).forEach { button ->
+                (button.layoutParams as? android.view.ViewGroup.MarginLayoutParams)?.let { lp ->
+                    lp.bottomMargin = bars.bottom + FAB_MARGIN
+                    button.layoutParams = lp
+                }
+            }
+            windowInsets
+        }
     }
 
     override fun onResume() {
@@ -353,6 +388,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private companion object {
+        /** Room below the list so the last row is not hidden by the buttons. */
+        const val FAB_CLEARANCE = 260
+        const val FAB_MARGIN = 48
+
         fun size(bytes: ULong): String {
             val units = listOf("B", "KB", "MB", "GB", "TB")
             var value = bytes.toDouble()

@@ -68,6 +68,18 @@ ciphertext and an IV and nothing that decrypts them.
 fingerprint every time the key is touched, including during a background sync
 when nobody is holding the phone, and sync would simply stop happening.
 
+## Window insets
+
+Android 15 draws apps edge to edge whether they ask or not. Without handling
+insets the toolbar sits *beneath* the status bar — which looks wrong, and, worse,
+makes the overflow button partly unreachable: taps in that strip go to the
+status bar instead. The bug is invisible in a screenshot until you try to press
+something, and it was found exactly that way.
+
+The padding goes on the `AppBarLayout`, not the toolbar. Padding the toolbar
+pushes its contents down inside a box that does not grow, so the title clips and
+the overflow button is squashed — which was the first attempt at the fix.
+
 ## Permissions
 
 `INTERNET` and `ACCESS_NETWORK_STATE`. Nothing else — no storage permission,

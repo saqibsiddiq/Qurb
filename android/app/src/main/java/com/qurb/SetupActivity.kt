@@ -4,6 +4,9 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.qurb.databinding.ActivitySetupBinding
@@ -24,6 +27,16 @@ class SetupActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         views = ActivitySetupBinding.inflate(layoutInflater)
         setContentView(views.root)
+
+        // Android 15 draws edge to edge whether an app asks or not; without
+        // this the first button sits under the status bar.
+        ViewCompat.setOnApplyWindowInsetsListener(views.root) { view, windowInsets ->
+            val bars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.updatePadding(top = bars.top, bottom = bars.bottom)
+            windowInsets
+        }
 
         views.create.setOnClickListener { create() }
         views.restore.setOnClickListener { showRestore() }
