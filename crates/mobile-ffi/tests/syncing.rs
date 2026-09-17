@@ -118,11 +118,11 @@ fn a_phone_pairs_with_a_desktop_and_takes_its_files() {
         }
     });
 
-    let mut outcome = phone.sync_within(20).unwrap();
-    // One retry, for the case where the desktop was between passes.
-    if outcome.reached == 0 {
-        outcome = phone.sync_within(20).unwrap();
-    }
+    // Retried to a deadline rather than once. A single attempt is a coin flip:
+    // the desktop is between passes about as often as it is inside one, and on
+    // a slow machine -- an emulator, say -- it is worse than that. An app does
+    // the same thing, by asking the platform for another background window.
+    let outcome = until_reached(&phone, std::time::Duration::from_secs(60));
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     server.join().unwrap();
 
@@ -192,10 +192,7 @@ fn receiving_a_large_file_does_not_hold_it_in_memory() {
     });
 
     let before = anon_kib();
-    let mut outcome = phone.sync_within(60).unwrap();
-    if outcome.reached == 0 {
-        outcome = phone.sync_within(60).unwrap();
-    }
+    let outcome = until_reached(&phone, std::time::Duration::from_secs(120));
     let after = anon_kib();
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     server.join().unwrap();
@@ -223,6 +220,21 @@ fn receiving_a_large_file_does_not_hold_it_in_memory() {
         "receiving {} MiB grew the heap by {grew} MiB -- is it buffering the file?",
         size >> 20
     );
+}
+
+/// Sync until a peer answers, or `budget` runs out.
+///
+/// Returns the last outcome either way, so a caller that wanted a peer reached
+/// fails on its own assertion with the real numbers rather than on a timeout.
+fn until_reached(qurb: &Qurb, budget: std::time::Duration) -> qurb_mobile::SyncOutcome {
+    let deadline = std::time::Instant::now() + budget;
+    loop {
+        let outcome = qurb.sync_within(10).unwrap();
+        if outcome.reached > 0 || std::time::Instant::now() >= deadline {
+            return outcome;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
 }
 
 /// Anonymous resident memory in KiB. Not total resident size: file-backed pages
