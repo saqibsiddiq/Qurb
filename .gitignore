@@ -14,3 +14,14 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Android app build output. `local.properties` holds this machine's SDK path.
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
+# Copied in by scripts/android-app.sh from cargo's output, and regenerated
+# every build -- committing them would mean a stale binary or stale bindings
+# silently shipping.
+android/app/src/main/jniLibs/
+android/app/src/main/java/uniffi/

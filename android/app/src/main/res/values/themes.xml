@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- NoActionBar because MainActivity supplies its own MaterialToolbar.
+         With the default, the window decor provides one too and the activity
+         throws on launch: "This Activity already has an action bar supplied by
+         the window decor." -->
+    <style name="Theme.Qurb" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+    </style>
+</resources>

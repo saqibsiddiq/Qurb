@@ -431,6 +431,15 @@ pub fn is_set_up(root: String) -> bool {
     Vault::at(&store_dir(Path::new(&root))).exists()
 }
 
+/// Every exported method on `Qurb` lives in this one block.
+///
+/// Not a style preference. UniFFI keeps only the **last** `#[uniffi::export]`
+/// impl block for an object and silently discards the others: the Rust
+/// compiles, the bindings generate without a warning, and the methods from
+/// every earlier block are simply absent from the Kotlin and Swift. Splitting
+/// this block once cost eight methods, and nothing noticed until an app tried
+/// to call them — the Rust tests reach these functions directly rather than
+/// through the generated bindings, so they all kept passing.
 #[uniffi::export]
 impl Qurb {
     /// Open a store that has already been set up.
@@ -473,45 +482,6 @@ impl Qurb {
         Self::open_inner(root, passphrase, settings, None)
     }
 
-}
-
-/// Not exported. `#[uniffi::export]` takes every function in the block it is
-/// applied to, and a constructor with four arguments — one of them an optional
-/// callback interface — is not a shape worth putting in front of an app. The
-/// three exported constructors above are.
-impl Qurb {
-    fn open_inner(
-        root: String,
-        passphrase: Option<String>,
-        settings: Settings,
-        keystore: Option<Arc<dyn KeyStore>>,
-    ) -> Result<Self, QurbError> {
-        let store_dir = store_dir(Path::new(&root));
-        let vault = vault_at(&store_dir, keystore.as_ref());
-
-        if !vault.exists() {
-            return Err(QurbError::NotSetUp { detail: format!("{root} has no vault") });
-        }
-
-        let master: MasterKey = vault.unlock(passphrase.as_deref())?;
-        let chunk_key = ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
-        let root = PathBuf::from(&root);
-        let store = Store::open(&store_dir, chunk_key)?;
-        let ignore = IgnoreRules::new().with_store_dir(&store_dir);
-
-        Ok(Self {
-            inner: Mutex::new(Engine::new(&root, store, ignore)),
-            root,
-            store_dir,
-            master,
-            device_name: settings.device_name,
-            signal_url: settings.signal_url,
-            relay: settings.relay,
-            port: settings.port,
-            discover: settings.discover,
-            runtime: Mutex::new(None),
-        })
-    }
 
     /// The directory being synced.
     pub fn root(&self) -> String {
@@ -618,6 +588,106 @@ impl Qurb {
         Ok(())
     }
 
+    /// Devices this one trusts.
+    pub fn peers(&self) -> Result<Vec<PeerInfo>, QurbError> {
+        let engine = self.engine()?;
+        Ok(engine
+            .store()
+            .db()
+            .trusted_peers()?
+            .into_iter()
+            .map(|p| {
+                let fingerprint = qurb_peer::Fingerprint::from_bytes(p.fingerprint);
+                PeerInfo {
+                    fingerprint: hex(fingerprint.as_bytes()),
+                    short: fingerprint.short(),
+                    name: p.name,
+                    paired_at: p.paired_at,
+                    last_seen: p.last_seen,
+                }
+            })
+            .collect())
+    }
+
+    /// Offer an invitation, for another device to scan or be read.
+    ///
+    /// The returned code carries this device's *full* fingerprint and must
+    /// travel out of band — a QR code on the screen, or a code spoken aloud.
+    /// Sending it over the network being paired would defeat the point: someone
+    /// who can change what you see has already won.
+    pub fn offer_pairing(&self) -> Result<Arc<Pairing>, QurbError> {
+        let identity = self.identity()?;
+        let port = self.port;
+        let runtime = self.runtime()?;
+
+        // Inside the runtime even though `open` is not async: it binds a QUIC
+        // endpoint, and quinn registers the socket with whatever reactor is
+        // current. Without this it fails with "no async runtime found" — which
+        // names the cause but not the fix, since nothing in the call is awaited.
+        let host = {
+            let _guard = runtime.enter();
+            qurb_peer::PairingHost::open(
+                format!("0.0.0.0:{port}").parse().expect("a literal address"),
+                &identity,
+                now(),
+            )
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?
+        };
+
+        let invite = host.invite();
+        Ok(Arc::new(Pairing {
+            code: invite.encode(),
+            human: invite.for_humans(),
+            expires_at: invite.expires_at,
+            store: self.shared_store()?,
+            name: self.device_name.clone(),
+            runtime,
+            inner: Mutex::new(Some(host)),
+        }))
+    }
+
+    /// Accept an invitation offered by another device.
+    ///
+    /// The usual direction for a phone: the desktop shows a QR code and the
+    /// phone's camera reads it.
+    pub fn join_pairing(&self, code: String) -> Result<PeerInfo, QurbError> {
+        let invite = qurb_peer::Invite::parse(&code)
+            .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
+
+        let identity = self.identity()?;
+        let store = self.shared_store()?;
+        let runtime = self.runtime()?;
+
+        let paired = runtime
+            .block_on(qurb_peer::accept(&invite, &identity, store, &self.device_name, now()))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+
+        Ok(PeerInfo {
+            fingerprint: hex(paired.fingerprint.as_bytes()),
+            short: paired.fingerprint.short(),
+            name: paired.name,
+            paired_at: now(),
+            last_seen: None,
+        })
+    }
+
+    /// Sync with every trusted device, giving up after `seconds`.
+    ///
+    /// The deadline is the point. Both platforms hand a background task a
+    /// window and kill it for outstaying one, so a sync that runs until it is
+    /// finished is a sync that eventually gets the app's background privileges
+    /// revoked. Running out of time is reported in
+    /// [`SyncOutcome::timed_out`] and is not an error — work already applied
+    /// stays applied, because each file is committed as it lands rather than at
+    /// the end.
+    ///
+    /// Pass a generous value when the app is in the foreground and the user is
+    /// watching; pass what the platform granted when it is not.
+    pub fn sync_within(&self, seconds: u32) -> Result<SyncOutcome, QurbError> {
+        let deadline = std::time::Duration::from_secs(seconds.max(1) as u64);
+        self.sync_inner(deadline)
+    }
+
     /// How much space the store occupies on this device.
     ///
     /// Both numbers, because on a phone the difference is the selling point:
@@ -633,6 +703,45 @@ impl Qurb {
         Ok(Usage { logical: db.live_bytes()?, on_disk })
     }
 }
+
+/// Not exported. `#[uniffi::export]` takes every function in the block it is
+/// applied to, and neither a `MutexGuard` nor a four-argument constructor
+/// taking an optional callback interface can cross an FFI boundary.
+impl Qurb {
+    fn open_inner(
+        root: String,
+        passphrase: Option<String>,
+        settings: Settings,
+        keystore: Option<Arc<dyn KeyStore>>,
+    ) -> Result<Self, QurbError> {
+        let store_dir = store_dir(Path::new(&root));
+        let vault = vault_at(&store_dir, keystore.as_ref());
+
+        if !vault.exists() {
+            return Err(QurbError::NotSetUp { detail: format!("{root} has no vault") });
+        }
+
+        let master: MasterKey = vault.unlock(passphrase.as_deref())?;
+        let chunk_key = ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
+        let root = PathBuf::from(&root);
+        let store = Store::open(&store_dir, chunk_key)?;
+        let ignore = IgnoreRules::new().with_store_dir(&store_dir);
+
+        Ok(Self {
+            inner: Mutex::new(Engine::new(&root, store, ignore)),
+            root,
+            store_dir,
+            master,
+            device_name: settings.device_name,
+            signal_url: settings.signal_url,
+            relay: settings.relay,
+            port: settings.port,
+            discover: settings.discover,
+            runtime: Mutex::new(None),
+        })
+    }
+}
+
 
 /// Not exported. `#[uniffi::export]` takes every method in the block it is
 /// applied to, and a `MutexGuard` cannot cross an FFI boundary — nor should it.
@@ -1031,105 +1140,3 @@ impl Pairing {
     }
 }
 
-#[uniffi::export]
-impl Qurb {
-    /// Devices this one trusts.
-    pub fn peers(&self) -> Result<Vec<PeerInfo>, QurbError> {
-        let engine = self.engine()?;
-        Ok(engine
-            .store()
-            .db()
-            .trusted_peers()?
-            .into_iter()
-            .map(|p| {
-                let fingerprint = qurb_peer::Fingerprint::from_bytes(p.fingerprint);
-                PeerInfo {
-                    fingerprint: hex(fingerprint.as_bytes()),
-                    short: fingerprint.short(),
-                    name: p.name,
-                    paired_at: p.paired_at,
-                    last_seen: p.last_seen,
-                }
-            })
-            .collect())
-    }
-
-    /// Offer an invitation, for another device to scan or be read.
-    ///
-    /// The returned code carries this device's *full* fingerprint and must
-    /// travel out of band — a QR code on the screen, or a code spoken aloud.
-    /// Sending it over the network being paired would defeat the point: someone
-    /// who can change what you see has already won.
-    pub fn offer_pairing(&self) -> Result<Arc<Pairing>, QurbError> {
-        let identity = self.identity()?;
-        let port = self.port;
-        let runtime = self.runtime()?;
-
-        // Inside the runtime even though `open` is not async: it binds a QUIC
-        // endpoint, and quinn registers the socket with whatever reactor is
-        // current. Without this it fails with "no async runtime found" — which
-        // names the cause but not the fix, since nothing in the call is awaited.
-        let host = {
-            let _guard = runtime.enter();
-            qurb_peer::PairingHost::open(
-                format!("0.0.0.0:{port}").parse().expect("a literal address"),
-                &identity,
-                now(),
-            )
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?
-        };
-
-        let invite = host.invite();
-        Ok(Arc::new(Pairing {
-            code: invite.encode(),
-            human: invite.for_humans(),
-            expires_at: invite.expires_at,
-            store: self.shared_store()?,
-            name: self.device_name.clone(),
-            runtime,
-            inner: Mutex::new(Some(host)),
-        }))
-    }
-
-    /// Accept an invitation offered by another device.
-    ///
-    /// The usual direction for a phone: the desktop shows a QR code and the
-    /// phone's camera reads it.
-    pub fn join_pairing(&self, code: String) -> Result<PeerInfo, QurbError> {
-        let invite = qurb_peer::Invite::parse(&code)
-            .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
-
-        let identity = self.identity()?;
-        let store = self.shared_store()?;
-        let runtime = self.runtime()?;
-
-        let paired = runtime
-            .block_on(qurb_peer::accept(&invite, &identity, store, &self.device_name, now()))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
-
-        Ok(PeerInfo {
-            fingerprint: hex(paired.fingerprint.as_bytes()),
-            short: paired.fingerprint.short(),
-            name: paired.name,
-            paired_at: now(),
-            last_seen: None,
-        })
-    }
-
-    /// Sync with every trusted device, giving up after `seconds`.
-    ///
-    /// The deadline is the point. Both platforms hand a background task a
-    /// window and kill it for outstaying one, so a sync that runs until it is
-    /// finished is a sync that eventually gets the app's background privileges
-    /// revoked. Running out of time is reported in
-    /// [`SyncOutcome::timed_out`] and is not an error — work already applied
-    /// stays applied, because each file is committed as it lands rather than at
-    /// the end.
-    ///
-    /// Pass a generous value when the app is in the foreground and the user is
-    /// watching; pass what the platform granted when it is not.
-    pub fn sync_within(&self, seconds: u32) -> Result<SyncOutcome, QurbError> {
-        let deadline = std::time::Duration::from_secs(seconds.max(1) as u64);
-        self.sync_inner(deadline)
-    }
-}

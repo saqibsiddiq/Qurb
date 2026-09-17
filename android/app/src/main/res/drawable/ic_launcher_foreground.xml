@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- A ring with a gap: a store that is closed, and yours. -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M54,30 A24,24 0 1,1 53.9,30 Z M54,38 A16,16 0 1,0 54.1,38 Z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M62,62 L76,76 L70,82 L56,68 Z" />
+</vector>

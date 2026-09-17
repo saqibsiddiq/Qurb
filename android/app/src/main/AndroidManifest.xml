@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Sync needs the network. Nothing else is asked for: no storage
+         permission, because the synced directory is this app's own private
+         storage; no camera, because pairing codes are typed rather than
+         scanned; no location, contacts, or anything else. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Qurb">
+
+        <!-- allowBackup is false deliberately. Android's backup would copy the
+             encrypted vault to Google's servers, and the key wrapping it lives
+             in the Keystore and does NOT travel - so a restored copy would be
+             an unreadable store that looks like a working one. The recovery
+             phrase is the supported way to move to a new device. -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".SetupActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
+    </application>
+</manifest>
