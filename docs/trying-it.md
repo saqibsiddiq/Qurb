@@ -115,11 +115,10 @@ method is in [measuring-connectivity.md](measuring-connectivity.md).
 
 ## 5. On an Android phone
 
-**This is the most valuable thing you can test that nobody has.** Everything
-on-device so far ran on an x86_64 emulator, so the ARM64 build that would
-actually ship has been compiled and never executed. That gap matters more than
-it sounds: BLAKE3 takes a different code path on ARM, and ARM's memory model is
-weaker than x86's, so a concurrency bug that x86 hides can surface there.
+**Done, and it passed.** A Samsung Galaxy S23 (Android 16, arm64-v8a) runs all
+35 binaries — 426 tests in 104 seconds — with a 512 MiB file over QUIC costing
+6 MiB of heap. Worth repeating on other hardware, especially anything older,
+slower, or from a different manufacturer.
 
 On the phone: Settings → About → tap *Build number* seven times, then
 Developer options → **USB debugging**. Plug it in and accept the prompt on the
@@ -143,9 +142,14 @@ one if it cannot find it.
 
 Expect around 426 tests across 35 binaries, taking a couple of minutes.
 
-**If anything fails there and passes on the emulator, that is a real find** —
-please keep the output. Re-run the single binary with `STRIP=0` to get symbols
-in the backtrace.
+**If anything fails on your device that passes here, that is a real find** —
+keep the output. Re-run that one binary with `STRIP=0` to get symbols in the
+backtrace.
+
+What this does *not* test, on any device: the tests run from `/data/local/tmp`
+as a shell user on a plugged-in, awake phone. An installed app that the system
+has backgrounded lives under quite different rules, and none of that is measured
+because there is no app.
 
 ## 6. What you cannot test yet
 

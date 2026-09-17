@@ -186,10 +186,10 @@ band, finds the other device through the rendezvous service, connects over QUIC
 and syncs — with `syncWithin(seconds)`, because both platforms kill background
 work that outstays its window.
 
-**It runs on Android.** `./scripts/android-test.sh` pushes the test binaries to
-a device and runs them: 426 of the 433 pass there, QUIC handshakes and hole
-punching included. Receiving a 512 MiB file on the device grows the heap by
-5 MiB.
+**It runs on a phone.** `./scripts/android-test.sh` pushes the test binaries to
+a connected device and runs them: on a Samsung Galaxy S23 (Android 16, ARM64),
+426 of the 433 pass, QUIC handshakes and hole punching included. Receiving a
+512 MiB file over the network there grows the heap by 6 MiB.
 
 Mobile also forced three fixes in the core: files no longer pass through memory
 whole (adopting a 1 GiB file grew the heap by 1024 MiB and now grows it by 1);
@@ -202,10 +202,10 @@ The master key can be handed to the platform's own keystore, which the app
 supplies because neither Android's nor iOS's is reachable from Rust — the
 contract is tested against a fake, and no platform implements it yet.
 
-Not built: an app of any kind, an interface, installers, signed updates.
-Everything on-device ran on an **x86_64** emulator — the ARM build that would
-ship to a phone is compiled and never run, because the emulator refuses an ARM
-image on an x86 host. iOS has not been built at all; that needs a Mac.
+Not built: an app of any kind, an interface, installers, signed updates. The
+phone tests ran as a shell user on a plugged-in device, so nothing measures
+battery or what survives being backgrounded. iOS has not been built at all; that
+needs a Mac.
 
 **Phase 1 is complete.** Its kill criterion — syncing 100,000 files cleanly —
 was run and passed: 4.40 GiB between two devices with every correctness check

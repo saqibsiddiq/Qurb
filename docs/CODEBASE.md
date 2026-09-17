@@ -12,8 +12,7 @@ should be reflected here in the same piece of work that changes it.
 checked against the source, not just the sections that changed. Phases 0–2 are
 complete. Phase 3 is built and its kill criterion is unmeasured, for want of a
 second machine. Phase 4 has a daemon and nothing graphical. Phase 5 runs on an
-Android emulator, where it pairs and syncs, with no app around it, no ARM build
-ever executed, and no iOS at all.
+Galaxy S23, where it pairs and syncs, with no app around it and no iOS at all.
 
 ---
 
@@ -434,8 +433,8 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-433 tests pass across ten crates on Linux, 426 of them on Android; clippy is
-clean.
+433 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
+clippy is clean.
 
 **Two devices now sync over a real network connection**, converging through
 concurrent edits, deletions and resurrections, with both sides computing the
@@ -586,10 +585,10 @@ platforms kill background work that outstays its window. The master key can be
 handed to the platform's own keystore, which the app supplies because neither
 Android's nor iOS's is reachable from Rust.
 
-**It runs on a device.** `./scripts/android-test.sh` pushes the test binaries
-with `adb` and runs them: on an Android 14 emulator all 35 pass, 426 tests,
-including the real QUIC handshakes and hole punching. Receiving a 512 MiB file
-there grows the heap by 5 MiB.
+**It runs on a phone.** `./scripts/android-test.sh` pushes the test binaries
+with `adb` and runs them: on a Samsung Galaxy S23 (Android 16, arm64-v8a) all 35
+pass — 426 tests, including the real QUIC handshakes and hole punching.
+Receiving a 512 MiB file over the network there grows the heap by 6 MiB.
 
 Three problems mobile exposed were fixed in the core, because all three were
 core problems that a desktop merely tolerates:
@@ -606,12 +605,10 @@ core problems that a desktop merely tolerates:
   binds `127.0.0.1` explicitly and STUN normally supplies an address that works
   instead; it broke two devices on a network with no route to the internet.
 
-**No ARM, no real phone, no iOS.** Everything on-device ran on an x86_64
-emulator; emulator 37.x refuses an ARM image on an x86_64 host, so the build
-that ships to phones is compiled and never run — which matters because BLAKE3
-takes a different path on ARM and ARM's memory model is weaker than x86's. An
-emulator also imposes none of a phone's memory pressure or battery behaviour and
-never suspends the process. iOS needs Xcode, which needs a Mac. See
+**No app, and no iOS.** The tests ran from `/data/local/tmp` as a shell user on
+a plugged-in, awake phone — not as an installed app the platform has stopped
+caring about. Nothing measures battery, suspension, or memory pressure from
+other apps. iOS needs Xcode, which needs a Mac. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ### Designed but not built

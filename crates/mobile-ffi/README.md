@@ -33,9 +33,9 @@ Stripped, the library is 3.2–3.9 MB depending on architecture — roughly what
 engine adds to an app download, with SQLite, Zstd, BLAKE3, XChaCha20-Poly1305
 and QUIC all inside it.
 
-Measured on the emulator, receiving a file over a real QUIC connection: a 32 MiB
-file grows the heap by 4 MiB, 128 MiB by 4 MiB, and 512 MiB by 5 MiB. Flat, which
-is the property that matters.
+Measured on that phone, receiving a file over a real QUIC connection: a 32 MiB
+file grows the heap by 8 MiB, 128 MiB by 5 MiB, and 512 MiB by 6 MiB. Flat as the
+file grows sixteen-fold, which is the property that matters.
 
 ## Running the tests on a device
 
@@ -45,8 +45,9 @@ is the property that matters.
 
 Builds the test binaries for Android, pushes them with `adb`, runs them. No app,
 no Gradle, no JVM: the FFI is a C ABI, and a test binary exercises the same Rust
-an app calls through it. On an Android 14 emulator all 35 binaries pass — 426
-tests, including the QUIC handshakes and hole punching.
+an app calls through it. On a Samsung Galaxy S23 (Android 16, arm64-v8a) all 35
+binaries pass — 426 tests in 104 seconds, including the QUIC handshakes and hole
+punching.
 
 This is the only thing that answers "does it work on Android?".
 Cross-compiling proves the toolchain is right and says nothing about bionic's
@@ -228,11 +229,7 @@ this app.
 - **The generated bindings, compiled.** The Kotlin and Swift are exercised only
   as the Rust functions underneath them. Neither has been through a Kotlin or
   Swift toolchain.
-- **ARM64, executed.** Everything on-device ran on an x86_64 emulator. Emulator
-  37.x refuses an `arm64-v8a` image on an x86_64 host, so there is no way to run
-  the shipping build here. BLAKE3 takes a different code path on ARM and ARM's
-  memory model is weaker than x86's, so the concurrency in this workspace has
-  never been exercised where it is most likely to break.
-- **A real phone.** An emulator imposes none of a device's memory pressure,
-  thermal limits or battery behaviour, and never suspends the process the way a
-  backgrounded app is suspended. See `docs/phases/phase-5-mobile.md`.
+- **An app's conditions.** The tests run from `/data/local/tmp` as a shell user
+  on a plugged-in, awake phone. Nothing measures battery cost, what survives a
+  suspend, or how the platform treats a backgrounded process. See
+  `docs/phases/phase-5-mobile.md`.

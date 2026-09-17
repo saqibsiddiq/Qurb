@@ -14,9 +14,9 @@ record](../roadmap.md).
 | the core cross-compiles for Android | ✅ all four architectures |
 | an FFI a phone can call | ✅ [`qurb-mobile`](../../crates/mobile-ffi/) |
 | Kotlin and Swift bindings generate | ✅ `./scripts/mobile-bindings.sh` |
-| files without holding them in memory | ✅ measured on the device: 512 MiB → 5 MiB |
+| files without holding them in memory | ✅ on the phone: 512 MiB → 6 MiB |
 | filenames that survive macOS and iOS | ✅ NFC normalisation |
-| **running on an actual device** | ✅ **426 tests pass on Android 14** |
+| **running on an actual phone** | ✅ **426 tests on a Galaxy S23, ARM64** |
 | pairing and syncing from the phone | ✅ end to end, over QUIC |
 | a sync that fits a background window | ✅ `sync_within(seconds)` |
 | iOS build | ⬜ blocked: needs Xcode, which needs a Mac |
@@ -24,8 +24,8 @@ record](../roadmap.md).
 | the key kept outside the app's files | ◐ contract built and tested; no platform implementation |
 | an app | ⬜ not started |
 
-433 tests pass across ten crates on Linux, 426 of them on Android; clippy is
-clean.
+433 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
+clippy is clean.
 
 ## What the library costs
 
@@ -65,18 +65,18 @@ file:
 | 256 MiB | 256 MiB of heap | 0 MiB |
 | 1024 MiB | 1024 MiB of heap | 1 MiB |
 
-And, later, on the Android emulator itself — a file arriving over a real QUIC
-connection from another device rather than read from a local store:
+And on the phone itself — a file arriving over a real QUIC connection from
+another device rather than read from a local store:
 
-| file received over the network | heap |
-|---|---|
-| 32 MiB | 4 MiB |
-| 128 MiB | 4 MiB |
-| 512 MiB | 5 MiB |
+| file received over the network | heap (Galaxy S23) | heap (emulator) |
+|---|---|---|
+| 32 MiB | 8 MiB | 4 MiB |
+| 128 MiB | 5 MiB | 4 MiB |
+| 512 MiB | 6 MiB | 5 MiB |
 
-A half-gigabyte file costs 5 MiB. That is the number the FileProvider concern
-was always about, and it is now measured on the platform rather than argued from
-a desktop.
+**A half-gigabyte file costs 6 MiB of heap on a real phone**, and the number does
+not move as the file grows sixteen-fold. That is what the FileProvider concern
+was always about, measured on hardware rather than argued from a desktop.
 
 `RssAnon` rather than total resident size, on purpose. A memory-limited platform
 counts *dirty* pages against a process; pages backed by a file on disk are clean
@@ -112,8 +112,12 @@ pushes them with `adb`, and runs them. There is no app, no Gradle and no JVM
 involved: the FFI is a C ABI, and a test binary exercises the same Rust an app
 would reach through it.
 
-On an Android 14 (API 34) x86_64 emulator, all 35 binaries pass — 426 tests in
-around 70 seconds. The networking crates are included deliberately: they open real
+**On a real phone**: a Samsung Galaxy S23 (SM-S911B, Snapdragon 8 Gen 2,
+Android 16, API 36, arm64-v8a). All 35 binaries pass — 426 tests in 104 seconds.
+
+Also on an Android 14 (API 34) x86_64 emulator, where the same 35 binaries pass
+in 74 seconds. The emulator is worth keeping for the fast loop; the phone is
+what the claim rests on. The networking crates are included deliberately: they open real
 sockets, complete a real QUIC handshake and punch through to each other on
 loopback. Excluding them would have meant the answer to "does it work on
 Android?" quietly left out the interesting half.
@@ -130,31 +134,38 @@ the code:
   that reports green while showing nothing is indistinguishable from one that
   works.
 
-### What this does not establish
+### Why ARM mattered, and what it showed
 
-**ARM64 has never been executed.** The emulator is x86_64, and the build that
-would ship to a real phone is compiled and never run. This was attempted: an
-`arm64-v8a` system image downloads and creates an AVD, and the emulator then
-refuses it outright —
+Running on ARM was worth insisting on. Architecture-independent Rust is
+architecture-independent, but two things here are not: BLAKE3 takes a NEON code
+path on ARM rather than AVX2, and ARM's memory model is weaker than x86's, so a
+concurrency bug that x86 hides can surface there. This workspace has real
+concurrency — a garbage collector running against a live writer, a worker pool
+holding a database connection each — and until now none of it had run anywhere
+but x86.
+
+It found nothing. Every test passes on ARM64 exactly as on x86_64, including the
+crash-injection suite, the property tests with their 320 random seeds, and the
+concurrent-collector test. That is a negative result and worth recording as one:
+it does not prove the code is free of memory-ordering bugs, it proves that this
+suite on this device did not expose any.
+
+A note for anyone repeating this: the emulator cannot substitute. Emulator 37.x
+refuses an `arm64-v8a` image on an x86_64 host outright —
 
     Avd's CPU Architecture 'arm64' is not supported by the QEMU2 emulator
     on x86_64 host. System image must match the host architecture.
 
-Emulator 37.x dropped cross-architecture emulation, so there is no route to
-running ARM64 on this machine. That matters more than it might sound.
-Architecture-independent Rust is architecture-independent, but two things are
-not: BLAKE3 takes a different code path on ARM (NEON rather than AVX2), and
-ARM's memory model is weaker than x86's, so a concurrency bug that x86 hides can
-appear there. The workspace has real concurrency — a garbage collector running
-against a live writer, a worker pool with a connection each — and none of it has
-been exercised under a weak memory model.
+Cross-architecture emulation is gone, so ARM verification needs ARM hardware:
+a phone, a Raspberry Pi, an ARM CI runner, or an Apple Silicon Mac.
 
-Closing this needs an ARM machine: a phone, a Raspberry Pi, an ARM CI runner, or
-an Apple Silicon Mac.
+### What this still does not establish
 
-**The emulator is not a phone.** It imposes none of a real device's memory
-pressure, thermal limits or battery behaviour, and it never suspends the process
-the way a backgrounded app is suspended.
+**The phone was plugged in, awake and unthrottled.** Tests ran from
+`/data/local/tmp` as a shell user, not as an installed app in the background.
+Nothing here measures battery cost, what survives a suspend, what happens under
+memory pressure from other apps, or how the platform treats a process it has
+stopped caring about. Those need an app.
 
 ## Filenames that mean the same thing
 
