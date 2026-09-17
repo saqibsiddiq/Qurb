@@ -36,5 +36,20 @@
             android:name=".SetupActivity"
             android:exported="false"
             android:label="@string/app_name" />
+
+        <!-- Puts the synced files in the system file picker and the Files app.
+             Without it everything lives in this app's private directory and
+             only this app can see it, which makes a file sync product no other
+             app can open. -->
+        <provider
+            android:name=".QurbDocumentsProvider"
+            android:authorities="com.qurb.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
     </application>
 </manifest>
