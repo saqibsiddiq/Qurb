@@ -108,16 +108,30 @@ first path, `Store::adopt` the second.
 Writing identical bytes is deliberately not a change and does not advance the
 clock, or a touched file would start beating a peer's genuinely newer version.
 
+## Reading without holding the file
+
+`read_file` returns the bytes. `read_file_into` and `read_content_into` write
+them out a chunk at a time, so peak memory is one chunk — at most 2 MiB —
+however large the file is. `adopt_file` is the same idea for the other
+direction: it maps a file the caller has already written rather than taking a
+buffer.
+
+The buffering forms remain, because tests and the storage-only replica path use
+them. Which to use is not a matter of taste:
+[decision 0018](../../docs/decisions/0018-file-contents-never-cross-the-ffi.md)
+says why anything a phone can reach must stream.
+
+All of them verify the whole-file hash — but only once the last byte is written,
+which is the earliest it can be known. A destination is therefore not
+trustworthy until the call returns.
+
 ## Not yet built
 
-- **Key storage.** `ChunkKey` is supplied by the caller and
-  [`qurb-keys`](../keys/) derives it from a master secret with a recovery
-  phrase. What is missing is protecting that master secret at rest: it lives in
-  an owner-only file rather than the platform keystore.
-- **Parallel writing.** One connection, one writer. Concurrent access is
-  exercised — the collector runs against a live writer in `tests/concurrency.rs`
-  — but nothing writes in parallel, and a cold index of 100k files takes four
-  minutes largely because of it.
+- **Per-file keys.** One `ChunkKey` encrypts everything. Sharing a single file
+  with someone else would mean sharing the key to all of them, so sharing needs
+  this first.
+- **Key rotation.** There is no way to change the master secret without
+  re-encrypting every chunk, and nothing does that.
 - **Streaming reads.** `read_file` builds the whole file in memory. Fine for the
   desktop, not acceptable inside an iOS FileProvider extension, which will need
   a chunk-at-a-time API.

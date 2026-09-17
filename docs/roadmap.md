@@ -162,6 +162,13 @@ Plan for iOS to be a **good viewer with opportunistic sync**, not a peer equal t
 desktop. Every peer-to-peer application on iOS makes this compromise; deciding it
 deliberately beats discovering it in month fifteen.
 
+**Started, against the recommendation below.** The memory-ceiling prediction was
+correct and cost more than expected: the receive path held whole files, which a
+FileProvider extension would not survive, and fixing it changed the engine
+rather than anything mobile-specific. The engine now cross-compiles for all four
+Android architectures and has never run on a phone. See
+[phases/phase-5-mobile.md](phases/phase-5-mobile.md).
+
 ---
 
 ## Phase 6 — Commercial
@@ -173,8 +180,10 @@ incident response.
 
 ## The two risks that are not technical
 
-**Availability.** Covered in [0006](decisions/0006-availability-gap.md). The
-single largest open question in the project.
+**Availability.** Was the single largest open question; answered in
+[0006](decisions/0006-availability-gap.md) by storage-only replicas, and built
+in Phase 3. What remains is not technical: a replica has to be a machine
+somebody keeps switched on, and most people do not have one.
 
 **Key recovery.** Zero-knowledge means a lost key is unrecoverable data, and
 that conversation will eventually happen with a real, distressed person. Every

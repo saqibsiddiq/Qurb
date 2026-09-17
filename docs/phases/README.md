@@ -14,9 +14,9 @@ A number without its conditions is not evidence.
 | [0](phase-0-spike.md) | Spike — do the core ideas hold? | ✅ complete, all criteria passed |
 | [1](phase-1-engine.md) | The engine | ✅ complete — kill criterion passed |
 | [2](phase-2-correctness.md) | Adversarial correctness | ✅ complete — 4 defects found |
-| [3](phase-3-networking.md) | Networking at scale | 🔨 in progress — pairing done |
+| [3](phase-3-networking.md) | Networking at scale | 🔨 built — kill criterion unmeasured |
 | [4](phase-4-product.md) | Desktop product | 🔨 in progress — the daemon runs |
-| 5 | Mobile | not started |
+| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — builds, never run on a phone |
 | 6 | Commercial | not started |
 
 Phase definitions and kill criteria: [../roadmap.md](../roadmap.md).

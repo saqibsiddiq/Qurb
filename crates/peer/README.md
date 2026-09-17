@@ -168,11 +168,13 @@ not route through the internet to reach each other.
 
 
 - **Upgrading back to direct.** A connection that fell back to the relay stays
-  relayed, even after the device moves to a network where punching would work. Connections are direct to a known address. STUN, hole
-  punching, and relay fallback are Phase 3 — Phase 0 measured that the
-  home network here supports hole punching, but none of it is implemented.
+  relayed, even after the device moves to a network where punching would work.
 - **Discovery.** A peer's address must be supplied; an invite carries one, but
   only the one it had when the invite was made.
+- **A measured direct-connection rate.** Hole punching works between the
+  networks tested here, which is one home network. The rate across real networks
+  is the number the relay bill depends on, and it needs a second machine — see
+  [measuring-connectivity.md](../../docs/measuring-connectivity.md).
 - **Transitive trust.** Pairing A to B and B to C does not pair A to C, and
   there is no way to tell other devices that one is no longer trusted.
 - **Tree paging.** The whole tree is sent in one message, capped at 64 MiB. A

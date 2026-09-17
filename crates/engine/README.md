@@ -126,6 +126,30 @@ including tombstoned ones — a deleted file's chunks survive the retention
 window, and "do we have these bytes?" is a question about chunks rather than
 names.
 
+## Receiving a file without holding it
+
+Content arrives a chunk at a time and goes straight to disk. Nothing assembles a
+whole file in memory, so peak memory is one chunk — at most 2 MiB — regardless
+of the file's size. Adopting a 1 GiB file used to grow the heap by 1024 MiB and
+now grows it by 1:
+
+```bash
+cargo run --release -p qurb-engine --example peak_memory -- buffered 1024
+cargo run --release -p qurb-engine --example peak_memory -- stream 1024
+```
+
+Both shapes are kept so the comparison stays checkable. The reason it matters is
+[decision 0018](../../docs/decisions/0018-file-contents-never-cross-the-ffi.md):
+an iOS FileProvider extension is killed at a ceiling in the tens of megabytes,
+and a path that buffers works for documents and kills the process for video.
+
+Content cannot be verified until its last byte arrives, so a file is assembled
+under a staging name beside its destination and renamed once the hash checks
+out. Unverified bytes are therefore never visible at the real path, and an
+interrupted transfer leaves nothing that looks complete. The watcher ignores
+that staging name; without it the half-written file would be indexed, its rename
+read as a deletion, and both the phantom and its removal sent everywhere.
+
 ## Two kinds of device
 
 An engine is either **syncing** a directory someone uses, or acting as a
@@ -144,6 +168,11 @@ everywhere, quietly.
 
 **It does not materialise files.** Storing chunks *and* writing every file costs
 roughly twice the space for a copy nobody reads.
+
+One consequence: a replica is the only path that still buffers a whole file,
+because there is no file on disk to stream into. Replicas are machines somebody
+keeps switched on rather than phones, so the memory ceiling does not apply — but
+the gap is real and is marked where it lives in `peer.rs`.
 
 A replica can hold a subset — `PinSet::under(["work"])` — because "hold
 everything" is the expensive answer and the useful one is usually "hold what I

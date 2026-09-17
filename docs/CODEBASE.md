@@ -8,9 +8,11 @@ goes deeper on one topic; this file is the map.
 It is a **living document**. Anything that changes how the system fits together
 should be reflected here in the same piece of work that changes it.
 
-**Last verified against the code:** 2026-09-17, during Phase 4. Phases 0–2 are
-complete; Phase 3 is built but its kill criterion is unmeasured; Phase 4 has a
-daemon and nothing graphical.
+**Last verified against the code:** 2026-09-17, during Phase 5 — the whole file
+checked against the source, not just the sections that changed. Phases 0–2 are
+complete. Phase 3 is built and its kill criterion is unmeasured, for want of a
+second machine. Phase 4 has a daemon and nothing graphical. Phase 5 builds for
+Android and has never run on a phone.
 
 ---
 
@@ -211,9 +213,13 @@ Steps 1–8 are built, tested, and joined together: step 1 in
 the rest. A directory now syncs into a local store and stays in step with it.
 
 All eleven steps now run end to end between two devices over a real network
-connection. What is missing is not the pipeline but the things around it:
-devices must be told each other's identities by hand, and must be able to reach
-each other directly, because pairing and NAT traversal are Phase 3.
+connection, including the things around the pipeline: devices pair out of band,
+find each other through the rendezvous service, punch through NAT, and fall back
+to a relay when no direct path exists.
+
+What is unmeasured is *how often* the direct path works. That needs two machines
+on two different networks — see
+[measuring-connectivity.md](measuring-connectivity.md).
 
 Step 11 is where the chunking finally pays off. Inserting 16 bytes at the front
 of a 200 MB file moved **248 KiB** over the wire — one chunk, 0.1% of the file —
@@ -291,6 +297,9 @@ qurb/
 │   │   ├── src/client.rs    asks for trees, manifests, chunks
 │   │   └── src/source.rs    plugs the client into the engine
 │   │
+│   ├── mobile-ffi/        The engine, as a phone can call it.
+│   │   └── src/lib.rs       UniFFI surface; no sync logic of its own
+│   │
 │   ├── keys/              The root secret and the way back to it.
 │   │   ├── src/master.rs    HKDF derivation, one key per purpose
 │   │   ├── src/phrase.rs    the 24 words, via BIP-39
@@ -311,6 +320,10 @@ qurb/
 │       ├── src/main.rs       init, pair, join, run, status, verify, config
 │       ├── src/daemon.rs     watch, apply, sync, retry
 │       └── src/config.rs     a flat file meant to be edited by hand
+│
+├── scripts/
+│   ├── android-build.sh   cross-compile the engine for all four Android ABIs
+│   └── mobile-bindings.sh generate the Kotlin and Swift bindings
 │
 ├── experiments/
 │   └── phase0-spike/      Throwaway. Proved the core ideas work.
@@ -337,7 +350,8 @@ code gets written fresh, informed by the spike rather than copied from it.
 ## 5. What actually exists right now
 
 Being precise about this matters, because the architecture document describes a
-complete system and almost none of it is built.
+complete system and a good deal of it is still unbuilt. The engine is real; the
+product around it largely is not.
 
 ### Built and tested (`crates/storage`, Phase 1)
 
@@ -394,7 +408,8 @@ complete system and almost none of it is built.
 | Content fetched by hash | renames and copies cost a lookup, not a transfer |
 | Two directories converging | including conflicts, deletions, resurrections |
 
-170 tests pass across four crates; clippy is clean.
+Those four crates were the first to be joined together; the counts below are
+for the workspace as it stands.
 
 ### Built and tested (`crates/peer`, Phase 1)
 
@@ -416,7 +431,7 @@ complete system and almost none of it is built.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-405 tests pass across nine crates; clippy is clean.
+420 tests pass across ten crates; clippy is clean.
 
 **Two devices now sync over a real network connection**, converging through
 concurrent edits, deletions and resurrections, with both sides computing the
@@ -474,9 +489,12 @@ devices it has been paired with; `qurb signal` and `qurb relay` run the services
 **What has never been measured is how often that fallback is needed.** The
 direct-connection rate on real networks is the number the relay bill depends on.
 Until now it could not be measured because there was nothing to run on a second
-machine; now there is. And the master key
-sits in an owner-only file rather than the platform keystore, which is the
-largest security gap in the project.
+machine; now there is, and
+[measuring-connectivity.md](measuring-connectivity.md) says how.
+
+**And the engine now cross-compiles for a phone.** All four Android
+architectures build, and [`crates/mobile-ffi`](../crates/mobile-ffi/) generates
+the Kotlin and Swift a phone would call. It has never run on a device.
 
 ### Hardened (Phase 2, complete)
 
@@ -540,7 +558,8 @@ Everything is in one process, which is the one thing about it that is not
 realistic. The sockets, handshakes, encryption, chunking and conflict resolution
 are all the real implementations.
 
-What is missing is everything about a *second device*.
+What is missing is everything a *person* needs: an interface, installers,
+updates, and an app on either phone.
 
 ### Measured in the Phase 0 spike
 
@@ -552,29 +571,52 @@ What is missing is everything about a *second device*.
 | QUIC transport | 287 MiB/s loopback |
 | NAT classification | home network is cone NAT; more networks still to test |
 
+### Prepared for mobile (Phase 5, in progress)
+
+The engine cross-compiles for all four Android architectures, and
+[`crates/mobile-ffi`](../crates/mobile-ffi/) generates Kotlin and Swift
+bindings from it. Two problems mobile exposed were fixed in the core, because
+both were core problems that a desktop merely tolerates:
+
+- **Whole files no longer pass through memory.** Adopting a 1 GiB file grew the
+  heap by 1024 MiB and now grows it by 1. An iOS FileProvider extension is
+  killed at a ceiling in the tens of megabytes, so the old path worked for small
+  files and killed the process for large ones.
+- **Filenames are normalised to NFC.** macOS and iOS decompose names on the way
+  in, which made a synced `café` look deleted-and-recreated on every scan and
+  duplicated it without limit.
+
+**Nothing has run on a phone.** The libraries build and export the right
+symbols; they have never been loaded by an Android or iOS process, and iOS has
+not been built at all because that needs a Mac. See
+[phases/phase-5-mobile.md](phases/phase-5-mobile.md).
+
 ### Designed but not built
 
-Platform keystore integration, per-file keys, relay selection and quotas,
-accounts and billing, the desktop UI, both mobile clients, search, updates.
+Keychain and Android Keystore, per-file keys, relay selection and quotas,
+accounts and billing, the desktop UI, both mobile apps, syncing from a phone at
+all, search, updates.
 
 ### The gaps that matter most
 
-Two things are known-missing rather than merely unbuilt:
+Three things are known-missing rather than merely unbuilt:
 
-12. **Protecting the master key at rest.** It lives in a file readable only by
-   its owner, which defends against other users on the machine and against
-   nothing that can read the disk. The platform keystore — Keychain, DPAPI,
-   Secret Service — is three separate integrations and is not built. **The
-   largest security gap in the project**, and one a user reading "end-to-end
-   encrypted" would reasonably assume was already closed.
-
-13. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
+12. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
    consumer product in this space eventually adds some escape hatch — social
    recovery, an escrowed key, a printed kit — and each trades away part of the
    promise. Choosing which compromise to make is better done on paper now than
    under pressure from an upset user later. Still undecided.
 
-Two earlier entries here have since been closed, and how they were closed is
+13. **The phone cannot sync.** `qurb-peer` cross-compiles for Android, but the
+   FFI exposes no pairing and no transfer. What exists makes a phone a local
+   encrypted file store — a real thing, and not what the project is for.
+
+14. **Two kill criteria remain unmeasured**, both for want of hardware rather
+   than for want of code: Phase 3's direct-connection rate needs a second
+   machine on a different network, and Phase 5's battery-and-survival test needs
+   a phone. Neither can be closed on this machine.
+
+Three earlier entries here have since been closed, and how they were closed is
 worth knowing:
 
 **Chunk garbage collection** was written first in Phase 1, because a collector
@@ -629,6 +671,20 @@ cargo test --workspace
 ./target/release/quictest stun
 ```
 
+```bash
+# Cross-compile the engine for all four Android architectures
+./scripts/android-build.sh --release
+```
+
+```bash
+# Generate the Kotlin and Swift a phone would call
+./scripts/mobile-bindings.sh
+```
+
+The Android build needs the NDK, because SQLite is C. The script looks for one
+and says where to get it if there is none. Nothing else in the tree needs a
+cross-compiler.
+
 `quictest stun` contacts public STUN servers, which reveals your public IP to
 them exactly as any VPN or video-call client does. Nothing else in the spike
 touches the network.
@@ -671,11 +727,16 @@ Then the layers, bottom to top:
 14. [crates/signal/README.md](../crates/signal/README.md) and
     [crates/relay/README.md](../crates/relay/README.md) — the two services, and
     what each is deliberately unable to learn.
+15. [crates/mobile-ffi/README.md](../crates/mobile-ffi/README.md) — the surface
+    a phone calls, and the three platform constraints that shaped it.
 
-And when you want to close the one measurement still outstanding:
+And when you want to close the measurements still outstanding:
 
-15. [measuring-connectivity.md](measuring-connectivity.md) — how to measure the
-    direct-connection rate, which is the number the relay bill depends on.
+16. [measuring-connectivity.md](measuring-connectivity.md) — how to measure the
+    direct-connection rate, which is the number the relay bill depends on. The
+    other open measurement, whether sync survives a phone's battery and its
+    platform's patience, needs a device — see
+    [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ---
 

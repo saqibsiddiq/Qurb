@@ -292,6 +292,21 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
+    /// Total size of every live file, as the user would count it.
+    ///
+    /// Distinct from the plaintext total in [`size_totals`](Self::size_totals),
+    /// which sums *chunks* and therefore counts shared content once. Three
+    /// copies of one file are 3x here and 1x there, and the gap between the two
+    /// is exactly what deduplication saved.
+    pub fn live_bytes(&self) -> Result<u64> {
+        let total: i64 = self.conn.query_row(
+            "SELECT coalesce(sum(size), 0) FROM files WHERE deleted_at IS NULL",
+            [],
+            |r| r.get(0),
+        )?;
+        Ok(total as u64)
+    }
+
     pub fn live_paths(&self) -> Result<Vec<String>> {
         let mut stmt = self
             .conn

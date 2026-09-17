@@ -1,0 +1,30 @@
+[package]
+name = "qurb-mobile"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# Both, deliberately. `cdylib` is what Android loads with System.loadLibrary;
+# `staticlib` is what an iOS app and its FileProvider extension link, because an
+# extension cannot dlopen a shared library from the app bundle.
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[dependencies]
+qurb-engine = { path = "../engine" }
+qurb-storage = { path = "../storage" }
+qurb-watcher = { path = "../watcher" }
+qurb-keys = { path = "../keys" }
+qurb-sync = { path = "../sync" }
+uniffi = { version = "0.32", features = ["cli"] }
+thiserror = "2"
+tracing = "0.1"
+
+[build-dependencies]
+uniffi = { version = "0.32", features = ["build"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"

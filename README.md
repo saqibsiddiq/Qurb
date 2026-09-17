@@ -4,10 +4,14 @@ Private cloud storage. Dropbox-like sync where your files stay on your own
 devices — they move directly between them, encrypted end to end, and are never
 stored on our servers.
 
-**Status: Phase 3 in progress.** Phases 0–2 are complete: two devices sync end
-to end over QUIC with encryption, conflict resolution and key management,
-verified at 100,000 files and hardened against crashes, wrong clocks, long
-absences, damaged disks and hostile peers. Devices now pair, too.
+**Status: Phases 4 and 5 in progress.** Phases 0–2 are complete: two devices
+sync end to end over QUIC with encryption, conflict resolution and key
+management, verified at 100,000 files and hardened against crashes, wrong
+clocks, long absences, damaged disks and hostile peers. Phase 3 built pairing,
+NAT traversal, a rendezvous service and a relay — its kill criterion, how often
+the direct path works, needs a second machine and is still unmeasured. Phase 4
+has a daemon and no interface. Phase 5 cross-compiles the engine for Android
+and has never run on a phone.
 
 ---
 
@@ -30,7 +34,8 @@ Then, depending on what you want:
 
 ```
 docs/           documentation — start with CODEBASE.md
-crates/         the engine: storage, watching, sync, transport, keys
+crates/         the engine: storage, watching, sync, transport, keys, FFI
+scripts/        cross-compiling for Android, generating mobile bindings
 experiments/    throwaway spikes, clearly marked as such
 website/        the landing page (Next.js), independent of the engine
 ```
@@ -139,7 +144,7 @@ directory behind it.
 Built and tested in [`crates/keys`](crates/keys/): a 256-bit master key, HKDF
 derivation of one key per purpose, and a 24-word BIP-39 recovery phrase — tested
 end to end, so the words on a piece of paper genuinely turn back into the user's
-files. 405 tests across nine crates, clippy clean.
+files. 420 tests across ten crates, clippy clean.
 
 A directory syncs into a local store — on 2437 real files (979 MiB), 12.96s for
 the first pass and 0.03s for the second. **Two devices now sync over a real
@@ -174,9 +179,16 @@ around it. Running it for the first time found three bugs the whole test suite
 had missed, including an invite that offered `0.0.0.0` as an address — true, and
 impossible to connect to.
 
-Not built: platform keystore integration, so the master key sits in an
-owner-only file rather than Keychain or DPAPI; and relays, and every user
-interface.
+Built and tested in [`crates/mobile-ffi`](crates/mobile-ffi/): the surface a
+phone calls, generating Kotlin and Swift from the Rust. The engine
+cross-compiles for all four Android architectures. Mobile also forced two fixes
+in the core — files no longer pass through memory whole (adopting a 1 GiB file
+grew the heap by 1024 MiB and now grows it by 1), and filenames are normalised
+to NFC, without which a `café` synced to a Mac duplicates itself without limit.
+
+Not built: an interface of any kind, installers, signed updates, Keychain and
+Android Keystore, and syncing from a phone — which compiles but is not exposed.
+Nothing has run on a phone.
 
 **Phase 1 is complete.** Its kill criterion — syncing 100,000 files cleanly —
 was run and passed: 4.40 GiB between two devices with every correctness check
@@ -189,9 +201,12 @@ with real `SIGKILL`, clock-skew and month-offline scenarios, repair of damaged
 chunks from a peer, and tests against peers that lie. It found four real
 defects — including a writer that could reference a chunk garbage collection had
 just deleted, and renames that re-transferred an entire library depending on how
-the old and new names happened to sort alphabetically. 293 tests.
+the old and new names happened to sort alphabetically. 293 tests at the time;
+420 now.
 
 The master key can be kept in a file, in the operating system's keystore, or
-wrapped with a passphrase — `qurb protect` explains what each defends against. Availability — files being
-unreachable when every device is switched off — is answered by storage-only
-replicas, in [decisions/0006](docs/decisions/0006-availability-gap.md).
+wrapped with a passphrase — `qurb protect` explains what each defends against.
+
+Availability — files being unreachable when every device is switched off — is
+answered by storage-only replicas, in
+[decisions/0006](docs/decisions/0006-availability-gap.md).
