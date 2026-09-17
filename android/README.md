@@ -15,7 +15,7 @@ Keystore, lists files, pairs with another device and syncs.
 |---|---|
 | setup | create an identity and show the 24 words, or restore from them |
 | main | the files, what they cost on disk, and a Sync button |
-| menu | pair with a device, list paired devices, set the rendezvous service |
+| menu | pair, list paired devices, background sync, rendezvous service |
 
 The `+` button copies a file from elsewhere on the phone into the synced
 directory. Sync runs one pass with a 25-second deadline and reports what
@@ -93,10 +93,37 @@ From an emulator use `ws://10.0.2.2:9000`, which is how it reaches its host.
 Then `qurb pair <dir>` on the computer, and menu → **Pair a device** on the
 phone with the code it prints.
 
-## Not built
+## Background sync
 
-- **No background sync.** `syncWithin` exists and is built for it; nothing
-  schedules it. That needs `WorkManager` and a policy about when to ask.
+`SyncWorker` is the half of [decision
+0020](../docs/decisions/0020-sync-takes-a-deadline.md) that Rust cannot do.
+`syncWithin(seconds)` makes a sync that ends when its window does; this decides
+when to ask for a window and what to tell the system when one runs out.
+
+WorkManager rather than an alarm or a foreground service: an alarm does not
+survive Doze or a reboot, and a foreground service means a permanent
+notification plus — since Android 14 — a declared type that "syncing files" does
+not cleanly fit.
+
+Every fifteen minutes, which is not a choice: it is the shortest period
+WorkManager accepts, and asking for less silently becomes fifteen anyway. In
+practice it is a floor rather than a promise, because Doze batches background
+work and an idle phone may go hours between runs.
+
+The three outcomes are mapped deliberately:
+
+| what happened | what the worker says |
+|---|---|
+| ran out of time | `retry` — ask for another window sooner |
+| nothing answered | `retry` — the other device is asleep, which is ordinary |
+| keystore locked, no vault | `failure` — retrying will reach the same conclusion |
+
+It records what it did, because a background worker is otherwise invisible:
+nobody is watching when it runs, so without a trace there is no way to tell a
+sync that works from one that silently stopped — and "silently stopped" is the
+failure mode a sync app actually dies of. Menu → **Background sync** shows it.
+
+## Not built
 - **No FileProvider**, so the files are invisible to the rest of the phone.
   This screen is the only way to see them.
 - **No QR scanning.** Pairing codes are typed. A scanner needs a camera

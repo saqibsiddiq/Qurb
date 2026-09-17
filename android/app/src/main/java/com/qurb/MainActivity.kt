@@ -58,6 +58,11 @@ class MainActivity : AppCompatActivity() {
         views.files.layoutManager = LinearLayoutManager(this)
         views.files.adapter = files
 
+        // Registered here rather than in the setup screen: this runs on every
+        // launch, and `KEEP` makes re-registering a no-op while still
+        // re-establishing the work if the user cleared the app's data.
+        SyncWorker.schedule(this)
+
         views.sync.setOnClickListener { sync() }
         views.add.setOnClickListener { picker.launch(arrayOf("*/*")) }
         views.refresh.setOnRefreshListener { refresh() }
@@ -77,6 +82,7 @@ class MainActivity : AppCompatActivity() {
         R.id.pair -> { pair(); true }
         R.id.peers -> { showPeers(); true }
         R.id.settings -> { showSettings(); true }
+        R.id.background -> { showBackground(); true }
         else -> super.onOptionsItemSelected(item)
     }
 
@@ -235,6 +241,41 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /**
+     * What the background scheduler is doing, in the user's own words.
+     *
+     * Worth showing because the honest answer is "roughly every fifteen minutes,
+     * when Android feels like it" — and an app that quietly does nothing for six
+     * hours while claiming to sync is worse than one that says so.
+     */
+    private fun showBackground() {
+        lifecycleScope.launch {
+            val state = withContext(Dispatchers.IO) { SyncWorker.state(this@MainActivity) }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle("Background sync")
+                .setMessage(
+                    "$state\n\n" +
+                        "Android decides when this actually runs. Fifteen minutes is the " +
+                        "shortest period it accepts, and an idle phone may go much longer " +
+                        "between attempts — it batches background work to save battery.\n\n" +
+                        "Both devices have to be awake at the same moment for a sync to " +
+                        "happen, so a computer that is switched off will be missed."
+                )
+                .setPositiveButton("OK", null)
+                .setNeutralButton("Run one now") { _, _ ->
+                    // Through the scheduler rather than directly, so this
+                    // exercises the same path the periodic schedule uses.
+                    SyncWorker.runNow(this@MainActivity)
+                    Snackbar.make(
+                        views.root,
+                        "Queued. It will run when the conditions are met.",
+                        Snackbar.LENGTH_LONG,
+                    ).show()
+                }
+                .show()
+        }
     }
 
     /**

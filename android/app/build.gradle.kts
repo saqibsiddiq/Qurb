@@ -65,6 +65,12 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
+    // Background sync. WorkManager rather than a bare AlarmManager or a
+    // foreground service: it is the only scheduler that survives reboots,
+    // respects Doze, and backs off on its own when the system is busy — which
+    // is exactly the negotiation a sync app has to win to keep running at all.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     // UniFFI's Kotlin bindings call the native library through JNA. The `@aar`
     // classifier matters: the plain jar has no Android native components and
     // fails at runtime rather than at build time.
