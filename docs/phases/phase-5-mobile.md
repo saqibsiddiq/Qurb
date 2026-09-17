@@ -19,10 +19,11 @@ record](../roadmap.md).
 | **running on an actual phone** | ✅ **426 tests on a Galaxy S23, ARM64** |
 | pairing and syncing from the phone | ✅ end to end, over QUIC |
 | a sync that fits a background window | ✅ `sync_within(seconds)` |
-| iOS build | ⬜ blocked: needs Xcode, which needs a Mac |
-| background scheduling | ⬜ the Rust half is done; the platform half is not |
-| the key kept outside the app's files | ◐ contract built and tested; no platform implementation |
-| an app | ⬜ not started |
+| the key kept outside the app's files | ✅ Android Keystore, verified on a device |
+| **an Android app** | ✅ [`android/`](../../android/) — installs, sets up, syncs |
+| background scheduling in the app | ⬜ `syncWithin` exists; nothing schedules it |
+| a FileProvider | ⬜ the files are invisible to the rest of the phone |
+| iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
 433 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
 clippy is clean.
@@ -304,6 +305,64 @@ rather than to a particular one.
 and nothing fills it in. `crates/mobile-ffi/README.md` has a starting point for
 each platform; neither has been compiled.
 
+## The app
+
+[`android/`](../../android/) — Kotlin, classic Views, about 700 lines. It
+installs, sets up an identity, keeps the key in the Android Keystore, lists
+files, pairs with another device, and syncs. The APK is 21 MB, of which roughly
+7 MB is the engine.
+
+`scripts/android-app.sh` builds the native libraries, strips them, copies them
+into `jniLibs`, regenerates the Kotlin bindings, and then runs Gradle. Cargo is
+deliberately not wired into Gradle: a Rust change should be an explicit step
+rather than something that happens invisibly inside an IDE, and the app then
+builds from a clean checkout on a machine with no NDK.
+
+### The bug only an app could find
+
+`Qurb` had its methods in two `#[uniffi::export] impl` blocks. **UniFFI keeps
+only the last one and silently discards the rest.** The Rust compiled. The
+bindings generated without a warning. Eight methods — `scan`, `list`, `export`,
+`importFile`, `remove`, `usage`, `contains`, `root` — were simply absent from
+the Kotlin and Swift.
+
+Every Rust test kept passing, because they call these functions directly rather
+than through the generated bindings. The binding-generation step "succeeded".
+The first sign anything was wrong was the Kotlin compiler saying `Unresolved
+reference 'scan'`.
+
+The cause was self-inflicted: an earlier edit split the impl block to move a
+private helper out and put the closing brace in the wrong place, so every
+instance method fell into the non-exported block.
+
+`crates/mobile-ffi/tests/bindings.rs` now reads the generated text and checks
+every method an app needs, in both languages. It also refuses to run against a
+library older than `src/lib.rs` — because its own first run passed against a
+stale one, which would have been a false pass exactly as easily as a false
+failure.
+
+The general lesson is the same one [decision
+0018](../decisions/0018-file-contents-never-cross-the-ffi.md) already recorded
+about a buffering default: **a failure that produces working-looking output
+cannot be caught by review or by a compiler.** It has to be caught by something
+that inspects the artefact.
+
+### The keystore, on hardware
+
+[Decision 0021](../decisions/0021-the-platform-supplies-the-keystore.md) was
+tested against a fake. It now has a real implementation, and the result is
+visible from outside the app. After setup, the vault file is five bytes:
+
+```
+$ adb shell run-as com.qurb od -An -c files/qurb/.qurb/master.key
+   Q   R   B   K 004
+```
+
+Magic, then `FORMAT_PLATFORM`. The key is nowhere in the app's files: the
+ciphertext and its IV sit in SharedPreferences and the AES key that opens them
+lives in the Keystore, where the app cannot read it. Force-stopping and
+relaunching reopens the store, so the round trip works and not merely the write.
+
 ## What is not verified
 
 The honest state of this phase.
@@ -320,13 +379,18 @@ preparation is done; the build is not. Nothing about iOS in this document is
 measured — the memory work was done *because* of the FileProvider ceiling, and
 whether it clears that ceiling in practice is unknown.
 
-**No app, either platform.** The FFI is exercised by Rust tests calling the same
-functions the generated Kotlin and Swift expose. The bindings themselves have
-never been compiled by a Kotlin or Swift toolchain, let alone run.
+**No iOS app, and the Swift has never been compiled.** The Kotlin bindings are
+now compiled and run by a real app; the Swift ones are generated and checked as
+text by a test, and nothing has put them through a Swift toolchain.
 
 **Background scheduling is half-built.** `sync_within(seconds)` is the Rust side
-and it works. The platform side — `WorkManager` on Android, `BGTaskScheduler` on
-iOS, and the policy about when to ask for a window — does not exist.
+and it works, and the app calls it from a button. Nothing *schedules* it:
+`WorkManager` on Android, `BGTaskScheduler` on iOS, and the policy about when to
+ask for a window at all, do not exist.
+
+**The app has never run unattended.** Syncing happens when someone presses Sync
+with the app in front of them. What the platform does to it in the background —
+and what that costs in battery — is unmeasured.
 
 ## Kill criterion
 

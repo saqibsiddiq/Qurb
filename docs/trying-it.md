@@ -151,16 +151,44 @@ as a shell user on a plugged-in, awake phone. An installed app that the system
 has backgrounded lives under quite different rules, and none of that is measured
 because there is no app.
 
-## 6. What you cannot test yet
+## 6. The Android app
 
-- **An app on a phone.** There is no app. The engine runs on Android and syncs,
-  but there is nothing installable and no screen.
+```bash
+./scripts/android-app.sh install
+```
+
+Builds the native libraries, regenerates the Kotlin bindings, builds a 21 MB
+APK and installs it on a connected device. Needs the NDK and a JDK 17; the
+script says so if it cannot find them.
+
+On first launch it offers to create an identity or restore from 24 words. The
+key goes into the Android Keystore, where the app itself cannot read it.
+
+To sync with a computer, the phone needs a rendezvous service to find it
+through. There is no hosted one, so run one:
+
+```bash
+qurb signal 0.0.0.0:9000
+```
+
+In the app: menu → **Rendezvous service** → `ws://<your computer's LAN IP>:9000`.
+Then `qurb pair <dir>` on the computer, and menu → **Pair a device** on the
+phone with the code it prints. Press **Sync** on both.
+
+Both devices have to be awake and running at the same moment — a QUIC
+handshake's opening packets are the hole punch, so a device that is only
+listening has punched nothing.
+
+## 7. What you cannot test yet
+
+- **Unattended sync.** On the phone, syncing happens when someone presses the
+  button. Nothing schedules it, so a phone left alone does not stay in step.
 - **iOS, at all.** Building it needs Xcode, which needs a Mac. The Swift
   bindings generate and have never been compiled.
-- **The platform keystore.** `KeyStore` is a contract with a test against a
-  fake. No Android or iOS implementation exists.
-- **Battery and background behaviour.** `sync_within(seconds)` is built for it
-  and nothing has measured what it costs on a real device.
+- **Seeing the files from elsewhere on the phone.** Without a FileProvider the
+  synced directory is private to the app, so its own screen is the only view.
+- **Battery.** `syncWithin(seconds)` is built for short background windows and
+  nothing has measured what a sync actually costs.
 
 ---
 

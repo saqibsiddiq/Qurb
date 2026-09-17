@@ -36,7 +36,8 @@ Then, depending on what you want:
 ```
 docs/           documentation — start with CODEBASE.md
 crates/         the engine: storage, watching, sync, transport, keys, FFI
-scripts/        cross-compiling for Android, generating mobile bindings
+android/        the Android app, a thin Kotlin layer over the FFI
+scripts/        building for Android, generating mobile bindings
 experiments/    throwaway spikes, clearly marked as such
 website/        the landing page (Next.js), independent of the engine
 ```
@@ -202,10 +203,13 @@ The master key can be handed to the platform's own keystore, which the app
 supplies because neither Android's nor iOS's is reachable from Rust — the
 contract is tested against a fake, and no platform implements it yet.
 
-Not built: an app of any kind, an interface, installers, signed updates. The
-phone tests ran as a shell user on a plugged-in device, so nothing measures
-battery or what survives being backgrounded. iOS has not been built at all; that
-needs a Mac.
+**There is an Android app** — [`android/`](android/). It installs, sets up an
+identity, keeps the key in the Android Keystore where the app itself cannot read
+it, lists files, pairs with a computer and syncs. The APK is 21 MB.
+
+Not built: a desktop interface, installers, signed updates, background
+scheduling on the phone, a FileProvider, and iOS — which needs a Mac. Nothing
+syncs unattended yet: on the phone it happens when someone presses Sync.
 
 **Phase 1 is complete.** Its kill criterion — syncing 100,000 files cleanly —
 was run and passed: 4.40 GiB between two devices with every correctness check

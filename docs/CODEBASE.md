@@ -322,7 +322,12 @@ qurb/
 │       ├── src/daemon.rs     watch, apply, sync, retry
 │       └── src/config.rs     a flat file meant to be edited by hand
 │
+├── android/               The Android app. Kotlin over the FFI, no sync logic.
+│   └── app/src/main/java/com/qurb/
+│                          AndroidKeyStore.kt — the platform half of decision 0021
+│
 ├── scripts/
+│   ├── android-app.sh     build the app: libraries, bindings, then Gradle
 │   ├── android-build.sh   cross-compile the engine for all four Android ABIs
 │   ├── android-test.sh    run the test suite on a device, over adb
 │   └── mobile-bindings.sh generate the Kotlin and Swift bindings
@@ -605,18 +610,24 @@ core problems that a desktop merely tolerates:
   binds `127.0.0.1` explicitly and STUN normally supplies an address that works
   instead; it broke two devices on a network with no route to the internet.
 
-**No app, and no iOS.** The tests ran from `/data/local/tmp` as a shell user on
-a plugged-in, awake phone — not as an installed app the platform has stopped
-caring about. Nothing measures battery, suspension, or memory pressure from
-other apps. iOS needs Xcode, which needs a Mac. See
+**There is an Android app** — [`android/`](../android/) — which installs, sets up
+an identity, keeps the key in the Android Keystore, lists files, pairs and
+syncs. Building it found a bug nothing else could: UniFFI keeps only the *last*
+`#[uniffi::export] impl` block for an object and silently discards the others,
+so eight methods were missing from the generated Kotlin and Swift while every
+Rust test passed.
+
+**Nothing runs unattended, and there is no iOS.** Syncing happens when someone
+presses a button with the app in front of them; what the platform does to a
+backgrounded process, and what it costs in battery, is unmeasured. iOS needs
+Xcode, which needs a Mac. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 ### Designed but not built
 
-An app on either phone, per-file keys, key rotation, relay selection and quotas,
-accounts and billing, the desktop UI, selective sync, search, updates. The
-mobile keystore has a contract and a test but no implementation on either
-platform.
+An iOS app, background scheduling, a FileProvider, per-file keys, key rotation,
+relay selection and quotas, accounts and billing, the desktop UI, selective
+sync, search, updates.
 
 ### The gaps that matter most
 
@@ -628,9 +639,9 @@ Three things are known-missing rather than merely unbuilt:
    promise. Choosing which compromise to make is better done on paper now than
    under pressure from an upset user later. Still undecided.
 
-13. **No app, on either platform.** The engine runs on Android and syncs, but
-   nothing a person can install exists. The generated Kotlin and Swift have
-   never been through their own toolchains, let alone onto a screen.
+13. **Nothing syncs by itself on a phone.** There is an Android app and it
+   syncs when told to. No background scheduling exists, so a phone left alone
+   does not stay in step — which is most of what a sync product is for.
 
 14. **Two kill criteria remain unmeasured**, both for want of hardware rather
    than for want of code: Phase 3's direct-connection rate needs a second
