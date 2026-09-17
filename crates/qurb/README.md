@@ -70,6 +70,21 @@ neither read it nor forge it.
 Both belong behind TLS before they face the internet. Neither refuses to start
 without it, which is a gap rather than a decision.
 
+## Where the key is kept
+
+```bash
+qurb protect ~/Sync              # what it is now, and the options
+qurb protect ~/Sync keystore     # into the operating system's keystore
+qurb protect ~/Sync passphrase   # wrapped with something only you know
+```
+
+The key does not change, so nothing it protects becomes unreadable — this
+changes the lock, not the contents. A passphrase means `qurb run` asks at
+startup, so the device can no longer start unattended, which is the trade.
+
+Your recovery phrase is unaffected either way: it recovers the key, while the
+passphrase guards the copy on this disk.
+
 ## Settings
 
 `<dir>/.qurb/config`, a flat `key = value` file meant to be edited by hand:

@@ -416,7 +416,7 @@ complete system and almost none of it is built.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-389 tests pass across nine crates; clippy is clean.
+405 tests pass across nine crates; clippy is clean.
 
 **Two devices now sync over a real network connection**, converging through
 concurrent edits, deletions and resurrections, with both sides computing the
@@ -585,6 +585,10 @@ raises no error doing it. See
 **Availability** — files being unreachable when every device is switched off —
 is answered by storage-only replicas, decided in
 [decisions/0006](decisions/0006-availability-gap.md) and built in Phase 3.
+
+**Protecting the key at rest** was the largest security gap and is now a choice
+between a file, the operating system's keystore, and a passphrase — see
+[crates/keys/README.md](../crates/keys/README.md) for what each defends against.
 
 ---
 

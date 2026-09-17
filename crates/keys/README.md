@@ -45,17 +45,36 @@ product means losing their data. The `bip39` crate supplies the canonical list
 and checksum, and a test pins a known phrase against a known key so a change of
 library cannot silently change what a phrase means.
 
-## The gap, stated plainly
+## Three ways to keep the key
 
-The master key is written to a file readable only by its owner. That protects it
-from other users on the machine and from a backup that excludes it. It does
-**not** protect it from anyone who can read the disk — malware running as the
-user, a stolen unencrypted drive, a filesystem backup that includes it.
+They defend against different things, and the difference is worth stating
+because a user reading "end-to-end encrypted" will assume the strongest.
 
-The real answer is the operating system's keystore: Keychain on macOS, DPAPI or
-the Credential Manager on Windows, the Secret Service on Linux. Each is a
-separate platform integration and none is built. The threat model should say so
-rather than implying more.
+| | defends against | starts unattended |
+|---|---|---|
+| `file` | other users of the machine | yes |
+| `keystore` | anyone reading the disk while it is locked | yes |
+| `passphrase` | anyone who takes the disk *and* the session | no |
+
+**File** is what was there before, and remains the default: a headless machine
+may have neither a keystore nor anybody to type a passphrase, and a device that
+cannot unlock itself is worse than one whose key sits in a file.
+
+**Keystore** is the operating system's own — Keychain, the Windows Credential
+Manager, the Secret Service. `keystore_available()` probes whether this machine
+actually has a usable one, because a headless server has one in name only.
+
+**Passphrase** wraps the key with Argon2id at 64 MiB and three passes, then
+XChaCha20-Poly1305 with the header authenticated so a salt cannot be swapped in
+from another file. It is the only option that survives a stolen disk, and the
+only one that stops a device starting on its own.
+
+The recovery phrase is unaffected by any of this. Two different secrets protect
+the same key and neither interferes with the other: the phrase recovers the key,
+the passphrase guards the copy on this disk.
+
+**None of them help while the daemon is running and holding the key in memory.**
+That is what it means to be a program that can decrypt your files.
 
 ## Testing
 
@@ -77,9 +96,10 @@ cargo run -p qurb-keys --example enrol -- /tmp/device-a
 
 ## Not yet built
 
-- **OS keystore integration**, as above. The largest gap.
-- **Passphrase protection** of the key file, as an interim measure for users who
-  want it before keystore support exists.
+- **Verified support on macOS and Windows.** The keystore path is written
+  against a cross-platform library and tested here against the Secret Service on
+  Linux. Keychain and the Credential Manager are exercised by nothing, and a
+  claim about them would be a guess.
 - **Key rotation.** Changing the master key means re-encrypting every chunk, and
   there is no mechanism for it.
 - **Per-file keys.** The architecture describes deriving a key per file so that

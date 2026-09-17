@@ -139,7 +139,7 @@ directory behind it.
 Built and tested in [`crates/keys`](crates/keys/): a 256-bit master key, HKDF
 derivation of one key per purpose, and a 24-word BIP-39 recovery phrase — tested
 end to end, so the words on a piece of paper genuinely turn back into the user's
-files. 389 tests across nine crates, clippy clean.
+files. 405 tests across nine crates, clippy clean.
 
 A directory syncs into a local store — on 2437 real files (979 MiB), 12.96s for
 the first pass and 0.03s for the second. **Two devices now sync over a real
@@ -191,7 +191,7 @@ defects — including a writer that could reference a chunk garbage collection h
 just deleted, and renames that re-transferred an entire library depending on how
 the old and new names happened to sort alphabetically. 293 tests.
 
-The largest open gap is protecting the master key at rest: it sits in an
-owner-only file rather than the platform keystore. Availability — files being
+The master key can be kept in a file, in the operating system's keystore, or
+wrapped with a passphrase — `qurb protect` explains what each defends against. Availability — files being
 unreachable when every device is switched off — is answered by storage-only
 replicas, in [decisions/0006](docs/decisions/0006-availability-gap.md).

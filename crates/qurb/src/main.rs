@@ -26,6 +26,8 @@ qurb — private cloud storage
   qurb status <dir>                   what this device holds and trusts
   qurb verify <dir> [--deep]          check the store against itself
   qurb config <dir> [key=value ...]   show or change settings
+  qurb protect <dir> <how>            change how the key is kept
+                                        file | keystore | passphrase
 
 Running the services yourself:
 
@@ -78,6 +80,7 @@ fn run() -> Result<()> {
         "status" => status(&directory(&args)?),
         "verify" => verify(&directory(&args)?, args.iter().any(|a| a == "--deep")),
         "config" => configure(&directory(&args)?, &args[2..]),
+        "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
         "signal" => block_on(signal(args.get(1).cloned())),
         "relay" => block_on(relay(args.get(1).cloned())),
         "netcheck" => netcheck(),
@@ -124,7 +127,13 @@ fn open(root: &Path) -> Result<(MasterKey, Identity, Store, Config)> {
         );
     }
 
-    let master = vault.open_or_create()?.key().clone();
+    let master = match vault.protection()? {
+        qurb_keys::Protection::Passphrase => {
+            let passphrase = prompt_passphrase("Passphrase: ")?;
+            vault.unlock(Some(&passphrase))?
+        }
+        _ => vault.unlock(None)?,
+    };
     let identity = Identity::load_or_create(&store_dir)?;
     let chunk_key = ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
     let store = Store::open(&store_dir, chunk_key)?;
@@ -256,6 +265,7 @@ fn status(root: &Path) -> Result<()> {
     println!("{}", root.display());
     println!("  identity   {}", identity.fingerprint().short());
     println!("  name       {}", config.name);
+    println!("  key kept   {}", Vault::at(&store_dir(root)).protection()?.as_str());
     println!("  files      {}", live.len());
     println!("  chunks     {chunks}");
     println!("  content    {} ({} on disk)", human(plaintext), human(stored));
@@ -319,6 +329,126 @@ fn verify(root: &Path, deep: bool) -> Result<()> {
         std::process::exit(1);
     }
     Ok(())
+}
+
+/// Change how the key is kept.
+///
+/// The key itself does not change, so nothing it protects becomes unreadable —
+/// this changes the lock, not the contents.
+fn protect(root: &Path, how: Option<&str>) -> Result<()> {
+    use qurb_keys::Protection;
+
+    let store_dir = store_dir(root);
+    let vault = Vault::at(&store_dir);
+    if !vault.exists() {
+        bail!("{} is not set up yet", root.display());
+    }
+
+    let current = vault.protection()?;
+    let Some(how) = how else {
+        println!("This key is kept: {}", current.as_str());
+        println!();
+        println!("  file        a file only you can read. Protects against other users");
+        println!("              of this machine, and against nothing that can read the");
+        println!("              disk — a stolen laptop, an unencrypted backup.");
+        println!("  keystore    the operating system's own store. {}",
+            if qurb_keys::keystore_available() { "Available here." } else { "NOT available here." });
+        println!("  passphrase  wrapped with something only you know. The only option");
+        println!("              that survives someone taking the disk, and the only one");
+        println!("              that cannot start unattended.");
+        println!();
+        println!("  qurb protect {} <how>", root.display());
+        return Ok(());
+    };
+
+    let wanted: Protection = how.parse()?;
+    if wanted == current {
+        println!("Already kept in the {}.", current.as_str());
+        return Ok(());
+    }
+
+    if wanted == Protection::Keystore && !qurb_keys::keystore_available() {
+        bail!(
+            "this machine has no usable keystore — a device that cannot unlock \
+             itself is worse than one whose key sits in a file"
+        );
+    }
+
+    let current_passphrase = if current.needs_passphrase() {
+        Some(prompt_passphrase("Current passphrase: ")?)
+    } else {
+        None
+    };
+
+    let new_passphrase = if wanted.needs_passphrase() {
+        let first = prompt_passphrase("New passphrase: ")?;
+        if first.trim().is_empty() {
+            bail!("an empty passphrase protects nothing");
+        }
+        let again = prompt_passphrase("Again: ")?;
+        if first != again {
+            bail!("those do not match");
+        }
+        Some(first)
+    } else {
+        None
+    };
+
+    vault.protect(wanted, current_passphrase.as_deref(), new_passphrase.as_deref())?;
+
+    println!("This key is now kept: {}", wanted.as_str());
+    if wanted.needs_passphrase() {
+        println!();
+        println!("`qurb run` will ask for it at startup, so this device can no longer");
+        println!("start unattended. Your recovery phrase is unaffected — it recovers the");
+        println!("key, while the passphrase guards the copy on this disk.");
+    }
+    Ok(())
+}
+
+/// Read a passphrase without echoing it.
+///
+/// Falls back to a visible prompt where the terminal cannot be put into
+/// no-echo mode, saying so, rather than silently showing what was typed.
+fn prompt_passphrase(prompt: &str) -> Result<String> {
+    use std::io::{BufRead, Write};
+
+    eprint!("{prompt}");
+    std::io::stderr().flush().ok();
+
+    let hidden = set_echo(false);
+    if !hidden {
+        eprintln!("\n  (this terminal will show what you type)");
+        eprint!("{prompt}");
+        std::io::stderr().flush().ok();
+    }
+
+    let mut line = String::new();
+    let read = std::io::stdin().lock().read_line(&mut line);
+    if hidden {
+        set_echo(true);
+        eprintln!();
+    }
+    read.context("reading the passphrase")?;
+
+    Ok(line.trim_end_matches(['\n', '\r']).to_string())
+}
+
+#[cfg(unix)]
+fn set_echo(on: bool) -> bool {
+    // Done with stty rather than a terminal crate: one command, no dependency,
+    // and it fails visibly on anything that is not a terminal.
+    std::process::Command::new("stty")
+        .arg(if on { "echo" } else { "-echo" })
+        .stdin(std::process::Stdio::inherit())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn set_echo(_on: bool) -> bool {
+    false
 }
 
 fn configure(root: &Path, settings: &[String]) -> Result<()> {

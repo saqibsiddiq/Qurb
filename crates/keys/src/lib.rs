@@ -34,9 +34,11 @@
 pub mod error;
 pub mod master;
 pub mod phrase;
+pub mod protection;
 pub mod vault;
 
 pub use error::{Error, Result};
 pub use master::{DerivedKey, MasterKey, Purpose};
 pub use phrase::RecoveryPhrase;
+pub use protection::{keystore_available, Protection};
 pub use vault::{Opened, Vault};

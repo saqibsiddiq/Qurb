@@ -166,3 +166,171 @@ fn two_devices_from_one_phrase_can_read_each_others_data() {
     let b = Store::open(&first.path().join("store"), chunk_key).unwrap();
     assert_eq!(b.read_file("shared.txt").unwrap(), b"written on the first device");
 }
+
+// -- how the key is kept -----------------------------------------------------
+
+use qurb_keys::Protection;
+
+/// Set up a device whose key is kept a particular way, and store a file.
+fn device_with(protection: Protection, passphrase: Option<&str>) -> (tempfile::TempDir, String) {
+    let dir = tempfile::tempdir().unwrap();
+    let Opened::Created { key, phrase } =
+        Vault::at(dir.path()).open_or_create_with(protection, passphrase).unwrap()
+    else {
+        panic!("expected a fresh key");
+    };
+
+    let chunk_key = ChunkKey::from_bytes(key.derive(Purpose::ChunkEncryption).to_bytes());
+    let mut store = Store::open(&dir.path().join("store"), chunk_key).unwrap();
+    store.put_bytes("kept.txt", b"the thing being protected", 0).unwrap();
+
+    (dir, phrase.to_string())
+}
+
+fn can_read(dir: &std::path::Path, key: &MasterKey) -> bool {
+    let chunk_key = ChunkKey::from_bytes(key.derive(Purpose::ChunkEncryption).to_bytes());
+    match Store::open(&dir.join("store"), chunk_key) {
+        Ok(store) => store.read_file("kept.txt").is_ok(),
+        Err(_) => false,
+    }
+}
+
+#[test]
+fn a_passphrase_protected_key_opens_the_data() {
+    let (dir, _) = device_with(Protection::Passphrase, Some("a long passphrase"));
+
+    let vault = Vault::at(dir.path());
+    assert_eq!(vault.protection().unwrap(), Protection::Passphrase);
+
+    let key = vault.unlock(Some("a long passphrase")).unwrap();
+    assert!(can_read(dir.path(), &key), "the right passphrase did not open the data");
+}
+
+#[test]
+fn the_key_is_not_in_the_file_when_a_passphrase_protects_it() {
+    // The whole point. A stolen disk must not carry the key on it.
+    let dir = tempfile::tempdir().unwrap();
+    let Opened::Created { key, .. } =
+        Vault::at(dir.path()).open_or_create_with(Protection::Passphrase, Some("secret")).unwrap()
+    else {
+        panic!("expected a fresh key");
+    };
+
+    let on_disk = std::fs::read(Vault::at(dir.path()).path()).unwrap();
+    assert!(
+        !on_disk.windows(32).any(|w| w == key.derive(Purpose::ChunkEncryption).as_bytes()),
+        "a derived key was written out in the clear"
+    );
+}
+
+#[test]
+fn a_passphrase_protected_key_will_not_open_without_one() {
+    let (dir, _) = device_with(Protection::Passphrase, Some("passphrase"));
+    let vault = Vault::at(dir.path());
+
+    assert!(matches!(vault.unlock(None), Err(qurb_keys::Error::PassphraseRequired)));
+    assert!(matches!(vault.unlock(Some("wrong")), Err(qurb_keys::Error::WrongPassphrase)));
+}
+
+#[test]
+fn creating_a_passphrase_vault_without_one_is_refused() {
+    // Falling back to an unprotected file because nobody supplied a passphrase
+    // would be worse than refusing, and silent.
+    let dir = tempfile::tempdir().unwrap();
+    assert!(Vault::at(dir.path()).open_or_create_with(Protection::Passphrase, None).is_err());
+    assert!(!Vault::at(dir.path()).exists(), "a vault was created anyway");
+}
+
+#[test]
+fn changing_the_protection_keeps_the_same_key() {
+    // Changing the lock, not the contents. If this were wrong the data would be
+    // unreadable afterwards, which is the worst outcome an operation meant to
+    // improve security could have.
+    let (dir, _) = device_with(Protection::File, None);
+    let before = Vault::at(dir.path()).unlock(None).unwrap();
+
+    Vault::at(dir.path()).protect(Protection::Passphrase, None, Some("now protected")).unwrap();
+
+    let vault = Vault::at(dir.path());
+    assert_eq!(vault.protection().unwrap(), Protection::Passphrase);
+    let after = vault.unlock(Some("now protected")).unwrap();
+
+    assert_eq!(before, after, "the key changed when the lock did");
+    assert!(can_read(dir.path(), &after), "the data became unreadable");
+}
+
+#[test]
+fn a_passphrase_can_be_changed() {
+    let (dir, _) = device_with(Protection::Passphrase, Some("first"));
+    let vault = Vault::at(dir.path());
+    let before = vault.unlock(Some("first")).unwrap();
+
+    vault.protect(Protection::Passphrase, Some("first"), Some("second")).unwrap();
+
+    assert!(matches!(vault.unlock(Some("first")), Err(qurb_keys::Error::WrongPassphrase)));
+    assert_eq!(vault.unlock(Some("second")).unwrap(), before, "the key changed with the passphrase");
+    assert!(can_read(dir.path(), &before));
+}
+
+#[test]
+fn a_recovery_phrase_still_works_under_a_passphrase() {
+    // Two different secrets protecting the same key, and neither may interfere
+    // with the other: the phrase recovers the key, the passphrase guards the
+    // copy on this disk.
+    let (dir, phrase) = device_with(Protection::Passphrase, Some("local passphrase"));
+
+    let elsewhere = tempfile::tempdir().unwrap();
+    let recovered = Vault::at(elsewhere.path())
+        .restore(&RecoveryPhrase::parse(&phrase).unwrap())
+        .unwrap();
+
+    let here = Vault::at(dir.path()).unlock(Some("local passphrase")).unwrap();
+    assert_eq!(recovered, here, "the phrase did not recover the protected key");
+}
+
+/// The operating system's keystore, where one is usable.
+///
+/// Skipped rather than failed where there is none — a headless build machine
+/// has no keyring, and a test that cannot run there is not a test that failed.
+#[test]
+fn a_keystore_protected_key_opens_the_data() {
+    if !qurb_keys::keystore_available() {
+        eprintln!("skipped: no usable keystore on this machine");
+        return;
+    }
+
+    let (dir, _) = device_with(Protection::Keystore, None);
+    let vault = Vault::at(dir.path());
+    assert_eq!(vault.protection().unwrap(), Protection::Keystore);
+
+    let key = vault.unlock(None).unwrap();
+    assert!(can_read(dir.path(), &key), "the keystore did not give back the key");
+
+    // And the file left behind is a marker, not the key.
+    let on_disk = std::fs::read(vault.path()).unwrap();
+    assert!(on_disk.len() < 32, "the key file still holds something key-sized");
+
+    // Leave the machine's keystore as we found it.
+    vault.protect(Protection::File, None, None).unwrap();
+}
+
+#[test]
+fn moving_a_key_into_the_keystore_takes_it_out_of_the_file() {
+    if !qurb_keys::keystore_available() {
+        eprintln!("skipped: no usable keystore on this machine");
+        return;
+    }
+
+    let (dir, _) = device_with(Protection::File, None);
+    let vault = Vault::at(dir.path());
+    let before = vault.unlock(None).unwrap();
+    assert!(std::fs::read(vault.path()).unwrap().len() >= 32);
+
+    vault.protect(Protection::Keystore, None, None).unwrap();
+
+    assert!(std::fs::read(vault.path()).unwrap().len() < 32, "the key is still in the file");
+    assert_eq!(vault.unlock(None).unwrap(), before, "the key changed");
+    assert!(can_read(dir.path(), &before));
+
+    vault.protect(Protection::File, None, None).unwrap();
+}

@@ -14,13 +14,45 @@ warns is not the fun part and is a full quarter.
 | the commands around it | ✅ init, enrol, pair, join, run, status, verify, config |
 | running the services | ✅ `qurb signal`, `qurb relay` |
 | push, rather than polling | ✅ ~430ms, measured |
+| protecting the key at rest | ✅ keystore and passphrase |
+| storing files in parallel | ✅ 487 → 830-888 files/s |
 | onboarding and the recovery phrase | ◐ works, in a terminal |
 | installers | ⬜ not started |
 | signed updates with rollback | ⬜ not started |
 | observability | ◐ structured logs, nothing more |
 | the interface | ⬜ not started |
 
-389 tests pass across nine crates; clippy is clean.
+405 tests pass across nine crates; clippy is clean.
+
+## Protecting the key at rest
+
+The largest security gap the project had. The master key sat in a file readable
+only by its owner, which defends against other users of the machine and against
+nothing that can read the disk.
+
+Three options now, and the difference between them is worth stating because a
+user reading "end-to-end encrypted" will assume the strongest:
+
+| | defends against | starts unattended |
+|---|---|---|
+| `file` | other users of the machine | yes |
+| `keystore` | anyone reading the disk while it is locked | yes |
+| `passphrase` | anyone who takes the disk *and* the session | no |
+
+File remains the default, which looks like timidity and is not: a headless
+machine may have neither a keystore nor anybody to type a passphrase, and a
+device that cannot unlock itself is worse than one whose key sits in a file.
+`qurb protect` changes it, and says what each option does before it does
+anything.
+
+Changing the protection changes the lock and not the contents — the key is read
+out and written back, so nothing it protects becomes unreadable. The old copy is
+removed only once the new one is in place, because a device that loses its key
+halfway through being made safer has been made catastrophically less safe.
+
+The keystore path is tested here against the Secret Service. Keychain and the
+Windows Credential Manager go through the same library and are exercised by
+nothing, which the documentation says rather than implying otherwise.
 
 ## The daemon
 

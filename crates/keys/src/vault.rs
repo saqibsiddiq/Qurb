@@ -1,26 +1,30 @@
 //! Where the root secret lives on this device.
 //!
-//! # The gap, stated plainly
+//! # Three ways to keep it, and what each defends against
 //!
-//! The key is written to a file readable only by its owner. That protects it
-//! from other users on the machine and from a stolen backup that excludes it.
-//! It does **not** protect it from anyone who can read the disk — malware
-//! running as the user, an unencrypted drive that is stolen, a filesystem
-//! backup that includes it.
+//! - [`Protection::File`] — owner-only permissions. Defends against other users
+//!   of the machine and a backup that excludes it. Does **not** defend against
+//!   anything that can read the disk.
+//! - [`Protection::Keystore`] — the operating system's own store. Encrypted at
+//!   rest, and on a locked machine unreadable.
+//! - [`Protection::Passphrase`] — wrapped with something only the user knows.
+//!   The only option that survives someone taking the disk *and* the session,
+//!   and the only one that cannot start unattended.
 //!
-//! The real answer is the operating system's keystore: Keychain on macOS, DPAPI
-//! or the Credential Manager on Windows, the Secret Service on Linux. Each is a
-//! separate platform integration, and none is built. Until they are, this is
-//! what protects the key, and the threat model should say so out loud rather
-//! than implying more.
+//! The file remains the default because a headless machine may have neither a
+//! keystore nor anybody to type a passphrase, and a device that cannot unlock
+//! itself is worse than one whose key sits in a file. `qurb key protect`
+//! changes it.
+//!
+//! None of them help while the daemon is running and holding the key in memory.
+//! That is what it means to be a program that can decrypt your files.
 
 use crate::error::{Error, Result};
 use crate::master::MasterKey;
 use crate::phrase::RecoveryPhrase;
+use crate::protection::{self, Protection, FORMAT_FILE, FORMAT_KEYSTORE, FORMAT_PASSPHRASE, MAGIC};
 use std::path::{Path, PathBuf};
 
-const MAGIC: &[u8; 4] = b"QRBK";
-const FORMAT: u8 = 1;
 const FILE_LEN: usize = 4 + 1 + 32;
 
 /// The result of opening a vault.
@@ -69,13 +73,80 @@ impl Vault {
 
     /// Load the key, generating one on first use.
     pub fn open_or_create(&self) -> Result<Opened> {
+        self.open_or_create_with(Protection::File, None)
+    }
+
+    /// Load or create, keeping the key the way `protection` says.
+    ///
+    /// The passphrase is only consulted when one is called for, and is required
+    /// then — a vault that silently fell back to an unprotected file because
+    /// nobody supplied one would be worse than refusing.
+    pub fn open_or_create_with(
+        &self,
+        protection: Protection,
+        passphrase: Option<&str>,
+    ) -> Result<Opened> {
         if self.exists() {
-            return Ok(Opened::Existing(self.load()?));
+            return Ok(Opened::Existing(self.unlock(passphrase)?));
         }
         let key = MasterKey::generate();
         let phrase = key.to_phrase();
-        self.write(&key)?;
+        self.write_with(&key, protection, passphrase)?;
         Ok(Opened::Created { key, phrase })
+    }
+
+    /// How this vault's key is kept.
+    pub fn protection(&self) -> Result<Protection> {
+        let bytes = std::fs::read(&self.path)
+            .map_err(|e| Error::Io { path: self.path.clone(), source: e })?;
+        if bytes.len() < 5 || &bytes[..4] != MAGIC {
+            return Err(Error::NotAKeyFile { path: self.path.clone() });
+        }
+        match bytes[4] {
+            FORMAT_FILE => Ok(Protection::File),
+            FORMAT_KEYSTORE => Ok(Protection::Keystore),
+            FORMAT_PASSPHRASE => Ok(Protection::Passphrase),
+            found => Err(Error::UnsupportedFormat { path: self.path.clone(), found }),
+        }
+    }
+
+    /// Open the key, supplying a passphrase if this vault needs one.
+    pub fn unlock(&self, passphrase: Option<&str>) -> Result<MasterKey> {
+        match self.protection()? {
+            Protection::File => self.load(),
+            Protection::Keystore => protection::keystore_get(&self.path),
+            Protection::Passphrase => {
+                let passphrase = passphrase.ok_or(Error::PassphraseRequired)?;
+                let bytes = std::fs::read(&self.path)
+                    .map_err(|e| Error::Io { path: self.path.clone(), source: e })?;
+                protection::unwrap(&bytes, passphrase)
+            }
+        }
+    }
+
+    /// Change how the key is kept, without changing the key.
+    ///
+    /// The key is read out first and written back the new way, so the data it
+    /// protects is untouched — this changes the lock, not the contents. The old
+    /// copy is removed only once the new one is in place, because a device that
+    /// loses its key in the middle of being made safer has been made
+    /// catastrophically less safe.
+    pub fn protect(
+        &self,
+        to: Protection,
+        current_passphrase: Option<&str>,
+        new_passphrase: Option<&str>,
+    ) -> Result<()> {
+        let from = self.protection()?;
+        let key = self.unlock(current_passphrase)?;
+
+        self.write_with(&key, to, new_passphrase)?;
+
+        // Only now that the key is safely somewhere else.
+        if from == Protection::Keystore && to != Protection::Keystore {
+            protection::keystore_remove(&self.path)?;
+        }
+        Ok(())
     }
 
     /// Install a key recovered from its phrase, setting up a replacement device.
@@ -99,6 +170,27 @@ impl Vault {
         Ok(key)
     }
 
+    /// Install a recovered key, kept the way `protection` says.
+    pub fn restore_with(
+        &self,
+        phrase: &RecoveryPhrase,
+        protection: Protection,
+        passphrase: Option<&str>,
+    ) -> Result<MasterKey> {
+        if self.exists() {
+            return Err(Error::Io {
+                path: self.path.clone(),
+                source: std::io::Error::new(
+                    std::io::ErrorKind::AlreadyExists,
+                    "a key is already installed; remove it deliberately to replace it",
+                ),
+            });
+        }
+        let key = MasterKey::from_phrase(phrase)?;
+        self.write_with(&key, protection, passphrase)?;
+        Ok(key)
+    }
+
     fn load(&self) -> Result<MasterKey> {
         let bytes = std::fs::read(&self.path)
             .map_err(|e| Error::Io { path: self.path.clone(), source: e })?;
@@ -106,7 +198,7 @@ impl Vault {
         if bytes.len() != FILE_LEN || &bytes[..4] != MAGIC {
             return Err(Error::NotAKeyFile { path: self.path.clone() });
         }
-        if bytes[4] != FORMAT {
+        if bytes[4] != FORMAT_FILE {
             return Err(Error::UnsupportedFormat { path: self.path.clone(), found: bytes[4] });
         }
 
@@ -116,22 +208,51 @@ impl Vault {
     }
 
     fn write(&self, key: &MasterKey) -> Result<()> {
+        self.write_with(key, Protection::File, None)
+    }
+
+    fn write_with(
+        &self,
+        key: &MasterKey,
+        protection: Protection,
+        passphrase: Option<&str>,
+    ) -> Result<()> {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| Error::Io { path: parent.to_path_buf(), source: e })?;
         }
 
-        let mut bytes = Vec::with_capacity(FILE_LEN);
-        bytes.extend_from_slice(MAGIC);
-        bytes.push(FORMAT);
-        bytes.extend_from_slice(key.as_bytes());
+        let bytes = match protection {
+            Protection::File => {
+                let mut bytes = Vec::with_capacity(FILE_LEN);
+                bytes.extend_from_slice(MAGIC);
+                bytes.push(FORMAT_FILE);
+                bytes.extend_from_slice(key.as_bytes());
+                bytes
+            }
+            Protection::Keystore => {
+                // Written first: a marker file with no key in it is harmless,
+                // whereas a key in the keystore that nothing points at is
+                // litter nobody will ever clean up.
+                protection::keystore_put(&self.path, key)?;
+                let mut bytes = Vec::with_capacity(5);
+                bytes.extend_from_slice(MAGIC);
+                bytes.push(FORMAT_KEYSTORE);
+                bytes
+            }
+            Protection::Passphrase => {
+                let passphrase = passphrase.ok_or(Error::PassphraseRequired)?;
+                protection::wrap(key, passphrase)?
+            }
+        };
 
-        // Create with the right permissions from the start. Writing first and
-        // tightening after leaves a window in which the key is world-readable,
-        // and that window is enough.
+        // Replaced rather than appended to, and still owner-only: the file is a
+        // marker under keystore protection, but under the others it is the key.
+        let _ = std::fs::remove_file(&self.path);
         write_private(&self.path, &bytes)?;
         Ok(())
     }
+
 }
 
 #[cfg(unix)]
@@ -228,13 +349,17 @@ mod tests {
 
     #[test]
     fn a_newer_format_is_refused_rather_than_misread() {
+        // A file written by a future version must not be guessed at. Reading a
+        // key out of a layout we do not understand would produce a key that is
+        // wrong, and a device that then cannot read its own data.
         let dir = tempfile::tempdir().unwrap();
         let vault = Vault::at(dir.path());
         let mut bytes = MAGIC.to_vec();
-        bytes.push(FORMAT + 1);
+        bytes.push(FORMAT_PASSPHRASE + 1);
         bytes.extend_from_slice(&[0u8; 32]);
         std::fs::write(vault.path(), &bytes).unwrap();
 
+        assert!(matches!(vault.protection(), Err(Error::UnsupportedFormat { .. })));
         assert!(matches!(vault.open_or_create(), Err(Error::UnsupportedFormat { .. })));
     }
 
