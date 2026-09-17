@@ -12,10 +12,11 @@
 //! anyone, it just stops a device that found the port from pairing with one
 //! that never saw the code.
 
-use qurb_peer::{accept, Identity, Invite, PairingHost};
+use qurb_peer::{accept, Error, Identity, Invite, PairingHost};
 use qurb_storage::{ChunkKey, Store};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 const NOW: i64 = 1_757_462_400;
 const LOOPBACK: &str = "127.0.0.1:0";
@@ -401,4 +402,53 @@ async fn a_paired_device_can_sync_and_an_unpaired_one_cannot() {
     if let Ok(Ok(client)) = outcome {
         assert!(client.tree().await.is_err(), "an unpaired device was served files");
     }
+}
+
+/// An invite that has already expired must be refused at once.
+///
+/// It used to wait for ever. `wait` took `now` as a parameter and compared the
+/// invite against it *inside* the accept loop, so the clock it checked was the
+/// one from before the wait began and the check could never fire. A
+/// `qurb pair` nobody answered sat there advertising a code that had stopped
+/// working five minutes in, with the screen still saying "Waiting..." — found
+/// after one had been waiting two and a half hours.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_expired_invite_does_not_wait() {
+    let host = Device::new();
+    let pairing = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+
+    // A clock past the invite's expiry, which is what a caller would pass after
+    // leaving the terminal open for six minutes.
+    let later = pairing.invite().expires_at + 1;
+
+    let started = std::time::Instant::now();
+    let outcome = pairing.wait(Arc::clone(&host.store), "host", later).await;
+
+    assert!(matches!(outcome, Err(Error::InviteExpired)), "{outcome:?}");
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "it waited {:?} on an invite that was already dead",
+        started.elapsed()
+    );
+}
+
+/// A live invite stops waiting when its lifetime runs out, rather than blocking
+/// until the process is killed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_live_invite_stops_when_it_expires() {
+    let host = Device::new();
+    let pairing = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+
+    // One second left, so the test does not take five minutes to make its point.
+    let nearly_up = pairing.invite().expires_at - 1;
+
+    let started = std::time::Instant::now();
+    let outcome = pairing.wait(Arc::clone(&host.store), "host", nearly_up).await;
+
+    assert!(matches!(outcome, Err(Error::InviteExpired)), "{outcome:?}");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "it waited {:?} past the invite's lifetime",
+        started.elapsed()
+    );
 }

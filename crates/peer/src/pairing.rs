@@ -36,6 +36,7 @@ use crate::wire::{Request, Response, MAX_MESSAGE};
 use qurb_storage::Store;
 use qurb_sync::DeviceId;
 use std::net::SocketAddr;
+use std::time::Duration;
 use std::sync::{Arc, Mutex};
 
 /// How long an invite is good for.
@@ -202,6 +203,31 @@ impl PairingHost {
     ) -> Result<Paired> {
         let our_device = { store.lock().expect("store mutex").device_id()? };
 
+        // How long this invite has left, from the caller's clock.
+        //
+        // The whole wait is bounded by it. Without this the accept loop blocks
+        // for ever, so a `qurb pair` nobody answers sits there advertising a
+        // code that stopped working five minutes in -- which is worse than
+        // failing, because the screen still says "Waiting..." and the person
+        // reading the code out has no way to know it is dead.
+        let remaining = self.invite.expires_at - now;
+        if remaining <= 0 {
+            return Err(Error::InviteExpired);
+        }
+        let deadline = Duration::from_secs(remaining as u64);
+
+        tokio::time::timeout(deadline, self.accept_one(store, our_name, our_device))
+            .await
+            .unwrap_or(Err(Error::InviteExpired))
+    }
+
+    /// The accept loop, run under the caller's deadline.
+    async fn accept_one(
+        &self,
+        store: Arc<Mutex<Store>>,
+        our_name: &str,
+        our_device: DeviceId,
+    ) -> Result<Paired> {
         while let Some(incoming) = self.endpoint.accept().await {
             let Ok(connection) = incoming.await else { continue };
 
@@ -219,9 +245,10 @@ impl PairingHost {
                 continue;
             };
 
-            if self.invite.is_expired(now) {
-                return Err(Error::InviteExpired);
-            }
+            // No expiry check here: it used to compare against a `now` captured
+            // before the wait began, which meant it could never fire however
+            // long the wait lasted. The deadline in `wait` is the real one.
+            //
             // Constant-time, because a token compared byte by byte can be
             // guessed one byte at a time by anyone who can measure the reply.
             if !constant_time_eq(&token, &self.invite.token) {

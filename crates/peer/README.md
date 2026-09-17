@@ -164,6 +164,19 @@ timing out, so three in sequence means three timeouts before discovering the
 last one worked. Local addresses come first, so two devices on one network do
 not route through the internet to reach each other.
 
+## Pairing stops when the invite does
+
+`PairingHost::wait` is bounded by the invite's remaining lifetime and returns
+`Error::InviteExpired` when it runs out.
+
+That is worth stating because it did not, and the failure was invisible. `wait`
+took `now` as a parameter and checked `is_expired(now)` *inside* the accept
+loop — so the clock it compared against was the one captured before the wait
+began, and the check could never fire however long the wait lasted. Nothing else
+bounded the loop, so `qurb pair` sat advertising a code that had stopped working
+five minutes in, with the screen still saying "Waiting...". It was found on a
+terminal that had been waiting two and a half hours.
+
 ## Not yet built
 
 

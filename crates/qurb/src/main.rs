@@ -222,9 +222,20 @@ async fn pair(root: PathBuf) -> Result<()> {
     println!("screen has already won.\n");
     println!("It expires in 5 minutes and works once. Waiting...");
 
-    let peer = host.wait(Arc::clone(&store), &config.name, now()).await?;
-    println!("\nPaired with {} ({})", peer.name, peer.fingerprint.short());
-    Ok(())
+    match host.wait(Arc::clone(&store), &config.name, now()).await {
+        Ok(peer) => {
+            println!("\nPaired with {} ({})", peer.name, peer.fingerprint.short());
+            Ok(())
+        }
+        // Said plainly rather than as an error trace. This is the ordinary
+        // ending when nobody types the code in time, and the only useful thing
+        // to tell someone is that the code is dead and how to get another.
+        Err(qurb_peer::Error::InviteExpired) => {
+            println!("\nThat code has expired. Run `qurb pair {}` again for a new one.", root.display());
+            Ok(())
+        }
+        Err(e) => Err(e.into()),
+    }
 }
 
 async fn join(root: PathBuf, code: String) -> Result<()> {
