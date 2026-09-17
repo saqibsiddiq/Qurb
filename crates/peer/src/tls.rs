@@ -148,6 +148,87 @@ impl ClientCertVerifier for Pinned {
     }
 }
 
+/// Accept a certificate from anyone, for pairing only.
+///
+/// Every other listener refuses a peer it does not recognise. A pairing
+/// listener cannot: the device joining is, by definition, not yet known.
+///
+/// What keeps that from being a hole is what the listener *does*. It answers
+/// nothing but a pairing request, only one carrying a token that came from an
+/// out-of-band invite, and it stops as soon as one device succeeds. The
+/// certificate is still required and the handshake signature still verified, so
+/// the fingerprint recorded for the joiner is proven rather than claimed.
+#[derive(Debug)]
+struct AnyCertificate {
+    provider: Arc<CryptoProvider>,
+}
+
+impl ClientCertVerifier for AnyCertificate {
+    fn root_hint_subjects(&self) -> &[DistinguishedName] {
+        &[]
+    }
+
+    fn verify_client_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _now: UnixTime,
+    ) -> std::result::Result<ClientCertVerified, rustls::Error> {
+        Ok(ClientCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        Err(rustls::Error::General("TLS 1.2 is not accepted".into()))
+    }
+
+    /// Still verified. Accepting any *identity* is not the same as accepting an
+    /// unproven one: the joiner must hold the key behind the certificate it
+    /// presents, or the fingerprint we record would mean nothing.
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider.signature_verification_algorithms.supported_schemes()
+    }
+
+    fn client_auth_mandatory(&self) -> bool {
+        true
+    }
+}
+
+/// A listener for pairing: any certificate, but nothing served except pairing.
+pub fn pairing_server_config(identity: &Identity) -> Result<quinn::ServerConfig> {
+    let verifier = AnyCertificate { provider: provider() };
+
+    let mut tls = rustls::ServerConfig::builder_with_provider(provider())
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .map_err(|e| Error::Tls(e.to_string()))?
+        .with_client_cert_verifier(Arc::new(verifier))
+        .with_single_cert(vec![identity.cert_der()], identity.key_der()?)
+        .map_err(|e| Error::Tls(e.to_string()))?;
+    tls.alpn_protocols = vec![ALPN.to_vec()];
+
+    let quic = quinn::crypto::rustls::QuicServerConfig::try_from(tls)
+        .map_err(|e| Error::Tls(e.to_string()))?;
+    Ok(quinn::ServerConfig::with_crypto(Arc::new(quic)))
+}
+
 /// Accept connections only from `allowed`.
 pub fn server_config(identity: &Identity, allowed: &[Fingerprint]) -> Result<quinn::ServerConfig> {
     let pinned = Pinned { allowed: allowed.to_vec(), provider: provider() };

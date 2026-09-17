@@ -49,11 +49,24 @@ certificate rather than the key inside it avoids parsing X.509 to compare
 identities and is equivalent here: the certificate is self-signed, so it binds
 the key it contains, and a device keeps exactly one.
 
-**Pairing is not built.** Deciding *which* fingerprint to expect — the QR-code
-exchange in the architecture — is Phase 3 work. Until then the caller supplies
-it, which is why `PeerClient::connect` demands a fingerprint rather than
-offering a way to skip one. An API with a "trust whoever answers" path would
-make the insecure option the easy one.
+`PeerClient::connect` demands a fingerprint rather than offering a way to skip
+one. An API with a "trust whoever answers" path would make the insecure option
+the easy one.
+
+## Pairing
+
+Where the fingerprint comes from. An invite carries the inviter's **full**
+fingerprint, its address, a one-time token and an expiry, encoded for a QR code
+or for someone to read aloud.
+
+The security is in the out-of-band channel: an attacker in the network path
+cannot change what is printed on a screen. The token authenticates nobody — it
+lets the inviter tell a device that saw the invite from one that found the port
+open, and makes an invite single-use.
+
+Both sides record the other in a trust store binding device id to fingerprint,
+and `PeerServer::bind_trusting` takes its guest list from there. See
+[decision 0014](../../docs/decisions/0014-pairing.md).
 
 ## The wire format
 
@@ -101,13 +114,67 @@ was asked for. Authentication says *who* is talking; it says nothing about
 whether they are telling the truth — and relays, which are Phase 3, will forward
 traffic nobody here controls.
 
+## Getting through a router
+
+`nat` asks a public STUN server what address this machine's packets appear to
+come from, and classifies the router by asking two operators from **one socket**:
+if the external port is the same either way, the mapping does not depend on the
+destination and hole punching can work.
+
+The socket matters more than it looks. A router's mapping belongs to one local
+port, so the socket that did the discovery and the punching must be the one QUIC
+then runs on — `PeerClient::connect_on` exists for exactly that. Using a fresh
+socket works in a lab and fails on every real network.
+
+```bash
+cargo run --release --example netcheck
+```
+
+## Reaching a peer, start to finish
+
+`Connector` is the policy that sequences everything else:
+
+```
+start    bind a socket, ask STUN where it appears from, announce
+reach    ask the rendezvous service for a peer, be told to punch
+race     try every candidate at once, keep the first that answers
+```
+
+**Both sides dial.** A router only lets a packet in if it has recently seen one
+go out to that address, so a device sitting idle has punched nothing and the
+caller's packets arrive at a router that has never heard of them. A QUIC
+handshake begins with packets that *are* the punch, so both devices dial when
+told to. Whichever handshake completes carries the traffic; the responder's is
+deliberately doomed — it pins its own fingerprint — and exists only to have sent
+something.
+
+**Discovery happens before the endpoint is built.** Once QUIC owns the socket
+nothing else can send through it, which is why `Connector::start` runs STUN
+first and why there is no explicit punch step afterwards. Getting this backwards
+produces code that looks right and cannot work.
+
+**The relay is the fallback, not the plan.** When every candidate fails,
+`reach` goes the long way round — same pinned certificate, because the relay
+carries the handshake without being party to it. The relay connection is held
+open rather than dialled on demand, since being reachable is not something that
+can be arranged after someone has already failed to reach you.
+
+**Candidates are raced, not tried in turn.** An unreachable address fails by
+timing out, so three in sequence means three timeouts before discovering the
+last one worked. Local addresses come first, so two devices on one network do
+not route through the internet to reach each other.
+
 ## Not yet built
 
-- **Pairing**, as above. The largest gap.
-- **NAT traversal.** Connections are direct to a known address. STUN, hole
+
+- **Upgrading back to direct.** A connection that fell back to the relay stays
+  relayed, even after the device moves to a network where punching would work. Connections are direct to a known address. STUN, hole
   punching, and relay fallback are Phase 3 — Phase 0 measured that the
   home network here supports hole punching, but none of it is implemented.
-- **Discovery.** A peer's address must be supplied.
+- **Discovery.** A peer's address must be supplied; an invite carries one, but
+  only the one it had when the invite was made.
+- **Transitive trust.** Pairing A to B and B to C does not pair A to C, and
+  there is no way to tell other devices that one is no longer trusted.
 - **Tree paging.** The whole tree is sent in one message, capped at 64 MiB. A
   large library needs incremental exchange rather than a full dump per sync.
 - **Chunk-level resume.** An interrupted fetch restarts that chunk. Chunks are

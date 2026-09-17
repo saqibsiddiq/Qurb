@@ -1,0 +1,27 @@
+[package]
+name = "qurb-signal"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+# The rendezvous service: how two devices behind routers learn where the other
+# is, and agree to punch at the same moment.
+#
+# Deliberately knows nothing about files. See
+# ../../docs/decisions/0016-what-signalling-learns.md.
+
+[dependencies]
+blake3.workspace = true
+qurb-keys = { path = "../keys" }
+
+tokio.workspace = true
+tokio-tungstenite = "0.30"
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }

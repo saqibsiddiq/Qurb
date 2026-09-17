@@ -107,12 +107,17 @@ Conflict semantics are settled here in code, per
 
 ---
 
-## Phase 3 — Networking at scale
+## Phase 3 — Networking at scale 🔨 in progress
 
 *Months 6–7.*
 
 The Go control plane, STUN, signalling, and DERP relay. Device pairing by QR
 code with out-of-band key verification.
+
+**Pairing is built** — an invite carrying the inviter's full fingerprint across
+an out-of-band channel, a trust store binding device identity to network
+identity, and a listener that takes its guest list from it. See
+[phases/phase-3-networking.md](phases/phase-3-networking.md).
 
 Budget real time for the relay. It is one line in the architecture document and
 a substantial service in practice — connection management, fairness, abuse
@@ -123,9 +128,14 @@ prevention — and it is the component that costs money per byte forever.
 
 ---
 
-## Phase 4 — Desktop product
+## Phase 4 — Desktop product 🔨 in progress
 
 *Months 8–10.*
+
+The daemon runs: `qurb init`, `pair`, `join`, `run`, `status`, `verify`, plus
+`qurb signal` and `qurb relay` for the services. Running it found three bugs the
+whole test suite had missed. See
+[phases/phase-4-product.md](phases/phase-4-product.md).
 
 Tauri UI, installers, onboarding, recovery-phrase flow, signed updates with
 rollback, observability.

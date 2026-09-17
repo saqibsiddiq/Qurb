@@ -32,17 +32,24 @@
 //!
 //! See ../../docs/CODEBASE.md for where this sits in the system.
 
+pub mod base32;
 pub mod client;
+pub mod connect;
 pub mod error;
 pub mod identity;
+pub mod nat;
+pub mod pairing;
 pub mod server;
 pub mod source;
 pub mod tls;
 pub mod wire;
 
 pub use client::PeerClient;
+pub use connect::Connector;
 pub use error::{Error, Result};
 pub use identity::{Fingerprint, Identity};
-pub use server::{PeerServer, ServerStats};
+pub use nat::{NatBehaviour, Reflexive};
+pub use pairing::{accept, Invite, Paired, PairingHost};
+pub use server::{trusted_fingerprints, PeerServer, ServerStats};
 pub use source::NetworkSource;
 pub use wire::{Request, Response};

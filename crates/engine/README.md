@@ -109,6 +109,30 @@ including tombstoned ones — a deleted file's chunks survive the retention
 window, and "do we have these bytes?" is a question about chunks rather than
 names.
 
+## Two kinds of device
+
+An engine is either **syncing** a directory someone uses, or acting as a
+**storage-only replica** — always on, holding content so the other devices need
+not all be awake at once.
+
+A replica switches off two behaviours, and both would be destructive rather than
+merely wrong:
+
+**It does not infer deletion from an empty directory.** A syncing device decides
+a file is gone by walking its tree and not finding it. A replica has nothing on
+disk by design, so the same inference would tombstone the entire library and
+propagate those deletions to every device that trusted it. `Engine::reconcile`
+returning early for a replica looks like a no-op; removing it would destroy data
+everywhere, quietly.
+
+**It does not materialise files.** Storing chunks *and* writing every file costs
+roughly twice the space for a copy nobody reads.
+
+A replica can hold a subset — `PinSet::under(["work"])` — because "hold
+everything" is the expensive answer and the useful one is usually "hold what I
+reach for". See
+[decision 0006](../../docs/decisions/0006-availability-gap.md).
+
 ## Trying it
 
 ```bash

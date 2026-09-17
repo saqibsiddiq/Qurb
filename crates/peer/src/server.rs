@@ -55,6 +55,20 @@ impl PeerServer {
         Arc::clone(&self.stats)
     }
 
+    /// Listen on `addr`, accepting the devices this store has paired with.
+    ///
+    /// The list is read once, at bind. A device paired afterwards will not be
+    /// accepted until the listener is rebuilt — acceptable while pairing is a
+    /// deliberate act a person performs, and something to revisit when devices
+    /// come and go on their own.
+    pub fn bind_trusting(addr: SocketAddr, identity: &Identity, store: &Store) -> Result<Self> {
+        let allowed = trusted_fingerprints(store)?;
+        if allowed.is_empty() {
+            tracing::warn!("no paired devices; this listener will refuse everyone");
+        }
+        Self::bind(addr, identity, &allowed)
+    }
+
     /// The address actually bound, which matters when port 0 was requested.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.endpoint
@@ -90,6 +104,24 @@ impl PeerServer {
     pub fn close(&self) {
         self.endpoint.close(0u32.into(), b"shutting down");
     }
+}
+
+/// The fingerprints of every device this store trusts.
+pub fn trusted_fingerprints(store: &Store) -> Result<Vec<Fingerprint>> {
+    Ok(store
+        .db()
+        .trusted_peers()?
+        .into_iter()
+        .map(|peer| Fingerprint::from_bytes(peer.fingerprint))
+        .collect())
+}
+
+/// Serve one connection, for tests that build their own endpoint.
+///
+/// Exists because hole punching requires the endpoint to be constructed from an
+/// existing socket, which [`PeerServer::bind`] cannot do.
+pub async fn serve_connection_for_test(connection: quinn::Connection, store: Arc<Mutex<Store>>) {
+    serve_connection(connection, store, Arc::new(ServerStats::default())).await
 }
 
 async fn serve_connection(
@@ -132,7 +164,7 @@ async fn serve_request(
             stats.bytes_served.fetch_add(bytes.len() as u64, Ordering::Relaxed);
             stats.chunks_served.fetch_add(1, Ordering::Relaxed)
         }
-        Response::NotFound => 0,
+        Response::NotFound | Response::Paired { .. } => 0,
     };
 
     let encoded = response.encode();
@@ -153,6 +185,11 @@ fn answer(store: &Store, request: &Request) -> Result<Response> {
                 None => Response::NotFound,
             }
         }
+
+        // Pairing is served by its own listener, which accepts unknown
+        // certificates. This one only ever talks to devices already trusted, so
+        // a pairing request here is either a mistake or a probe.
+        Request::Pair { .. } => Response::NotFound,
 
         Request::Chunk { hash } => {
             let hash = blake3::Hash::from(*hash);

@@ -23,7 +23,7 @@ use std::path::Path;
 ///
 /// Migrations are append-only. Editing one that has already shipped would leave
 /// databases in the field at a schema nobody can reproduce.
-const MIGRATIONS: &[&str] = &[V1, V2];
+const MIGRATIONS: &[&str] = &[V1, V2, V3];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -115,6 +115,28 @@ CREATE TABLE IF NOT EXISTS local (
 -- version of a file we already have costs a lookup instead of a transfer.
 CREATE INDEX IF NOT EXISTS idx_files_content ON files (content_hash)
     WHERE deleted_at IS NULL;
+"#;
+
+/// The devices this one trusts.
+///
+/// Until now `DeviceId` and the network fingerprint were unrelated: version
+/// vectors counted against one, connections authenticated the other, and
+/// nothing tied them together. A device could authenticate as itself and then
+/// claim any history it liked.
+///
+/// This table is the binding. A row says: the device whose certificate hashes
+/// to this fingerprint is the one whose changes count under this device id.
+/// Rows are written only by pairing, which requires an out-of-band exchange.
+const V3: &str = r#"
+CREATE TABLE IF NOT EXISTS peers (
+    device_id   BLOB PRIMARY KEY,
+    fingerprint BLOB NOT NULL UNIQUE,
+    name        TEXT NOT NULL,
+    paired_at   INTEGER NOT NULL,
+    last_seen   INTEGER
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_peers_fingerprint ON peers (fingerprint);
 "#;
 
 pub struct Db {
@@ -439,6 +461,73 @@ impl Db {
             .map_err(Into::into)
     }
 
+    // -- trusted peers -------------------------------------------------------
+
+    /// Record a device as trusted.
+    ///
+    /// Binds a device id to a network fingerprint. Both are unique: one device
+    /// cannot hold two identities, and one identity cannot serve two devices.
+    /// Re-pairing an already-known device updates its name and fingerprint
+    /// rather than creating a second row, so replacing a device's certificate
+    /// does not leave a stale identity trusted forever.
+    pub fn trust_peer(
+        &self,
+        device: &DeviceId,
+        fingerprint: &[u8; 32],
+        name: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO peers (device_id, fingerprint, name, paired_at)
+             VALUES (?1, ?2, ?3, unixepoch())
+             ON CONFLICT (device_id) DO UPDATE SET
+                 fingerprint = excluded.fingerprint,
+                 name = excluded.name",
+            params![device.as_bytes().as_slice(), fingerprint.as_slice(), name],
+        )?;
+        Ok(())
+    }
+
+    pub fn trusted_peers(&self) -> Result<Vec<TrustedPeer>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT device_id, fingerprint, name, paired_at, last_seen
+               FROM peers ORDER BY name",
+        )?;
+        let rows = stmt.query_map([], peer_row)?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// The device behind a fingerprint, if it is one we trust.
+    ///
+    /// What turns an authenticated connection into a known device: TLS proves
+    /// the peer holds the key behind a fingerprint, and this says whose device
+    /// that is.
+    pub fn peer_by_fingerprint(&self, fingerprint: &[u8; 32]) -> Result<Option<TrustedPeer>> {
+        self.conn
+            .query_row(
+                "SELECT device_id, fingerprint, name, paired_at, last_seen
+                   FROM peers WHERE fingerprint = ?1",
+                params![fingerprint.as_slice()],
+                peer_row,
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    pub fn forget_peer(&self, device: &DeviceId) -> Result<bool> {
+        let n = self
+            .conn
+            .execute("DELETE FROM peers WHERE device_id = ?1", params![device.as_bytes().as_slice()])?;
+        Ok(n > 0)
+    }
+
+    pub fn mark_peer_seen(&self, fingerprint: &[u8; 32]) -> Result<()> {
+        self.conn.execute(
+            "UPDATE peers SET last_seen = unixepoch() WHERE fingerprint = ?1",
+            params![fingerprint.as_slice()],
+        )?;
+        Ok(())
+    }
+
     /// A different live path that a case-insensitive filesystem could not keep
     /// apart from `path`.
     ///
@@ -497,6 +586,30 @@ impl Db {
         })?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
+}
+
+/// A device this one has paired with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrustedPeer {
+    pub device_id: DeviceId,
+    pub fingerprint: [u8; 32],
+    /// What the user calls it. Chosen by the peer, so display-only — never
+    /// used to decide anything.
+    pub name: String,
+    pub paired_at: i64,
+    pub last_seen: Option<i64>,
+}
+
+fn peer_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrustedPeer> {
+    let id: Vec<u8> = r.get(0)?;
+    let fp: Vec<u8> = r.get(1)?;
+    Ok(TrustedPeer {
+        device_id: to_device(id).expect("device_id column holds 32 bytes"),
+        fingerprint: fp.try_into().expect("fingerprint column holds 32 bytes"),
+        name: r.get(2)?,
+        paired_at: r.get(3)?,
+        last_seen: r.get(4)?,
+    })
 }
 
 #[derive(Debug, Clone)]

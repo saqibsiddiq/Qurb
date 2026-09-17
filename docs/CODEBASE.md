@@ -8,8 +8,8 @@ goes deeper on one topic; this file is the map.
 It is a **living document**. Anything that changes how the system fits together
 should be reflected here in the same piece of work that changes it.
 
-**Last verified against the code:** 2026-09-16, end of Phase 2. Phases 0–2
-complete; pairing, NAT traversal and relays remain for Phase 3.
+**Last verified against the code:** 2026-09-16, during Phase 3. Phases 0–2
+complete and pairing built; NAT traversal, signalling and relays remain.
 
 ---
 
@@ -109,6 +109,11 @@ external port per destination, which defeats the trick. For those we fall back
 to a **relay** — a server that forwards encrypted bytes without being able to
 read them. Relaying costs us bandwidth, so the percentage of connections that go
 direct is a number with a dollar value attached.
+
+There is a second problem that direct connections do not solve: a device can only
+send you a file if it is *switched on*. A **replica** is a device that always is,
+holding content without a person using it, so the rest need not all be awake at
+once. See [decisions/0006](decisions/0006-availability-gap.md).
 
 ### 2.4 There is no central truth, so devices must agree by themselves
 
@@ -260,6 +265,8 @@ qurb/
 │   │
 │   ├── engine/            Decides what a change means, and does it.
 │   │   ├── src/lib.rs       reconcile, apply, and the run loop
+│   │   ├── src/role.rs      syncing device, or storage-only replica
+│   │   ├── src/repair.rs    refetch chunks the disk damaged
 │   │   ├── src/peer.rs      compare with another device and act on it
 │   │   └── examples/        sync_once: one directory into a store
 │   │                        sync_pair: two directories against each other
@@ -274,15 +281,35 @@ qurb/
 │   ├── peer/              Reaching another device, over QUIC.
 │   │   ├── src/wire.rs      the message format; bounded and hostile-input safe
 │   │   ├── src/identity.rs  a device's certificate and its fingerprint
+│   │   ├── src/pairing.rs   deciding which device to trust in the first place
+│   │   ├── src/base32.rs    invite encoding, chosen for how QR codes work
+│   │   ├── src/nat.rs       STUN, NAT classification, hole punching
+│   │   ├── src/connect.rs   the policy: discover, announce, race candidates
 │   │   ├── src/tls.rs       mutual authentication by pinned fingerprint
 │   │   ├── src/server.rs    serves a store, read-only
 │   │   ├── src/client.rs    asks for trees, manifests, chunks
 │   │   └── src/source.rs    plugs the client into the engine
 │   │
-│   └── keys/              The root secret and the way back to it.
-│       ├── src/master.rs    HKDF derivation, one key per purpose
-│       ├── src/phrase.rs    the 24 words, via BIP-39
-│       └── src/vault.rs     where the master key lives, and its limits
+│   ├── keys/              The root secret and the way back to it.
+│   │   ├── src/master.rs    HKDF derivation, one key per purpose
+│   │   ├── src/phrase.rs    the 24 words, via BIP-39
+│   │   └── src/vault.rs     where the master key lives, and its limits
+│   │
+│   ├── signal/            Finding the other device.
+│   │   ├── src/rendezvous.rs  identifiers the server cannot link to anyone
+│   │   ├── src/message.rs     what is said; carries nothing about files
+│   │   ├── src/server.rs      holds a channel open per device
+│   │   └── src/client.rs      announce, ask, punch when told
+│   │
+│   ├── relay/             The fallback when no direct path exists.
+│   │   ├── src/frame.rs      opaque forwarding, binary and bounded
+│   │   ├── src/socket.rs     a relay connection pretending to be a UDP socket
+│   │   └── src/server.rs     forwards between registered identifiers
+│   │
+│   └── qurb/              The program a person runs.
+│       ├── src/main.rs       init, pair, join, run, status, verify, config
+│       ├── src/daemon.rs     watch, apply, sync, retry
+│       └── src/config.rs     a flat file meant to be edited by hand
 │
 ├── experiments/
 │   └── phase0-spike/      Throwaway. Proved the core ideas work.
@@ -388,7 +415,7 @@ complete system and almost none of it is built.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-293 tests pass across six crates; clippy is clean.
+389 tests pass across nine crates; clippy is clean.
 
 **Two devices now sync over a real network connection**, converging through
 concurrent edits, deletions and resurrections, with both sides computing the
@@ -402,11 +429,53 @@ edited files takes 3.5s. A cold index takes 237s, which is slow — 58% of it is
 filesystem syscalls, and the fix is parallelism, which nothing in the design
 prevents. See [phases/phase-1-engine.md](phases/phase-1-engine.md).
 
-**What is missing is everything around it.** Devices must be told each other's
-fingerprints by hand and must be able to reach each other directly — pairing,
-NAT traversal, and relays are all Phase 3. And the master key sits in an
-owner-only file rather than the platform keystore, which is the largest security
-gap in the project.
+**Devices now pair.** An invite carries the inviter's full fingerprint across an
+out-of-band channel — a QR code, or a code read aloud — and both sides record the
+other in a trust store binding device identity to network identity. A listener
+takes its guest list from there, so the system has a notion of "my devices"
+rather than a list the caller assembled.
+
+**Devices can also get through a router.** STUN discovers what address this
+machine looks like from outside, and hole punching opens a path — on the same
+socket throughout, because a router's mapping belongs to one local port and
+using a fresh socket would punch a hole nobody is listening behind.
+
+**A device can also be a storage-only replica** — always on, holding content so
+the others need not all be awake at once, materialising nothing and originating
+nothing. That is the answer to the availability gap that had been open since
+Phase 1; see [decisions/0006](decisions/0006-availability-gap.md).
+
+**A rendezvous service now coordinates them.** Devices announce where they are
+and are told to punch at the same moment — which is what hole punching needs and
+what a request-and-response API cannot arrange. It learns no filenames and
+cannot link a group of devices to a person; see
+[decisions/0016](decisions/0016-what-signalling-learns.md).
+
+**And a connection policy joins them up.** `Connector` binds a socket, discovers
+its public address, announces, asks to be introduced, and races every address the
+peer offered — keeping the first that answers, local addresses first. Both sides
+dial when told to, because a QUIC handshake's opening packets *are* the hole
+punch and a device that only listens has punched nothing.
+
+**And a relay carries what cannot go directly.** It forwards opaque datagrams
+with an ordinary QUIC session running inside, so it sees ciphertext addressed to
+an identifier it cannot link to a person. It is TCP, on port 443, because it
+exists for networks where UDP does not work.
+
+**And the two are joined.** Reaching a peer tries every direct address at once
+and falls back to the relay when none answers, with identity pinned exactly as
+hard either way.
+
+**And there is now a program to run.** `qurb init`, `pair`, `join` and `run`
+turn all of the above into a daemon that watches a directory and syncs with the
+devices it has been paired with; `qurb signal` and `qurb relay` run the services.
+
+**What has never been measured is how often that fallback is needed.** The
+direct-connection rate on real networks is the number the relay bill depends on.
+Until now it could not be measured because there was nothing to run on a second
+machine; now there is. And the master key
+sits in an owner-only file rather than the platform keystore, which is the
+largest security gap in the project.
 
 ### Hardened (Phase 2, complete)
 
@@ -458,6 +527,18 @@ again. Needs roughly 20 GiB free at 100k files:
 cargo run --release -p qurb-peer --example scale -- /tmp/scale 100000
 ```
 
+**The whole system at once.** Starts a rendezvous service and a relay, brings up
+two devices in the directories given, pairs them, connects them, and then keeps
+running — drop a file into either directory and watch it appear in the other:
+
+```bash
+cargo run --release -p qurb-peer --example demo -- /tmp/device-a /tmp/device-b
+```
+
+Everything is in one process, which is the one thing about it that is not
+realistic. The sockets, handshakes, encryption, chunking and conflict resolution
+are all the real implementations.
+
 What is missing is everything about a *second device*.
 
 ### Measured in the Phase 0 spike
@@ -472,31 +553,37 @@ What is missing is everything about a *second device*.
 
 ### Designed but not built
 
-Platform keystore integration, per-file keys, device pairing, NAT traversal, the
-Go control plane, relays, the desktop UI, both mobile clients, search, updates,
-billing.
+Platform keystore integration, per-file keys, relay selection and quotas,
+accounts and billing, the desktop UI, both mobile clients, search, updates.
 
 ### The gaps that matter most
 
-Two things are known-missing rather than merely unbuilt, ranked by how expensive
-they get if deferred:
+Two things are known-missing rather than merely unbuilt:
 
-1. **The availability question.** If all your devices are offline, your files
-   are unreachable. That is the design working as intended, and it contradicts
-   what the Dropbox-like promise leads people to expect. The fix — an always-on
-   node, whether a NAS, a cheap VPS, or an optional paid encrypted pin — touches
-   the storage engine, not just the network layer, so it must be decided early.
-   **This is the largest open question in the project.**
+1. **Protecting the master key at rest.** It lives in a file readable only by
+   its owner, which defends against other users on the machine and against
+   nothing that can read the disk. The platform keystore — Keychain, DPAPI,
+   Secret Service — is three separate integrations and is not built. **The
+   largest security gap in the project**, and one a user reading "end-to-end
+   encrypted" would reasonably assume was already closed.
 
 2. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
-   consumer product in this space eventually adds some escape hatch. Choosing
-   which compromise to make is better done on paper now than under pressure
-   later.
+   consumer product in this space eventually adds some escape hatch — social
+   recovery, an escrowed key, a printed kit — and each trades away part of the
+   promise. Choosing which compromise to make is better done on paper now than
+   under pressure from an upset user later. Still undecided.
 
-Chunk garbage collection was the third item here and is now built. It was
-deliberately the first thing written in Phase 1, because a collector that is
-even slightly wrong destroys data in files the user never touched and raises no
-error doing it. See [phases/phase-1-engine.md](phases/phase-1-engine.md).
+Two earlier entries here have since been closed, and how they were closed is
+worth knowing:
+
+**Chunk garbage collection** was written first in Phase 1, because a collector
+that is even slightly wrong destroys data in files the user never touched and
+raises no error doing it. See
+[phases/phase-1-engine.md](phases/phase-1-engine.md).
+
+**Availability** — files being unreachable when every device is switched off —
+is answered by storage-only replicas, decided in
+[decisions/0006](decisions/0006-availability-gap.md) and built in Phase 3.
 
 ---
 
@@ -505,6 +592,17 @@ error doing it. See [phases/phase-1-engine.md](phases/phase-1-engine.md).
 ```bash
 cargo build --release
 ```
+
+**The program itself.** Two devices, start to finish — `init` on the first,
+`enrol` on the second with the phrase it printed, then `pair` and `join` to
+introduce them, then `run` on both:
+
+```bash
+./target/release/qurb init ~/Sync
+```
+
+`qurb` with no arguments lists the rest. See
+[crates/qurb/README.md](../crates/qurb/README.md).
 
 ```bash
 # the test suites -- start here to see what each layer guarantees
@@ -560,6 +658,8 @@ tmpfs that the 2 GiB synthetic corpus will fill.
     the wire, and what pinned identity does and does not protect.
 13. [crates/keys/README.md](../crates/keys/README.md) — why a lost phrase is
     unrecoverable, and what the key file does and does not defend against.
+14. [crates/qurb/README.md](../crates/qurb/README.md) — the commands, and what
+    the daemon does not do yet.
 
 ---
 

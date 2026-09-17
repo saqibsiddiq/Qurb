@@ -30,10 +30,12 @@
 pub mod error;
 pub mod peer;
 pub mod repair;
+pub mod role;
 
 pub use error::{Error, FileFailure, Result};
 pub use peer::{ContentSource, NoContent, PlanStats, StoreSource};
 pub use repair::RepairStats;
+pub use role::{PinSet, Role};
 
 use qurb_storage::Store;
 use qurb_watcher::{Change, ChangeKind, Event, IgnoreRules, Watcher};
@@ -77,6 +79,7 @@ pub struct Engine {
     store: Store,
     ignore: IgnoreRules,
     fold_case: bool,
+    role: Role,
 }
 
 impl Engine {
@@ -87,7 +90,26 @@ impl Engine {
         // Probed rather than assumed from the platform: macOS can be formatted
         // either way, and a network mount can be anything regardless of host.
         let fold_case = qurb_watcher::is_case_insensitive(&root);
-        Self { root, store, ignore, fold_case }
+        Self { root, store, ignore, fold_case, role: Role::Syncing }
+    }
+
+    /// A device that holds content without a directory behind it.
+    ///
+    /// `root` is only where the store lives; nothing is ever written under it.
+    /// See [`Role::Replica`] for the two behaviours this switches off and why
+    /// leaving either on would destroy data rather than merely waste space.
+    pub fn replica(root: impl Into<PathBuf>, store: Store, pins: PinSet) -> Self {
+        Self {
+            root: root.into(),
+            store,
+            ignore: IgnoreRules::new(),
+            fold_case: false,
+            role: Role::Replica(pins),
+        }
+    }
+
+    pub fn role(&self) -> &Role {
+        &self.role
     }
 
     /// Whether two paths differing only in case are treated as a collision.
@@ -138,6 +160,16 @@ impl Engine {
     /// needs no record of where the gap began.
     pub fn reconcile(&mut self) -> Result<SyncStats> {
         let mut stats = SyncStats::default();
+
+        // A replica has no directory to compare against. Walking one anyway
+        // would find nothing and conclude that every file it holds had been
+        // deleted -- then propagate those tombstones to every device that
+        // trusts it. Doing nothing is not a shortcut here; it is the whole
+        // point of the role.
+        if self.role.is_replica() {
+            tracing::debug!("replica: nothing to reconcile against");
+            return Ok(stats);
+        }
 
         let entries = qurb_watcher::scan(&self.root, &self.ignore)?;
         let mut on_disk = Vec::with_capacity(entries.len());

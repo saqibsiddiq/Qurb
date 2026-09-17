@@ -38,6 +38,34 @@ impl PeerClient {
         Ok(Self { endpoint, connection })
     }
 
+    /// Connect using a socket that has already been used for discovery and
+    /// punching.
+    ///
+    /// The ordinary [`connect`](Self::connect) binds its own socket, which is
+    /// fine when the address is directly reachable. It is wrong after hole
+    /// punching: the router mapping the peer was told about belongs to the port
+    /// that punched it, so a fresh socket arrives at an address nobody expects.
+    pub async fn connect_on(
+        socket: std::net::UdpSocket,
+        addr: SocketAddr,
+        identity: &Identity,
+        expected: Fingerprint,
+    ) -> Result<Self> {
+        let mut endpoint = crate::nat::endpoint_from(socket, None)?;
+        endpoint.set_default_client_config(tls::client_config(identity, expected)?);
+        let connection = endpoint.connect(addr, "qurb-device")?.await?;
+        Ok(Self { endpoint, connection })
+    }
+
+    /// Wrap a connection someone else established.
+    ///
+    /// Used by [`Connector`](crate::connect::Connector), which races several
+    /// candidate addresses and cannot hand over a connection it has not made
+    /// yet.
+    pub fn from_parts(endpoint: quinn::Endpoint, connection: quinn::Connection) -> Self {
+        Self { endpoint, connection }
+    }
+
     pub fn remote_address(&self) -> SocketAddr {
         self.connection.remote_address()
     }
@@ -148,6 +176,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Manifest(_) => "manifest",
         Response::Chunk(_) => "chunk",
         Response::NotFound => "not-found",
+        Response::Paired { .. } => "pairing reply",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }
 }

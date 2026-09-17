@@ -1,7 +1,9 @@
 # 0011 — Peer identity is a pinned certificate fingerprint
 
-**Status:** Accepted — with pairing explicitly unbuilt
+**Status:** Accepted
 **Date:** 2026-09-16
+**Completed by:** [0014](0014-pairing.md), which builds the pairing this record
+identified as missing and binds `DeviceId` to `Fingerprint`.
 
 ## Decision
 

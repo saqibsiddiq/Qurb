@@ -127,7 +127,9 @@ impl Engine {
         // about to want -- turning a free rename into a full re-transfer. It
         // also shortens the window in which a renamed file exists at neither
         // path.
-        let mut ordered: Vec<&Action> = actions.iter().collect();
+        // A replica holding a subset ignores what it was not asked to hold.
+        let mut ordered: Vec<&Action> =
+            actions.iter().filter(|a| self.role().wants(a.path())).collect();
         ordered.sort_by_key(|action| match action {
             Action::Adopt { remote } if remote.is_deleted() => 1,
             _ => 0,
@@ -182,13 +184,18 @@ impl Engine {
 
         match &version.content {
             Content::Deleted => {
-                match std::fs::remove_file(&path) {
-                    Ok(()) => {}
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(e) => return Err(Error::Io { path: path.clone(), source: e }),
+                // A replica records the tombstone but has no file to remove.
+                if !self.role().is_replica() {
+                    match std::fs::remove_file(&path) {
+                        Ok(()) => {}
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => return Err(Error::Io { path: path.clone(), source: e }),
+                    }
                 }
                 self.store_mut().adopt(version, None, 0)?;
-                prune_empty_parents(&path, self.root());
+                if !self.role().is_replica() {
+                    prune_empty_parents(&path, self.root());
+                }
             }
             Content::File { hash, size } => {
                 // Refuse a path this filesystem cannot keep separate from one
@@ -223,21 +230,27 @@ impl Engine {
                     }
                 };
 
-                if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent)
-                        .map_err(|e| Error::Io { path: parent.to_path_buf(), source: e })?;
-                }
-                std::fs::write(&path, &bytes)
-                    .map_err(|e| Error::Io { path: path.clone(), source: e })?;
+                if self.role().is_replica() {
+                    // Storage only. Materialising the file as well would cost
+                    // roughly twice the space for a copy nobody reads, and
+                    // would make a filesystem the replica does not really have
+                    // authoritative for what it holds.
+                    self.store_mut().adopt(version, Some(&bytes), version.modified_at)?;
+                } else {
+                    if let Some(parent) = path.parent() {
+                        std::fs::create_dir_all(parent)
+                            .map_err(|e| Error::Io { path: parent.to_path_buf(), source: e })?;
+                    }
+                    std::fs::write(&path, &bytes)
+                        .map_err(|e| Error::Io { path: path.clone(), source: e })?;
 
-                // Record the modification time the file actually ended up with,
-                // so the engine's size-and-mtime fast path recognises it and
-                // does not immediately re-read what it just wrote.
-                let mtime = std::fs::metadata(&path)
-                    .ok()
-                    .map(|m| mtime_ns(&m))
-                    .unwrap_or(0);
-                self.store_mut().adopt(version, Some(&bytes), mtime)?;
+                    // Record the modification time the file actually ended up
+                    // with, so the engine's size-and-mtime fast path recognises
+                    // it and does not immediately re-read what it just wrote.
+                    let mtime =
+                        std::fs::metadata(&path).ok().map(|m| mtime_ns(&m)).unwrap_or(0);
+                    self.store_mut().adopt(version, Some(&bytes), mtime)?;
+                }
             }
         }
         Ok(())

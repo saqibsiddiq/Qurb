@@ -4,10 +4,10 @@ Private cloud storage. Dropbox-like sync where your files stay on your own
 devices — they move directly between them, encrypted end to end, and are never
 stored on our servers.
 
-**Status: Phases 0–2 complete.** Two devices sync end to end over QUIC with
-encryption, conflict resolution and key management — verified at 100,000 files,
-and hardened against crashes, wrong clocks, long absences, damaged disks and
-hostile peers.
+**Status: Phase 3 in progress.** Phases 0–2 are complete: two devices sync end
+to end over QUIC with encryption, conflict resolution and key management,
+verified at 100,000 files and hardened against crashes, wrong clocks, long
+absences, damaged disks and hostile peers. Devices now pair, too.
 
 ---
 
@@ -38,6 +38,30 @@ website/        the landing page (Next.js), independent of the engine
 The split between `crates/` and `experiments/` is deliberate. Experimental code
 may cut corners provided its README says which. Code in `crates/` is meant to
 last. Nothing migrates silently between them.
+
+## Trying it
+
+There is a program now. On the first device:
+
+```bash
+qurb init ~/Sync
+```
+
+It prints 24 words, which are the only copy of your key. On the second device,
+using those words, then introduce them and start both:
+
+```bash
+qurb enrol ~/Sync "wheel push industry ..."
+```
+
+`qurb pair` on one, `qurb join` on the other, `qurb run` on both. See
+[crates/qurb/README.md](crates/qurb/README.md).
+
+To watch the whole thing work in one process instead, including the servers:
+
+```bash
+cargo run --release -p qurb-peer --example demo -- /tmp/device-a /tmp/device-b
+```
 
 ## Building
 
@@ -103,12 +127,19 @@ by hash so renames and copies cost a lookup rather than a transfer.
 
 Built and tested in [`crates/peer`](crates/peer/): a QUIC transport with mutual
 authentication by pinned certificate fingerprint, a length-bounded wire format,
-and incremental transfer that moves only the chunks the receiver lacks.
+and incremental transfer that moves only the chunks the receiver lacks. Devices
+pair by an invite carrying the inviter's full fingerprint across an out-of-band
+channel — a QR code, or a code read aloud — after which a listener takes its
+guest list from the trust store rather than from a caller. STUN discovers this
+machine's public address and classifies the router; hole punching opens a path
+on the same socket QUIC then runs over. A device can also run as a storage-only
+replica: always on, holding content so the others need not all be awake, with no
+directory behind it.
 
 Built and tested in [`crates/keys`](crates/keys/): a 256-bit master key, HKDF
 derivation of one key per purpose, and a 24-word BIP-39 recovery phrase — tested
 end to end, so the words on a piece of paper genuinely turn back into the user's
-files. 293 tests across six crates, clippy clean.
+files. 389 tests across nine crates, clippy clean.
 
 A directory syncs into a local store — on 2437 real files (979 MiB), 12.96s for
 the first pass and 0.03s for the second. **Two devices now sync over a real
@@ -124,10 +155,28 @@ Measured in Phase 0: chunking at 665 MiB/s, 99.7% chunk reuse after an edit
 where fixed blocks achieve 0%, byte-exact round trips over 2722 real files,
 QUIC transport, and a home network that supports direct connections.
 
-Not built: device pairing, so devices must be told each other's fingerprints by
-hand; NAT traversal, so they must be able to reach each other directly; platform
-keystore integration, so the master key sits in an owner-only file rather than
-Keychain or DPAPI; and the control plane, relays, and every user interface.
+Built and tested in [`crates/signal`](crates/signal/): a rendezvous service that
+tells two devices to punch at the same moment, under identifiers derived from
+the master key so it cannot link a group of devices to a person.
+
+Two devices that have never spoken can now pair out of band, find each other
+through the rendezvous service, connect, and sync — every layer at once.
+
+Built and tested in [`crates/relay`](crates/relay/): a relay that forwards
+opaque datagrams with a full QUIC session running inside, so it can neither read
+what it carries nor forge it.
+
+Reaching a peer tries every direct address at once and falls back to the relay
+when none answers, with identity pinned exactly as hard either way.
+
+Built and tested in [`crates/qurb`](crates/qurb/): the daemon and the commands
+around it. Running it for the first time found three bugs the whole test suite
+had missed, including an invite that offered `0.0.0.0` as an address — true, and
+impossible to connect to.
+
+Not built: platform keystore integration, so the master key sits in an
+owner-only file rather than Keychain or DPAPI; and relays, and every user
+interface.
 
 **Phase 1 is complete.** Its kill criterion — syncing 100,000 files cleanly —
 was run and passed: 4.40 GiB between two devices with every correctness check
@@ -142,7 +191,7 @@ defects — including a writer that could reference a chunk garbage collection h
 just deleted, and renames that re-transferred an entire library depending on how
 the old and new names happened to sort alphabetically. 293 tests.
 
-The largest open question is availability — a peer-to-peer design means files
-are unreachable when all your devices are offline, which contradicts what the
-product promises. See
-[decisions/0006](docs/decisions/0006-availability-gap.md).
+The largest open gap is protecting the master key at rest: it sits in an
+owner-only file rather than the platform keystore. Availability — files being
+unreachable when every device is switched off — is answered by storage-only
+replicas, in [decisions/0006](docs/decisions/0006-availability-gap.md).

@@ -71,6 +71,8 @@ fn start_hostile(
                         (Behaviour::ManifestWithoutChunks, Request::Chunk { .. }) => {
                             Some(Response::NotFound.encode())
                         }
+                        // Pairing has its own listener; this one never serves it.
+                        (_, Request::Pair { .. }) => Some(Response::NotFound.encode()),
                     };
 
                     match reply {

@@ -10,6 +10,37 @@ pub enum Error {
     #[error("peer is not one we trust")]
     UntrustedPeer,
 
+    #[error("pairing code is not valid: {detail}")]
+    BadInvite { detail: String },
+
+    #[error("pairing code has expired")]
+    InviteExpired,
+
+    #[error("the other device refused to pair")]
+    PairingRefused,
+
+    #[error("pairing ended before a device joined")]
+    PairingAbandoned,
+
+    #[error("no STUN server answered; UDP may be blocked outbound")]
+    NoStunResponse,
+
+    #[error("signalling: {detail}")]
+    Signalling { detail: String },
+
+    #[error("the peer offered no address to try")]
+    NoCandidates,
+
+    #[error("the peer did not answer the request to connect")]
+    PeerDidNotAnswer,
+
+    #[error("no relay is configured to fall back to")]
+    NoRelay,
+
+    /// Every candidate failed. In production this is where a relay takes over.
+    #[error("could not reach peer {peer} at any of its addresses")]
+    Unreachable { peer: String },
+
     #[error("connection failed: {0}")]
     Connect(#[from] quinn::ConnectError),
 

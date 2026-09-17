@@ -14,8 +14,8 @@ A number without its conditions is not evidence.
 | [0](phase-0-spike.md) | Spike — do the core ideas hold? | ✅ complete, all criteria passed |
 | [1](phase-1-engine.md) | The engine | ✅ complete — kill criterion passed |
 | [2](phase-2-correctness.md) | Adversarial correctness | ✅ complete — 4 defects found |
-| 3 | Networking at scale | not started |
-| 4 | Desktop product | not started |
+| [3](phase-3-networking.md) | Networking at scale | 🔨 in progress — pairing done |
+| [4](phase-4-product.md) | Desktop product | 🔨 in progress — the daemon runs |
 | 5 | Mobile | not started |
 | 6 | Commercial | not started |
 

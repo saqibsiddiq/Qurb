@@ -30,6 +30,9 @@ pub const MAX_MESSAGE: usize = 64 << 20;
 /// still far too small to be useful as an allocation attack.
 const MAX_PATH: usize = 4 << 10;
 
+/// A device name is for humans to read. Anything longer is not a name.
+const MAX_NAME: usize = 256;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Request {
     /// Everything this device knows about, tombstones included.
@@ -41,6 +44,15 @@ pub enum Request {
     Manifest { content: [u8; 32] },
     /// One chunk's plaintext.
     Chunk { hash: [u8; 32] },
+    /// Ask to be trusted, presenting the token from an out-of-band invite.
+    ///
+    /// The device id and name are claims; the fingerprint that ends up trusted
+    /// is taken from the connection, not from here.
+    Pair {
+        token: [u8; 16],
+        device_id: [u8; 32],
+        name: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,16 +63,20 @@ pub enum Response {
     /// The peer does not have what was asked for. Not an error: content moves
     /// and a peer may legitimately have dropped it.
     NotFound,
+    /// Pairing accepted, with the accepting device's own identity.
+    Paired { device_id: [u8; 32], name: String },
 }
 
 const TAG_TREE: u8 = 1;
 const TAG_MANIFEST: u8 = 2;
 const TAG_CHUNK: u8 = 3;
+const TAG_PAIR: u8 = 4;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
 const STATUS_CHUNK: u8 = 3;
 const STATUS_NOT_FOUND: u8 = 4;
+const STATUS_PAIRED: u8 = 5;
 
 impl Request {
     pub fn encode(&self) -> Vec<u8> {
@@ -75,6 +91,12 @@ impl Request {
                 out.push(TAG_CHUNK);
                 out.extend_from_slice(hash);
             }
+            Request::Pair { token, device_id, name } => {
+                out.push(TAG_PAIR);
+                out.extend_from_slice(token);
+                out.extend_from_slice(device_id);
+                put_name(&mut out, name);
+            }
         }
         out
     }
@@ -85,6 +107,11 @@ impl Request {
             TAG_TREE => Request::Tree,
             TAG_MANIFEST => Request::Manifest { content: r.hash()? },
             TAG_CHUNK => Request::Chunk { hash: r.hash()? },
+            TAG_PAIR => {
+                let mut token = [0u8; 16];
+                token.copy_from_slice(r.take(16)?);
+                Request::Pair { token, device_id: r.hash()?, name: r.name()? }
+            }
             tag => return Err(Error::Protocol { detail: format!("unknown request tag {tag}") }),
         };
         r.finished()?;
@@ -97,6 +124,11 @@ impl Response {
         let mut out = Vec::new();
         match self {
             Response::NotFound => out.push(STATUS_NOT_FOUND),
+            Response::Paired { device_id, name } => {
+                out.push(STATUS_PAIRED);
+                out.extend_from_slice(device_id);
+                put_name(&mut out, name);
+            }
             Response::Tree(versions) => {
                 out.push(STATUS_TREE);
                 put_u32(&mut out, versions.len());
@@ -124,6 +156,9 @@ impl Response {
         let mut r = Reader::new(bytes);
         let response = match r.u8()? {
             STATUS_NOT_FOUND => Response::NotFound,
+            STATUS_PAIRED => {
+                Response::Paired { device_id: r.hash()?, name: r.name()? }
+            }
             STATUS_TREE => {
                 let count = r.count()?;
                 let mut versions = Vec::with_capacity(count.min(4096));
@@ -205,6 +240,14 @@ fn decode_version(r: &mut Reader<'_>) -> Result<FileVersion> {
     })
 }
 
+/// A device name, length-prefixed and bounded.
+fn put_name(out: &mut Vec<u8>, name: &str) {
+    let bytes = name.as_bytes();
+    let capped = &bytes[..bytes.len().min(MAX_NAME)];
+    put_u32(out, capped.len());
+    out.extend_from_slice(capped);
+}
+
 fn put_u32(out: &mut Vec<u8>, n: usize) {
     out.extend_from_slice(&(n as u32).to_le_bytes());
 }
@@ -254,6 +297,17 @@ impl<'a> Reader<'a> {
             return Err(Error::Protocol { detail: format!("declared length {n} exceeds the cap") });
         }
         Ok(n)
+    }
+
+    /// A length-prefixed, bounded, valid-UTF-8 name.
+    fn name(&mut self) -> Result<String> {
+        let len = self.count()?;
+        if len > MAX_NAME {
+            return Err(Error::Protocol { detail: format!("name of {len} bytes is not a name") });
+        }
+        std::str::from_utf8(self.take(len)?)
+            .map(|s| s.to_string())
+            .map_err(|_| Error::Protocol { detail: "name is not utf-8".into() })
     }
 
     fn hash(&mut self) -> Result<[u8; 32]> {
