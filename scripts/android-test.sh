@@ -4,6 +4,10 @@
 #   ./scripts/android-test.sh              # x86_64, which is what an emulator is
 #   ./scripts/android-test.sh aarch64      # a real phone
 #
+# For a real phone: enable Developer options (tap Build number seven times),
+# turn on USB debugging, plug it in, and accept the prompt on the screen.
+# `adb devices` should list it as `device` rather than `unauthorized`.
+#
 # This is the only thing that answers the question "does it work on Android?".
 # Cross-compiling proves the toolchain is right and nothing more: it says
 # nothing about bionic's libc, Android's filesystem semantics, its SELinux
@@ -49,6 +53,9 @@ export "CARGO_TARGET_${upper}_LINKER=$BIN/$CLANG$API-clang"
 # looking in the wrong place entirely.
 REMOTE=/data/local/tmp/qurb
 "$ADB" shell "rm -rf $REMOTE && mkdir -p $REMOTE"
+
+STAGING=$(mktemp -d)
+trap 'rm -rf "$STAGING"' EXIT
 
 # Every crate that runs on a device. The networking ones are included on
 # purpose: they open real sockets, do a real QUIC handshake and really punch
@@ -100,6 +107,21 @@ for binary in "${BINARIES[@]}"; do
     "$ADB" shell "chmod 755 $REMOTE/$name"
 
     printf '=== %s\n' "$name"
+
+    # Stripped before pushing. A release test binary carries debug information
+    # and is around 236 MB; stripped it is 10 MB. Over USB to a real phone that
+    # is the difference between a run and a wasted afternoon, and 35 of them
+    # unstripped would not fit in /data/local/tmp at all.
+    #
+    # Backtraces lose their symbols, which is the cost. Reproduce a failure on
+    # the host to get them back -- and if it only fails on the device, re-push
+    # that one binary unstripped with STRIP=0.
+    if [[ ${STRIP:-1} = 1 && -x $BIN/llvm-strip ]]; then
+        cp "$binary" "$STAGING/$name"
+        "$BIN/llvm-strip" "$STAGING/$name" 2>/dev/null || true
+        binary="$STAGING/$name"
+    fi
+
     # TMPDIR matters: Rust's tempfile falls back to /tmp, which does not exist
     # on Android. Without it every test that makes a temporary directory fails
     # for a reason that has nothing to do with the code under test.
@@ -117,6 +139,12 @@ for binary in "${BINARIES[@]}"; do
     if ! printf '%s' "$output" | grep -q "^test result: ok"; then
         failed+=("$name")
     fi
+
+    # Removed as we go. A phone's /data/local/tmp is not a build directory, and
+    # leaving 35 binaries there to be cleaned up at the end means needing room
+    # for all of them at once.
+    "$ADB" shell "rm -f $REMOTE/$name"
+    rm -f "$STAGING/$name"
     echo
 done
 

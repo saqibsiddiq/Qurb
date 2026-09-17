@@ -249,6 +249,7 @@ qurb/
 ├── docs/
 │   ├── CODEBASE.md        ← you are here
 │   ├── glossary.md        Every term, defined plainly
+│   ├── trying-it.md       Running it yourself, from one machine to a phone
 │   ├── architecture.md    The target design, all subsystems
 │   ├── roadmap.md         Phases, timelines, honest risk assessment
 │   ├── decisions/         Why each choice was made (one file per decision)
@@ -658,6 +659,9 @@ between a file, the operating system's keystore, and a passphrase — see
 ---
 
 ## 6. Running things
+
+A step-by-step guide for trying it on real hardware, including an Android phone,
+is in [trying-it.md](trying-it.md). What follows is the reference.
 
 ```bash
 cargo build --release

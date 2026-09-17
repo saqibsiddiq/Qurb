@@ -29,6 +29,7 @@ Then, depending on what you want:
 | the full target design | [docs/architecture.md](docs/architecture.md) |
 | why a particular choice was made | [docs/decisions/](docs/decisions/) |
 | what each phase produced and measured | [docs/phases/](docs/phases/) |
+| how to try it on your own hardware | [docs/trying-it.md](docs/trying-it.md) |
 
 ## Layout
 
