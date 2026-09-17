@@ -134,7 +134,19 @@ impl Connector {
             None => None,
         };
 
-        let endpoints = Endpoints { public, local: vec![local] };
+        // Through `dialable`, because binding `0.0.0.0` -- which is what a
+        // device behind a router should do -- makes `local_addr` report
+        // `0.0.0.0:port`. That is a true statement about the socket and a
+        // useless thing to hand a peer: it means "every interface here", and
+        // there is no "here" on the other machine.
+        //
+        // The same mistake was found and fixed in pairing invites. It survived
+        // this long because every test bound `127.0.0.1` explicitly, and in
+        // ordinary use STUN supplies a public address that works instead. What
+        // it breaks is the case with no STUN: two devices on a network with no
+        // route to the internet, which is exactly when a local address is the
+        // only one there is.
+        let endpoints = Endpoints { public, local: vec![nat::dialable(local)] };
         let signal_url = signal_url.into();
         let signal_url: String = signal_url;
 
@@ -426,4 +438,30 @@ async fn futures_select<T>(
         std::task::Poll::Pending
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Binding every interface must not announce "every interface".
+    ///
+    /// `0.0.0.0` is what `local_addr` reports for a socket bound to all of
+    /// them, and it is meaningless to a peer: it names every interface on *this*
+    /// machine, and the peer has no way to turn that into somewhere to dial.
+    ///
+    /// Ordinarily STUN supplies a public address and the useless local one does
+    /// no harm. This matters when there is no STUN — two devices on a network
+    /// with no route to the internet — which is exactly when the local address
+    /// is the only one there is.
+    #[test]
+    fn an_unspecified_bind_is_announced_as_something_dialable() {
+        let socket = std::net::UdpSocket::bind("0.0.0.0:0").expect("bind");
+        let local = socket.local_addr().expect("local_addr");
+        assert!(local.ip().is_unspecified(), "the test needs an unspecified bind");
+
+        let announced = nat::dialable(local);
+        assert!(!announced.ip().is_unspecified(), "0.0.0.0 was announced to peers");
+        assert_eq!(announced.port(), local.port(), "the port must survive");
+    }
 }

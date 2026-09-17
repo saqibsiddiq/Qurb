@@ -15,6 +15,8 @@ qurb-storage = { path = "../storage" }
 qurb-watcher = { path = "../watcher" }
 qurb-keys = { path = "../keys" }
 qurb-sync = { path = "../sync" }
+qurb-peer = { path = "../peer" }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "macros", "sync"] }
 uniffi = { version = "0.32", features = ["cli"] }
 thiserror = "2"
 tracing = "0.1"
@@ -24,6 +26,8 @@ uniffi = { version = "0.32", features = ["build"] }
 
 [dev-dependencies]
 tempfile = "3"
+qurb-signal = { path = "../signal" }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 
 [[bin]]
 name = "uniffi-bindgen"

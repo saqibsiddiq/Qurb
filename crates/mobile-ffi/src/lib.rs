@@ -29,7 +29,7 @@ use qurb_keys::{MasterKey, Purpose, RecoveryPhrase, Vault};
 use qurb_storage::{ChunkKey, Store};
 use qurb_watcher::IgnoreRules;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 uniffi::setup_scaffolding!();
 
@@ -60,6 +60,16 @@ pub enum QurbError {
     /// The disk said no: out of space, permission denied, a bad path.
     #[error("storage failed: {detail}")]
     Storage { detail: String },
+
+    /// A pairing code that was not a pairing code, or had expired.
+    #[error("bad pairing code: {detail}")]
+    BadCode { detail: String },
+
+    /// The network refused, or nothing answered. Usually worth retrying later
+    /// rather than showing as a failure: a phone syncs against devices that
+    /// are asleep most of the time.
+    #[error("network: {detail}")]
+    Network { detail: String },
 
     /// Anything else, including bugs.
     #[error("{detail}")]
@@ -145,6 +155,52 @@ pub struct Usage {
     pub on_disk: u64,
 }
 
+/// Where the services are, and what this device calls itself.
+///
+/// Every field has a working default, so an app that does not care can pass
+/// [`Settings::default`] — which is what [`Qurb::open`] does.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Settings {
+    /// Shown to other devices when pairing. Display only: nothing is ever
+    /// decided from it, because the peer chooses it.
+    #[uniffi(default = "phone")]
+    pub device_name: String,
+    /// The rendezvous service that introduces two devices.
+    #[uniffi(default = "ws://localhost:9000")]
+    pub signal_url: String,
+    /// A relay to fall back to when no direct path exists. `None` means direct
+    /// connections only, which on a cellular network often means none at all.
+    #[uniffi(default = None)]
+    pub relay: Option<String>,
+    /// The port to listen on. Zero means any, which is right on a phone: it is
+    /// always behind a router that forwards nothing, so a fixed port buys
+    /// nothing and collides with whatever else wanted it.
+    #[uniffi(default = 0)]
+    pub port: u16,
+    /// Whether to ask a public STUN server what this device's address looks
+    /// like from outside.
+    ///
+    /// On by default, and necessary: a phone is behind carrier-grade NAT and
+    /// has no idea what address a peer should dial. Turning it off restricts
+    /// the device to peers on the same network, and is worth doing only when
+    /// contacting a third party is itself the objection — it reveals this
+    /// device's public IP to that server, as any VPN or video call does.
+    #[uniffi(default = true)]
+    pub discover: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            device_name: "phone".to_string(),
+            signal_url: "ws://localhost:9000".to_string(),
+            relay: None,
+            port: 0,
+            discover: true,
+        }
+    }
+}
+
 /// A newly created identity, shown to the user once.
 #[derive(Debug, uniffi::Record)]
 pub struct Setup {
@@ -161,6 +217,24 @@ pub struct Setup {
 pub struct Qurb {
     inner: Mutex<Engine>,
     root: PathBuf,
+    store_dir: PathBuf,
+    master: MasterKey,
+    /// What this device calls itself when pairing. Display only.
+    device_name: String,
+    /// Where the rendezvous service is.
+    signal_url: String,
+    /// The relay to fall back to, if one is configured.
+    relay: Option<String>,
+    /// The port to listen on. Zero means any, which is right behind a router
+    /// that forwards nothing — and a phone is always behind one of those.
+    port: u16,
+    /// Whether to ask a public STUN server for this device's public address.
+    discover: bool,
+    /// Built on first use and kept.
+    ///
+    /// Lazy because a phone that only browses its files should not pay for a
+    /// thread pool, and kept because building one per call would be worse.
+    runtime: Mutex<Option<Arc<tokio::runtime::Runtime>>>,
 }
 
 /// Set up a new device, generating a key and its recovery phrase.
@@ -235,22 +309,45 @@ impl Qurb {
     /// between the file and anyone else — see the crate README.
     #[uniffi::constructor]
     pub fn open(root: String, passphrase: Option<String>) -> Result<Self, QurbError> {
-        let root = PathBuf::from(root);
-        let store_dir = store_dir(&root);
+        Self::open_with(root, passphrase, Settings::default())
+    }
+
+    /// Open, choosing where the services are and what this device is called.
+    ///
+    /// Separate from [`open`](Self::open) because most callers want the
+    /// defaults and an app that lets the user point at their own rendezvous
+    /// service needs this one.
+    #[uniffi::constructor]
+    pub fn open_with(
+        root: String,
+        passphrase: Option<String>,
+        settings: Settings,
+    ) -> Result<Self, QurbError> {
+        let store_dir = store_dir(Path::new(&root));
         let vault = Vault::at(&store_dir);
 
         if !vault.exists() {
-            return Err(QurbError::NotSetUp {
-                detail: format!("{} has no vault", root.display()),
-            });
+            return Err(QurbError::NotSetUp { detail: format!("{root} has no vault") });
         }
 
         let master: MasterKey = vault.unlock(passphrase.as_deref())?;
         let chunk_key = ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
+        let root = PathBuf::from(&root);
         let store = Store::open(&store_dir, chunk_key)?;
         let ignore = IgnoreRules::new().with_store_dir(&store_dir);
 
-        Ok(Self { inner: Mutex::new(Engine::new(&root, store, ignore)), root: root.clone() })
+        Ok(Self {
+            inner: Mutex::new(Engine::new(&root, store, ignore)),
+            root,
+            store_dir,
+            master,
+            device_name: settings.device_name,
+            signal_url: settings.signal_url,
+            relay: settings.relay,
+            port: settings.port,
+            discover: settings.discover,
+            runtime: Mutex::new(None),
+        })
     }
 
     /// The directory being synced.
@@ -377,6 +474,226 @@ impl Qurb {
 /// Not exported. `#[uniffi::export]` takes every method in the block it is
 /// applied to, and a `MutexGuard` cannot cross an FFI boundary — nor should it.
 impl Qurb {
+    /// This device's network identity, loaded or created on first use.
+    fn identity(&self) -> Result<qurb_peer::Identity, QurbError> {
+        qurb_peer::Identity::load_or_create(&self.store_dir)
+            .map_err(|e| QurbError::Storage { detail: e.to_string() })
+    }
+
+    /// A second handle on the store, for the parts of `qurb-peer` that serve
+    /// requests from their own task.
+    ///
+    /// A separate connection rather than a share of the engine's: SQLite in WAL
+    /// mode allows concurrent readers, and handing out the engine's own handle
+    /// would mean a peer's read could block a local write behind one lock.
+    fn shared_store(&self) -> Result<Arc<std::sync::Mutex<Store>>, QurbError> {
+        let key = self.engine()?.store().chunk_key();
+        let store = Store::open(&self.store_dir, key)?;
+        Ok(Arc::new(std::sync::Mutex::new(store)))
+    }
+
+    /// The tokio runtime, built on first use.
+    fn runtime(&self) -> Result<Arc<tokio::runtime::Runtime>, QurbError> {
+        let mut slot = self
+            .runtime
+            .lock()
+            .map_err(|_| QurbError::Other { detail: "the runtime is unusable".into() })?;
+
+        if let Some(runtime) = slot.as_ref() {
+            return Ok(Arc::clone(runtime));
+        }
+
+        // Two threads. Enough to overlap a transfer with the connection work
+        // behind it, and few enough that a backgrounded app is not holding a
+        // pool the platform would rather have back.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .thread_name("qurb")
+            .build()
+            .map_err(|e| QurbError::Other { detail: format!("no runtime: {e}") })?;
+
+        let runtime = Arc::new(runtime);
+        *slot = Some(Arc::clone(&runtime));
+        Ok(runtime)
+    }
+
+    /// One sync pass against every trusted peer, bounded by `budget`.
+    fn sync_inner(&self, budget: std::time::Duration) -> Result<SyncOutcome, QurbError> {
+        let started = std::time::Instant::now();
+        let mut outcome = SyncOutcome {
+            reached: 0,
+            unreachable: 0,
+            adopted: 0,
+            conflicts: 0,
+            timed_out: false,
+        };
+
+        let peers: Vec<qurb_peer::Fingerprint> = {
+            let engine = self.engine()?;
+            qurb_peer::trusted_fingerprints(engine.store())
+                .map_err(|e| QurbError::Storage { detail: e.to_string() })?
+        };
+        if peers.is_empty() {
+            return Ok(outcome);
+        }
+
+        let identity = self.identity()?;
+        let runtime = self.runtime()?;
+        let relay = match &self.relay {
+            Some(text) => Some(
+                text.parse::<std::net::SocketAddr>()
+                    .map_err(|e| QurbError::Other { detail: format!("bad relay address: {e}") })?,
+            ),
+            None => None,
+        };
+
+        // Built per pass rather than kept. A phone's address changes with every
+        // move between Wi-Fi and cellular, and a connector holding a stale
+        // public address announces somewhere nothing can reach.
+        let connector = runtime
+            .block_on(qurb_peer::Connector::start(
+                format!("0.0.0.0:{}", self.port).parse().expect("a literal address"),
+                identity,
+                self.master.clone(),
+                &peers,
+                self.signal_url.clone(),
+                self.discover,
+                relay,
+            ))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+
+        // Answer as well as ask, for the length of this pass.
+        //
+        // A sync is two devices each dialling the other -- a QUIC handshake's
+        // opening packets *are* the hole punch, so a device that only listens
+        // has punched nothing and a device that only dials has nobody to reach.
+        // Without this the two sides call each other simultaneously and both
+        // hear silence.
+        //
+        // Unlike the desktop daemon, which serves continuously, this stops when
+        // the pass does. That is what a phone wants: a background window is not
+        // a licence to keep a socket open afterwards, and the platform will
+        // suspend the process the moment the window closes regardless.
+        let served = self.shared_store()?;
+        let generation = qurb_peer::Generation::new();
+        let mut accepting = Vec::new();
+        for endpoint in [Some(connector.endpoint().clone()), connector.relay_endpoint().cloned()]
+            .into_iter()
+            .flatten()
+        {
+            let store = Arc::clone(&served);
+            let generation = Arc::clone(&generation);
+            accepting.push(runtime.spawn(async move {
+                while let Some(incoming) = endpoint.accept().await {
+                    let store = Arc::clone(&store);
+                    let generation = Arc::clone(&generation);
+                    tokio::spawn(async move {
+                        if let Ok(connection) = incoming.await {
+                            qurb_peer::server::serve_connection(connection, store, generation)
+                                .await;
+                        }
+                    });
+                }
+            }));
+        }
+
+        for peer in peers {
+            let left = match budget.checked_sub(started.elapsed()) {
+                Some(left) if !left.is_zero() => left,
+                _ => {
+                    outcome.timed_out = true;
+                    break;
+                }
+            };
+
+            match self.sync_one(&runtime, &connector, peer, left) {
+                Ok(Some(stats)) => {
+                    outcome.reached += 1;
+                    outcome.adopted += stats.adopted as u32;
+                    outcome.conflicts += stats.conflicts as u32;
+                }
+                // Ran out of time mid-peer. Whatever landed is already
+                // committed; the rest is the next window's problem.
+                Ok(None) => {
+                    outcome.timed_out = true;
+                    break;
+                }
+                Err(e) => {
+                    tracing::debug!(error = %e, "peer unreachable");
+                    outcome.unreachable += 1;
+                }
+            }
+        }
+
+        for task in accepting {
+            task.abort();
+        }
+        Ok(outcome)
+    }
+
+    /// Sync against one peer. `Ok(None)` means the time ran out.
+    fn sync_one(
+        &self,
+        runtime: &tokio::runtime::Runtime,
+        connector: &qurb_peer::Connector,
+        peer: qurb_peer::Fingerprint,
+        budget: std::time::Duration,
+    ) -> Result<Option<qurb_engine::PlanStats>, QurbError> {
+        // The timeout is constructed *inside* the async block. `timeout` needs a
+        // reactor when it is built, not when it is awaited, so building it
+        // outside `block_on` panics with a message about being called from
+        // outside a runtime -- which is true and reads like it is about the
+        // future it wraps.
+        let client = match runtime
+            .block_on(async { tokio::time::timeout(budget, connector.reach(peer)).await })
+        {
+            Ok(Ok(client)) => client,
+            Ok(Err(e)) => return Err(QurbError::Network { detail: e.to_string() }),
+            Err(_) => return Ok(None),
+        };
+
+        let started = std::time::Instant::now();
+        let tree = match runtime
+            .block_on(async { tokio::time::timeout(budget, client.tree()).await })
+        {
+            Ok(Ok(tree)) => tree,
+            Ok(Err(e)) => return Err(QurbError::Network { detail: e.to_string() }),
+            Err(_) => return Ok(None),
+        };
+
+        let mut engine = self.engine()?;
+        let plan = engine.plan_against(&tree)?;
+        if plan.is_empty() {
+            return Ok(Some(qurb_engine::PlanStats::default()));
+        }
+
+        if budget.checked_sub(started.elapsed()).is_none() {
+            return Ok(None);
+        }
+
+        // The transfer itself is not interrupted once started. A partly applied
+        // plan is a valid state -- every file is committed as it lands -- but
+        // abandoning one mid-file would leave a staging file behind, and the
+        // platform's patience is measured in seconds while a chunk is measured
+        // in milliseconds.
+        //
+        // Inside `block_on` and then `block_in_place`: `NetworkSource` captures
+        // the current runtime handle when it is built, and blocks on network
+        // I/O for each chunk. `block_in_place` is what lets it do that without
+        // stalling the whole scheduler, and it is only available on a worker
+        // thread of a multi-threaded runtime -- which is why `runtime()` builds
+        // one of those rather than a current-thread runtime.
+        let reader = Store::open(&self.store_dir, engine.store().chunk_key())?;
+        let stats = runtime.block_on(async {
+            tokio::task::block_in_place(|| {
+                let mut source = qurb_peer::NetworkSource::new(&client, &reader);
+                engine.apply_plan(&plan, &mut source)
+            })
+        })?;
+        Ok(Some(stats))
+    }
+
     fn engine(&self) -> Result<std::sync::MutexGuard<'_, Engine>, QurbError> {
         // A poisoned lock means an earlier call panicked while holding it. The
         // engine's state is then unknown, so this reports rather than recovers.
@@ -401,9 +718,255 @@ fn store_dir(root: &Path) -> PathBuf {
 /// `..`, or a differently-spelled but equivalent path is still recognised.
 /// A path that does not exist cannot be the same file as one that does, so a
 /// failure to canonicalise answers `false`.
+/// Lowercase hex. The form a fingerprint takes when it crosses the boundary,
+/// because a 32-byte array is awkward in both target languages and a string is
+/// what an app puts in a list or a log.
+fn hex(bytes: &[u8; 32]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Unix seconds.
+fn now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 fn same_file(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
         _ => false,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Networking
+// ---------------------------------------------------------------------------
+//
+// Everything below is what turns the phone from a local encrypted file store
+// into a device that syncs. Three things about a phone shape it, and none of
+// them apply to the desktop daemon:
+//
+// **The network changes under you.** Wi-Fi to cellular, cellular to nothing, a
+// new address on every transition. The desktop daemon holds one long-lived
+// connector because a laptop's address is stable for hours. Here a connector is
+// built per sync pass, so each pass discovers the address the device has *now*
+// rather than the one it had when the app launched.
+//
+// **Time is rationed.** iOS `BGTaskScheduler` grants short, unpredictable
+// windows and kills a process that outstays one; Android's `WorkManager` is
+// more generous and still finite. So the entry point that matters is not "sync"
+// but "sync for at most this many seconds, and stop cleanly" — which is what
+// `sync_within` is.
+//
+// **Calls block.** Same contract as the rest of this crate: the platform runs
+// them off the main thread.
+
+/// One trusted device.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct PeerInfo {
+    /// Hex fingerprint. The identity; everything else here is decoration.
+    pub fingerprint: String,
+    /// Short form, for showing to a person.
+    pub short: String,
+    /// What the peer calls itself. Chosen by the peer, so display-only — never
+    /// used to decide anything.
+    pub name: String,
+    /// Unix seconds.
+    pub paired_at: i64,
+    pub last_seen: Option<i64>,
+}
+
+/// What a sync pass did.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SyncOutcome {
+    /// Peers that answered.
+    pub reached: u32,
+    /// Peers that did not. Not an error: a phone syncs against devices that are
+    /// asleep most of the time, and that is the normal case rather than a fault.
+    pub unreachable: u32,
+    /// Files taken from a peer.
+    pub adopted: u32,
+    /// Conflicts, each of which left both versions on disk.
+    pub conflicts: u32,
+    /// Whether the pass ran out of time before finishing.
+    ///
+    /// Not a failure. It means the next window has work to do, and the platform
+    /// side should schedule one rather than report a problem.
+    pub timed_out: bool,
+}
+
+/// An invitation this device is offering, while it waits to be joined.
+#[derive(uniffi::Object)]
+pub struct Pairing {
+    code: String,
+    human: String,
+    expires_at: i64,
+    inner: Mutex<Option<qurb_peer::PairingHost>>,
+    store: Arc<std::sync::Mutex<Store>>,
+    name: String,
+    runtime: Arc<tokio::runtime::Runtime>,
+}
+
+#[uniffi::export]
+impl Pairing {
+    /// The code to put in a QR code.
+    pub fn code(&self) -> String {
+        self.code.clone()
+    }
+
+    /// The same code, grouped for reading aloud.
+    ///
+    /// Not a nicety. The code carries this device's full identity and must
+    /// travel outside the network, so a channel that is nothing but a person's
+    /// voice has to work.
+    pub fn spoken(&self) -> String {
+        self.human.clone()
+    }
+
+    /// Unix seconds after which the code stops working.
+    pub fn expires_at(&self) -> i64 {
+        self.expires_at
+    }
+
+    /// Block until another device joins, or the invitation expires.
+    ///
+    /// Consumes the invitation: it works once, by design. A code that could be
+    /// replayed would let anyone who saw it once join later.
+    pub fn wait(&self) -> Result<PeerInfo, QurbError> {
+        let host = self
+            .inner
+            .lock()
+            .map_err(|_| QurbError::Other { detail: "pairing already failed".into() })?
+            .take()
+            .ok_or_else(|| QurbError::Other {
+                detail: "this invitation has already been used".into(),
+            })?;
+
+        let paired = self
+            .runtime
+            .block_on(host.wait(Arc::clone(&self.store), &self.name, now()))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+
+        Ok(PeerInfo {
+            fingerprint: hex(paired.fingerprint.as_bytes()),
+            short: paired.fingerprint.short(),
+            name: paired.name,
+            paired_at: now(),
+            last_seen: None,
+        })
+    }
+
+    /// Give up waiting, and stop listening.
+    pub fn cancel(&self) {
+        if let Ok(mut guard) = self.inner.lock() {
+            if let Some(host) = guard.take() {
+                host.close();
+            }
+        }
+    }
+}
+
+#[uniffi::export]
+impl Qurb {
+    /// Devices this one trusts.
+    pub fn peers(&self) -> Result<Vec<PeerInfo>, QurbError> {
+        let engine = self.engine()?;
+        Ok(engine
+            .store()
+            .db()
+            .trusted_peers()?
+            .into_iter()
+            .map(|p| {
+                let fingerprint = qurb_peer::Fingerprint::from_bytes(p.fingerprint);
+                PeerInfo {
+                    fingerprint: hex(fingerprint.as_bytes()),
+                    short: fingerprint.short(),
+                    name: p.name,
+                    paired_at: p.paired_at,
+                    last_seen: p.last_seen,
+                }
+            })
+            .collect())
+    }
+
+    /// Offer an invitation, for another device to scan or be read.
+    ///
+    /// The returned code carries this device's *full* fingerprint and must
+    /// travel out of band — a QR code on the screen, or a code spoken aloud.
+    /// Sending it over the network being paired would defeat the point: someone
+    /// who can change what you see has already won.
+    pub fn offer_pairing(&self) -> Result<Arc<Pairing>, QurbError> {
+        let identity = self.identity()?;
+        let port = self.port;
+        let runtime = self.runtime()?;
+
+        // Inside the runtime even though `open` is not async: it binds a QUIC
+        // endpoint, and quinn registers the socket with whatever reactor is
+        // current. Without this it fails with "no async runtime found" — which
+        // names the cause but not the fix, since nothing in the call is awaited.
+        let host = {
+            let _guard = runtime.enter();
+            qurb_peer::PairingHost::open(
+                format!("0.0.0.0:{port}").parse().expect("a literal address"),
+                &identity,
+                now(),
+            )
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?
+        };
+
+        let invite = host.invite();
+        Ok(Arc::new(Pairing {
+            code: invite.encode(),
+            human: invite.for_humans(),
+            expires_at: invite.expires_at,
+            store: self.shared_store()?,
+            name: self.device_name.clone(),
+            runtime,
+            inner: Mutex::new(Some(host)),
+        }))
+    }
+
+    /// Accept an invitation offered by another device.
+    ///
+    /// The usual direction for a phone: the desktop shows a QR code and the
+    /// phone's camera reads it.
+    pub fn join_pairing(&self, code: String) -> Result<PeerInfo, QurbError> {
+        let invite = qurb_peer::Invite::parse(&code)
+            .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
+
+        let identity = self.identity()?;
+        let store = self.shared_store()?;
+        let runtime = self.runtime()?;
+
+        let paired = runtime
+            .block_on(qurb_peer::accept(&invite, &identity, store, &self.device_name, now()))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+
+        Ok(PeerInfo {
+            fingerprint: hex(paired.fingerprint.as_bytes()),
+            short: paired.fingerprint.short(),
+            name: paired.name,
+            paired_at: now(),
+            last_seen: None,
+        })
+    }
+
+    /// Sync with every trusted device, giving up after `seconds`.
+    ///
+    /// The deadline is the point. Both platforms hand a background task a
+    /// window and kill it for outstaying one, so a sync that runs until it is
+    /// finished is a sync that eventually gets the app's background privileges
+    /// revoked. Running out of time is reported in
+    /// [`SyncOutcome::timed_out`] and is not an error — work already applied
+    /// stays applied, because each file is committed as it lands rather than at
+    /// the end.
+    ///
+    /// Pass a generous value when the app is in the foreground and the user is
+    /// watching; pass what the platform granted when it is not.
+    pub fn sync_within(&self, seconds: u32) -> Result<SyncOutcome, QurbError> {
+        let deadline = std::time::Duration::from_secs(seconds.max(1) as u64);
+        self.sync_inner(deadline)
     }
 }

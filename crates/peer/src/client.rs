@@ -146,11 +146,17 @@ impl PeerClient {
     /// The whole-file check can only happen after the last byte is written, so
     /// write somewhere temporary and move it once this returns. Content that
     /// failed verification has still been written by then.
+    ///
+    /// `out` is deliberately not `Send`, so the future this returns is not
+    /// `Send` either and cannot be spawned. That is the point: the only caller
+    /// writes through a `&mut dyn Write` borrowed from the blocked thread, and
+    /// a `Send` bound here would have to be paid for with an `unsafe impl` on
+    /// the far side that is sound only while nobody spawns it.
     pub async fn fetch_content_into(
         &self,
         local: &Store,
         content: [u8; 32],
-        out: &mut (impl std::io::Write + Send),
+        out: &mut impl std::io::Write,
     ) -> Result<u64> {
         let hash = blake3::Hash::from(content);
         let Some(chunks) = self.manifest(content).await? else {

@@ -1869,12 +1869,16 @@ version = "0.1.0"
 dependencies = [
  "qurb-engine",
  "qurb-keys",
+ "qurb-peer",
+ "qurb-signal",
  "qurb-storage",
  "qurb-sync",
  "qurb-watcher",
  "tempfile",
  "thiserror",
+ "tokio",
  "tracing",
+ "tracing-subscriber",
  "uniffi",
 ]
 
