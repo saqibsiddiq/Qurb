@@ -167,18 +167,27 @@ fn run_with_tray(root: PathBuf, mut watcher: Watcher, tray: TrayIcon) -> Result<
 /// every update, because a background program that scrolls a terminal is a
 /// background program someone kills.
 fn run_headless(mut watcher: Watcher) -> Result<()> {
-    let mut last = None;
+    let mut last = String::new();
     loop {
         let status = watcher.borrow_and_update().clone();
-        if last.as_ref() != Some(&status.state) {
-            println!(
-                "qurb: {} — {} file{}, {}",
-                status.state.summary(),
-                status.files,
-                if status.files == 1 { "" } else { "s" },
-                devices(&status),
-            );
-            last = Some(status.state);
+
+        // Compared as the rendered line rather than by state.
+        //
+        // Printing only on a state change meant a file count that grew while
+        // the state stayed "up to date" was never shown -- the display sat on
+        // "5 files" with six in the index, which is precisely the kind of quiet
+        // wrongness an interface exists to prevent. Comparing the text shows
+        // every change worth showing and cannot repeat itself.
+        let line = format!(
+            "qurb: {} — {} file{}, {}",
+            status.state.summary(),
+            status.files,
+            if status.files == 1 { "" } else { "s" },
+            devices(&status),
+        );
+        if line != last {
+            println!("{line}");
+            last = line;
         }
 
         // Polled rather than awaited: `Receiver::changed` is async and this
