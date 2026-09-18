@@ -325,10 +325,18 @@ qurb/
 │   │   ├── src/socket.rs     a relay connection pretending to be a UDP socket
 │   │   └── src/server.rs     forwards between registered identifiers
 │   │
-│   └── qurb/              The program a person runs.
-│       ├── src/main.rs       init, pair, join, run, status, verify, config
-│       ├── src/daemon.rs     watch, apply, sync, retry
-│       └── src/config.rs     a flat file meant to be edited by hand
+│   ├── qurb/              The program a person runs.
+│   │   ├── src/lib.rs       the daemon, as a library, so an interface can
+│   │   │                    run the same one the terminal does
+│   │   ├── src/main.rs      init, pair, join, run, status, verify, config
+│   │   ├── src/daemon.rs    watch, apply, sync, retry
+│   │   ├── src/status.rs    what the daemon is doing, for a display
+│   │   └── src/config.rs    a flat file meant to be edited by hand
+│   │
+│   └── tray/              qurb in the corner of the screen.
+│       ├── src/host.rs      whether a tray icon would be visible at all
+│       ├── src/icon.rs      the icon, drawn rather than shipped
+│       └── src/ui.rs        the menu, and what to do when there is no tray
 │
 ├── android/               The Android app. Kotlin over the FFI, no sync logic.
 │   └── app/src/main/java/com/qurb/
@@ -449,7 +457,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-439 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
+446 tests pass across eleven crates on Linux, 426 of them on a Galaxy S23;
 clippy is clean.
 
 **Two devices now sync over a real network connection**, converging through
@@ -748,6 +756,11 @@ cargo test --workspace
 ```bash
 # Build the app, and put it on a connected phone
 ./scripts/android-app.sh install
+```
+
+```bash
+# The daemon with an icon in the corner of the screen
+cargo run --release -p qurb-tray -- ~/qurb
 ```
 
 The Android build needs the NDK, because SQLite is C. The script looks for one

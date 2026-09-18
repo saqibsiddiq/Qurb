@@ -20,9 +20,62 @@ warns is not the fun part and is a full quarter.
 | installers | ⬜ not started |
 | signed updates with rollback | ⬜ not started |
 | observability | ◐ structured logs, nothing more |
-| the interface | ⬜ not started |
+| the interface | ◐ a tray icon; unseen on this desktop |
 
-433 tests pass across ten crates; clippy is clean.
+446 tests pass across eleven crates; clippy is clean.
+
+## The interface
+
+A system tray icon — [`crates/tray`](../../crates/tray/) — that runs the daemon
+rather than talking to one. A socket between them would buy attaching to an
+already-running daemon and cost a second surface to design, version and secure;
+two daemons on one store collide on the SQLite lock regardless, so the choice is
+really which single process runs. `qurb run` stays for machines with no screen.
+
+This needed the daemon to say what it is doing. It had only ever had its log,
+which is right for a terminal and useless to an interface: a person wants "up to
+date, three devices, last synced two minutes ago", not a stream of events to
+reconstruct it from. The daemon now publishes a `Status` on a `watch` channel —
+watch rather than broadcast, because a display only wants the current value and
+an icon catching up through stale summaries would be showing the past.
+
+**It will not say "up to date" when no device has been reached.** A contented
+icon beside a store that has not spoken to another device in a week is the kind
+of lie that makes people stop trusting a sync tool, so `State::Alone` exists and
+reads "no devices reachable". It also separates *no paired devices* from *paired
+but unreachable*: one is a setup step, the other a network problem.
+
+### GNOME has no tray, and says nothing about it
+
+The nastiest part. GNOME removed the system tray and ships no StatusNotifier
+host, so an icon there is invisible — and creating one still **succeeds**.
+Nothing returns an error. A program trusting that return value is running,
+unseen and unquittable.
+
+So the session bus is asked whether anything has registered
+`org.kde.StatusNotifierWatcher` before anything is built. With no watcher the
+program says so, explains how to get a tray back, and keeps syncing with status
+on stderr.
+
+The check has to come before GTK is touched for a second reason, found by
+running it: `tray-icon` is GTK-backed on Linux and *panics* if a menu is
+constructed before `gtk::init`. An error path alone would never have run.
+
+### Two bugs the fallback exposed at once
+
+Having a display made two invisible problems visible immediately.
+
+It reported **"0 files" with two in the store**, because counting happened after
+the networking that had just failed. What a device holds is knowable without
+reaching anything, and an interface showing zero because a service is down is
+worse than showing nothing.
+
+And when the daemon died, the status still said **"syncing"** — the failure
+returned without reporting it, so the display kept showing the last thing that
+had been true. It now records why it is stopping before it stops.
+
+Neither was a new bug. Both had been there all along, invisible because nothing
+was looking.
 
 ## Protecting the key at rest
 

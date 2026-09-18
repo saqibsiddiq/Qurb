@@ -146,7 +146,7 @@ directory behind it.
 Built and tested in [`crates/keys`](crates/keys/): a 256-bit master key, HKDF
 derivation of one key per purpose, and a 24-word BIP-39 recovery phrase — tested
 end to end, so the words on a piece of paper genuinely turn back into the user's
-files. 439 tests across ten crates, clippy clean.
+files. 446 tests across eleven crates, clippy clean.
 
 A directory syncs into a local store — on 2437 real files (979 MiB), 12.96s for
 the first pass and 0.03s for the second. **Two devices now sync over a real
@@ -216,7 +216,12 @@ router — chief among them that the rendezvous service knew the moment a device
 appeared and told nobody, which made sync one-directional in practice while
 looking symmetrical in design.
 
-Not built: a desktop interface, installers, signed updates, and iOS — which
+There is a tray interface — [`crates/tray`](crates/tray/) — that runs the same
+daemon and shows whether things are in step. It refuses to claim "up to date"
+when no device has been reached. On GNOME, which has no system tray, it says so
+and keeps syncing rather than becoming an invisible background process.
+
+Not built: installers, signed updates, and iOS — which
 needs a Mac. Everything verified on hardware was one phone and one laptop on one
 network, and nobody has yet watched a phone sync for a day, so what Android
 grants the background worker in practice, and what it costs in battery, is
