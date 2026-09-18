@@ -21,6 +21,17 @@ The `+` button copies a file from elsewhere on the phone into the synced
 directory. Sync runs one pass with a 25-second deadline and reports what
 happened.
 
+**Tapping a file offers to open it, or save a copy to the phone.** That second
+one matters more than it sounds: the synced directory is this app's private
+storage, so a file that arrives from another device and stays there is invisible
+to everything else on the phone. Without a way out, a sync product syncs into a
+hole. Both actions go through the app's own `DocumentsProvider`, so there is one
+path out of the store rather than two implementations of reading it.
+
+Saving streams through a cache file rather than a byte array, because `export`
+writes a chunk at a time precisely so a large file never has to fit in the heap
+— reading it back into memory at the last step would throw that away.
+
 ## Three pieces, kept apart on purpose
 
 **The engine is Rust.** Everything here is a thin layer over
@@ -140,5 +151,6 @@ failure mode a sync app actually dies of. Menu → **Background sync** shows it.
   This screen is the only way to see them.
 - **No QR scanning.** Pairing codes are typed. A scanner needs a camera
   dependency and a permission; the code is designed to be read aloud anyway.
-- **Nothing opens a file.** You can add and sync files, not view them.
+- **No bulk save.** One file at a time; there is no "save everything".
+
 - **Not signed.** `assembleRelease` produces an unsigned APK.

@@ -46,6 +46,19 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let { addFile(it) } }
 
+    /** The file waiting for a destination, while the save dialog is open. */
+    private var pendingSave: FileEntry? = null
+
+    private val saver = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("*/*")
+    ) { destination ->
+        val entry = pendingSave
+        pendingSave = null
+        if (destination != null && entry != null) {
+            writeCopy(entry, destination)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -280,6 +293,62 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * What to do with a file the user tapped.
+     *
+     * Until this existed the list was inert: files synced to the phone and
+     * there was no way to open one or get it anywhere else, which makes a sync
+     * product that syncs into a hole. Both actions go through the app's own
+     * `DocumentsProvider`, so there is one path out of the store rather than
+     * two implementations of reading it.
+     */
+    private fun chooseAction(entry: FileEntry) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(entry.path.substringAfterLast('/'))
+            .setItems(arrayOf("Open", "Save a copy to this phone")) { _, which ->
+                when (which) {
+                    0 -> openFile(entry)
+                    1 -> saveCopy(entry)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Hand the file to whatever app handles its type. */
+    private fun openFile(entry: FileEntry) {
+        val uri = documentUri(entry.path)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType(entry.path))
+            // Without this the receiving app has no permission to read the URI
+            // and fails with something that looks like a corrupt file.
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(Intent.createChooser(intent, "Open with"))
+        } catch (e: Exception) {
+            fail("Nothing can open that file", e)
+        }
+    }
+
+    /**
+     * Copy a file out to wherever the user chooses.
+     *
+     * The synced directory is this app's private storage, so a file that lives
+     * only there is invisible to everything else on the phone. This is how it
+     * gets to Downloads, or a photo to the gallery, or anywhere the user
+     * actually keeps things.
+     */
+    private fun saveCopy(entry: FileEntry) {
+        pendingSave = entry
+        try {
+            saver.launch(entry.path.substringAfterLast('/'))
+        } catch (e: Exception) {
+            pendingSave = null
+            fail("Could not open the save dialog", e)
+        }
+    }
+
+    /**
      * What the background scheduler is doing, in the user's own words.
      *
      * Worth showing because the honest answer is "roughly every fifteen minutes,
@@ -352,6 +421,47 @@ class MainActivity : AppCompatActivity() {
         return uri.lastPathSegment?.substringAfterLast('/') ?: "file"
     }
 
+    /**
+     * Stream a stored file out to a location the user picked.
+     *
+     * Exported to a cache file first and copied from there, rather than held in
+     * memory: `export` writes a chunk at a time precisely so a large file never
+     * has to fit in the heap, and reading it back into a `ByteArray` here would
+     * throw that away at the last step.
+     */
+    private fun writeCopy(entry: FileEntry, destination: Uri) {
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val staging = File(cacheDir, "save-${System.nanoTime()}")
+                    try {
+                        Engine.open(this@MainActivity).export(entry.path, staging.absolutePath)
+                        staging.inputStream().use { input ->
+                            contentResolver.openOutputStream(destination)?.use { output ->
+                                input.copyTo(output)
+                            } ?: error("could not open the destination")
+                        }
+                    } finally {
+                        staging.delete()
+                    }
+                }
+                Snackbar.make(views.root, "Saved a copy", Snackbar.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                fail("Could not save that file", e)
+            }
+        }
+    }
+
+    /** This app's own document URI for a stored path. */
+    private fun documentUri(path: String): Uri =
+        android.provider.DocumentsContract.buildDocumentUri("com.qurb.documents", "qurb/$path")
+
+    private fun mimeType(path: String): String {
+        val extension = path.substringAfterLast('.', "").lowercase()
+        return android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+            ?: "application/octet-stream"
+    }
+
     private fun fail(title: String, e: Exception) {
         MaterialAlertDialogBuilder(this)
             .setTitle(title)
@@ -372,15 +482,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
-            FileHolder(RowFileBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+            FileHolder(
+                RowFileBinding.inflate(LayoutInflater.from(parent.context), parent, false),
+                ::chooseAction,
+            )
 
         override fun onBindViewHolder(holder: FileHolder, position: Int) = holder.bind(items[position])
         override fun getItemCount() = items.size
     }
 
-    private class FileHolder(private val views: RowFileBinding) :
-        RecyclerView.ViewHolder(views.root) {
+    private class FileHolder(
+        private val views: RowFileBinding,
+        private val onTap: (FileEntry) -> Unit,
+    ) : RecyclerView.ViewHolder(views.root) {
         fun bind(entry: FileEntry) {
+            views.root.setOnClickListener { onTap(entry) }
             views.name.text = entry.path
             views.detail.text = "${size(entry.size)} · ${when (entry.modifiedAt) {
                 0L -> "unknown"
