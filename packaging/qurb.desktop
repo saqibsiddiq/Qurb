@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=qurb
+GenericName=File sync
+Comment=Private cloud storage — your files, on your own devices
+Exec=qurb-tray
+Icon=qurb
+Terminal=false
+Categories=Utility;
+Keywords=sync;files;backup;p2p;
+StartupNotify=false
+# A background utility rather than a window, so it should not appear in the
+# dock or task switcher as though it had one.
+NoDisplay=false
+X-GNOME-UsesNotifications=true

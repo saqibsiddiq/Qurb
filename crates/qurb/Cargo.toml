@@ -31,6 +31,7 @@ qurb-watcher = { path = "../watcher" }
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+qrcode = { version = "0.14.1", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

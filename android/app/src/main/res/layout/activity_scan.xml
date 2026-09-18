@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/preview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <TextView
+        android:id="@+id/hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:padding="32dp"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
+        android:shadowColor="#000000"
+        android:shadowRadius="8"
+        android:textSize="16sp"
+        android:text="Point the camera at the code shown by `qurb pair`" />
+</FrameLayout>

@@ -9,6 +9,7 @@
 
 pub mod config;
 pub mod daemon;
+pub mod qr;
 pub mod status;
 
 use anyhow::{bail, Result};

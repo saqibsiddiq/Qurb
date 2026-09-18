@@ -21,6 +21,18 @@ pub fn show(root: PathBuf, watcher: Watcher) -> Result<()> {
             eprintln!("{advice}");
         }
         eprintln!();
+
+        // A window instead. Printing to stderr is fine for someone who started
+        // this in a terminal and useless for someone who launched it from the
+        // applications menu -- which is how a program is normally started, and
+        // which would otherwise show nothing at all.
+        #[cfg(target_os = "linux")]
+        if gtk::init().is_ok() {
+            eprintln!("  Showing a window instead.");
+            eprintln!();
+            return crate::window::show(root, watcher);
+        }
+
         eprintln!("  Syncing regardless. Ctrl-C to stop.");
         eprintln!();
         return run_headless(watcher);
@@ -229,7 +241,7 @@ fn tooltip(status: &Status) -> String {
     format!("qurb — {}\n{}", status.state.summary(), devices(status))
 }
 
-fn devices(status: &Status) -> String {
+pub(crate) fn devices(status: &Status) -> String {
     match (status.peers, status.peers_reachable) {
         (0, _) => "no paired devices".to_string(),
         (n, 0) => format!("{n} device{} · none reachable", plural(n)),
@@ -250,7 +262,7 @@ fn plural(n: usize) -> &'static str {
 ///
 /// The end, because that is where the filename is — a truncated
 /// `Documents/Projects/2026/…` tells you nothing about which file arrived.
-fn shorten(path: &str) -> String {
+pub(crate) fn shorten(path: &str) -> String {
     const MAX: usize = 32;
     if path.chars().count() <= MAX {
         return path.to_string();
@@ -259,7 +271,7 @@ fn shorten(path: &str) -> String {
     format!("…{tail}")
 }
 
-fn ago(then: SystemTime) -> String {
+pub(crate) fn ago(then: SystemTime) -> String {
     let Ok(elapsed) = then.elapsed() else { return "just now".into() };
     let seconds = elapsed.as_secs();
     match seconds {
@@ -270,7 +282,7 @@ fn ago(then: SystemTime) -> String {
     }
 }
 
-fn human(bytes: u64) -> String {
+pub(crate) fn human(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut value = bytes as f64;
     let mut unit = 0;

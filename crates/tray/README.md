@@ -23,6 +23,21 @@ Watch rather than broadcast because a display only wants the *current* state: an
 icon that fell behind and had to work through a queue of stale summaries would
 be showing the past.
 
+## In the applications menu
+
+```bash
+./packaging/install.sh
+```
+
+Copies the binaries to `~/.local/bin`, the icon to the user's icon theme, and a
+`.desktop` file into the applications menu. Per-user on purpose: it needs no
+root, touches nothing outside `$HOME`, and `--uninstall` genuinely undoes it. A
+packaged build for distribution is a separate job.
+
+The binaries are copied rather than symlinked into `target/`, because a menu
+entry that stops working after `cargo clean` is worse than one that is slightly
+stale.
+
 ## When there is no tray
 
 **GNOME has no system tray.** It was removed, and GNOME ships no
@@ -34,9 +49,15 @@ and unquittable, which is the worst outcome available.
 
 So [`host::available`](src/host.rs) asks the session bus whether anything has
 registered `org.kde.StatusNotifierWatcher` *before* anything is built. With no
-watcher, the program says so, explains how to get a tray back on GNOME, and
-keeps syncing with status on stderr. Degrading to a working terminal program
-beats pretending.
+watcher it **opens a window instead** — [`window.rs`](src/window.rs), in GTK 3
+because that is what `tray-icon` already links.
+
+The window matters more than it sounds. Printing to stderr is fine for someone
+who started the program in a terminal and useless for someone who launched it
+from the applications menu, which is how a program is normally started — and
+which would otherwise show nothing at all. Falling back to stderr only would
+have made the menu entry above worse than useless on the one desktop this
+machine runs.
 
 The check happens before GTK is touched for a second reason: `tray-icon` is
 GTK-backed on Linux and **panics** if a menu is constructed before `gtk::init`,

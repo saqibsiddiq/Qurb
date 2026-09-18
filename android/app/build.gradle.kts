@@ -65,6 +65,15 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
+    // Scanning a pairing code with the camera. CameraX for the preview and
+    // frame delivery; the Play Services build of ML Kit for the decoding,
+    // because it is a few hundred KB against several MB for the bundled model
+    // and this phone has Play Services anyway.
+    implementation("androidx.camera:camera-camera2:1.5.3")
+    implementation("androidx.camera:camera-lifecycle:1.5.3")
+    implementation("androidx.camera:camera-view:1.5.3")
+    implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
+
     // Background sync. WorkManager rather than a bare AlarmManager or a
     // foreground service: it is the only scheduler that survives reboots,
     // respects Doze, and backs off on its own when the system is busy — which

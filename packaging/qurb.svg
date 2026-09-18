@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- A ring with a gap: a store that is closed, and yours. The same shape
+       the tray icon draws, so the app drawer and the panel agree. -->
+  <circle cx="32" cy="28" r="15" fill="none" stroke="#2B5CE6" stroke-width="7"
+          stroke-dasharray="72 30" transform="rotate(-50 32 28)" stroke-linecap="round"/>
+  <path d="M40 40 L52 52" stroke="#2B5CE6" stroke-width="7" stroke-linecap="round"/>
+</svg>

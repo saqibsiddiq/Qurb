@@ -33,6 +33,8 @@ use std::path::{Path, PathBuf};
 mod host;
 mod icon;
 mod ui;
+#[cfg(target_os = "linux")]
+mod window;
 
 fn main() {
     tracing_subscriber::fmt()

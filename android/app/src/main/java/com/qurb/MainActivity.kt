@@ -46,6 +46,12 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let { addFile(it) } }
 
+    private val scanner = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        result.data?.getStringExtra(ScanActivity.EXTRA_CODE)?.let { joinWith(it) }
+    }
+
     /** The file waiting for a destination, while the save dialog is open. */
     private var pendingSave: FileEntry? = null
 
@@ -218,34 +224,56 @@ class MainActivity : AppCompatActivity() {
      * aloud, which is the fallback anyway.
      */
     private fun pair() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Pair with a device")
+            .setMessage(
+                "Run `qurb pair <dir>` on the other device. It shows a QR code — " +
+                    "point the camera at it.\n\nThe code carries that device's full " +
+                    "identity, which is why it travels across the room rather than " +
+                    "over the network."
+            )
+            // Scanning first, because it is what anyone will actually do. A
+            // pairing code is 107 characters; typing one is possible and
+            // nobody does it twice.
+            .setPositiveButton("Scan a code") { _, _ ->
+                scanner.launch(Intent(this, ScanActivity::class.java))
+            }
+            .setNeutralButton("Type it instead") { _, _ -> typeCode() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** The fallback, for a device with no camera or a refused permission. */
+    private fun typeCode() {
         val input = EditText(this).apply {
             hint = "qurb1-..."
             setPadding(48, 32, 48, 8)
         }
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("Pair with a device")
-            .setMessage("Run `qurb pair <dir>` on the other device and type the code it shows.")
+            .setTitle("Type the pairing code")
             .setView(input)
             .setPositiveButton("Pair") { _, _ ->
                 val code = input.text.toString().trim()
-                if (code.isEmpty()) return@setPositiveButton
-
-                lifecycleScope.launch {
-                    try {
-                        val peer = withContext(Dispatchers.IO) {
-                            Engine.open(this@MainActivity).joinPairing(code)
-                        }
-                        Snackbar.make(views.root, "Paired with ${peer.name}", Snackbar.LENGTH_LONG)
-                            .show()
-                        refresh()
-                    } catch (e: Exception) {
-                        fail("Pairing failed", e)
-                    }
-                }
+                if (code.isNotEmpty()) joinWith(code)
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /** Join, however the code arrived. */
+    private fun joinWith(code: String) {
+        lifecycleScope.launch {
+            try {
+                val peer = withContext(Dispatchers.IO) {
+                    Engine.open(this@MainActivity).joinPairing(code)
+                }
+                Snackbar.make(views.root, "Paired with ${peer.name}", Snackbar.LENGTH_LONG).show()
+                refresh()
+            } catch (e: Exception) {
+                fail("Pairing failed", e)
+            }
+        }
     }
 
     private fun showPeers() {

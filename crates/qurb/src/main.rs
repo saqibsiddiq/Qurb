@@ -211,8 +211,25 @@ async fn pair(root: PathBuf) -> Result<()> {
         now(),
     )?;
 
-    println!("On the other device, run:\n");
-    println!("  qurb join <dir> {}\n", host.invite().encode());
+    let code = host.invite().encode();
+
+    // The QR first, because it is the way anyone will actually do this. The
+    // text below it is the fallback for a device with no camera, and for
+    // reading aloud down a phone line.
+    match qurb_cli::qr::terminal(&code) {
+        Ok(rendered) => {
+            println!("Scan this with the qurb app on your phone:\n");
+            print!("{rendered}");
+            println!();
+        }
+        Err(e) => {
+            // Not fatal. The code still works typed.
+            tracing::debug!(error = %e, "could not render a QR code");
+        }
+    }
+
+    println!("Or on another computer:\n");
+    println!("  qurb join <dir> {code}\n");
     println!("Or read this out:\n");
     println!("  {}\n", host.invite().for_humans());
     println!("The code carries this device's full identity, which is why it has to");
