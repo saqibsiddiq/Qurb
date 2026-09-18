@@ -57,6 +57,11 @@ pub struct Daemon {
     master: MasterKey,
     identity: Identity,
     config: Config,
+    /// Where to publish what the daemon is doing, if anyone is displaying it.
+    ///
+    /// Optional because the terminal front end has no use for it: its account
+    /// of the daemon is the log. An interface supplies one.
+    status: Option<crate::status::Publisher>,
 }
 
 impl Daemon {
@@ -73,6 +78,24 @@ impl Daemon {
             master,
             identity,
             config,
+            status: None,
+        }
+    }
+
+    /// Publish status to `publisher` as the daemon runs.
+    pub fn reporting_to(mut self, publisher: crate::status::Publisher) -> Self {
+        self.status = Some(publisher);
+        self
+    }
+
+    /// Update the published status, if anyone asked for it.
+    ///
+    /// Takes a closure rather than a value so a caller that is not publishing
+    /// pays nothing: the closure is not run when there is no publisher, and
+    /// gathering a summary means counting files and querying the store.
+    fn report(&self, change: impl FnOnce(&mut crate::status::Status)) {
+        if let Some(publisher) = &self.status {
+            publisher.send_modify(change);
         }
     }
 
@@ -115,6 +138,19 @@ impl Daemon {
             failures = initial.failures.len(),
             "reconciled"
         );
+        // Counted here, before any networking. What this device holds is
+        // knowable without reaching anything, and an interface that shows
+        // "0 files" while the store has hundreds -- because the rendezvous
+        // service happens to be down -- is worse than showing nothing.
+        if let Ok(counted) = self.count() {
+            self.report(|status| {
+                status.files = counted.0;
+                status.bytes_on_disk = counted.1;
+                status.peers = counted.2;
+                status.settle();
+            });
+        }
+
         if initial.collided > 0 {
             tracing::warn!(
                 count = initial.collided,
@@ -124,19 +160,31 @@ impl Daemon {
         }
         report_collisions(&engine);
 
-        let connector = Arc::new(
-            Connector::start(
-                format!("0.0.0.0:{}", self.config.port).parse()?,
-                self.identity.clone(),
-                self.master.clone(),
-                &trusted,
-                &self.config.signal,
-                true,
-                self.config.relay,
-            )
-            .await
-            .context("starting the connection machinery")?,
-        );
+        let connector = match Connector::start(
+            format!("0.0.0.0:{}", self.config.port).parse()?,
+            self.identity.clone(),
+            self.master.clone(),
+            &trusted,
+            &self.config.signal,
+            true,
+            self.config.relay,
+        )
+        .await
+        {
+            Ok(connector) => Arc::new(connector),
+            Err(e) => {
+                // Reported before returning, so an interface shows what
+                // happened rather than the last thing that was true. Failing
+                // silently here used to leave a tray saying "syncing" over a
+                // daemon that had already stopped.
+                let detail = format!("cannot reach the rendezvous service: {e}");
+                self.report(|status| {
+                    status.problem = Some(detail.clone());
+                    status.settle();
+                });
+                return Err(anyhow::Error::new(e).context("starting the connection machinery"));
+            }
+        };
         tracing::info!(
             address = %connector.local_addr()?,
             public = ?connector.endpoints().public,
@@ -268,6 +316,15 @@ impl Daemon {
         }
     }
 
+    /// Count what the store holds, for a status summary.
+    fn count(&self) -> Result<(usize, u64, usize)> {
+        let store = self.open_store()?;
+        let files = store.db().live_paths()?.len();
+        let (_, on_disk) = store.db().size_totals()?;
+        let peers = store.db().trusted_peers()?.len();
+        Ok((files, on_disk, peers))
+    }
+
     /// Pull from every peer we can reach.
     async fn sync_all(
         &self,
@@ -276,9 +333,16 @@ impl Daemon {
         peers: &mut Peers,
         generation: &Arc<qurb_peer::Generation>,
     ) {
-        for peer in peers.ready() {
+        let mut reached = 0usize;
+        let attempted = peers.ready();
+        if !attempted.is_empty() {
+            self.report(|status| status.state = crate::status::State::Working);
+        }
+
+        for peer in attempted {
             match self.sync_one(engine, connector, peers, peer).await {
                 Ok(moved) => {
+                    reached += 1;
                     peers.succeeded(peer);
                     // So `qurb status` can say when a device was last reachable,
                     // which is usually the first question when something has not
@@ -300,6 +364,18 @@ impl Daemon {
                     peers.failed(peer);
                 }
             }
+        }
+
+        // Counted per pass rather than accumulated, because the question an
+        // interface answers is "can I reach my devices *now*".
+        if let Ok(counted) = self.count() {
+            self.report(|status| {
+                status.files = counted.0;
+                status.bytes_on_disk = counted.1;
+                status.peers = counted.2;
+                status.peers_reachable = reached;
+                status.settle();
+            });
         }
     }
 
@@ -335,11 +411,27 @@ impl Daemon {
             return Ok(0);
         }
 
+        // The paths before applying, because a plan is consumed by it. These
+        // are what a "recently synced" list is made of -- files arriving from
+        // another device, which is the part a person did not do themselves and
+        // therefore the part worth telling them about.
+        let arriving: Vec<String> =
+            plan.iter().map(|action| action.path().to_string()).collect();
+
         let reader = self.open_store()?;
         let outcome = tokio::task::block_in_place(|| {
             let mut source = qurb_peer::NetworkSource::new(&client, &reader);
             engine.apply_plan(&plan, &mut source)
         })?;
+
+        if outcome.adopted > 0 || outcome.conflicts > 0 {
+            self.report(|status| {
+                for path in arriving {
+                    status.remember(path, true);
+                }
+                status.last_sync = Some(std::time::SystemTime::now());
+            });
+        }
 
         for failure in &outcome.failures {
             tracing::warn!(

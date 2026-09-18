@@ -1,14 +1,12 @@
 //! qurb — private cloud storage.
 //!
-//! The program a person runs. Everything else in this repository is a library;
-//! this is the daemon and the handful of commands around it.
-
-mod config;
-mod daemon;
+//! The terminal front end. The daemon itself lives in the library beside this,
+//! so that something other than a terminal can run the same one — an interface
+//! should display the engine rather than reimplement it.
 
 use anyhow::{bail, Context, Result};
-use config::Config;
-use daemon::Daemon;
+use qurb_cli::config::Config;
+use qurb_cli::daemon::Daemon;
 use qurb_keys::{MasterKey, Opened, Purpose, RecoveryPhrase, Vault};
 use qurb_peer::{Identity, PairingHost};
 use qurb_storage::{ChunkKey, Store};

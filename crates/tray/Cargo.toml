@@ -1,0 +1,32 @@
+[package]
+name = "qurb-tray"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "qurb-tray"
+path = "src/main.rs"
+
+[dependencies]
+qurb-cli = { path = "../qurb" }
+qurb-keys = { path = "../keys" }
+
+anyhow = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# The tray icon itself. Cross-platform: StatusNotifierItem on Linux, the
+# status bar on macOS, the notification area on Windows.
+tray-icon = "0.25"
+# Desktop notifications, for the things worth interrupting someone about.
+notify-rust = "4"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# `tray-icon` is GTK-backed on Linux and requires it initialised first; it
+# panics rather than returning an error if it is not.
+gtk = "0.18"
+# To ask whether anything would actually display a tray icon. GNOME ships no
+# StatusNotifier host, so the icon is created successfully and never appears --
+# a failure mode no return value reports.
+zbus = { version = "5", default-features = false, features = ["tokio"] }

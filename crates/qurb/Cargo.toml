@@ -8,6 +8,10 @@ license.workspace = true
 #
 # Everything else is a library; this is the daemon and the commands around it.
 
+[lib]
+name = "qurb_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "qurb"
 path = "src/main.rs"
