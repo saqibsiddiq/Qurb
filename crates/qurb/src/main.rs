@@ -22,6 +22,7 @@ qurb — private cloud storage
   qurb pair [dir]                     show a code and wait for a device to join
   qurb join <dir> <code>              join a device that is showing a code
   qurb run [dir]                      watch, sync, and keep running
+  qurb replica <dir> [--only <path>]  hold content for devices that are asleep
   qurb status [dir]                   what this device holds and trusts
   qurb verify [dir] [--deep]          check the store against itself
   qurb reclaim [dir]                  free space the folder itself already holds
@@ -78,6 +79,16 @@ fn run() -> Result<()> {
             block_on(join(directory(&args)?, code))
         }
         "run" => block_on(start(directory(&args)?)),
+        "replica" => {
+            let only: Vec<String> = args
+                .iter()
+                .skip_while(|a| a.as_str() != "--only")
+                .skip(1)
+                .take(1)
+                .cloned()
+                .collect();
+            block_on(replica(directory(&args)?, only))
+        }
         "status" => status(&directory(&args)?),
         "verify" => verify(&directory(&args)?, args.iter().any(|a| a == "--deep")),
         "reclaim" => reclaim(&directory(&args)?),
@@ -325,6 +336,45 @@ async fn start(root: PathBuf) -> Result<()> {
     println!();
 
     Daemon::new(&root, &store_dir(&root), master, identity, config).run().await
+}
+
+/// Hold content so that other devices do not have to be awake together.
+///
+/// The device this system most needs and the one nobody wants to be: always
+/// on, holding chunks it cannot read, so a phone can send a photo at midnight
+/// and a laptop can collect it on Tuesday. See
+/// [decision 0006](../../docs/decisions/0006-availability-gap.md).
+///
+/// It has no folder. The directory given is where its store lives, and nothing
+/// is ever materialised inside it — a replica that wrote files out would be a
+/// second copy of someone's library on a machine they do not sit at, which is
+/// the opposite of the point.
+async fn replica(root: PathBuf, only: Vec<String>) -> Result<()> {
+    let (master, identity, store, config) = open(&root)?;
+    drop(store);
+
+    let pins = if only.is_empty() {
+        qurb_engine::PinSet::everything()
+    } else {
+        qurb_engine::PinSet::under(only.clone())
+    };
+
+    println!("qurb: holding content at {}", root.display());
+    println!("  identity  {}", identity.fingerprint().short());
+    println!("  signal    {}", config.signal);
+    match pins.is_everything() {
+        true => println!("  holding   everything its peers have"),
+        false => println!("  holding   only {}", only.join(", ")),
+    }
+    println!();
+    println!("  This device stores content it cannot read, and shows nobody any files.");
+    println!("  Nothing is written into {} except the store itself.", root.display());
+    println!();
+
+    Daemon::new(&root, &store_dir(&root), master, identity, config)
+        .holding(pins)
+        .run()
+        .await
 }
 
 fn status(root: &Path) -> Result<()> {

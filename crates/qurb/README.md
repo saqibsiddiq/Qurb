@@ -9,6 +9,7 @@ qurb pair <dir>                  show a code and wait for a device to join
                                  (the code lasts five minutes, then it stops)
 qurb join <dir> <code>           join a device that is showing a code
 qurb run <dir>                   watch, sync, and keep running
+qurb replica <dir> [--only p]    hold content for devices that are asleep
 qurb status <dir>                what this device holds and trusts
 qurb verify <dir> [--deep]       check the store against itself
 qurb reclaim <dir>               free space the folder itself already holds

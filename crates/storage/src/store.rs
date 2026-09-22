@@ -881,7 +881,15 @@ impl Store {
     /// chunk store alone would bound almost nothing.
     pub fn usage(&self) -> Result<Usage> {
         Ok(Usage {
-            files: self.db.materialised_bytes()?,
+            // Zero without a folder, and that is not a special case so much as
+            // the plain meaning: a store with no folder holds nothing in one.
+            // Its bytes are all in the chunk store and are counted there, so
+            // adding the file sizes as well would report a replica using twice
+            // the disk it does.
+            files: match self.tree {
+                Some(_) => self.db.materialised_bytes()?,
+                None => 0,
+            },
             chunks: self.db.size_totals()?.1,
         })
     }

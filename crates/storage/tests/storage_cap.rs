@@ -169,3 +169,31 @@ fn a_replica_evicts_nothing() {
     assert!(store.evict("payload.bin").is_err(), "a replica dropped its only copy");
     assert_eq!(store.read_file("payload.bin").unwrap(), data);
 }
+
+/// A store with no folder must not report its content twice.
+///
+/// Every file in a replica is "held", and every byte of it is in the chunk
+/// store. Counting both makes a replica look like it is using twice the disk
+/// it is — which on a small always-on box is the difference between fitting
+/// and not.
+#[test]
+fn a_replica_counts_its_bytes_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("payload.bin");
+    let data = noisy(1024 * 1024, 0x1234_5678);
+    std::fs::write(&source, &data).unwrap();
+
+    let mut store =
+        Store::open(&dir.path().join("store"), ChunkKey::from_bytes([31; 32])).unwrap();
+    store.put_file("payload.bin", &source).unwrap();
+
+    let usage = store.usage().unwrap();
+    assert_eq!(usage.files, 0, "a store with no folder reported bytes held in one");
+    assert!(usage.chunks > data.len() as u64 / 2, "the payload was not counted at all");
+    assert!(
+        usage.total() < data.len() as u64 * 3 / 2,
+        "{} counted for {} of content",
+        usage.total(),
+        data.len()
+    );
+}

@@ -18,7 +18,7 @@
 
 use crate::config::Config;
 use anyhow::{Context, Result};
-use qurb_engine::Engine;
+use qurb_engine::{Engine, PinSet};
 use qurb_keys::{MasterKey, Purpose};
 use qurb_peer::{Connector, Fingerprint, Identity, PeerClient};
 use qurb_storage::{ChunkKey, Store};
@@ -85,6 +85,14 @@ pub struct Daemon {
     /// Optional because the terminal front end has no use for it: its account
     /// of the daemon is the log. An interface supplies one.
     status: Option<crate::status::Publisher>,
+    /// Set when this daemon is a storage-only replica, and then saying what it
+    /// holds. `None` is an ordinary device with a folder someone looks at.
+    ///
+    /// A replica has no directory to watch and nothing to materialise: it
+    /// keeps chunks so that the devices people actually use do not all have to
+    /// be awake at the same moment. See
+    /// [decision 0006](../../docs/decisions/0006-availability-gap.md).
+    pins: Option<PinSet>,
 }
 
 impl Daemon {
@@ -102,10 +110,28 @@ impl Daemon {
             identity,
             config,
             status: None,
+            pins: None,
         }
     }
 
     /// Publish status to `publisher` as the daemon runs.
+    /// Run as a storage-only replica, holding the paths `pins` selects.
+    ///
+    /// The difference is not a setting on the same thing: a replica has no
+    /// directory to watch, materialises nothing, and keeps every chunk payload
+    /// because it is the only place its copy lives. A device with a folder
+    /// stores content once, in the folder; a replica has no folder to store it
+    /// in.
+    pub fn holding(mut self, pins: PinSet) -> Self {
+        self.pins = Some(pins);
+        self
+    }
+
+    /// Whether this daemon holds content without a folder behind it.
+    fn is_replica(&self) -> bool {
+        self.pins.is_some()
+    }
+
     pub fn reporting_to(mut self, publisher: crate::status::Publisher) -> Self {
         self.status = Some(publisher);
         self
@@ -180,16 +206,28 @@ impl Daemon {
 
     fn open_store(&self) -> Result<Store> {
         Store::open(&self.store_dir, self.chunk_key())
-            .map(|store| store.in_tree(&self.root))
+            .map(|store| {
+                // A replica has no folder, so there is no materialised file to
+                // read payloads back out of: it keeps every chunk, which is
+                // the whole reason it is worth having. Attaching a folder here
+                // would make it believe content was available that is not.
+                match self.is_replica() {
+                    true => store,
+                    false => store.in_tree(&self.root),
+                }
+            })
             .with_context(|| format!("opening the store at {}", self.store_dir.display()))
     }
 
     fn engine(&self) -> Result<Engine> {
-        Ok(Engine::new(
-            self.root.clone(),
-            self.open_store()?,
-            IgnoreRules::new().with_store_dir(&self.store_dir),
-        ))
+        Ok(match &self.pins {
+            Some(pins) => Engine::replica(self.root.clone(), self.open_store()?, pins.clone()),
+            None => Engine::new(
+                self.root.clone(),
+                self.open_store()?,
+                IgnoreRules::new().with_store_dir(&self.store_dir),
+            ),
+        })
     }
 
     pub async fn run(&self) -> Result<()> {
@@ -319,12 +357,20 @@ impl Daemon {
             });
         }
 
-        let mut watcher = Watcher::start(
-            &self.root,
-            IgnoreRules::new().with_store_dir(&self.store_dir),
-            DebounceConfig::default(),
-        )
-        .context("watching the directory")?;
+        // A replica has no directory to watch. Starting one would be worse
+        // than useless: it would report an empty tree, and every file the
+        // replica holds would look like one the user had just deleted.
+        let mut watcher = match self.is_replica() {
+            true => None,
+            false => Some(
+                Watcher::start(
+                    &self.root,
+                    IgnoreRules::new().with_store_dir(&self.store_dir),
+                    DebounceConfig::default(),
+                )
+                .context("watching the directory")?,
+            ),
+        };
 
         let mut peers = Peers::new(trusted);
         let mut arrivals = connector.arrivals();
@@ -338,7 +384,14 @@ impl Daemon {
 
         loop {
             tokio::select! {
-                event = watcher.next() => match event {
+                // `pending()` when there is no watcher, so the arm simply
+                // never fires rather than the loop needing two shapes.
+                event = async {
+                    match &mut watcher {
+                        Some(watcher) => watcher.next().await,
+                        None => std::future::pending().await,
+                    }
+                } => match event {
                     Some(Event::Changes(changes)) => {
                         // Storage work is synchronous and can take seconds on a
                         // large file, so it must not run on the async scheduler.

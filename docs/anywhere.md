@@ -114,8 +114,54 @@ announce under are bearer secrets, and sending them unencrypted across a
 carrier's network hands them to everyone on the path. See
 [decisions/0027](decisions/0027-plaintext-stops-at-the-local-network.md).
 
-**Anything, if the laptop is asleep.** qurb syncs between devices, so both have
-to be awake at the same moment. A laptop with the lid shut is not reachable
-from anywhere, by any arrangement. A storage-only replica on an always-on
-machine is the answer to that, and is a separate piece of work —
-[decisions/0006](decisions/0006-availability-gap.md).
+**Reachability alone does not make the laptop awake.** qurb syncs between
+devices, so two devices that are never on at the same moment never meet,
+however well each can be reached. Paying for a rendezvous service does not
+change that: it never holds content.
+
+The answer is on the next page — the same host can run a replica.
+
+## Holding content for devices that are asleep
+
+A **storage-only replica** is a device that holds chunks and nothing else. It
+has no folder, shows nobody any files, and cannot read what it stores. Its
+whole job is to be awake when the others are not.
+
+```bash
+qurb enrol /srv/qurb "<the same 24 words>"
+qurb replica /srv/qurb
+```
+
+With one in the picture, a phone can send a photo at midnight to a machine that
+is always on, and a laptop can collect it on Tuesday. The two never have to be
+awake together, which is the limitation nothing else removes.
+
+`--only` restricts what it holds:
+
+```bash
+qurb replica /srv/qurb --only work
+```
+
+Measured on the development laptop, 2026-09-22, three stores and a rendezvous
+service on loopback, with the phone and laptop daemons **never running at the
+same time**: a 400 KB file written on the phone reached the replica while the
+laptop was stopped, and the laptop collected it byte-for-byte from the replica
+after the phone had stopped.
+
+### What a replica is not
+
+**It is not a backup.** It holds what its peers have. A file deleted on a
+device is deleted on the replica too, once the deletion reaches it — that is
+what syncing means.
+
+**It does not make a small box hold a large library.** A replica keeps every
+payload, because with no folder there is nowhere else for the bytes to live.
+The storage cap can bound it, but a replica over its cap currently has nothing
+it is able to drop: eviction works by deleting a file from a folder, and a
+replica has no folder. So a cap on a replica reports the overrun rather than
+acting on it. Choose a host with room for what you ask it to hold, or use
+`--only`.
+
+**It is not the same as the rendezvous service**, though the same host can run
+both. The rendezvous service introduces devices and never sees content; a
+replica holds content and needs no public name beyond being reachable.

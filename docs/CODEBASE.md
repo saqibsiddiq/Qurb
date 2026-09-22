@@ -794,7 +794,9 @@ checks the limit.
 
 **Availability** — files being unreachable when every device is switched off —
 is answered by storage-only replicas, decided in
-[decisions/0006](decisions/0006-availability-gap.md) and built in Phase 3.
+[decisions/0006](decisions/0006-availability-gap.md), built in Phase 3 and
+runnable since `qurb replica`. Verified with the two ordinary devices never
+running at the same time: see [anywhere.md](anywhere.md).
 
 **Protecting the key at rest** was the largest security gap and is now a choice
 between a file, the operating system's keystore, and a passphrase — see
