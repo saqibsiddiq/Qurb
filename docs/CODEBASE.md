@@ -132,7 +132,12 @@ For that question to have an answer, a device that finishes receiving content
 tells the device it got it from: `Got { content }`, the only message in the
 protocol that asks for nothing. Credited to the certificate the connection
 authenticated with, never to anything the message claims — a storage cap drops
-local copies on the strength of that record. See
+local copies on the strength of that record.
+
+A device also sends it for content it is merely *holding*, a few per sync and
+each only once. Without that, anything delivered before this existed would be
+counted as delivered nowhere for ever, since a file both devices already have
+is never transferred again. See
 [decisions/0026](decisions/0026-sharing-while-the-other-device-is-off.md).
 
 ### 2.2 Chunk boundaries are chosen by content, not by position

@@ -8,6 +8,49 @@ use crate::client::PeerClient;
 use qurb_engine::ContentSource;
 use qurb_storage::Store;
 
+/// Tell a peer about content it made that this device is holding.
+///
+/// `Got` is sent when a transfer finishes, which covers everything from now on
+/// and nothing from before. A device that received a file last week holds it
+/// just as truly and never said so — and since a file both devices already
+/// have is never transferred again, the device that made it would go on
+/// counting it as delivered nowhere for the life of the file.
+///
+/// So holdings are reported too, a few per pass, each one only once. Returns
+/// how many were reported.
+///
+/// Best effort throughout. This corrects a number on someone's screen; it must
+/// never be the reason a sync reports failure.
+pub async fn report_holdings(
+    client: &PeerClient,
+    store: &Store,
+    peer: &qurb_sync::DeviceId,
+    limit: usize,
+) -> usize {
+    let holdings = match store.db().unreported_to(peer, limit) {
+        Ok(holdings) => holdings,
+        Err(e) => {
+            tracing::debug!(error = %e, "could not work out what to report");
+            return 0;
+        }
+    };
+
+    let mut told = 0;
+    for content in holdings {
+        if client.got(*content.as_bytes()).await.is_err() {
+            // The connection is probably gone. Stop rather than grind through
+            // the rest of the list failing.
+            break;
+        }
+        if let Err(e) = store.db().note_reported(peer, &content) {
+            tracing::debug!(error = %e, "could not record what was reported");
+            break;
+        }
+        told += 1;
+    }
+    told
+}
+
 /// Serves the engine's content requests from a connected peer.
 ///
 /// Holds the local store as well as the connection, because most of what a

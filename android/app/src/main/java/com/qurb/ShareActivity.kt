@@ -9,9 +9,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.qurb.databinding.ActivityShareBinding
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * The share sheet's way in.
@@ -116,11 +114,6 @@ class ShareActivity : AppCompatActivity() {
             // its own if nothing answers.
             SyncWorker.runNow(this@ShareActivity)
 
-            val waiting = withContext(Dispatchers.IO) {
-                runCatching { Engine.open(this@ShareActivity).outstanding().files.size }
-                    .getOrDefault(0)
-            }
-
             views.progress.visibility = android.view.View.GONE
             views.done.visibility = android.view.View.VISIBLE
             views.headline.text = when {
@@ -128,16 +121,15 @@ class ShareActivity : AppCompatActivity() {
                 saved == 1 -> "Saved to qurb"
                 else -> "Saved $saved files to qurb"
             }
+
+            // About what was just shared, not about the backlog. Someone who
+            // shared one photo and is told their devices will get "them" is
+            // being answered about something they did not ask.
+            val it = if (saved == 1) "it" else "them"
             views.detail.text = buildString {
                 append(
-                    if (waiting > 0) {
-                        "Your other devices will get " +
-                            (if (waiting == 1) "it" else "them") +
-                            " the next time one is switched on and reachable. " +
-                            "You do not need to do anything."
-                    } else {
-                        "Already copied to your other device."
-                    }
+                    "Your other devices will get $it the next time one is " +
+                        "switched on and reachable. You do not need to do anything."
                 )
                 if (failed > 0) {
                     append("\n\n$failed could not be read and was not saved.")

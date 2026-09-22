@@ -72,6 +72,33 @@ Failures are swallowed. It is a courtesy to the other end, and a sync that
 worked must not be reported as failed because the closing remark did not get
 through.
 
+### And reporting what is merely held
+
+A report sent when a transfer finishes covers everything from then on and
+nothing from before. A device that received a file last week holds it just as
+truly and never said so — and because a file both devices already have is never
+transferred again, that gap could never close on its own. Every such file would
+be counted as delivered nowhere for as long as it existed.
+
+Found by testing rather than by reasoning: on real hardware both devices held
+all nine files and each still claimed several were only on itself.
+
+So a device also reports content it is *holding*, not only content it has just
+received. On each sync it tells the peer about content the peer made that is
+sitting here, a few dozen at a time, each one only once — a `reported` table
+records what has been said to whom, because the statement is worth making once
+and not on every sweep for every file.
+
+The statement is identical in kind to the one sent after a transfer, and just
+as true: "I have these bytes." It is the *timing* that differs.
+
+One thing this exposed, worth stating because it is the sort of thing that
+looks like it works: the reports have to be sent **before** the check for an
+empty plan, not after. Two devices that agree about everything produce an empty
+plan every single time, and those are exactly the devices that have holdings to
+report. Sending afterwards means never sending at all in the one case it is
+for.
+
 ## What actually carries the file across
 
 Nothing new. The phone's background worker already runs about every fifteen

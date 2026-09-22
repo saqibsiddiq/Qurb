@@ -15,5 +15,13 @@
     <style name="Theme.Qurb.Share" parent="Theme.Material3.DayNight.Dialog">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/on_primary</item>
+        <!-- The activity's label is what the share sheet puts on its button;
+             as a window title it only repeats the screen's own heading in
+             smaller type. -->
+        <item name="android:windowNoTitle">true</item>
+        <!-- Without these the dialog is sized to its text and comes out a
+             narrow column, breaking one short sentence across four lines. -->
+        <item name="android:windowMinWidthMajor">80%</item>
+        <item name="android:windowMinWidthMinor">90%</item>
     </style>
 </resources>

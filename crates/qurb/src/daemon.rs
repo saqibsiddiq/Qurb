@@ -543,6 +543,19 @@ impl Daemon {
         // is only that the bytes are not here.
         plan.extend(engine.wanted_actions()?);
 
+        // Before the early return below, not after it. Two devices that agree
+        // about everything have an empty plan every time, and those are
+        // exactly the devices with holdings to report: content that arrived
+        // before there was any way to say so is, by definition, content
+        // neither side needs to transfer again.
+        let reader = self.open_store()?;
+        if let Ok(Some(known)) = engine.store().db().peer_by_fingerprint(peer.as_bytes()) {
+            let told = qurb_peer::report_holdings(&client, &reader, &known.device_id, 64).await;
+            if told > 0 {
+                tracing::debug!(peer = %peer.short(), told, "reported holdings");
+            }
+        }
+
         if plan.is_empty() {
             return Ok(0);
         }
@@ -554,7 +567,6 @@ impl Daemon {
         let arriving: Vec<String> =
             plan.iter().map(|action| action.path().to_string()).collect();
 
-        let reader = self.open_store()?;
         let outcome = tokio::task::block_in_place(|| {
             let mut source = qurb_peer::NetworkSource::new(&client, &reader);
             engine.apply_plan(&plan, &mut source)
@@ -576,6 +588,7 @@ impl Daemon {
                 "could not apply"
             );
         }
+
         Ok(outcome.adopted + outcome.conflicts + outcome.resurrected)
     }
 }

@@ -23,7 +23,7 @@ use std::path::Path;
 ///
 /// Migrations are append-only. Editing one that has already shipped would leave
 /// databases in the field at a schema nobody can reproduce.
-const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5];
+const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -187,6 +187,27 @@ ALTER TABLE files ADD COLUMN wanted INTEGER NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_files_wanted ON files (wanted)
     WHERE wanted = 1 AND deleted_at IS NULL;
+"#;
+
+const V6: &str = r#"
+-- Which peers have already been told what this device holds.
+--
+-- `Got` is sent when a transfer completes, which covers everything from now
+-- on and nothing from before. A device that received a file last week holds it
+-- just as truly, but never said so, so the device that made it goes on
+-- counting it as delivered nowhere -- a number that would stay wrong for the
+-- life of the file, because a file both devices already have is never
+-- transferred again.
+--
+-- So a device also reports content it is merely holding. This records what it
+-- has already reported to whom, because the statement is worth making once and
+-- not on every sweep for every file.
+CREATE TABLE IF NOT EXISTS reported (
+    device_id    BLOB NOT NULL,
+    content_hash BLOB NOT NULL,
+    at           INTEGER NOT NULL,
+    PRIMARY KEY (device_id, content_hash)
+) STRICT;
 "#;
 
 pub struct Db {
@@ -564,6 +585,47 @@ impl Db {
         )?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64)))?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// Content `device` made and this one holds, that it has not been told
+    /// about yet.
+    ///
+    /// The peer's own "waiting to be delivered" list is made of files it made
+    /// that it believes nobody else has. This is the answer to that, for the
+    /// files it is wrong about — everything it made that is sitting here.
+    ///
+    /// Limited, because on a library where one device made everything this
+    /// would otherwise be the whole library in one pass. What is left over is
+    /// picked up next time.
+    pub fn unreported_to(&self, device: &DeviceId, limit: usize) -> Result<Vec<blake3::Hash>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT f.content_hash
+               FROM files f
+              WHERE f.deleted_at IS NULL
+                AND f.materialised = 1
+                AND f.modified_by = ?1
+                AND NOT EXISTS (
+                      SELECT 1 FROM reported r
+                       WHERE r.device_id = ?1 AND r.content_hash = f.content_hash
+                    )
+              LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![device.as_bytes().as_slice(), limit as i64], |r| {
+            let raw: Vec<u8> = r.get(0)?;
+            Ok(to_hash(&raw))
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// Remember that `device` has been told this content is held here.
+    pub fn note_reported(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO reported (device_id, content_hash, at)
+             VALUES (?1, ?2, unixepoch())
+             ON CONFLICT (device_id, content_hash) DO UPDATE SET at = excluded.at",
+            params![device.as_bytes().as_slice(), content.as_bytes().as_slice()],
+        )?;
+        Ok(())
     }
 
     pub fn live_paths(&self) -> Result<Vec<String>> {

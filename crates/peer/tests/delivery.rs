@@ -204,3 +204,75 @@ fn a_local_source_reports_no_delivery() {
         "copying out of a local store is not delivery to a device"
     );
 }
+
+/// Content delivered before there was any way to report it must not be
+/// counted as undelivered for ever.
+///
+/// A file both devices already have is never transferred again, so the
+/// transfer-time report can never fix it. The holder says so separately.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_peer_reports_what_it_is_merely_holding() {
+    let mut sender = Device::new();
+    let mut receiver = Device::new();
+    introduce(&sender, &receiver);
+
+    sender.write("old.bin", b"delivered long ago");
+
+    // Both devices hold it, and nobody ever said so -- the state an upgrade
+    // leaves behind. Built by copying the plan across without the report.
+    let tree = sender.engine.tree().unwrap();
+    let plan = receiver.engine.plan_against(&tree).unwrap();
+    receiver
+        .engine
+        .apply_plan(&plan, &mut StoreSource::new(sender.engine.store()))
+        .unwrap();
+
+    assert_eq!(
+        sender.outstanding(),
+        vec!["old.bin".to_string()],
+        "setup: the sender should still think nobody has it"
+    );
+
+    // Now they sync properly, and the receiver mentions what it is holding.
+    let (addr, fingerprint) = serve(&sender, &[receiver.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &receiver.identity, fingerprint).await.unwrap();
+
+    let sender_id = sender.engine.store().device_id().unwrap();
+    let told = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, 64).await;
+    client.close();
+
+    assert_eq!(told, 1, "the receiver reported nothing");
+    assert!(
+        sender.outstanding().is_empty(),
+        "still counted as undelivered: {:?}",
+        sender.outstanding()
+    );
+}
+
+/// Said once, not on every sweep. A device that has reported a holding does
+/// not report it again.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_holding_is_reported_only_once() {
+    let mut sender = Device::new();
+    let mut receiver = Device::new();
+    introduce(&sender, &receiver);
+
+    sender.write("thing.bin", b"content");
+    let tree = sender.engine.tree().unwrap();
+    let plan = receiver.engine.plan_against(&tree).unwrap();
+    receiver
+        .engine
+        .apply_plan(&plan, &mut StoreSource::new(sender.engine.store()))
+        .unwrap();
+
+    let (addr, fingerprint) = serve(&sender, &[receiver.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &receiver.identity, fingerprint).await.unwrap();
+    let sender_id = sender.engine.store().device_id().unwrap();
+
+    let first = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, 64).await;
+    let second = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, 64).await;
+    client.close();
+
+    assert_eq!(first, 1);
+    assert_eq!(second, 0, "the same holding was reported twice");
+}

@@ -978,6 +978,22 @@ impl Qurb {
 
         let mut engine = self.engine()?;
         let plan = engine.plan_against(&tree)?;
+
+        // Before the early return, not after: two devices that agree about
+        // everything produce an empty plan every time, and those are exactly
+        // the ones with holdings to report -- content that arrived before
+        // there was any way to say so is content neither side will transfer
+        // again.
+        let reader = Store::open(&self.store_dir, engine.store().chunk_key())?.in_tree(&self.root);
+        if let Ok(Some(known)) = engine.store().db().peer_by_fingerprint(peer.as_bytes()) {
+            runtime.block_on(qurb_peer::report_holdings(
+                &client,
+                &reader,
+                &known.device_id,
+                64,
+            ));
+        }
+
         if plan.is_empty() {
             return Ok(Some(qurb_engine::PlanStats::default()));
         }
@@ -998,13 +1014,13 @@ impl Qurb {
         // stalling the whole scheduler, and it is only available on a worker
         // thread of a multi-threaded runtime -- which is why `runtime()` builds
         // one of those rather than a current-thread runtime.
-        let reader = Store::open(&self.store_dir, engine.store().chunk_key())?.in_tree(&self.root);
         let stats = runtime.block_on(async {
             tokio::task::block_in_place(|| {
                 let mut source = qurb_peer::NetworkSource::new(&client, &reader);
                 engine.apply_plan(&plan, &mut source)
             })
         })?;
+
         Ok(Some(stats))
     }
 

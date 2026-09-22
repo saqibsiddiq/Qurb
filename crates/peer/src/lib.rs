@@ -51,5 +51,5 @@ pub use identity::{Fingerprint, Identity};
 pub use nat::{NatBehaviour, Reflexive};
 pub use pairing::{accept, Invite, Paired, PairingHost};
 pub use server::{trusted_fingerprints, Generation, PeerServer, ServerStats};
-pub use source::NetworkSource;
+pub use source::{report_holdings, NetworkSource};
 pub use wire::{Request, Response};
