@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server = PeerServer::bind(
         "127.0.0.1:0".parse()?,
         &a_identity,
-        &[b_identity.fingerprint()],
+        &qurb_peer::tls::TrustList::new(vec![b_identity.fingerprint()]),
     )?;
     let addr = server.local_addr()?;
     let wire = server.stats();

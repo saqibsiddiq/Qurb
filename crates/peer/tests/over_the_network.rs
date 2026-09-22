@@ -102,7 +102,7 @@ fn serve(device: &Device, allowed: &[Fingerprint]) -> Served {
     let store_dir = device.root.join(".qurb");
     let store = Store::open(&store_dir, ChunkKey::from_bytes([42; 32])).unwrap();
 
-    let server = PeerServer::bind(LOOPBACK.parse().unwrap(), &device.identity, allowed).unwrap();
+    let server = PeerServer::bind(LOOPBACK.parse().unwrap(), &device.identity, &qurb_peer::tls::TrustList::new(allowed.to_vec())).unwrap();
     let addr = server.local_addr().unwrap();
     let stats = server.stats();
     let fingerprint = device.identity.fingerprint();

@@ -41,7 +41,7 @@ fn start_hostile(
     behaviour: Behaviour,
     real_manifest: Vec<[u8; 32]>,
 ) -> SocketAddr {
-    let config = qurb_peer::tls::server_config(identity, &[allowed]).unwrap();
+    let config = qurb_peer::tls::server_config(identity, &qurb_peer::tls::TrustList::new(vec![allowed])).unwrap();
     let endpoint = quinn::Endpoint::server(config, "127.0.0.1:0".parse().unwrap()).unwrap();
     let addr = endpoint.local_addr().unwrap();
 

@@ -106,7 +106,7 @@ impl ServerStats {
 
 impl PeerServer {
     /// Listen on `addr`, accepting only the peers in `allowed`.
-    pub fn bind(addr: SocketAddr, identity: &Identity, allowed: &[Fingerprint]) -> Result<Self> {
+    pub fn bind(addr: SocketAddr, identity: &Identity, allowed: &crate::tls::TrustList) -> Result<Self> {
         let config = tls::server_config(identity, allowed)?;
         let endpoint = quinn::Endpoint::server(config, addr)
             .map_err(|e| Error::Io { path: addr.to_string().into(), source: e })?;
@@ -129,7 +129,7 @@ impl PeerServer {
         if allowed.is_empty() {
             tracing::warn!("no paired devices; this listener will refuse everyone");
         }
-        Self::bind(addr, identity, &allowed)
+        Self::bind(addr, identity, &crate::tls::TrustList::new(allowed))
     }
 
     /// The address actually bound, which matters when port 0 was requested.

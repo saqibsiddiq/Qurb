@@ -177,6 +177,23 @@ bounded the loop, so `qurb pair` sat advertising a code that had stopped working
 five minutes in, with the screen still saying "Waiting...". It was found on a
 terminal that had been waiting two and a half hours.
 
+## The guest list is live
+
+`TrustList` is shared with the TLS verifier rather than copied into it, so a
+device paired while a listener is running is accepted without a restart.
+
+It used to be a snapshot taken at startup. Pairing happens in a separate
+`qurb pair` process, so the daemon could not know about it — and "pair once"
+silently meant "pair once, then restart the daemon". The daemon now re-reads the
+trust store every five seconds, which is a handful of rows describing one
+person's own devices, and syncs immediately when something new appears:
+measured at **5 seconds** from scanning a code to the daemon acting on it,
+against 120 before.
+
+The list is replaced wholesale rather than added to, because the trust store is
+the authority: a device *forgotten* there must stop being accepted here too, and
+a set that only grew would keep letting it in.
+
 ## Not yet built
 
 

@@ -33,10 +33,51 @@ fn provider() -> Arc<CryptoProvider> {
     Arc::new(rustls::crypto::ring::default_provider())
 }
 
+/// The peers a listener will accept, as a live set.
+///
+/// Shared rather than copied, because the guest list changes while the program
+/// runs: a device paired by `qurb pair` writes to the trust store, and a
+/// listener holding a snapshot from startup would refuse it until restarted.
+/// "Pair once" has to mean once.
+///
+/// A read lock is taken per handshake, which is a handful of fingerprint
+/// comparisons against a list of one person's own devices — not a hot path.
+#[derive(Debug, Clone, Default)]
+pub struct TrustList(Arc<std::sync::RwLock<Vec<Fingerprint>>>);
+
+impl TrustList {
+    pub fn new(allowed: Vec<Fingerprint>) -> Self {
+        Self(Arc::new(std::sync::RwLock::new(allowed)))
+    }
+
+    /// Replace the set wholesale.
+    ///
+    /// Wholesale rather than adding one at a time because the trust store is
+    /// the authority: a device forgotten there must stop being accepted here,
+    /// and a set that only ever grows would keep letting it in.
+    pub fn replace(&self, allowed: Vec<Fingerprint>) {
+        if let Ok(mut current) = self.0.write() {
+            *current = allowed;
+        }
+    }
+
+    pub fn contains(&self, fingerprint: &Fingerprint) -> bool {
+        self.0.read().map(|a| a.contains(fingerprint)).unwrap_or(false)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.read().map(|a| a.is_empty()).unwrap_or(true)
+    }
+
+    fn snapshot(&self) -> Vec<Fingerprint> {
+        self.0.read().map(|a| a.clone()).unwrap_or_default()
+    }
+}
+
 /// The set of peers a connection will accept, by fingerprint.
 #[derive(Debug, Clone)]
 struct Pinned {
-    allowed: Vec<Fingerprint>,
+    allowed: TrustList,
     provider: Arc<CryptoProvider>,
     /// Whether a rejection here is expected.
     ///
@@ -64,7 +105,7 @@ impl Pinned {
                 tracing::warn!(
                     peer = %fingerprint.short(),
                     presented = %hex(fingerprint.as_bytes()),
-                    allowed = ?self.allowed.iter().map(|f| hex(f.as_bytes())).collect::<Vec<_>>(),
+                    allowed = ?self.allowed.snapshot().iter().map(|f| hex(f.as_bytes())).collect::<Vec<_>>(),
                     "rejected an unrecognised peer"
                 );
             }
@@ -255,8 +296,9 @@ pub fn pairing_server_config(identity: &Identity) -> Result<quinn::ServerConfig>
 }
 
 /// Accept connections only from `allowed`.
-pub fn server_config(identity: &Identity, allowed: &[Fingerprint]) -> Result<quinn::ServerConfig> {
-    let pinned = Pinned { allowed: allowed.to_vec(), provider: provider(), expect_rejection: false };
+pub fn server_config(identity: &Identity, allowed: &TrustList) -> Result<quinn::ServerConfig> {
+    let pinned =
+        Pinned { allowed: allowed.clone(), provider: provider(), expect_rejection: false };
 
     let mut tls = rustls::ServerConfig::builder_with_provider(provider())
         .with_protocol_versions(&[&rustls::version::TLS13])
@@ -301,7 +343,11 @@ fn client_config_inner(
     expected: Fingerprint,
     expect_rejection: bool,
 ) -> Result<quinn::ClientConfig> {
-    let pinned = Pinned { allowed: vec![expected], provider: provider(), expect_rejection };
+    let pinned = Pinned {
+        allowed: TrustList::new(vec![expected]),
+        provider: provider(),
+        expect_rejection,
+    };
 
     let mut tls = rustls::ClientConfig::builder_with_provider(provider())
         .with_protocol_versions(&[&rustls::version::TLS13])
@@ -322,4 +368,49 @@ fn client_config_inner(
     config.transport_config(Arc::new(transport));
 
     Ok(config)
+}
+
+#[cfg(test)]
+mod trust_tests {
+    use super::*;
+
+    fn fp(byte: u8) -> Fingerprint {
+        Fingerprint::from_bytes([byte; 32])
+    }
+
+    /// A device paired after a listener started must be accepted without a
+    /// restart. The verifier holds the list by reference, not by value.
+    #[test]
+    fn a_device_added_later_is_accepted() {
+        let trust = TrustList::new(vec![fp(1)]);
+        let held = trust.clone();
+
+        assert!(!held.contains(&fp(2)), "not trusted yet");
+        trust.replace(vec![fp(1), fp(2)]);
+        assert!(held.contains(&fp(2)), "a device paired later was still refused");
+    }
+
+    /// And a device forgotten must stop being accepted. A set that only grew
+    /// would keep letting in a device the user had removed, which is worse
+    /// than needing a restart.
+    #[test]
+    fn a_device_removed_later_is_refused() {
+        let trust = TrustList::new(vec![fp(1), fp(2)]);
+        let held = trust.clone();
+
+        assert!(held.contains(&fp(2)));
+        trust.replace(vec![fp(1)]);
+        assert!(!held.contains(&fp(2)), "a forgotten device is still accepted");
+    }
+
+    /// Clones share one list. If they did not, the daemon would be updating a
+    /// copy nobody consults — which is exactly the bug this replaced, in a
+    /// harder-to-see form.
+    #[test]
+    fn clones_share_one_list() {
+        let a = TrustList::new(vec![]);
+        let b = a.clone();
+        a.replace(vec![fp(7)]);
+        assert!(b.contains(&fp(7)), "the clone kept its own list");
+    }
 }

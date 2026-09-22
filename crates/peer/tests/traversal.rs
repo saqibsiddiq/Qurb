@@ -78,7 +78,7 @@ async fn two_devices_connect_over_punched_sockets() {
     let store = Arc::new(Mutex::new(store));
 
     let config =
-        qurb_peer::tls::server_config(&host_identity, &[joiner_identity.fingerprint()]).unwrap();
+        qurb_peer::tls::server_config(&host_identity, &qurb_peer::tls::TrustList::new(vec![joiner_identity.fingerprint()])).unwrap();
     let host_endpoint = nat::endpoint_from(host_socket, Some(config)).unwrap();
 
     let serving = Arc::clone(&store);
@@ -131,7 +131,7 @@ async fn a_connection_survives_stray_packets_arriving_first() {
     ));
 
     let config =
-        qurb_peer::tls::server_config(&host_identity, &[joiner_identity.fingerprint()]).unwrap();
+        qurb_peer::tls::server_config(&host_identity, &qurb_peer::tls::TrustList::new(vec![joiner_identity.fingerprint()])).unwrap();
     let host_endpoint = nat::endpoint_from(host_socket, Some(config)).unwrap();
     let serving = Arc::clone(&store);
     tokio::spawn(async move {

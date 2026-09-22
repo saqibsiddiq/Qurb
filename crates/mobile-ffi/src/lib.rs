@@ -828,7 +828,7 @@ impl Qurb {
                 format!("0.0.0.0:{}", self.port).parse().expect("a literal address"),
                 identity,
                 self.master.clone(),
-                &peers,
+                &qurb_peer::tls::TrustList::new(peers.clone()),
                 self.signal_url.clone(),
                 self.discover,
                 relay,

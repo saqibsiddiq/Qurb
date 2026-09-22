@@ -37,6 +37,15 @@ use tokio::sync::mpsc;
 /// when it changed, or a machine coming back from sleep.
 const SWEEP_INTERVAL: Duration = Duration::from_secs(120);
 
+/// How often to look for devices paired since the last check.
+///
+/// Much shorter than a sweep because it is much cheaper — a handful of rows
+/// describing one person's own devices — and because the wait is felt. Someone
+/// who has just scanned a pairing code is watching the screen, and two minutes
+/// of nothing reads as "it did not work", which is how people end up pairing
+/// twice.
+const TRUST_INTERVAL: Duration = Duration::from_secs(5);
+
 /// How long to wait before the first retry after failing to reach a peer.
 ///
 /// Short, because the commonest failure is not a device that is off but one
@@ -123,8 +132,15 @@ impl Daemon {
         // this point needs a restart to be let in. Stated as a limitation
         // rather than hidden: it is the same one `PeerServer::bind_trusting`
         // has, and fixing it properly means a listener that can be reconfigured.
-        let trusted: Vec<Fingerprint> =
-            qurb_peer::trusted_fingerprints(engine.store())?;
+        // A live set, not a snapshot. `qurb pair` is a separate process writing
+        // to the trust store, so a listener holding the list it read at startup
+        // refuses a device paired a minute later -- and "pair once" then means
+        // "pair once, then restart the daemon", which is not what anyone reads
+        // it as. Refreshed on every sweep below.
+        let trust = qurb_peer::tls::TrustList::new(qurb_peer::trusted_fingerprints(
+            engine.store(),
+        )?);
+        let trusted: Vec<Fingerprint> = qurb_peer::trusted_fingerprints(engine.store())?;
         if trusted.is_empty() {
             tracing::warn!("no paired devices; this daemon will sync with nobody");
         }
@@ -164,7 +180,7 @@ impl Daemon {
             format!("0.0.0.0:{}", self.config.port).parse()?,
             self.identity.clone(),
             self.master.clone(),
-            &trusted,
+            &trust,
             &self.config.signal,
             true,
             self.config.relay,
@@ -232,6 +248,7 @@ impl Daemon {
         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
 
         let mut timer = tokio::time::interval(SWEEP_INTERVAL);
+        let mut trust_timer = tokio::time::interval(TRUST_INTERVAL);
         timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
@@ -281,7 +298,17 @@ impl Daemon {
                 },
 
                 _ = timer.tick() => {
+                    self.refresh_trust(&trust, &mut peers);
                     self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
+                }
+
+                // A device paired just now, rather than at the next sweep.
+                _ = trust_timer.tick() => {
+                    if self.refresh_trust(&trust, &mut peers) {
+                        // Newly paired, so try it immediately: the person who
+                        // just scanned the code is waiting to see their files.
+                        self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
+                    }
                 }
 
                 // A peer said it changed. This is how news travels now; the
@@ -314,6 +341,36 @@ impl Daemon {
                 }
             }
         }
+    }
+
+    /// Pick up devices paired since the last look.
+    ///
+    /// Cheap: the trust store is a handful of rows describing one person's own
+    /// devices, and this runs once a sweep rather than per connection.
+    ///
+    /// Returns whether anything was newly trusted, so the caller can act on it.
+    fn refresh_trust(&self, trust: &qurb_peer::tls::TrustList, peers: &mut Peers) -> bool {
+        let Ok(store) = self.open_store() else { return false };
+        let Ok(current) = qurb_peer::trusted_fingerprints(&store) else { return false };
+
+        let added: Vec<Fingerprint> =
+            current.iter().copied().filter(|f| !peers.knows(f)).collect();
+
+        if !added.is_empty() {
+            for peer in &added {
+                tracing::info!(peer = %peer.short(), "a new device was paired");
+            }
+            peers.learn(&current);
+            self.report(|status| {
+                status.peers = current.len();
+                status.settle();
+            });
+        }
+        // Replaced every time, not only when something was added: a device
+        // forgotten in the trust store must stop being accepted here too.
+        let gained = !added.is_empty();
+        trust.replace(current);
+        gained
     }
 
     /// Count what the store holds, for a status summary.
@@ -489,6 +546,22 @@ impl Peers {
             .iter()
             .copied()
             .find(|f| *qurb_signal::MemberId::derive(master, f.as_bytes()).as_bytes() == *id.as_bytes())
+    }
+
+    /// Whether this peer is already known.
+    fn knows(&self, peer: &Fingerprint) -> bool {
+        self.known.contains(peer)
+    }
+
+    /// Adopt a new set of trusted peers.
+    ///
+    /// Connections to peers no longer trusted are dropped rather than left
+    /// open: forgetting a device should stop it syncing now, not at whatever
+    /// point the connection happens to fail.
+    fn learn(&mut self, current: &[Fingerprint]) {
+        self.known = current.to_vec();
+        self.connections.retain(|peer, _| current.contains(peer));
+        self.backoff.retain(|peer, _| current.contains(peer));
     }
 
     /// Forget any waiting period for this peer.

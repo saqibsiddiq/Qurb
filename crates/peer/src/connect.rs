@@ -93,7 +93,7 @@ impl Connector {
         bind: SocketAddr,
         identity: Identity,
         master: MasterKey,
-        allowed: &[Fingerprint],
+        allowed: &tls::TrustList,
         signal_url: impl Into<String>,
         discover: bool,
         relay: Option<SocketAddr>,

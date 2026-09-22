@@ -102,7 +102,6 @@ setting that silently does nothing is a bad afternoon.
 
 ## What it does not do yet
 
-- **Notice new pairings while running.** The guest list is read at startup, so a
-  device paired afterwards needs a restart.
+
 - **Run as a service.** No unit file, no launch agent, no Windows service.
 - **Anything graphical.** This is the daemon the interface will sit on.

@@ -25,3 +25,6 @@ android/app/build/
 # silently shipping.
 android/app/src/main/jniLibs/
 android/app/src/main/java/uniffi/
+
+# Understand Anything knowledge-graph cache (regenerated locally by /understand)
+.ua/
