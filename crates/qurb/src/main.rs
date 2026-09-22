@@ -16,15 +16,16 @@ use std::sync::{Arc, Mutex};
 const USAGE: &str = "\
 qurb — private cloud storage
 
-  qurb init <dir>                     set up a device and create a key
+  qurb init [dir]                     set up a device and create a key
+                                    (defaults to ~/Downloads/qurb)
   qurb enrol <dir> \"<24 words>\"       set up a device with an existing key
-  qurb pair <dir>                     show a code and wait for a device to join
+  qurb pair [dir]                     show a code and wait for a device to join
   qurb join <dir> <code>              join a device that is showing a code
-  qurb run <dir>                      watch, sync, and keep running
-  qurb status <dir>                   what this device holds and trusts
-  qurb verify <dir> [--deep]          check the store against itself
-  qurb config <dir> [key=value ...]   show or change settings
-  qurb protect <dir> <how>            change how the key is kept
+  qurb run [dir]                      watch, sync, and keep running
+  qurb status [dir]                   what this device holds and trusts
+  qurb verify [dir] [--deep]          check the store against itself
+  qurb config [dir] [key=value ...]   show or change settings
+  qurb protect [dir] <how>            change how the key is kept
                                         file | keystore | passphrase
 
 Running the services yourself:
@@ -64,10 +65,10 @@ fn run() -> Result<()> {
     };
 
     match command {
-        "init" => init(&directory(&args)?),
+        "init" => init(&new_directory(&args)?),
         "enrol" | "enroll" => {
             let phrase = args.get(2).context("give the 24 words, in quotes")?;
-            enrol(&directory(&args)?, phrase)
+            enrol(&new_directory(&args)?, phrase)
         }
         "pair" => block_on(pair(directory(&args)?)),
         "join" => {
@@ -94,9 +95,27 @@ fn run() -> Result<()> {
     }
 }
 
+/// Which folder a command should act on.
+///
+/// A path if one was given. Otherwise the folder this person last used, or the
+/// default location if it is set up — so the common case is `qurb status` with
+/// no arguments rather than retyping a path every time.
 fn directory(args: &[String]) -> Result<PathBuf> {
-    let dir = args.get(1).context("give the directory to sync")?;
-    Ok(PathBuf::from(dir))
+    if let Some(dir) = args.get(1) {
+        return Ok(PathBuf::from(dir));
+    }
+    qurb_cli::profiles::current().context(
+        "no folder given, and none is set up yet.\n\
+         Run `qurb init` to make one, or pass a path.",
+    )
+}
+
+/// Where `qurb init` should put a folder when told no path.
+fn new_directory(args: &[String]) -> Result<PathBuf> {
+    match args.get(1) {
+        Some(dir) => Ok(PathBuf::from(dir)),
+        None => qurb_cli::profiles::default_root(),
+    }
 }
 
 /// The multi-threaded scheduler is required, not preferred: storage work runs
@@ -171,7 +190,10 @@ fn init(root: &Path) -> Result<()> {
             println!("them and lose this device, your files cannot be recovered by anyone,");
             println!("including us. That is not a policy we could choose to relax.");
             println!();
-            println!("To add another device:");
+            // Recorded so later commands can be run with no path at all.
+    let _ = qurb_cli::profiles::remember(root);
+
+    println!("To add another device:");
             println!("  qurb enrol <dir> \"{} ...\"", phrase.words()[..3].join(" "));
             Ok(())
         }
@@ -195,6 +217,8 @@ fn enrol(root: &Path, phrase: &str) -> Result<()> {
     Store::open(&store_dir, chunk_key)?;
 
     println!("Set up {} with an existing key.\n", root.display());
+    let _ = qurb_cli::profiles::remember(root);
+
     println!("This device shares a key with your others, which is what makes them");
     println!("yours. They still have to be introduced: run `qurb pair` on one and");
     println!("`qurb join` here with the code it shows.");

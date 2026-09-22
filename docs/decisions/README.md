@@ -49,3 +49,4 @@ is worth more than a tidy directory.
 | [0020](0020-sync-takes-a-deadline.md) | Sync takes a deadline, and running out is not an error | Accepted |
 | [0021](0021-the-platform-supplies-the-keystore.md) | On mobile, the app supplies the keystore | Accepted |
 | [0022](0022-the-service-announces-arrivals.md) | The rendezvous service announces arrivals | Accepted |
+| [0023](0023-one-person-per-account.md) | One person per operating-system account | Accepted |

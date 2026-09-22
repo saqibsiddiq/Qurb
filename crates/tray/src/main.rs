@@ -28,7 +28,7 @@
 use anyhow::{Context, Result};
 use qurb_cli::status::Status;
 use qurb_cli::{open_with, store_dir, Daemon};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 mod host;
 mod icon;
@@ -107,19 +107,20 @@ fn directory() -> Result<PathBuf> {
         return Ok(PathBuf::from(given));
     }
 
-    // The same default the CLI uses, so running one and then the other does
-    // not silently address two different stores.
-    let home = std::env::var("HOME").context("no HOME set, and no directory given")?;
-    let default = Path::new(&home).join("qurb");
-    if qurb_cli::is_set_up(&default) {
-        return Ok(default);
-    }
-
-    anyhow::bail!(
-        "no directory given, and {} is not set up.\n\
-         Pass one: qurb-tray <dir>",
-        default.display()
-    )
+    // The same resolution the CLI uses, so launching from the applications
+    // menu and running `qurb status` in a terminal address the same folder.
+    // Without that they would silently disagree, which is the kind of thing
+    // nobody suspects until a file appears in one place and not the other.
+    qurb_cli::profiles::current().ok_or_else(|| {
+        let default = qurb_cli::profiles::default_root()
+            .map(|d| d.display().to_string())
+            .unwrap_or_else(|_| "~/Downloads/qurb".into());
+        anyhow::anyhow!(
+            "no folder is set up yet.\n\
+             Run `qurb init` to make one at {default}, or pass a path:\n\
+             \n    qurb-tray <dir>"
+        )
+    })
 }
 
 /// Ask for a passphrase.
