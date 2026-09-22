@@ -11,7 +11,7 @@ warns is not the fun part and is a full quarter.
 | area | status |
 |---|---|
 | a daemon that runs | ✅ [`qurb`](../../crates/qurb/) |
-| the commands around it | ✅ init, enrol, pair, join, run, status, verify, config |
+| the commands around it | ✅ init, enrol, pair, join, run, status, verify, reclaim, config |
 | running the services | ✅ `qurb signal`, `qurb relay` |
 | push, rather than polling | ✅ ~430ms, measured |
 | protecting the key at rest | ✅ keystore and passphrase |
@@ -21,8 +21,12 @@ warns is not the fun part and is a full quarter.
 | signed updates with rollback | ⬜ not started |
 | observability | ◐ structured logs, nothing more |
 | the interface | ◐ a tray icon; unseen on this desktop |
+| pairing | ✅ scan a QR code, once, and it stays paired |
+| a folder that needs no path | ✅ `~/Downloads/qurb`, with a registry |
+| storing each file once | ✅ the folder *is* the payload store |
+| a storage cap | ⬜ not started |
 
-446 tests pass across eleven crates; clippy is clean.
+460 tests pass across eleven crates; clippy is clean.
 
 ## The interface
 
@@ -181,9 +185,82 @@ versions kept, the same conflict filename computed independently on each device,
 and both agreeing on the resulting file list afterwards. `qurb verify --deep`
 reports everything agrees.
 
+## Pairing, once — and a folder nobody has to name
+
+Three things stood between the daemon and something a person could be handed.
+
+### "Paired" did not survive the daemon restarting — or rather, starting
+
+The TLS verifier held its list of trusted devices as a `Vec<Fingerprint>`
+snapshot, taken when the connection layer was built. `qurb pair` runs as a
+*separate process*, so a daemon that was already running never learned about a
+device paired afterwards. Pairing appeared to work — it wrote the fingerprint —
+and then nothing connected until the daemon was restarted.
+
+The snapshot is now a `TrustList`: an `Arc<RwLock<Vec<Fingerprint>>>` shared
+between the verifier and the daemon, replaced wholesale every five seconds from
+disk. Wholesale rather than appended, so that *forgetting* a device takes effect
+too. Learning a new fingerprint also triggers an immediate sync rather than
+waiting for the next interval.
+
+Measured on two fresh devices on the development laptop, 2026-09-22: **five
+seconds** from `qurb pair` completing to the devices connected, against never
+without a restart.
+
+### The pairing code was eight lines of base32 read off a screen
+
+Now `qurb pair` renders the same invite as a QR code in the terminal, and the
+Android app scans it with CameraX and ML Kit. The invite is unchanged — same
+bytes, same expiry, same one-time use — so nothing about the security argument
+moves. What changes is that a phone no longer needs a keyboard, and a person no
+longer needs to transcribe a fingerprint to know they paired with the right
+machine.
+
+### Every command wanted a path
+
+`qurb run ~/qurb` is fine once. It is not fine as the thing a person types
+daily, and it is impossible as the thing a desktop launcher does. Commands now
+default to a folder: `$XDG_DOWNLOAD_DIR/qurb`, falling back to
+`~/Downloads/qurb`, with a small registry under `$XDG_CONFIG_HOME/qurb/folders`
+recording which folders exist so the most recently used one wins. The legacy
+`~/qurb` is still found if it is there.
+
+Several people on one computer is answered by several operating-system
+accounts rather than by a qurb-level notion of a user — see
+[decisions/0023](../decisions/0023-one-person-per-account.md).
+
+## Every file cost twice its size
+
+Content lived in two places on every syncing device: the file in `~/qurb`, and
+compressed, encrypted chunks of the same bytes in `~/qurb/.qurb/chunks`. Nobody
+had noticed because the test corpora were small and the store was never
+compared against the folder that produced it.
+
+Measured on the development laptop, 2026-09-22: 7.6 MB of files in `~/qurb`,
+7.5 MiB of chunk payloads holding exactly that same content.
+
+The fix is that a materialised file *is* the payload store for the chunks it
+holds — the chunk store keeps only what the folder cannot supply, and reads
+that find no payload seek into the file and hash-check what they find.
+[decisions/0024](../decisions/0024-the-file-is-the-payload-store.md) records
+what that costs, which is not nothing: editing a file now makes its superseded
+versions unreadable rather than recoverable.
+
+`qurb reclaim` frees the duplicates an older store still holds. On the real
+laptop store: 7.5 MiB across 15 chunks, `qurb verify --deep` clean afterwards.
+
+This was found while sizing up the storage cap, and it had to be fixed first: a
+cap that counts every file twice is a cap on half of what the user thinks they
+are limiting.
+
 ## Still to do
 
-- **Noticing a device paired while running.** The guest list is read at startup.
+- **A storage cap.** The next piece of work, and the reason the above was
+  found.
+- **Running garbage collection.** `Store::gc` is written and tested and has no
+  caller outside tests, so superseded chunks accumulate without limit — 82 MB
+  of them on the laptop, for one deleted file. The cap cannot work until this
+  does.
 - **Running as a service** — a systemd unit, a launch agent, a Windows service.
 - **Installers**, and the update mechanism with rollback.
 - **The interface.** Everything so far is a terminal, and the onboarding screen

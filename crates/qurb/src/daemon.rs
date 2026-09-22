@@ -114,6 +114,7 @@ impl Daemon {
 
     fn open_store(&self) -> Result<Store> {
         Store::open(&self.store_dir, self.chunk_key())
+            .map(|store| store.in_tree(&self.root))
             .with_context(|| format!("opening the store at {}", self.store_dir.display()))
     }
 

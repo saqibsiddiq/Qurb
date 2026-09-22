@@ -292,6 +292,57 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
+    /// Where a chunk's bytes can be found inside a live file.
+    ///
+    /// Returns the logical path, the byte offset within it, and the length —
+    /// enough to read the plaintext straight from the file the user can see,
+    /// without keeping a second encrypted copy of it.
+    ///
+    /// The offset is not stored; it is the running sum of the sizes of the
+    /// chunks before this one in the same file, which the chunk list already
+    /// determines. Scoped to a single holder first, so the window function runs
+    /// over one file's chunks rather than every chunk in the index.
+    ///
+    /// `None` when no live file provides it — the content was deleted, or this
+    /// device never materialised it (a replica holds chunks and no tree).
+    pub fn locate_chunk(&self, hash: &blake3::Hash) -> Result<Option<(String, u64, u64)>> {
+        let found = self.conn.query_row(
+            "WITH holder AS (
+                 SELECT fc.file_id AS id
+                   FROM file_chunks fc
+                   JOIN files f ON f.id = fc.file_id
+                  WHERE fc.chunk_hash = ?1 AND f.deleted_at IS NULL
+                  LIMIT 1
+             ),
+             laid_out AS (
+                 SELECT fc.chunk_hash,
+                        c.size,
+                        COALESCE(
+                            SUM(c.size) OVER (ORDER BY fc.seq
+                                              ROWS BETWEEN UNBOUNDED PRECEDING
+                                                       AND 1 PRECEDING),
+                            0) AS offset
+                   FROM file_chunks fc
+                   JOIN chunks c ON c.hash = fc.chunk_hash
+                  WHERE fc.file_id = (SELECT id FROM holder)
+             )
+             SELECT (SELECT path FROM files WHERE id = (SELECT id FROM holder)),
+                    l.offset,
+                    l.size
+               FROM laid_out l
+              WHERE l.chunk_hash = ?1
+              LIMIT 1",
+            params![hash.as_bytes().as_slice()],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64)),
+        );
+
+        match found {
+            Ok(located) => Ok(Some(located)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     /// Total size of every live file, as the user would count it.
     ///
     /// Distinct from the plaintext total in [`size_totals`](Self::size_totals),

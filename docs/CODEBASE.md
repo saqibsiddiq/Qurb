@@ -72,6 +72,26 @@ Two consequences follow immediately, and they are the reason for the design:
   is intact, hash it and compare to its own filename. This is how corruption
   is detected.
 
+#### The file in the folder is one of the places chunks live
+
+The picture above is not the whole story, and the part it leaves out matters
+more than it looks. On a device that syncs a folder, the file `Summer.jpg` is
+sitting right there in `~/qurb`, holding exactly the bytes those chunks are
+made of. Writing an encrypted copy of them into `chunks/` as well would make
+every synced file cost **twice** its size.
+
+So it is not written. On a device with a folder attached, the chunk store keeps
+only what the folder cannot supply, and a read that finds no payload goes to the
+file instead — seeking to the chunk's offset, which the index computes as the
+running sum of the chunks before it. The bytes are hashed before they are
+returned, so a file edited behind qurb's back makes the *old* chunks fail to
+read rather than answer with the wrong content.
+
+A store with no folder — a storage-only replica — keeps every payload, because
+nothing else has them. See
+[decisions/0024](decisions/0024-the-file-is-the-payload-store.md) for what this
+costs, and `qurb reclaim` for freeing the duplicates an older store still holds.
+
 ### 2.2 Chunk boundaries are chosen by content, not by position
 
 The obvious way to split a file is every N bytes. Dropbox does this with 4 MB
@@ -198,6 +218,8 @@ This is the single most useful trace to have in your head.
  4. Ask the index: seen this hash?  ✅ SQLite lookup
       already known → record a reference, no data written
       new          → continue
+ 4b. Is the file itself in the      ✅ if so, it *is* the payload — record the
+     synced folder?                    chunk, write nothing, skip to 8
  5. Compress                        ✅ Zstd, kept only when it actually helps
  6. Encrypt                         ✅ XChaCha20-Poly1305
  7. Write to the CAS                ✅ chunks/<first 2 hex>/<full hash>
@@ -388,9 +410,11 @@ product around it largely is not.
 | Content-addressable store | crash-safe writes via temp file + rename |
 | SQLite index | paths, chunk lists, reference counts via triggers |
 | Deduplication | within a file, across files, across versions |
+| Single-copy storage | a materialised file *is* its own payload store |
 | Deletion, tombstones, restore | content survives a retention window |
-| Garbage collection | two-stage, never touches a referenced chunk |
+| Garbage collection | two-stage, never touches a referenced chunk — **but nothing calls it** |
 | Integrity verification | detects missing, corrupt, and orphaned chunks |
+| Reclaiming duplicates | `qurb reclaim`, for stores written before single-copy |
 
 ### Built and tested (`crates/watcher`, Phase 1)
 
@@ -662,7 +686,16 @@ and billing, the desktop UI, selective sync, updates.
 
 ### The gaps that matter most
 
-Three things are known-missing rather than merely unbuilt:
+Four things are known-missing rather than merely unbuilt:
+
+11. **Garbage collection has never run.** `Store::gc` is written, tested, and
+   correct as far as its tests go, but it has **no caller outside tests** — no
+   command invokes it and the daemon does not schedule it. Superseded and
+   expired chunks therefore accumulate without limit. On the development laptop
+   on 2026-09-22 this was 82 MB of retained chunks for one deleted file, in a
+   store holding 7.6 MB of live files. This has to be fixed before a storage
+   cap means anything: a cap that cannot free space is a cap that stops
+   working.
 
 12. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
    consumer product in this space eventually adds some escape hatch — social
@@ -686,7 +719,8 @@ worth knowing:
 **Chunk garbage collection** was written first in Phase 1, because a collector
 that is even slightly wrong destroys data in files the user never touched and
 raises no error doing it. See
-[phases/phase-1-engine.md](phases/phase-1-engine.md).
+[phases/phase-1-engine.md](phases/phase-1-engine.md). Writing it, however, is
+not running it — see gap 11 above, which is the part still open.
 
 **Availability** — files being unreachable when every device is switched off —
 is answered by storage-only replicas, decided in
@@ -717,6 +751,12 @@ introduce them, then `run` on both:
 
 `qurb` with no arguments lists the rest. See
 [crates/qurb/README.md](../crates/qurb/README.md).
+
+```bash
+# Free the duplicate payloads a store written before single-copy still holds.
+# Safe to interrupt, and a no-op on a store that has no folder attached.
+./target/release/qurb reclaim ~/Sync
+```
 
 ```bash
 # the test suites -- start here to see what each layer guarantees

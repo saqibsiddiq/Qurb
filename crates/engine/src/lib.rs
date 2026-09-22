@@ -348,6 +348,11 @@ impl Engine {
         let queue = std::sync::Mutex::new(entries.into_iter());
         let root = self.store.root().to_path_buf();
         let key = self.store.chunk_key();
+        // Each worker must agree with the main store about whether the tree
+        // supplies payloads. A worker without it would write a second copy of
+        // every file it stores, silently undoing the saving for exactly the
+        // bulk pass where it matters most.
+        let tree = self.store.has_tree().then(|| self.root.clone());
         let collected = std::sync::Mutex::new(SyncStats::default());
 
         std::thread::scope(|scope| {
@@ -356,7 +361,11 @@ impl Engine {
                     // A connection per worker. WAL mode allows it, and the
                     // collector already runs against a live writer, so
                     // concurrent access is a path with tests behind it.
-                    let mut store = match Store::open(&root, key.clone()) {
+                    let mut store = match Store::open(&root, key.clone())
+                        .map(|s| match &tree {
+                            Some(root) => s.in_tree(root),
+                            None => s,
+                        }) {
                         Ok(store) => store,
                         Err(e) => {
                             collected

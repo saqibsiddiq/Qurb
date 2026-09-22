@@ -12,13 +12,25 @@ use crate::format::{self, ChunkKey};
 use crate::gc::{self, GcStats};
 use qurb_sync::{Content, DeviceId, FileVersion};
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub struct Store {
     cas: Cas,
     db: Db,
     key: ChunkKey,
+    /// Where this device's materialised files live, if it has any.
+    ///
+    /// A syncing device writes every file to a folder the user can see, so the
+    /// plaintext is already on disk — and keeping an encrypted copy of it in
+    /// the chunk store as well costs a second copy of everything the user
+    /// owns. With this set, the tree *is* the payload store for content it
+    /// holds, and the chunk store keeps only what the tree does not provide.
+    ///
+    /// `None` for a storage-only replica, which has no tree and must therefore
+    /// keep every payload itself. That is not a special case bolted on: a
+    /// replica is precisely the device whose content is not materialised.
+    tree: Option<PathBuf>,
 }
 
 /// Whose change this is.
@@ -67,7 +79,75 @@ impl Store {
         std::fs::create_dir_all(root).map_err(|e| Error::io(root, e))?;
         let cas = Cas::open(root.join("chunks"))?;
         let db = Db::open(&root.join("index.db"))?;
-        Ok(Self { cas, db, key })
+        Ok(Self { cas, db, key, tree: None })
+    }
+
+    /// Tell the store where materialised files live.
+    ///
+    /// With a tree, content the user can already see is not stored a second
+    /// time: `read_chunk` reads those bytes back out of the file. Without one —
+    /// a storage-only replica — every payload is kept in the chunk store, which
+    /// is the only copy that exists there.
+    ///
+    /// The root is the *sync* folder, not the store directory: the store lives
+    /// inside it, at `<root>/.qurb`.
+    pub fn in_tree(mut self, root: impl Into<PathBuf>) -> Self {
+        self.tree = Some(root.into());
+        self
+    }
+
+    /// Whether this store materialises files.
+    pub fn has_tree(&self) -> bool {
+        self.tree.is_some()
+    }
+
+    /// Whether the tree holds a readable file at this logical path.
+    ///
+    /// The question is not "is there a tree" but "will these bytes still be
+    /// reachable afterwards". A path the tree does not actually have must keep
+    /// its payloads in the chunk store, or the content is gone.
+    fn supplies(&self, logical_path: &str) -> bool {
+        self.tree
+            .as_ref()
+            .map(|tree| tree.join(logical_path).is_file())
+            .unwrap_or(false)
+    }
+
+    /// Read a chunk's plaintext out of the file that holds it.
+    ///
+    /// Returns `None` when no live file provides it, which is the ordinary
+    /// case for a replica and for content whose file has been deleted.
+    ///
+    /// The bytes are verified against the hash asked for. A file the user has
+    /// edited since it was indexed will not match, and saying so is right:
+    /// the content that hash names is genuinely no longer there, and returning
+    /// the new bytes under the old name would corrupt whatever asked.
+    fn chunk_from_tree(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
+        let Some(tree) = &self.tree else { return Ok(None) };
+        let Some((path, offset, len)) = self.db.locate_chunk(hash)? else { return Ok(None) };
+
+        let full = tree.join(&path);
+        let mut file = match std::fs::File::open(&full) {
+            Ok(file) => file,
+            // Gone or unreadable: not an error here, just not a source.
+            Err(_) => return Ok(None),
+        };
+
+        use std::io::{Read, Seek, SeekFrom};
+        if file.seek(SeekFrom::Start(offset)).is_err() {
+            return Ok(None);
+        }
+        let mut buffer = vec![0u8; len as usize];
+        if file.read_exact(&mut buffer).is_err() {
+            return Ok(None);
+        }
+
+        if blake3::hash(&buffer) != *hash {
+            // The file changed under us. The index will catch up on the next
+            // scan; until then this chunk simply has no source here.
+            return Ok(None);
+        }
+        Ok(Some(buffer))
     }
 
     /// Where this store lives, so another handle can be opened on it.
@@ -262,6 +342,17 @@ impl Store {
             }
         };
 
+        // Whether the file being recorded is the one the tree holds at this
+        // path -- in which case the tree supplies the payloads and the chunk
+        // store need not.
+        //
+        // Checked by path rather than assumed, because `put_file` accepts any
+        // source: importing from elsewhere on the disk copies into the tree
+        // first, but nothing in the type system says so, and skipping the
+        // write for a file that is *not* in the tree would lose the content
+        // entirely.
+        let materialised = self.supplies(logical_path);
+
         // Phase 1: get every payload on disk. Distinct hashes only -- a file
         // that repeats a chunk internally should not write it twice.
         let mut seen = HashSet::new();
@@ -275,6 +366,19 @@ impl Store {
                 && self.db.has_chunk(&c.hash)?
                 && self.cas.contains(&c.hash)
             {
+                stats.bytes_deduplicated += c.len as u64;
+                continue;
+            }
+
+            // Where the tree already holds these bytes, do not store them
+            // again. The file the user can see *is* the payload; a second
+            // encrypted copy of it would double what every synced file costs,
+            // for content that is already on this disk and already readable.
+            //
+            // `stored_size` is recorded as zero for such a chunk, which is
+            // true: it occupies nothing of its own.
+            if materialised {
+                self.db.insert_chunk(&c.hash, c.len as u64, 0)?;
                 stats.bytes_deduplicated += c.len as u64;
                 continue;
             }
@@ -326,6 +430,22 @@ impl Store {
                     continue;
                 }
                 let indexed: bool = exists.exists(rusqlite::params![c.hash.as_bytes().as_slice()])?;
+
+                // A tree-backed chunk is deliberately absent from the CAS, so
+                // "indexed but no payload" is its normal state, not evidence
+                // that collection took it. Re-assert the index row -- that much
+                // *can* have been collected -- and never write the payload.
+                if materialised {
+                    if !indexed {
+                        insert.execute(rusqlite::params![
+                            c.hash.as_bytes().as_slice(),
+                            c.len as i64,
+                            0i64
+                        ])?;
+                    }
+                    continue;
+                }
+
                 if indexed && self.cas.contains(&c.hash) {
                     continue;
                 }
@@ -455,6 +575,15 @@ impl Store {
     /// Fetch one chunk: read, decrypt, decompress, and check it is what it
     /// claims to be.
     pub fn read_chunk(&self, hash: &blake3::Hash) -> Result<Vec<u8>> {
+        // The tree first when the chunk store does not hold it. Ordered this
+        // way round -- cheap membership test, then the file -- so a replica and
+        // any content the tree cannot supply take the original path unchanged.
+        if !self.cas.contains(hash) {
+            if let Some(plaintext) = self.chunk_from_tree(hash)? {
+                return Ok(plaintext);
+            }
+        }
+
         let stored = self.cas.get(hash)?;
         let plaintext = format::open(&self.key, &stored, &hash.to_hex())?;
         if blake3::hash(&plaintext) != *hash {
@@ -679,6 +808,41 @@ impl Store {
         gc::sweep_orphans(&mut self.db, &self.cas)
     }
 
+    /// Drop payloads the tree can supply, and report what that freed.
+    ///
+    /// The single-copy rule applies when a file is indexed. A store written
+    /// before the rule existed — or one whose tree was attached later — holds
+    /// a second encrypted copy of content the user's own folder already has,
+    /// and nothing re-indexes an unchanged file, so that copy would otherwise
+    /// stay forever. This is the one-off pass that removes it.
+    ///
+    /// Safe to interrupt: each chunk is verified out of the tree *before* its
+    /// payload is deleted, so a chunk is only ever dropped once the bytes are
+    /// known to be readable somewhere else. A storage-only replica has no tree
+    /// and reclaims nothing, which is correct — it is the only holder.
+    pub fn reclaim(&mut self) -> Result<GcStats> {
+        let mut stats = GcStats::default();
+        if self.tree.is_none() {
+            return Ok(stats);
+        }
+
+        for hash in self.cas.iter_hashes()? {
+            if !matches!(self.chunk_from_tree(&hash), Ok(Some(_))) {
+                continue;
+            }
+            let freed = self.cas.stored_size(&hash).unwrap_or(0);
+            self.cas.remove(&hash)?;
+            self.db.conn().execute(
+                "UPDATE chunks SET stored_size = 0 WHERE hash = ?1",
+                rusqlite::params![hash.as_bytes().as_slice()],
+            )?;
+            stats.chunks_removed += 1;
+            stats.bytes_reclaimed += freed;
+        }
+
+        Ok(stats)
+    }
+
     /// Check the index and the chunk store agree with each other.
     ///
     /// `deep` additionally decrypts and re-hashes every chunk, which is the
@@ -702,7 +866,14 @@ impl Store {
 
         for hash in &indexed {
             if !self.cas.contains(hash) {
-                report.missing.push(*hash);
+                // Not in the chunk store is not the same as missing. A tree
+                // supplies the payloads for content it materialises, and
+                // reporting every such chunk as lost would make `verify`
+                // useless on exactly the devices people run it on.
+                match self.chunk_from_tree(hash) {
+                    Ok(Some(_)) => {}
+                    _ => report.missing.push(*hash),
+                }
             } else if deep {
                 match self.read_chunk(hash) {
                     Ok(_) => {}

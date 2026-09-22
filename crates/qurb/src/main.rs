@@ -24,6 +24,7 @@ qurb — private cloud storage
   qurb run [dir]                      watch, sync, and keep running
   qurb status [dir]                   what this device holds and trusts
   qurb verify [dir] [--deep]          check the store against itself
+  qurb reclaim [dir]                  free space the folder itself already holds
   qurb config [dir] [key=value ...]   show or change settings
   qurb protect [dir] <how>            change how the key is kept
                                         file | keystore | passphrase
@@ -78,6 +79,7 @@ fn run() -> Result<()> {
         "run" => block_on(start(directory(&args)?)),
         "status" => status(&directory(&args)?),
         "verify" => verify(&directory(&args)?, args.iter().any(|a| a == "--deep")),
+        "reclaim" => reclaim(&directory(&args)?),
         "config" => configure(&directory(&args)?, &args[2..]),
         "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
         "signal" => block_on(signal(args.get(1).cloned())),
@@ -153,7 +155,11 @@ fn open(root: &Path) -> Result<(MasterKey, Identity, Store, Config)> {
     };
     let identity = Identity::load_or_create(&store_dir)?;
     let chunk_key = ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
-    let store = Store::open(&store_dir, chunk_key)?;
+    // Attach the sync folder, not just the store inside it. The folder holds
+    // the payloads for every file it materialises, so a store opened without
+    // it cannot read that content at all -- `verify` would call it missing and
+    // `reclaim` would find nothing to free.
+    let store = Store::open(&store_dir, chunk_key)?.in_tree(root);
     let config = Config::load(&store_dir)?;
     Ok((master, identity, store, config))
 }
@@ -363,6 +369,28 @@ fn status(root: &Path) -> Result<()> {
                 }
             }
         }
+    }
+    Ok(())
+}
+
+/// Drop encrypted copies of content the sync folder itself holds.
+///
+/// A store written before the single-copy rule kept both, and nothing
+/// re-indexes a file that has not changed, so the duplicates need asking for.
+fn reclaim(root: &Path) -> Result<()> {
+    let (_, _, mut store, _) = open(root)?;
+
+    println!("Looking for content {} already holds", root.display());
+    let freed = store.reclaim()?;
+
+    if freed.chunks_removed == 0 {
+        println!("  nothing to free — no second copies found");
+    } else {
+        println!(
+            "  freed {} across {} chunk(s)",
+            human(freed.bytes_reclaimed),
+            freed.chunks_removed
+        );
     }
     Ok(())
 }

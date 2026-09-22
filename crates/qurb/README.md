@@ -11,6 +11,7 @@ qurb join <dir> <code>           join a device that is showing a code
 qurb run <dir>                   watch, sync, and keep running
 qurb status <dir>                what this device holds and trusts
 qurb verify <dir> [--deep]       check the store against itself
+qurb reclaim <dir>               free space the folder itself already holds
 qurb config <dir> [key=value]    show or change settings
 
 qurb signal [addr]               the rendezvous service

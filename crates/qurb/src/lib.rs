@@ -60,7 +60,9 @@ pub fn open_with(
 
     let identity = Identity::load_or_create(&store_dir)?;
     let chunk_key = ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
-    let store = Store::open(&store_dir, chunk_key)?;
+    // In a tree: this device materialises its files, so the tree supplies
+    // the payloads and the chunk store keeps only what it cannot.
+    let store = Store::open(&store_dir, chunk_key)?.in_tree(root);
     let config = Config::load(&store_dir)?;
     Ok((master, identity, store, config))
 }
