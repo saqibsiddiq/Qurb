@@ -30,3 +30,6 @@ gtk = "0.18"
 # StatusNotifier host, so the icon is created successfully and never appears --
 # a failure mode no return value reports.
 zbus = { version = "5", default-features = false, features = ["tokio"] }
+# For the size of the disk the folder is on, which the allowance slider needs
+# as its maximum. There is no standard-library way to ask.
+libc = "0.2"

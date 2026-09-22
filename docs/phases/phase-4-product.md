@@ -20,11 +20,12 @@ warns is not the fun part and is a full quarter.
 | installers | ⬜ not started |
 | signed updates with rollback | ⬜ not started |
 | observability | ◐ structured logs, nothing more |
-| the interface | ◐ a tray icon; unseen on this desktop |
+| the interface | ◐ a window with the settings that matter |
+| one daemon per folder | ✅ an advisory lock, not a convention |
 | pairing | ✅ scan a QR code, once, and it stays paired |
 | a folder that needs no path | ✅ `~/Downloads/qurb`, with a registry |
 | storing each file once | ✅ the folder *is* the payload store |
-| a storage cap | ✅ limit, eviction, fetch-back |
+| a storage cap | ✅ limit, eviction, fetch-back — and a slider |
 | garbage collection running | ✅ every 5 minutes, 7-day retention |
 
 475 tests pass across eleven crates; clippy is clean.
@@ -301,10 +302,60 @@ Linux, which has no placeholder API — `qurb status` is the only place that say
 it still exists. And `qurb fetch` waits for the next sweep rather than nudging
 the daemon, so a file can take up to two minutes to come back.
 
+## A window with a slider in it
+
+The tray icon was the interface, and on GNOME there is no tray, so on the most
+common Linux desktop the interface was a window that could only be *read*. The
+one setting people actually want to change — how much of the disk qurb may
+have — was reachable only by typing `qurb config <dir> limit=10G`.
+
+So the window now has it: a usage bar, a checkbox for whether there is a limit
+at all, and a slider that runs from 1 GiB to the size of the filesystem the
+folder is on. Offering more than the disk holds would be offering a number that
+cannot mean anything.
+
+Two details decided the design.
+
+**The slider writes the settings file, and nothing else.** Not a socket to the
+daemon, not shared memory — the file the daemon already reads. That makes
+`qurb config limit=10G` in a terminal and the slider in the window literally
+the same act, and neither can leave the other showing something stale. The
+daemon re-reads it on every maintenance pass, so a change applies without a
+restart; a setting that needs a restart is a setting people think is broken.
+
+**The window reads the file too, rather than the daemon's published status.**
+The daemon only republishes on a sync pass, so a slider driven from the status
+would sit at its old value for up to two minutes after someone moved it —
+visibly snapping back under their finger.
+
+## Two daemons on one folder
+
+Found by running one: the desktop app launched from the applications menu and
+`qurb run` typed into a terminal are the same daemon with different faces, and
+neither knew about the other. Two of them on one store contend on the SQLite
+write lock, answer as the same device on the network, both reconcile the same
+directory and both enforce the same cap — and none of that reports an error. It
+is slow and confusing rather than broken, which is worse.
+
+`crates/qurb/src/lock.rs` takes an advisory `flock` on the store for the life
+of the daemon. The kernel releases it when the process dies, which a lock file
+holding a PID could not promise after a crash. The second daemon now refuses
+with a sentence saying what is already running.
+
+The same run turned up two smaller things. The window showed nothing when the
+daemon failed underneath it — it reported files and folders from a process that
+had stopped — so a problem now appears in the window in red. And the folder
+registry had test folders in it from an afternoon's work, which meant the app
+launched from the applications menu opened a throwaway directory in `/tmp`
+rather than the real one. That one is a lesson about test hygiene rather than a
+defect: the registry is per-user configuration, and tests must not write to it.
+
 ## Still to do
 
 - **Running as a service** — a systemd unit, a launch agent, a Windows service.
 - **Installers**, and the update mechanism with rollback.
-- **The interface.** Everything so far is a terminal, and the onboarding screen
-  that asks someone to write down 24 words is the highest-stakes part of the
-  product.
+- **The interface beyond the settings.** There is a window with status and a
+  storage slider; there is no way to pair a device, browse what is synced, or
+  recover a deleted file from it. The onboarding screen that asks someone to
+  write down 24 words is still a terminal, and is the highest-stakes part of
+  the product.

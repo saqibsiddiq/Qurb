@@ -2496,6 +2496,7 @@ name = "qurb-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "libc",
  "qrcode",
  "qurb-engine",
  "qurb-keys",
@@ -2646,6 +2647,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "gtk",
+ "libc",
  "notify-rust",
  "qurb-cli",
  "qurb-keys",

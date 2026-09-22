@@ -65,6 +65,11 @@ pub struct Status {
     pub identity: String,
     pub files: usize,
     pub bytes_on_disk: u64,
+    /// Everything qurb is costing on this disk: the files being held plus the
+    /// chunk store. What a storage allowance is measured against.
+    pub used: u64,
+    /// The allowance, in bytes. Zero means none is set.
+    pub limit: u64,
     /// Paired devices, and how many answered the last time we tried.
     pub peers: usize,
     pub peers_reachable: usize,
@@ -90,6 +95,8 @@ impl Status {
             identity,
             files: 0,
             bytes_on_disk: 0,
+            used: 0,
+            limit: 0,
             peers: 0,
             peers_reachable: 0,
             recent: Vec::new(),

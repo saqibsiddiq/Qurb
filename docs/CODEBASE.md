@@ -102,6 +102,10 @@ does not leave qurb, and `qurb fetch` brings it back.
 Two things about this are worth carrying in your head, because both are places
 where a storage cap would otherwise destroy data.
 
+The allowance is set with `qurb config <dir> limit=10G`, or with the slider in
+the desktop app — the same act either way, because the slider writes the same
+settings file the command does and the daemon re-reads it as it runs.
+
 **It refuses rather than approximates.** A file is dropped only when another
 device is known to hold those exact bytes. A device that cannot free enough
 stays over its limit and says so. That looks like a bug and is not: a limit is
@@ -405,10 +409,11 @@ qurb/
 │   │   ├── src/status.rs    what the daemon is doing, for a display
 │   │   └── src/config.rs    a flat file meant to be edited by hand
 │   │
-│   └── tray/              qurb in the corner of the screen.
+│   └── tray/              The desktop app: the daemon with a face.
 │       ├── src/host.rs      whether a tray icon would be visible at all
 │       ├── src/icon.rs      the icon, drawn rather than shipped
-│       └── src/ui.rs        the menu, and what to do when there is no tray
+│       ├── src/ui.rs        the menu, and what to do when there is no tray
+│       └── src/window.rs    the window: status, and the storage slider
 │
 ├── android/               The Android app. Kotlin over the FFI, no sync logic.
 │   └── app/src/main/java/com/qurb/
@@ -875,8 +880,15 @@ cargo test --workspace
 ```
 
 ```bash
-# The daemon with an icon in the corner of the screen
+# The desktop app: the same daemon, with a window showing what it is doing and
+# a slider for how much disk it may use. Falls back to a window where there is
+# no system tray, which on GNOME is always.
 cargo run --release -p qurb-tray -- ~/qurb
+```
+
+```bash
+# Put it in the applications menu for this user. --uninstall undoes it.
+./packaging/install.sh
 ```
 
 The Android build needs the NDK, because SQLite is C. The script looks for one

@@ -147,17 +147,18 @@ impl Daemon {
             Err(e) => tracing::warn!(error = %e, "collecting failed"),
         }
 
-        if self.config.limit == 0 {
+        let limit = self.limit();
+        if limit == 0 {
             return;
         }
 
-        match engine.enforce_limit(self.config.limit) {
+        match engine.enforce_limit(limit) {
             Ok(stats) if stats.dropped > 0 || !stats.within() => {
                 tracing::info!(
                     dropped = stats.dropped,
                     freed = stats.freed,
                     used = stats.used_after,
-                    limit = self.config.limit,
+                    limit,
                     "checked the storage limit"
                 );
                 if !stats.within() {
@@ -192,6 +193,20 @@ impl Daemon {
     }
 
     pub async fn run(&self) -> Result<()> {
+        // Before anything else, and held for the whole run. Two daemons on one
+        // store contend on the write lock, answer as the same device, and both
+        // enforce the same storage cap -- and none of that reports an error,
+        // it just behaves oddly. See [`crate::lock`].
+        let _lock = match crate::lock::Lock::take(&self.store_dir)? {
+            Some(lock) => lock,
+            None => anyhow::bail!(
+                "another qurb is already syncing {}.\n\
+                 That is either the desktop app or `qurb run` in another \
+                 terminal — only one can, and they are the same daemon.",
+                self.root.display()
+            ),
+        };
+
         let mut engine = self.engine()?;
 
         // The trust store answers who may connect, so a device paired after
@@ -226,9 +241,11 @@ impl Daemon {
         // service happens to be down -- is worse than showing nothing.
         if let Ok(counted) = self.count() {
             self.report(|status| {
-                status.files = counted.0;
-                status.bytes_on_disk = counted.1;
-                status.peers = counted.2;
+                status.files = counted.files;
+                status.bytes_on_disk = counted.on_disk;
+                status.peers = counted.peers;
+                status.used = counted.used;
+                status.limit = counted.limit;
                 status.settle();
             });
         }
@@ -447,12 +464,25 @@ impl Daemon {
     }
 
     /// Count what the store holds, for a status summary.
-    fn count(&self) -> Result<(usize, u64, usize)> {
+    fn count(&self) -> Result<Counted> {
         let store = self.open_store()?;
-        let files = store.db().live_paths()?.len();
-        let (_, on_disk) = store.db().size_totals()?;
-        let peers = store.db().trusted_peers()?.len();
-        Ok((files, on_disk, peers))
+        Ok(Counted {
+            files: store.db().live_paths()?.len(),
+            on_disk: store.db().size_totals()?.1,
+            peers: store.db().trusted_peers()?.len(),
+            used: store.usage()?.total(),
+            limit: self.limit(),
+        })
+    }
+
+    /// The storage allowance, read fresh.
+    ///
+    /// From the file rather than from the copy loaded at startup, so that
+    /// changing it — with `qurb config`, or by moving the slider in the
+    /// window — takes effect on a daemon that is already running. A setting
+    /// that needs a restart to apply is a setting people will think is broken.
+    fn limit(&self) -> u64 {
+        Config::load(&self.store_dir).map(|c| c.limit).unwrap_or(self.config.limit)
     }
 
     /// Pull from every peer we can reach.
@@ -500,10 +530,12 @@ impl Daemon {
         // interface answers is "can I reach my devices *now*".
         if let Ok(counted) = self.count() {
             self.report(|status| {
-                status.files = counted.0;
-                status.bytes_on_disk = counted.1;
-                status.peers = counted.2;
+                status.files = counted.files;
+                status.bytes_on_disk = counted.on_disk;
+                status.peers = counted.peers;
                 status.peers_reachable = reached;
+                status.used = counted.used;
+                status.limit = counted.limit;
                 status.settle();
             });
         }
@@ -763,4 +795,13 @@ fn report_collisions(engine: &Engine) {
         }
         Err(e) => tracing::debug!(error = %e, "could not check for case collisions"),
     }
+}
+
+/// What one pass counted, for an interface to display.
+struct Counted {
+    files: usize,
+    on_disk: u64,
+    peers: usize,
+    used: u64,
+    limit: u64,
 }
