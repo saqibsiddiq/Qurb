@@ -59,7 +59,7 @@ error would skip the cleanup it was meant to trigger.
 
 **Behind TLS.** The group identifier is a bearer secret: anyone holding one can
 enumerate that group's addresses. `SignalClient::connect` refuses a plain
-`ws://` URL to anywhere but the local machine; `connect_insecure` exists for
+`ws://` URL to anywhere but the local network; `connect_insecure` exists for
 tests and says what it is.
 
 ## Arrivals are pushed, not polled

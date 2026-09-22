@@ -15,7 +15,12 @@ blake3.workspace = true
 qurb-keys = { path = "../keys" }
 
 tokio.workspace = true
-tokio-tungstenite = "0.30"
+# TLS included, because the rendezvous identifiers are bearer secrets and a
+# device syncing from a café is sending them across somebody else's network.
+# Webpki roots rather than the platform's: they are the same everywhere,
+# including on Android, where reaching the system trust store from Rust is its
+# own project.
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -172,7 +172,7 @@ impl Connector {
         // which the server correctly reads as the device going away. A device
         // that called out would stop being reachable the moment it finished,
         // and the failure looks like the *other* device being absent.
-        let client = SignalClient::connect_insecure(
+        let client = SignalClient::connect(
             &signal_url,
             GroupId::derive(&master),
             MemberId::derive(&master, identity.fingerprint().as_bytes()),

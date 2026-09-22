@@ -150,11 +150,20 @@ impl SignalClient {
     }
 }
 
-/// Whether a URL points at this machine, where plaintext is not a network risk.
+/// Whether plaintext to this URL stays off the open internet.
 ///
-/// Conservative by construction: anything it cannot confidently identify as
-/// local is treated as remote, because the cost of being wrong in that
-/// direction is a refused connection and in the other is a leaked secret.
+/// Two places it does. This machine, obviously. And the local network — a
+/// laptop and a phone on the same Wi-Fi, which is how qurb is set up before
+/// anyone has hosted anything, and where requiring a certificate would mean
+/// requiring a certificate for `192.168.1.4`, which nobody can get.
+///
+/// Anywhere else is the open internet, where the rendezvous identifiers are
+/// bearer secrets crossing networks belonging to strangers: a café, a mobile
+/// carrier, whatever is between. That needs `wss://`.
+///
+/// Conservative by construction: anything it cannot confidently place on a
+/// local network is treated as remote, because being wrong that way costs a
+/// refused connection and being wrong the other way leaks a secret.
 fn is_local(url: &str) -> bool {
     let rest = url.strip_prefix("ws://").unwrap_or(url);
     let rest = rest.strip_prefix("wss://").unwrap_or(rest);
@@ -169,12 +178,59 @@ fn is_local(url: &str) -> bool {
         rest.split(['/', ':']).next().unwrap_or("")
     };
 
-    matches!(host, "localhost" | "127.0.0.1" | "::1")
+    if matches!(host, "localhost" | "::1") {
+        return true;
+    }
+
+    match host.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V4(ip)) => {
+            // Loopback, RFC 1918 private ranges, and link-local. Explicitly
+            // *not* carrier-grade NAT (100.64/10): a phone on mobile data sits
+            // inside one of those with the whole carrier, which is not a local
+            // network in any sense that makes plaintext acceptable.
+            ip.is_loopback() || ip.is_private() || ip.is_link_local()
+        }
+        Ok(std::net::IpAddr::V6(ip)) => {
+            // Unique-local (fc00::/7) and link-local (fe80::/10).
+            ip.is_loopback()
+                || (ip.segments()[0] & 0xfe00) == 0xfc00
+                || (ip.segments()[0] & 0xffc0) == 0xfe80
+        }
+        // A hostname. It could resolve anywhere, so it is treated as remote —
+        // which for a name means `wss://`, and a name is exactly the case
+        // where getting a certificate is possible.
+        Err(_) => false,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The boundary this draws is "does it leave the local network", and it
+    /// is the whole reason the check exists.
+    #[test]
+    fn plaintext_stays_on_the_local_network() {
+        // Here, and on the same Wi-Fi: no certificate is obtainable for
+        // `192.168.1.4`, and nothing leaves the building.
+        assert!(is_local("ws://localhost:9000"));
+        assert!(is_local("ws://127.0.0.1:9000"));
+        assert!(is_local("ws://192.168.1.4:9000"));
+        assert!(is_local("ws://10.0.2.2:9000"));
+        assert!(is_local("ws://172.16.5.9:9000"));
+        assert!(is_local("ws://[::1]:9000"));
+        assert!(is_local("ws://[fd00::1]:9000"));
+
+        // The open internet, where the identifiers cross networks belonging to
+        // strangers.
+        assert!(!is_local("ws://192.140.152.39:9000"));
+        assert!(!is_local("ws://rendezvous.example.com:9000"));
+        assert!(!is_local("ws://8.8.8.8:9000"));
+
+        // Carrier-grade NAT is not a local network: a phone on mobile data
+        // shares one with the rest of the carrier.
+        assert!(!is_local("ws://100.64.0.1:9000"));
+    }
 
     #[test]
     fn plaintext_to_a_remote_host_is_refused() {
