@@ -94,6 +94,15 @@ impl Engine {
         // Probed rather than assumed from the platform: macOS can be formatted
         // either way, and a network mount can be anything regardless of host.
         let fold_case = qurb_watcher::is_case_insensitive(&root);
+
+        // Attach the folder to the store here, so that no caller has to
+        // remember to. A syncing device's files *are* its payload store, and a
+        // store that does not know its folder keeps a second encrypted copy of
+        // every file — correct, and twice the size it should be. Doing it at
+        // the one place that knows both is the difference between a rule and a
+        // convention.
+        let store = store.in_tree(&root);
+
         Self { root, store, ignore, fold_case, role: Role::Syncing, workers: default_workers() }
     }
 
@@ -247,14 +256,71 @@ impl Engine {
         // which matters on a library with many files.
         on_disk.sort();
         for logical in self.store.db().live_paths()? {
-            if on_disk.binary_search(&logical).is_err() {
-                match self.store.delete_file(&logical) {
-                    Ok(()) => stats.deleted += 1,
-                    Err(e) => stats.record(Path::new(&logical), e.into()),
+            if on_disk.binary_search(&logical).is_ok() {
+                continue;
+            }
+
+            // Absent because *we* dropped it to stay under the storage cap,
+            // not because anyone deleted it. Tombstoning here would turn this
+            // device being short of space into a deletion on every other
+            // device — the single worst thing the cap could do.
+            if self.store.is_materialised(&logical)? == Some(false) {
+                continue;
+            }
+
+            match self.store.delete_file(&logical) {
+                Ok(()) => stats.deleted += 1,
+                Err(e) => stats.record(Path::new(&logical), e.into()),
+            }
+        }
+
+        Ok(stats)
+    }
+
+    /// Bring disk use under `limit` by dropping local copies, coldest first.
+    ///
+    /// Returns what it managed to free and what it could not. Falling short is
+    /// a normal outcome, not an error: a device whose content exists nowhere
+    /// else has nothing it may safely drop, and the honest answer is to stay
+    /// over the limit and say so. Deleting the user's only copy to satisfy a
+    /// number they typed into a settings box would be the wrong trade in every
+    /// case.
+    ///
+    /// A limit of zero means no limit.
+    pub fn enforce_limit(&mut self, limit: u64) -> Result<CapStats> {
+        let mut stats = CapStats::default();
+        if limit == 0 {
+            return Ok(stats);
+        }
+
+        let usage = self.store.usage()?;
+        stats.used_before = usage.total();
+        stats.used_after = stats.used_before;
+        if stats.used_before <= limit {
+            return Ok(stats);
+        }
+
+        let mut over = stats.used_before - limit;
+        for (path, size, _) in self.store.evictable()? {
+            if over == 0 {
+                break;
+            }
+            match self.store.evict(&path) {
+                Ok(freed) => {
+                    tracing::info!(path = %path, freed, "dropped a local copy to stay under the limit");
+                    stats.dropped += 1;
+                    stats.freed += freed;
+                    over = over.saturating_sub(freed.max(size));
+                }
+                Err(e) => {
+                    tracing::warn!(path = %path, error = %e, "could not drop this one");
+                    stats.refused += 1;
                 }
             }
         }
 
+        stats.used_after = self.store.usage()?.total();
+        stats.still_over = stats.used_after.saturating_sub(limit);
         Ok(stats)
     }
 
@@ -433,6 +499,13 @@ impl Engine {
         let mut stats = SyncStats::default();
 
         for path in self.store.db().live_paths_under(logical)? {
+            // Evicting a file removes it from the folder, and the watcher
+            // reports that like any other removal. The index was marked before
+            // the unlink precisely so this check can tell the two apart.
+            if self.store.is_materialised(&path)? == Some(false) {
+                continue;
+            }
+
             match self.store.delete_file(&path) {
                 Ok(()) => stats.deleted += 1,
                 // Already gone: another change in the same batch covered it.
@@ -525,4 +598,27 @@ fn mtime_ns(meta: &std::fs::Metadata) -> i64 {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_nanos() as i64)
         .unwrap_or(0)
+}
+
+/// What enforcing a storage limit achieved.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CapStats {
+    pub used_before: u64,
+    pub used_after: u64,
+    /// Files whose local copy was dropped.
+    pub dropped: usize,
+    /// Bytes that left the disk.
+    pub freed: u64,
+    /// Candidates the store declined to drop, having found them unsafe.
+    pub refused: usize,
+    /// Bytes still over the limit after doing everything permitted. Non-zero
+    /// means the device holds content nothing else has, and is keeping it.
+    pub still_over: u64,
+}
+
+impl CapStats {
+    /// Whether the device is now within its limit.
+    pub fn within(&self) -> bool {
+        self.still_over == 0
+    }
 }

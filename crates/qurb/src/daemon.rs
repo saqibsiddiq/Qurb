@@ -46,6 +46,20 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(120);
 /// twice.
 const TRUST_INTERVAL: Duration = Duration::from_secs(5);
 
+/// How often to collect garbage and check the storage limit.
+///
+/// Collection takes the write lock for its deletions, so it is not something to
+/// do on every change. Five minutes is often enough that a device cannot drift
+/// far over its limit, and rare enough to be invisible.
+const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(300);
+
+/// How long deleted and superseded content stays recoverable.
+///
+/// A week: long enough to notice a mistake over a weekend, short enough that a
+/// device does not carry a month of things nobody wants. Content still
+/// referenced by a live file is never touched by this, whatever its age.
+const RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+
 /// How long to wait before the first retry after failing to reach a peer.
 ///
 /// Short, because the commonest failure is not a device that is off but one
@@ -110,6 +124,57 @@ impl Daemon {
 
     fn chunk_key(&self) -> ChunkKey {
         ChunkKey::from_bytes(self.master.derive(Purpose::ChunkEncryption).to_bytes())
+    }
+
+    /// Collect garbage, then bring disk use under the configured limit.
+    ///
+    /// In that order, and the order is the point: collection frees superseded
+    /// and expired content, which costs the user nothing. Only once that has
+    /// happened is it fair to start dropping local copies of files they still
+    /// have.
+    ///
+    /// Everything here is best-effort. A device that cannot tidy up should
+    /// keep syncing, which is what it is for.
+    fn housekeep(&self, engine: &mut Engine) {
+        match engine.store_mut().gc(RETENTION) {
+            Ok(stats) if stats.chunks_removed > 0 => tracing::info!(
+                chunks = stats.chunks_removed,
+                bytes = stats.bytes_reclaimed,
+                tombstones = stats.tombstones_expired,
+                "collected"
+            ),
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "collecting failed"),
+        }
+
+        if self.config.limit == 0 {
+            return;
+        }
+
+        match engine.enforce_limit(self.config.limit) {
+            Ok(stats) if stats.dropped > 0 || !stats.within() => {
+                tracing::info!(
+                    dropped = stats.dropped,
+                    freed = stats.freed,
+                    used = stats.used_after,
+                    limit = self.config.limit,
+                    "checked the storage limit"
+                );
+                if !stats.within() {
+                    // Said plainly rather than buried: the device is over its
+                    // limit and is keeping the excess on purpose, because
+                    // everything left is content no other device is known to
+                    // hold. Dropping it would be losing it.
+                    tracing::warn!(
+                        over_by = stats.still_over,
+                        refused = stats.refused,
+                        "over the storage limit, and keeping it: nothing left is safe to drop"
+                    );
+                }
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "checking the storage limit failed"),
+        }
     }
 
     fn open_store(&self) -> Result<Store> {
@@ -250,6 +315,8 @@ impl Daemon {
 
         let mut timer = tokio::time::interval(SWEEP_INTERVAL);
         let mut trust_timer = tokio::time::interval(TRUST_INTERVAL);
+        let mut maintenance = tokio::time::interval(MAINTENANCE_INTERVAL);
+        maintenance.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {
@@ -301,6 +368,11 @@ impl Daemon {
                 _ = timer.tick() => {
                     self.refresh_trust(&trust, &mut peers);
                     self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
+                }
+
+                // Free what nothing references, then stay under the limit.
+                _ = maintenance.tick() => {
+                    tokio::task::block_in_place(|| self.housekeep(&mut engine));
                 }
 
                 // A device paired just now, rather than at the next sweep.
@@ -464,7 +536,13 @@ impl Daemon {
             }
         };
 
-        let plan = engine.plan_against(&tree)?;
+        let mut plan = engine.plan_against(&tree)?;
+
+        // Files somebody asked to have back. The peer and this device agree
+        // about them, so reconciliation finds nothing to do -- the difference
+        // is only that the bytes are not here.
+        plan.extend(engine.wanted_actions()?);
+
         if plan.is_empty() {
             return Ok(0);
         }

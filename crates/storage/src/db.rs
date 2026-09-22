@@ -23,7 +23,7 @@ use std::path::Path;
 ///
 /// Migrations are append-only. Editing one that has already shipped would leave
 /// databases in the field at a schema nobody can reproduce.
-const MIGRATIONS: &[&str] = &[V1, V2, V3];
+const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -137,6 +137,56 @@ CREATE TABLE IF NOT EXISTS peers (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_peers_fingerprint ON peers (fingerprint);
+"#;
+
+const V4: &str = r#"
+-- Whether this device is holding the file's bytes, or only knows about it.
+--
+-- A storage cap frees space by deleting the file from the folder and keeping
+-- the index entry. Without this column the next scan would find the file gone
+-- and tombstone it -- turning "I am short of space" into "the user deleted it"
+-- and propagating that to every other device. The whole cap rests on this
+-- distinction.
+ALTER TABLE files ADD COLUMN materialised INTEGER NOT NULL DEFAULT 1;
+
+CREATE INDEX IF NOT EXISTS idx_files_evicted ON files (materialised)
+    WHERE materialised = 0 AND deleted_at IS NULL;
+
+-- Which other devices are known to have taken delivery of which content.
+--
+-- Evicting the only copy of a file destroys it. This device may only drop
+-- content it has watched another device receive: a row here is written when a
+-- transfer of that exact content hash completed, in either direction. No row
+-- means no eviction, which is the safe default for a device that has never
+-- synced.
+--
+-- Keyed by content hash rather than by path, because the question at eviction
+-- time is "do these bytes exist elsewhere", and a renamed file is the same
+-- bytes.
+CREATE TABLE IF NOT EXISTS replicas (
+    content_hash BLOB NOT NULL,
+    device_id    BLOB NOT NULL,
+    at           INTEGER NOT NULL,
+    PRIMARY KEY (content_hash, device_id)
+) STRICT;
+
+-- When the file was last read or written here. Eviction takes the coldest
+-- first, and a file nobody has opened is the cheapest one to lose.
+ALTER TABLE files ADD COLUMN touched_at INTEGER NOT NULL DEFAULT 0;
+"#;
+
+const V5: &str = r#"
+-- A standing request to have this file's bytes back.
+--
+-- `qurb fetch` runs in a different process from the daemon that does the
+-- fetching, and the daemon may not even be running -- or may have no peer
+-- reachable -- at the moment the person asks. Writing the request to the index
+-- rather than sending it anywhere means it survives both: whenever a peer next
+-- becomes reachable, the file comes back without being asked again.
+ALTER TABLE files ADD COLUMN wanted INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_files_wanted ON files (wanted)
+    WHERE wanted = 1 AND deleted_at IS NULL;
 "#;
 
 pub struct Db {
@@ -311,7 +361,7 @@ impl Db {
                  SELECT fc.file_id AS id
                    FROM file_chunks fc
                    JOIN files f ON f.id = fc.file_id
-                  WHERE fc.chunk_hash = ?1 AND f.deleted_at IS NULL
+                  WHERE fc.chunk_hash = ?1 AND f.deleted_at IS NULL AND f.materialised = 1
                   LIMIT 1
              ),
              laid_out AS (
@@ -356,6 +406,135 @@ impl Db {
             |r| r.get(0),
         )?;
         Ok(total as u64)
+    }
+
+    /// Record that `device` is known to hold these bytes.
+    ///
+    /// Written when a transfer of this content completes, in either direction:
+    /// a peer that fetched it from us has it, and a peer we fetched it from had
+    /// it. This is what makes eviction safe -- see [`Db::evictable`].
+    pub fn note_replica(&self, content: &blake3::Hash, device: &DeviceId) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO replicas (content_hash, device_id, at)
+             VALUES (?1, ?2, unixepoch())
+             ON CONFLICT (content_hash, device_id) DO UPDATE SET at = excluded.at",
+            params![content.as_bytes().as_slice(), device.as_bytes().as_slice()],
+        )?;
+        Ok(())
+    }
+
+    /// How many other devices are known to hold these bytes.
+    pub fn replica_count(&self, content: &blake3::Hash) -> Result<usize> {
+        let n: i64 = self.conn.query_row(
+            "SELECT count(*) FROM replicas WHERE content_hash = ?1",
+            params![content.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(n as usize)
+    }
+
+    /// Note that a path was just read or written here.
+    pub fn touch(&self, path: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE files SET touched_at = unixepoch() WHERE path = ?1",
+            params![path],
+        )?;
+        Ok(())
+    }
+
+    /// Live files this device could drop the bytes of, coldest first.
+    ///
+    /// Three conditions, all of them necessary:
+    ///
+    /// - **Materialised.** There is nothing to free in a file already evicted.
+    /// - **Known to be elsewhere.** At least one other device has taken
+    ///   delivery of this exact content. Without that this is the only copy,
+    ///   and dropping it is not eviction but deletion.
+    /// - **Not a tombstone.** Deleted files are the garbage collector's
+    ///   problem, not the cap's.
+    ///
+    /// Ordered by last touch, oldest first, then by size largest first so that
+    /// among equally cold files the one that frees the most goes first.
+    pub fn evictable(&self) -> Result<Vec<(String, u64, blake3::Hash)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT f.path, f.size, f.content_hash
+               FROM files f
+              WHERE f.deleted_at IS NULL
+                AND f.materialised = 1
+                AND EXISTS (SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash)
+              ORDER BY f.touched_at ASC, f.size DESC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let raw: Vec<u8> = r.get(2)?;
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, to_hash(&raw)))
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// Mark a path as held or not held here. Returns whether anything changed.
+    pub fn set_materialised(&self, path: &str, held: bool) -> Result<bool> {
+        let changed = self.conn.execute(
+            "UPDATE files SET materialised = ?2 WHERE path = ?1 AND deleted_at IS NULL",
+            params![path, held as i64],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Whether this device holds the bytes of a live path.
+    ///
+    /// `None` when the path is not live here at all, which is a different
+    /// question from "evicted" and must not be confused with it.
+    pub fn is_materialised(&self, path: &str) -> Result<Option<bool>> {
+        self.conn
+            .query_row(
+                "SELECT materialised FROM files WHERE path = ?1 AND deleted_at IS NULL",
+                params![path],
+                |r| Ok(r.get::<_, i64>(0)? != 0),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// Live paths whose bytes this device has dropped.
+    pub fn evicted_paths(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT path FROM files
+              WHERE deleted_at IS NULL AND materialised = 0
+              ORDER BY path",
+        )?;
+        let rows = stmt.query_map([], |r| r.get(0))?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// Bytes of live files this device is actually holding.
+    pub fn materialised_bytes(&self) -> Result<u64> {
+        let n: i64 = self.conn.query_row(
+            "SELECT coalesce(sum(size), 0) FROM files
+              WHERE deleted_at IS NULL AND materialised = 1",
+            [],
+            |r| r.get(0),
+        )?;
+        Ok(n as u64)
+    }
+
+    /// Ask for a file's bytes back. Acted on the next time a peer is reachable.
+    pub fn want(&self, path: &str) -> Result<bool> {
+        let changed = self.conn.execute(
+            "UPDATE files SET wanted = 1 WHERE path = ?1 AND deleted_at IS NULL",
+            params![path],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Paths asked for that this device is not holding yet.
+    pub fn wanted_paths(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT path FROM files
+              WHERE wanted = 1 AND materialised = 0 AND deleted_at IS NULL
+              ORDER BY path",
+        )?;
+        let rows = stmt.query_map([], |r| r.get(0))?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
     pub fn live_paths(&self) -> Result<Vec<String>> {

@@ -100,7 +100,12 @@ struct Served {
 /// answering peers while another follows the filesystem.
 fn serve(device: &Device, allowed: &[Fingerprint]) -> Served {
     let store_dir = device.root.join(".qurb");
-    let store = Store::open(&store_dir, ChunkKey::from_bytes([42; 32])).unwrap();
+    // With the folder attached, as a real server's store is: a syncing device
+    // keeps its payloads in the files themselves, so a store that does not
+    // know the folder would answer "not found" for every chunk it holds.
+    let store = Store::open(&store_dir, ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&device.root);
 
     let server = PeerServer::bind(LOOPBACK.parse().unwrap(), &device.identity, &qurb_peer::tls::TrustList::new(allowed.to_vec())).unwrap();
     let addr = server.local_addr().unwrap();
@@ -127,7 +132,9 @@ async fn pull(local: &mut Device, remote: &Served) -> qurb_engine::PlanStats {
     let tree = client.tree().await.expect("tree");
     let plan = local.engine.plan_against(&tree).unwrap();
 
-    let reader = Store::open(&local.root.join(".qurb"), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&local.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&local.root);
     let mut source = NetworkSource::new(&client, &reader);
     let stats = local.engine.apply_plan(&plan, &mut source).unwrap();
 

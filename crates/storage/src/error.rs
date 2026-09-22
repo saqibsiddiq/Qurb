@@ -35,6 +35,11 @@ pub enum Error {
 
     #[error("index is corrupt: {detail}")]
     Corrupt { detail: String },
+
+    /// Dropping this file's bytes would destroy them. Refused rather than
+    /// risked: a storage cap is a promise about disk, not about data.
+    #[error("cannot drop {path}: {why}")]
+    CannotEvict { path: String, why: &'static str },
 }
 
 impl Error {

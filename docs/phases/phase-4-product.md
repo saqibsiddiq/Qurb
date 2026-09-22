@@ -11,7 +11,7 @@ warns is not the fun part and is a full quarter.
 | area | status |
 |---|---|
 | a daemon that runs | ✅ [`qurb`](../../crates/qurb/) |
-| the commands around it | ✅ init, enrol, pair, join, run, status, verify, reclaim, config |
+| the commands around it | ✅ init, enrol, pair, join, run, status, verify, reclaim, fetch, config |
 | running the services | ✅ `qurb signal`, `qurb relay` |
 | push, rather than polling | ✅ ~430ms, measured |
 | protecting the key at rest | ✅ keystore and passphrase |
@@ -24,9 +24,10 @@ warns is not the fun part and is a full quarter.
 | pairing | ✅ scan a QR code, once, and it stays paired |
 | a folder that needs no path | ✅ `~/Downloads/qurb`, with a registry |
 | storing each file once | ✅ the folder *is* the payload store |
-| a storage cap | ⬜ not started |
+| a storage cap | ✅ limit, eviction, fetch-back |
+| garbage collection running | ✅ every 5 minutes, 7-day retention |
 
-460 tests pass across eleven crates; clippy is clean.
+470 tests pass across eleven crates; clippy is clean.
 
 ## The interface
 
@@ -253,14 +254,55 @@ This was found while sizing up the storage cap, and it had to be fixed first: a
 cap that counts every file twice is a cap on half of what the user thinks they
 are limiting.
 
+## Telling a device how much disk it may use
+
+`qurb config <dir> limit=10G`. Over the limit, qurb drops local copies of the
+coldest files and keeps everything the index knows about them, so the path
+still syncs, still lists, and comes back on `qurb fetch`.
+
+The interesting part of this feature is not the freeing. It is the two refusals.
+
+**A file is dropped only when another device is known to hold those exact
+bytes**, recorded when this device adopts a version another device made. So a
+device never evicts content it originated — the phone keeps the photo it took,
+the desktop may drop the copy it was sent. A device that cannot free enough
+stays over its limit and says so in the log, which looks like a bug and is not:
+a limit is a promise about disk, and no number in a settings box outranks the
+only copy of someone's work.
+
+**Dropping a file must not look like deleting it.** A syncing device decides a
+file was deleted by not finding it during a scan — so without care, a device
+short of disk drops a file, the next scan calls that a deletion, and the file
+is deleted on every other device. The index now records whether this device is
+*holding* each file separately from whether the file is there, set before the
+unlink and never after, and both the scan and the watcher skip a file that is
+missing on purpose.
+
+Measured on the development laptop, 2026-09-22, two devices on loopback over a
+real QUIC connection with a 2 MiB limit and 4.8 MiB of content:
+
+| | device that received the files | device that made them |
+|---|---|---|
+| dropped | 1 file, 3.0 MB | nothing |
+| ended at | 1.9 MiB, under the limit | 5.0 MB, 2.8 MB over, deliberately |
+
+Neither device recorded a deletion, and the other device still held both files.
+`qurb fetch` brought the dropped file back on the following sweep, byte-identical.
+
+Garbage collection is part of this and had never run: `Store::gc` was written
+and tested in Phase 1 and had no caller outside tests, so superseded chunks
+accumulated without limit — 82 MB of them on this laptop for one deleted file.
+The daemon now collects every five minutes with a seven-day retention window,
+before it checks the limit. Collecting first costs the user nothing; only then
+is it fair to drop copies of files they still have.
+
+Two things this leaves undone. An evicted file **vanishes from the folder** on
+Linux, which has no placeholder API — `qurb status` is the only place that says
+it still exists. And `qurb fetch` waits for the next sweep rather than nudging
+the daemon, so a file can take up to two minutes to come back.
+
 ## Still to do
 
-- **A storage cap.** The next piece of work, and the reason the above was
-  found.
-- **Running garbage collection.** `Store::gc` is written and tested and has no
-  caller outside tests, so superseded chunks accumulate without limit — 82 MB
-  of them on the laptop, for one deleted file. The cap cannot work until this
-  does.
 - **Running as a service** — a systemd unit, a launch agent, a Windows service.
 - **Installers**, and the update mechanism with rollback.
 - **The interface.** Everything so far is a terminal, and the onboarding screen

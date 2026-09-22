@@ -140,6 +140,31 @@ impl Engine {
         Ok(qurb_sync::reconcile(&self.tree()?, remote))
     }
 
+    /// Actions that bring back files whose local copy was dropped.
+    ///
+    /// These are not part of a reconciliation plan and could not be: this
+    /// device and the peer agree completely about such a file — same path,
+    /// same content hash, same vector — so there is nothing to reconcile. What
+    /// differs is only whether the bytes are here, which is a local matter the
+    /// sync protocol has no opinion about.
+    ///
+    /// So the request is carried in the index, as a flag on the file, and
+    /// turned into work here. A request outlives being offline: it is acted on
+    /// whenever a peer next becomes reachable, not at the moment it was made.
+    pub fn wanted_actions(&self) -> Result<Vec<Action>> {
+        let wanted = self.store().db().wanted_paths()?;
+        if wanted.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        Ok(self
+            .tree()?
+            .into_iter()
+            .filter(|version| !version.content.is_deleted() && wanted.contains(&version.path))
+            .map(|remote| Action::Adopt { remote })
+            .collect())
+    }
+
     /// Carry out the local half of a plan.
     ///
     /// [`Action::Offer`] is the peer's work and is only counted here. Everything
@@ -232,6 +257,23 @@ impl Engine {
                 }
             }
             Content::File { hash, size } => {
+                // Remember that the device which made this version has the
+                // bytes. It is the only evidence available without asking, and
+                // it is what later lets the storage cap drop this content: a
+                // photo the phone took and sent here may be dropped here,
+                // because the phone made it and still has it.
+                //
+                // Deliberately narrow. Nothing is recorded for content this
+                // device originated, so a device can never evict its way out of
+                // being the last holder of its own work. See
+                // [decision 0025] for what this does not cover.
+                //
+                // [decision 0025]: ../../../docs/decisions/0025-a-storage-cap-that-cannot-lose-data.md
+                if version.modified_by != self.store().device_id()? {
+                    self.store()
+                        .note_replica(&blake3::Hash::from(*hash), &version.modified_by)?;
+                }
+
                 // Refuse a path this filesystem cannot keep separate from one
                 // already here. Writing it would destroy the existing file, and
                 // the next reconciliation would report that loss as a deletion

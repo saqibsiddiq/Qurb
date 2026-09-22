@@ -759,9 +759,20 @@ impl Qurb {
     /// mode allows concurrent readers, and handing out the engine's own handle
     /// would mean a peer's read could block a local write behind one lock.
     fn shared_store(&self) -> Result<Arc<std::sync::Mutex<Store>>, QurbError> {
+        Ok(Arc::new(std::sync::Mutex::new(self.open_store()?)))
+    }
+
+    /// A store that knows the folder its payloads live in.
+    ///
+    /// Every store this device opens has to, and there is more than one of
+    /// them: the engine's, the one the peer server reads from to answer chunk
+    /// requests, and the one a sync uses for content it already holds. A store
+    /// opened without the folder finds no payload for any materialised file,
+    /// so the peer server would answer "not found" for every chunk of every
+    /// file this device is holding.
+    fn open_store(&self) -> Result<Store, QurbError> {
         let key = self.engine()?.store().chunk_key();
-        let store = Store::open(&self.store_dir, key)?;
-        Ok(Arc::new(std::sync::Mutex::new(store)))
+        Ok(Store::open(&self.store_dir, key)?.in_tree(&self.root))
     }
 
     /// The tokio runtime, built on first use.
@@ -956,7 +967,7 @@ impl Qurb {
         // stalling the whole scheduler, and it is only available on a worker
         // thread of a multi-threaded runtime -- which is why `runtime()` builds
         // one of those rather than a current-thread runtime.
-        let reader = Store::open(&self.store_dir, engine.store().chunk_key())?;
+        let reader = Store::open(&self.store_dir, engine.store().chunk_key())?.in_tree(&self.root);
         let stats = runtime.block_on(async {
             tokio::task::block_in_place(|| {
                 let mut source = qurb_peer::NetworkSource::new(&client, &reader);

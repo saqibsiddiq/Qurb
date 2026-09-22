@@ -92,6 +92,30 @@ nothing else has them. See
 [decisions/0024](decisions/0024-the-file-is-the-payload-store.md) for what this
 costs, and `qurb reclaim` for freeing the duplicates an older store still holds.
 
+#### A device may be told how much disk it can use
+
+`qurb config <dir> limit=10G`. Over the limit, qurb frees space by deleting
+local copies of files while keeping everything the index knows about them —
+path, content hash, chunk list, version. The file leaves the folder; the file
+does not leave qurb, and `qurb fetch` brings it back.
+
+Two things about this are worth carrying in your head, because both are places
+where a storage cap would otherwise destroy data.
+
+**It refuses rather than approximates.** A file is dropped only when another
+device is known to hold those exact bytes. A device that cannot free enough
+stays over its limit and says so. That looks like a bug and is not: a limit is
+a promise about disk, and no number in a settings box outranks the only copy of
+someone's work.
+
+**Dropping a file must not look like deleting it.** A syncing device decides a
+file was deleted by not finding it. So the index records whether this device is
+*holding* each file, separately from whether the file is there — set before the
+unlink, never after — and both the scan and the watcher skip a file that is
+missing on purpose. Without that, a device running low on disk would delete the
+user's files on every other device. See
+[decisions/0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md).
+
 ### 2.2 Chunk boundaries are chosen by content, not by position
 
 The obvious way to split a file is every N bytes. Dropbox does this with 4 MB
@@ -415,6 +439,7 @@ product around it largely is not.
 | Garbage collection | two-stage, never touches a referenced chunk — **but nothing calls it** |
 | Integrity verification | detects missing, corrupt, and orphaned chunks |
 | Reclaiming duplicates | `qurb reclaim`, for stores written before single-copy |
+| A storage limit | drops local copies, keeps the index, never the only copy |
 
 ### Built and tested (`crates/watcher`, Phase 1)
 
@@ -682,20 +707,25 @@ network. iOS needs Xcode, which needs a Mac. See
 ### Designed but not built
 
 An iOS app, per-file keys, key rotation, relay selection and quotas, accounts
-and billing, the desktop UI, selective sync, updates.
+and billing, the desktop UI, updates.
+
+Selective sync is half-built rather than unbuilt: a device drops local copies
+when it is over its storage limit and fetches them back on request, which is
+the mechanism. What is missing is the *choosing* — a person saying which
+folders they want kept locally, rather than the cap deciding by what is
+coldest.
 
 ### The gaps that matter most
 
 Four things are known-missing rather than merely unbuilt:
 
-11. **Garbage collection has never run.** `Store::gc` is written, tested, and
-   correct as far as its tests go, but it has **no caller outside tests** — no
-   command invokes it and the daemon does not schedule it. Superseded and
-   expired chunks therefore accumulate without limit. On the development laptop
-   on 2026-09-22 this was 82 MB of retained chunks for one deleted file, in a
-   store holding 7.6 MB of live files. This has to be fixed before a storage
-   cap means anything: a cap that cannot free space is a cap that stops
-   working.
+11. **An evicted file simply vanishes from the folder on Linux.** Windows and
+   macOS both have an API for a placeholder that keeps its name and size and
+   fetches when opened; Linux has nothing short of a FUSE mount, whose failure
+   would take the user's whole folder with it. So a file dropped for the
+   storage cap is absent, and `qurb status` is the only place that says it
+   still exists. See
+   [decisions/0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md).
 
 12. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
    consumer product in this space eventually adds some escape hatch — social
@@ -719,8 +749,11 @@ worth knowing:
 **Chunk garbage collection** was written first in Phase 1, because a collector
 that is even slightly wrong destroys data in files the user never touched and
 raises no error doing it. See
-[phases/phase-1-engine.md](phases/phase-1-engine.md). Writing it, however, is
-not running it — see gap 11 above, which is the part still open.
+[phases/phase-1-engine.md](phases/phase-1-engine.md). Writing it was not the
+same as running it: until the storage cap went in, `Store::gc` had no caller
+outside tests, and superseded chunks accumulated without limit. The daemon now
+collects on a five-minute timer with a seven-day retention window, before it
+checks the limit.
 
 **Availability** — files being unreachable when every device is switched off —
 is answered by storage-only replicas, decided in
@@ -756,6 +789,17 @@ introduce them, then `run` on both:
 # Free the duplicate payloads a store written before single-copy still holds.
 # Safe to interrupt, and a no-op on a store that has no folder attached.
 ./target/release/qurb reclaim ~/Sync
+```
+
+```bash
+# Bound how much disk this folder may use. 0, the default, means no limit.
+./target/release/qurb config ~/Sync limit=10G
+```
+
+```bash
+# Ask for a file whose local copy was dropped. Acted on when a peer is next
+# reachable, so it works while offline.
+./target/release/qurb fetch ~/Sync holiday/beach.jpg
 ```
 
 ```bash

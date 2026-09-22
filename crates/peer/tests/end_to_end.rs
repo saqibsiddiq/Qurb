@@ -62,7 +62,10 @@ impl Device {
     fn open(dir: tempfile::TempDir, root: PathBuf, store_dir: PathBuf, master: MasterKey) -> Self {
         let chunk_key =
             ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
-        let store = Store::open(&store_dir, chunk_key).unwrap();
+        // The store the peer server answers chunk requests from. It has to
+        // know the folder: a syncing device keeps its payloads in the files
+        // themselves, so a store without it has nothing to serve.
+        let store = Store::open(&store_dir, chunk_key).unwrap().in_tree(&root);
         let identity = Identity::load_or_create(&store_dir).unwrap();
         Self { _dir: dir, root, master, identity, store: Arc::new(Mutex::new(store)) }
     }
@@ -184,7 +187,8 @@ async fn two_strangers_pair_find_each_other_and_sync() {
         &laptop.root.join(".qurb"),
         ChunkKey::from_bytes(laptop.master.derive(Purpose::ChunkEncryption).to_bytes()),
     )
-    .unwrap();
+    .unwrap()
+    .in_tree(&laptop.root);
     let mut source = qurb_peer::NetworkSource::new(&client, &reader);
     let stats = laptop_engine.apply_plan(&plan, &mut source).unwrap();
     assert!(stats.is_clean(), "{:?}", stats.failures);
@@ -340,7 +344,8 @@ async fn a_file_syncs_through_the_relay_when_there_is_no_direct_path() {
         &laptop.root.join(".qurb"),
         ChunkKey::from_bytes(laptop.master.derive(Purpose::ChunkEncryption).to_bytes()),
     )
-    .unwrap();
+    .unwrap()
+    .in_tree(&laptop.root);
     let mut source = qurb_peer::NetworkSource::new(&client, &reader);
     let stats = laptop_engine.apply_plan(&plan, &mut source).unwrap();
     assert!(stats.is_clean(), "{:?}", stats.failures);

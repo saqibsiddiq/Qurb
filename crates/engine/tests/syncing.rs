@@ -393,5 +393,12 @@ async fn the_run_loop_syncs_a_live_directory() {
         f.engine.store().read_file("created.txt").unwrap(),
         b"appeared while running"
     );
-    assert!(f.engine.store().verify(true).unwrap().is_healthy());
+    let report = f.engine.store().verify(true).unwrap();
+    assert!(
+        report.is_healthy(),
+        "missing={} corrupt={} drift={:?}",
+        report.missing.len(),
+        report.corrupt.len(),
+        report.refcount_drift
+    );
 }

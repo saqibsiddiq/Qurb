@@ -40,10 +40,6 @@ impl Device {
         Self { _dir: dir, root: root.clone(), engine: Engine::replica(root, store, pins) }
     }
 
-    fn store_dir(&self) -> PathBuf {
-        self.root.join(".qurb")
-    }
-
     fn write(&mut self, rel: &str, contents: &[u8]) {
         let path = self.root.join(rel);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -80,8 +76,11 @@ impl Device {
 /// Pull everything `from` has into `into`.
 fn pull(into: &mut Device, from: &Device) -> qurb_engine::PlanStats {
     let plan = into.engine.plan_against(&from.engine.tree().unwrap()).unwrap();
-    let reader = Store::open(&from.store_dir(), ChunkKey::from_bytes(KEY)).unwrap();
-    let stats = into.engine.apply_plan(&plan, &mut StoreSource::new(&reader)).unwrap();
+
+    // The source's own store, not a second one opened over the same directory.
+    // A syncing device serves content out of its folder, so a store that does
+    // not know the folder has nothing to give.
+    let stats = into.engine.apply_plan(&plan, &mut StoreSource::new(from.engine.store())).unwrap();
     assert!(stats.is_clean(), "{:?}", stats.failures);
     stats
 }
@@ -255,19 +254,19 @@ fn a_replica_can_repair_a_damaged_device() {
     let mut replica = Device::replica(PinSet::everything());
     pull(&mut replica, &laptop);
 
-    // Corrupt a chunk on the laptop.
-    let file = laptop.engine.store().db().file_by_path("precious.bin").unwrap().unwrap();
-    let victim = laptop.engine.store().db().chunk_hashes_for(file.id).unwrap()[0];
-    let hex = victim.to_hex().to_string();
-    let path = laptop.store_dir().join("chunks").join(&hex[..2]).join(&hex);
+    // Corrupt the laptop's copy. The file in the folder is where a syncing
+    // device keeps its payloads, so that is what a failing disk damages. The
+    // modification time is restored so this stays silent corruption rather
+    // than looking like the user editing the file.
+    let path = laptop.root.join("precious.bin");
+    let was = fs::metadata(&path).unwrap().modified().unwrap();
     let mut bytes = fs::read(&path).unwrap();
-    let last = bytes.len() - 1;
-    bytes[last] ^= 0xFF;
+    bytes[0] ^= 0xFF;
     fs::write(&path, &bytes).unwrap();
+    fs::File::options().write(true).open(&path).unwrap().set_modified(was).unwrap();
     assert!(laptop.engine.store().read_file("precious.bin").is_err());
 
-    let reader = Store::open(&replica.store_dir(), ChunkKey::from_bytes(KEY)).unwrap();
-    let stats = laptop.engine.repair(&mut StoreSource::new(&reader)).unwrap();
+    let stats = laptop.engine.repair(&mut StoreSource::new(replica.engine.store())).unwrap();
 
     assert_eq!(stats.files_restored, 1);
     assert!(stats.is_clean(), "{:?}", stats.unrepairable);

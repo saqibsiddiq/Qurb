@@ -464,11 +464,19 @@ impl Store {
                 stats.bytes_written += sealed.len() as u64;
             }
         }
+        // Whether this device is holding the bytes afterwards. A store with a
+        // folder holds what the folder has; a replica holds chunks and so
+        // always holds it. Recorded on every write so that a file coming back
+        // — re-created by the user, or fetched after being dropped for the
+        // storage cap — stops being marked as evicted without anyone having to
+        // remember to clear it.
+        let holding = materialised || self.tree.is_none();
+
         let file_id: i64 = tx.query_row(
             "INSERT INTO files
                  (path, size, content_hash, mtime_ns, created_at, updated_at, deleted_at,
-                  vector, modified_by)
-             VALUES (?1, ?2, ?3, ?4, unixepoch(), ?5, NULL, ?6, ?7)
+                  vector, modified_by, materialised, touched_at, wanted)
+             VALUES (?1, ?2, ?3, ?4, unixepoch(), ?5, NULL, ?6, ?7, ?8, unixepoch(), 0)
              ON CONFLICT (path) DO UPDATE SET
                  size = excluded.size,
                  content_hash = excluded.content_hash,
@@ -476,7 +484,10 @@ impl Store {
                  updated_at = excluded.updated_at,
                  deleted_at = NULL,
                  vector = excluded.vector,
-                 modified_by = excluded.modified_by
+                 modified_by = excluded.modified_by,
+                 materialised = excluded.materialised,
+                 touched_at = excluded.touched_at,
+                 wanted = CASE WHEN excluded.materialised = 1 THEN 0 ELSE wanted END
              RETURNING id",
             rusqlite::params![
                 logical_path,
@@ -486,6 +497,7 @@ impl Store {
                 modified_at,
                 vector.encode(),
                 modified_by.as_bytes().as_slice(),
+                holding as i64,
             ],
             |r| r.get(0),
         )?;
@@ -599,6 +611,13 @@ impl Store {
     /// tombstone are those references released. See
     /// ../../docs/CODEBASE.md section 2.1 for why deletion is not simply a
     /// matter of removing rows.
+    ///
+    /// Content the *folder* was holding is the exception, and has to be. Those
+    /// bytes left with the file, so the tombstone cannot keep them restorable
+    /// however long it is held — and a reference to a payload that no longer
+    /// exists is the index claiming content it cannot produce, which `verify`
+    /// is right to call damage. Those references are released here instead.
+    /// See [decision 0024](../../docs/decisions/0024-the-file-is-the-payload-store.md).
     pub fn delete_file(&mut self, logical_path: &str) -> Result<()> {
         if self
             .db
@@ -607,7 +626,38 @@ impl Store {
         {
             return Err(Error::NotFound { path: logical_path.to_string() });
         }
-        self.tombstone(logical_path, Stamp::Local)
+        self.tombstone(logical_path, Stamp::Local)?;
+        self.release_unbacked(logical_path)
+    }
+
+    /// Drop a tombstone's references to payloads nothing holds any more.
+    ///
+    /// Only the ones with no payload: a chunk the chunk store really has is
+    /// still restorable and keeps its reference for the retention window,
+    /// which is what a replica and any content imported from outside the
+    /// folder rely on.
+    fn release_unbacked(&mut self, logical_path: &str) -> Result<()> {
+        if self.tree.is_none() {
+            return Ok(());
+        }
+
+        let Some(row) = self.db.file_by_path(logical_path)? else { return Ok(()) };
+        let orphaned: Vec<blake3::Hash> = self
+            .db
+            .chunk_hashes_for(row.id)?
+            .into_iter()
+            .filter(|hash| !self.cas.contains(hash))
+            .collect();
+
+        for hash in orphaned {
+            // The delete trigger releases the reference, which starts the
+            // chunk's collection clock.
+            self.db.conn().execute(
+                "DELETE FROM file_chunks WHERE file_id = ?1 AND chunk_hash = ?2",
+                rusqlite::params![row.id, hash.as_bytes().as_slice()],
+            )?;
+        }
+        Ok(())
     }
 
     /// Write a tombstone, creating the row if this device never held the file.
@@ -745,8 +795,23 @@ impl Store {
     }
 
     /// Whether this device holds a chunk, in the index and on disk both.
+    /// Whether this device can produce a chunk's bytes right now.
+    ///
+    /// Three places it can come from, and all three must be consulted. The
+    /// index has to know it, and then either the chunk store holds the payload
+    /// or the folder does. Asking only the chunk store would call almost every
+    /// chunk absent on a device that syncs a folder, and the caller that most
+    /// often asks is the one deciding whether to pull content over the
+    /// network — so getting this wrong re-transfers files that are already
+    /// here rather than failing visibly.
     pub fn has_chunk(&self, hash: &blake3::Hash) -> Result<bool> {
-        Ok(self.db.has_chunk(hash)? && self.cas.contains(hash))
+        if !self.db.has_chunk(hash)? {
+            return Ok(false);
+        }
+        if self.cas.contains(hash) {
+            return Ok(true);
+        }
+        Ok(matches!(self.chunk_from_tree(hash), Ok(Some(_))))
     }
 
     /// Every path this device knows about, tombstones included: what it would
@@ -808,6 +873,92 @@ impl Store {
         gc::sweep_orphans(&mut self.db, &self.cas)
     }
 
+    /// What this store is costing on disk, in bytes.
+    ///
+    /// Both halves, because under single-copy storage neither is the whole
+    /// picture: the files the folder is holding, plus the chunk payloads that
+    /// the folder cannot supply. A cap has to bound the sum — bounding the
+    /// chunk store alone would bound almost nothing.
+    pub fn usage(&self) -> Result<Usage> {
+        Ok(Usage {
+            files: self.db.materialised_bytes()?,
+            chunks: self.db.size_totals()?.1,
+        })
+    }
+
+    /// Drop a file's bytes, keeping everything the index knows about it.
+    ///
+    /// The file leaves the folder and the row stays, marked as not held here.
+    /// Afterwards the path still syncs, still appears in listings, and still
+    /// has a content hash and a chunk list — it simply has no local content
+    /// until something fetches it back.
+    ///
+    /// Refuses when no other device is known to hold the content. That check is
+    /// the difference between eviction and data loss, and it is made here
+    /// rather than in the caller so that no caller can skip it.
+    pub fn evict(&mut self, logical_path: &str) -> Result<u64> {
+        let Some(tree) = self.tree.clone() else {
+            return Err(Error::CannotEvict {
+                path: logical_path.to_string(),
+                why: "this device has no folder, so it is the only holder",
+            });
+        };
+
+        let Some(row) = self.db.file_by_path(logical_path)? else {
+            return Err(Error::NotFound { path: logical_path.to_string() });
+        };
+        if row.deleted_at.is_some() {
+            return Err(Error::NotFound { path: logical_path.to_string() });
+        }
+
+        if self.db.replica_count(&row.content_hash)? == 0 {
+            return Err(Error::CannotEvict {
+                path: logical_path.to_string(),
+                why: "no other device is known to hold this content",
+            });
+        }
+
+        // Mark first, remove second. The other order leaves a window in which
+        // the file is gone from the folder and the index still calls it held:
+        // a scan landing there would read that as the user deleting it and
+        // propagate a tombstone. Marked-but-present is the harmless direction —
+        // it costs one needless fetch at worst.
+        self.db.set_materialised(logical_path, false)?;
+
+        let full = tree.join(logical_path);
+        let freed = std::fs::metadata(&full).map(|m| m.len()).unwrap_or(0);
+        match std::fs::remove_file(&full) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                self.db.set_materialised(logical_path, true)?;
+                return Err(Error::Io { path: full, source: e });
+            }
+        }
+
+        Ok(freed)
+    }
+
+    /// Whether this device is holding a live path's bytes.
+    pub fn is_materialised(&self, logical_path: &str) -> Result<Option<bool>> {
+        self.db.is_materialised(logical_path)
+    }
+
+    /// Live paths whose bytes this device has dropped to stay under its cap.
+    pub fn evicted(&self) -> Result<Vec<String>> {
+        self.db.evicted_paths()
+    }
+
+    /// Note that another device has taken delivery of this content.
+    pub fn note_replica(&self, content: &blake3::Hash, device: &DeviceId) -> Result<()> {
+        self.db.note_replica(content, device)
+    }
+
+    /// Files whose bytes could be dropped, coldest first. See [`Db::evictable`].
+    pub fn evictable(&self) -> Result<Vec<(String, u64, blake3::Hash)>> {
+        self.db.evictable()
+    }
+
     /// Drop payloads the tree can supply, and report what that freed.
     ///
     /// The single-copy rule applies when a file is indexed. A store written
@@ -855,16 +1006,26 @@ impl Store {
             report.refcount_drift.push(drift);
         }
 
-        let mut stmt = self.db.conn().prepare("SELECT hash FROM chunks")?;
-        let indexed: Vec<blake3::Hash> = stmt
+        let mut stmt = self.db.conn().prepare("SELECT hash, refcount FROM chunks")?;
+        let indexed: Vec<(blake3::Hash, i64)> = stmt
             .query_map([], |r| {
                 let raw: Vec<u8> = r.get(0)?;
-                Ok(db::to_hash(&raw))
+                Ok((db::to_hash(&raw), r.get::<_, i64>(1)?))
             })?
             .collect::<std::result::Result<_, _>>()?;
-        let indexed_set: HashSet<_> = indexed.iter().copied().collect();
+        let indexed_set: HashSet<_> = indexed.iter().map(|(hash, _)| *hash).collect();
 
-        for hash in &indexed {
+        for (hash, references) in &indexed {
+            // A chunk nothing references is waiting to be collected. Its
+            // payload being gone is not data loss — no file depends on it —
+            // and under single-copy storage this is the ordinary state of a
+            // superseded version, whose bytes left when the file was
+            // overwritten. Reporting these would mean `verify` calling a
+            // device damaged for the normal act of editing a file.
+            if *references == 0 {
+                continue;
+            }
+
             if !self.cas.contains(hash) {
                 // Not in the chunk store is not the same as missing. A tree
                 // supplies the payloads for content it materialises, and
@@ -922,4 +1083,21 @@ fn mtime_from(meta: &std::fs::Metadata) -> i64 {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_nanos() as i64)
         .unwrap_or(0)
+}
+
+/// What a store is costing on disk.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Usage {
+    /// Live files this device is holding in the folder.
+    pub files: u64,
+    /// Chunk payloads, which under single-copy storage are only the ones the
+    /// folder cannot supply: remote content not yet materialised, superseded
+    /// versions, and anything indexed from outside the folder.
+    pub chunks: u64,
+}
+
+impl Usage {
+    pub fn total(&self) -> u64 {
+        self.files + self.chunks
+    }
 }

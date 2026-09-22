@@ -91,7 +91,9 @@ fn a_colliding_path_is_refused_rather_than_silently_overwriting() {
     let plan = target.engine.plan_against(&tree).unwrap();
     assert!(!plan.is_empty(), "setup: the peer's file should need adopting");
 
-    let reader = Store::open(&source.root.join(".qurb"), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&source.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&source.root);
     let mut content = StoreSource::new(&reader);
     let stats = target.engine.apply_plan(&plan, &mut content).unwrap();
 
@@ -125,7 +127,9 @@ fn refusing_one_path_does_not_stop_the_rest_of_the_plan() {
 
     let tree = source.engine.tree().unwrap();
     let plan = target.engine.plan_against(&tree).unwrap();
-    let reader = Store::open(&source.root.join(".qurb"), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&source.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&source.root);
     let mut content = StoreSource::new(&reader);
     let stats = target.engine.apply_plan(&plan, &mut content).unwrap();
 

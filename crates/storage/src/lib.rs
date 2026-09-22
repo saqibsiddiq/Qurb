@@ -33,4 +33,4 @@ pub use chunker::{ChunkRef, Manifest, AVG_CHUNK, MAX_CHUNK, MIN_CHUNK};
 pub use error::{Error, Result};
 pub use format::ChunkKey;
 pub use gc::GcStats;
-pub use store::{PutStats, Store, VerifyReport};
+pub use store::{PutStats, Store, Usage, VerifyReport};

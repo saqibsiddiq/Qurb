@@ -29,10 +29,6 @@ impl Device {
         Self { _dir: dir, root: root.clone(), engine: Engine::new(root, store, ignore) }
     }
 
-    fn store_dir(&self) -> PathBuf {
-        self.root.join(".qurb")
-    }
-
     fn populate(&mut self, dir: &str, count: usize) {
         for i in 0..count {
             let path = self.root.join(dir).join(format!("sub{:02}", i % 10)).join(format!("f{i:05}.bin"));
@@ -51,13 +47,13 @@ impl Device {
 fn sync(a: &mut Device, b: &mut Device) {
     for _ in 0..3 {
         let plan = b.engine.plan_against(&a.engine.tree().unwrap()).unwrap();
-        let reader = Store::open(&a.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
-        let stats = b.engine.apply_plan(&plan, &mut StoreSource::new(&reader)).unwrap();
+        // The device's own store: a syncing device serves content out of its
+        // folder, so a second store opened over the same directory has none.
+        let stats = b.engine.apply_plan(&plan, &mut StoreSource::new(a.engine.store())).unwrap();
         assert!(stats.is_clean(), "{:?}", stats.failures);
 
         let plan = a.engine.plan_against(&b.engine.tree().unwrap()).unwrap();
-        let reader = Store::open(&b.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
-        let stats = a.engine.apply_plan(&plan, &mut StoreSource::new(&reader)).unwrap();
+        let stats = a.engine.apply_plan(&plan, &mut StoreSource::new(b.engine.store())).unwrap();
         assert!(stats.is_clean(), "{:?}", stats.failures);
 
         if a.engine.plan_against(&b.engine.tree().unwrap()).unwrap().is_empty()
@@ -118,8 +114,9 @@ fn a_rename_moves_no_content_over_the_wire() {
         a.engine.reconcile().unwrap();
 
         let plan = b.engine.plan_against(&a.engine.tree().unwrap()).unwrap();
-        let reader = Store::open(&a.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
-        let stats = b.engine.apply_plan(&plan, &mut StoreSource::new(&reader)).unwrap();
+        // The device's own store: a syncing device serves content out of its
+        // folder, so a second store opened over the same directory has none.
+        let stats = b.engine.apply_plan(&plan, &mut StoreSource::new(a.engine.store())).unwrap();
 
         assert!(stats.is_clean());
         assert_eq!(
@@ -155,8 +152,7 @@ fn a_directory_renamed_between_planning_and_applying_is_survivable() {
     // Now B's own tree moves out from under the plan it is about to apply.
     fs::rename(b.root.join("project"), b.root.join("moved")).unwrap();
 
-    let reader = Store::open(&a.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
-    let stats = b.engine.apply_plan(&plan, &mut StoreSource::new(&reader)).unwrap();
+    let stats = b.engine.apply_plan(&plan, &mut StoreSource::new(a.engine.store())).unwrap();
     assert!(stats.is_clean(), "applying onto a moved tree failed: {:?}", stats.failures);
 
     // B now has both the re-created originals and the moved copies. The next

@@ -7,6 +7,7 @@
 //! actually performs works, and that the memory promise holds.
 
 use qurb_mobile::{create, is_set_up, restore, Qurb, QurbError};
+use qurb_storage::{ChunkKey, Store};
 
 fn scratch() -> tempfile::TempDir {
     tempfile::tempdir().unwrap()
@@ -70,11 +71,15 @@ fn a_second_device_restores_from_the_phrase() {
     restore(second.clone(), setup.recovery_phrase.clone()).unwrap();
     let b = Qurb::open(second, None).unwrap();
 
-    // The proof is not that `restore` returned Ok -- it is that content
-    // encrypted by the first device decrypts on the second. Copying the store
-    // stands in for the network, which this crate does not touch.
+    // The index and the content both have to arrive, and since single-copy
+    // storage they are two different things: a device that materialises a file
+    // keeps the payload in the file itself, not as chunks. So standing in for
+    // the network means moving the folder as well as the store -- copying
+    // `.qurb` alone would move an index pointing at bytes that never left.
     let out = second_dir.path().join("fetched.txt");
     copy_store(first_dir.path(), second_dir.path());
+    std::fs::copy(first_dir.path().join("notes.txt"), second_dir.path().join("notes.txt"))
+        .unwrap();
     let b = {
         drop(b);
         Qurb::open(second_dir.path().display().to_string(), None).unwrap()
@@ -83,6 +88,33 @@ fn a_second_device_restores_from_the_phrase() {
 
     assert_eq!(n, 21);
     assert_eq!(std::fs::read(&out).unwrap(), b"hello from device one");
+
+    // And the part that copying cannot show, because a materialised file is
+    // read without ever using the key: that the phrase really did restore the
+    // same chunk key. Checked where encrypted chunks actually live -- a store
+    // with no folder behind it, which is what a storage-only replica is.
+    // Written with the first device's key, read with the second's.
+    let elsewhere = scratch();
+    let plain = elsewhere.path().join("secret.txt");
+    std::fs::write(&plain, b"only the key opens this").unwrap();
+
+    let vault_path = elsewhere.path().join("chunks-only");
+    let mut wrote = Store::open(&vault_path, chunk_key_of(first_dir.path())).unwrap();
+    wrote.put_file("secret.txt", &plain).unwrap();
+    drop(wrote);
+
+    let read = Store::open(&vault_path, chunk_key_of(second_dir.path())).unwrap();
+    assert_eq!(
+        read.read_file("secret.txt").unwrap(),
+        b"only the key opens this",
+        "the restored phrase did not produce the same chunk key"
+    );
+}
+
+/// The chunk key a device derives from its vault.
+fn chunk_key_of(root: &std::path::Path) -> ChunkKey {
+    let master = qurb_keys::Vault::at(&root.join(".qurb")).unlock(None).unwrap();
+    ChunkKey::from_bytes(master.derive(qurb_keys::Purpose::ChunkEncryption).to_bytes())
 }
 
 /// A wrong phrase must be rejected before it produces a key, not after. BIP-39

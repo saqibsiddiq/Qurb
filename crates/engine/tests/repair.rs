@@ -44,25 +44,40 @@ impl Device {
         self.root.join(".qurb")
     }
 
-    /// Flip a bit in one stored chunk, as a failing disk would.
+    /// Damage the first chunk's worth of a file, as a failing disk would.
+    ///
+    /// Under single-copy storage the file in the folder *is* the payload, so
+    /// silent corruption means the user's own file rather than an object in
+    /// the chunk store. The modification time is put back afterwards: a
+    /// corrupted file whose mtime moved would be re-indexed as an edit on the
+    /// next scan, which is a different story from the one these tests tell.
     fn corrupt_a_chunk(&self, of_path: &str) -> blake3::Hash {
         let file = self.engine.store().db().file_by_path(of_path).unwrap().unwrap();
         let victim = self.engine.store().db().chunk_hashes_for(file.id).unwrap()[0];
 
-        let hex = victim.to_hex().to_string();
-        let path = self.store_dir().join("chunks").join(&hex[..2]).join(&hex);
+        let path = self.root.join(of_path);
+        let was = fs::metadata(&path).unwrap().modified().unwrap();
         let mut bytes = fs::read(&path).unwrap();
-        let last = bytes.len() - 1;
-        bytes[last] ^= 0xFF;
+        bytes[0] ^= 0xFF;
         fs::write(&path, &bytes).unwrap();
+        fs::File::options().write(true).open(&path).unwrap().set_modified(was).unwrap();
+
+        // And any copy the chunk store happens to hold, so the damage is not
+        // quietly covered by a second copy that should not exist.
+        let hex = victim.to_hex().to_string();
+        let _ = fs::remove_file(self.store_dir().join("chunks").join(&hex[..2]).join(&hex));
         victim
     }
 
+    /// Lose a chunk's payload outright: the file gone from the folder, and
+    /// nothing in the chunk store to cover for it.
     fn delete_a_chunk(&self, of_path: &str) -> blake3::Hash {
         let file = self.engine.store().db().file_by_path(of_path).unwrap().unwrap();
         let victim = self.engine.store().db().chunk_hashes_for(file.id).unwrap()[0];
+
+        fs::remove_file(self.root.join(of_path)).unwrap();
         let hex = victim.to_hex().to_string();
-        fs::remove_file(self.store_dir().join("chunks").join(&hex[..2]).join(&hex)).unwrap();
+        let _ = fs::remove_file(self.store_dir().join("chunks").join(&hex[..2]).join(&hex));
         victim
     }
 }
@@ -101,7 +116,9 @@ fn a_corrupt_chunk_is_detected_and_refetched() {
     // The damage is real: the file no longer reads.
     assert!(damaged.engine.store().read_file("important.bin").is_err());
 
-    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&peer.root);
     let mut source = StoreSource::new(&reader);
     let stats = damaged.engine.repair(&mut source).unwrap();
 
@@ -123,7 +140,9 @@ fn a_missing_chunk_is_refetched_too() {
     damaged.write("gone.bin", &content);
     damaged.delete_a_chunk("gone.bin");
 
-    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&peer.root);
     let mut source = StoreSource::new(&reader);
     let stats = damaged.engine.repair(&mut source).unwrap();
 
@@ -140,7 +159,9 @@ fn repairing_a_healthy_store_does_nothing() {
     let mut device = Device::new();
     device.write("fine.bin", &content);
 
-    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&peer.root);
     let mut source = StoreSource::new(&reader);
     let stats = device.engine.repair(&mut source).unwrap();
 
@@ -168,7 +189,9 @@ fn one_bad_chunk_shared_by_several_files_repairs_all_of_them() {
         assert!(damaged.engine.store().read_file(path).is_err(), "{path} should be broken");
     }
 
-    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&peer.root);
     let mut source = StoreSource::new(&reader);
     let stats = damaged.engine.repair(&mut source).unwrap();
 
@@ -192,7 +215,9 @@ fn repair_does_not_disturb_undamaged_files() {
     let before = damaged.engine.tree().unwrap();
     damaged.corrupt_a_chunk("broken.bin");
 
-    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&peer.root);
     let mut source = StoreSource::new(&reader);
     damaged.engine.repair(&mut source).unwrap();
 
@@ -258,7 +283,9 @@ fn repair_can_be_run_twice() {
     damaged.write("f.bin", &content);
     damaged.corrupt_a_chunk("f.bin");
 
-    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32])).unwrap();
+    let reader = Store::open(&peer.store_dir(), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&peer.root);
     let mut source = StoreSource::new(&reader);
 
     assert_eq!(damaged.engine.repair(&mut source).unwrap().files_restored, 1);

@@ -25,6 +25,7 @@ qurb — private cloud storage
   qurb status [dir]                   what this device holds and trusts
   qurb verify [dir] [--deep]          check the store against itself
   qurb reclaim [dir]                  free space the folder itself already holds
+  qurb fetch [dir] <path>             ask for a dropped file's contents back
   qurb config [dir] [key=value ...]   show or change settings
   qurb protect [dir] <how>            change how the key is kept
                                         file | keystore | passphrase
@@ -80,6 +81,21 @@ fn run() -> Result<()> {
         "status" => status(&directory(&args)?),
         "verify" => verify(&directory(&args)?, args.iter().any(|a| a == "--deep")),
         "reclaim" => reclaim(&directory(&args)?),
+        "fetch" => {
+            // Both `qurb fetch <path>` and `qurb fetch <dir> <path>`. The file
+            // path always comes last; whether a folder was named is what the
+            // count tells us.
+            let wanted = args.last().context("give a path to fetch")?.clone();
+            let root = match args.len() {
+                0 | 1 => bail!("give a path to fetch"),
+                2 => qurb_cli::profiles::current().context(
+                    "no folder given, and none is set up yet.\n\
+                     Run `qurb init` to make one, or pass a path.",
+                )?,
+                _ => PathBuf::from(&args[1]),
+            };
+            fetch(&root, &wanted)
+        }
         "config" => configure(&directory(&args)?, &args[2..]),
         "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
         "signal" => block_on(signal(args.get(1).cloned())),
@@ -326,6 +342,26 @@ fn status(root: &Path) -> Result<()> {
     println!("  chunks     {chunks}");
     println!("  content    {} ({} on disk)", human(plaintext), human(stored));
 
+    let usage = store.usage()?;
+    let evicted = store.evicted()?;
+    if config.limit == 0 {
+        println!("  using      {} — no limit set", human(usage.total()));
+    } else {
+        let percent = (usage.total() as f64 / config.limit as f64 * 100.0).round();
+        println!(
+            "  using      {} of {} ({percent:.0}%)",
+            human(usage.total()),
+            human(config.limit)
+        );
+        if usage.total() > config.limit {
+            println!("    over the limit, and holding content nothing else has —");
+            println!("    qurb keeps the only copy of a file rather than honour a number");
+        }
+    }
+    if !evicted.is_empty() {
+        println!("  not here   {} file(s) — contents dropped, `qurb fetch` to get one back", evicted.len());
+    }
+
     let peers = store.db().trusted_peers()?;
     if peers.is_empty() {
         println!("\n  no paired devices — run `qurb pair` here and `qurb join` there");
@@ -370,6 +406,31 @@ fn status(root: &Path) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// Ask for the contents of a file this device dropped to stay under its limit.
+///
+/// Records the request rather than performing it. The daemon is a different
+/// process and may not be running, and even if it is, no peer may be reachable
+/// right now. A request written to the index is acted on whenever one next is —
+/// which is also what makes it work to ask for a file while offline.
+fn fetch(root: &Path, logical: &str) -> Result<()> {
+    let (_, _, store, _) = open(root)?;
+    let logical = logical.trim_start_matches("./");
+
+    match store.is_materialised(logical)? {
+        None => bail!("{logical} is not a file this folder knows about"),
+        Some(true) => {
+            println!("{logical} is already here");
+            return Ok(());
+        }
+        Some(false) => {}
+    }
+
+    store.db().want(logical)?;
+    println!("asked for {logical}");
+    println!("  it will arrive the next time a device holding it is reachable");
     Ok(())
 }
 
@@ -569,6 +630,14 @@ fn configure(root: &Path, settings: &[String]) -> Result<()> {
         println!("relay  = {}", config.relay.map(|r| r.to_string()).unwrap_or_default());
         println!("name   = {}", config.name);
         println!("port   = {}", config.port);
+        println!(
+            "limit  = {}",
+            if config.limit == 0 {
+                "none".to_string()
+            } else {
+                qurb_cli::config::human_size(config.limit)
+            }
+        );
         println!("\n{}", Config::path(&store_dir).display());
         return Ok(());
     }
@@ -588,6 +657,7 @@ fn configure(root: &Path, settings: &[String]) -> Result<()> {
             }
             "name" => config.name = value.trim().to_string(),
             "port" => config.port = value.trim().parse().context("port should be a number")?,
+            "limit" => config.limit = qurb_cli::config::parse_size(value)?,
             other => bail!("unknown setting `{other}`"),
         }
     }

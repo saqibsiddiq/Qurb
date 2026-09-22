@@ -12,6 +12,7 @@ qurb run <dir>                   watch, sync, and keep running
 qurb status <dir>                what this device holds and trusts
 qurb verify <dir> [--deep]       check the store against itself
 qurb reclaim <dir>               free space the folder itself already holds
+qurb fetch <dir> <path>          ask for a dropped file's contents back
 qurb config <dir> [key=value]    show or change settings
 
 qurb signal [addr]               the rendezvous service
@@ -96,13 +97,37 @@ signal = wss://signal.example.com
 relay  = 198.51.100.7:443
 name   = Study desktop
 port   = 0
+limit  = 10G
 ```
 
 An unknown key is an error rather than being ignored, because a misspelled
 setting that silently does nothing is a bad afternoon.
 
+### `limit`
+
+How much disk this folder may use — files plus chunk store. `0`, the default,
+means no limit. Accepts `500M`, `10G`, `1T`, or a plain byte count.
+
+Over the limit, qurb drops local copies of the files it has gone longest
+without touching. The path stays: it still syncs, still appears in
+`qurb status`, and `qurb fetch <dir> <path>` brings the contents back.
+
+Two refusals are built in and will not be talked out of:
+
+- A file is dropped only when **another device is known to hold those exact
+  bytes**. A device never drops content it made itself.
+- A device that cannot free enough **stays over its limit** and says so. A
+  limit is a promise about disk, not a reason to delete the only copy of
+  something.
+
+On Linux a dropped file is simply absent from the folder — there is no
+placeholder API to keep its name visible, so `qurb status` is where you find
+out it still exists.
+
 ## What it does not do yet
 
 
+- **Choose what to keep.** The storage limit picks by what is coldest. There
+  is no way to say "always keep this folder here, never that one".
 - **Run as a service.** No unit file, no launch agent, no Windows service.
 - **Anything graphical.** This is the daemon the interface will sit on.

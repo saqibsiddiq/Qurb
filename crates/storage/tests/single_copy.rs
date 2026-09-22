@@ -232,3 +232,37 @@ fn a_replica_with_no_tree_reclaims_nothing() {
     assert!(chunk_bytes_on_disk(&store_dir) > data.len() as u64 / 2);
     assert_eq!(store.read_file("only.bin").unwrap(), data);
 }
+
+/// Content already in the folder must be recognised as held.
+///
+/// The caller that asks this is deciding whether to pull a file over the
+/// network. A store that says "no" about content sitting in the folder does
+/// not fail visibly — it silently re-transfers files the device already has.
+#[test]
+fn content_in_the_tree_counts_as_held() {
+    let tree = tempfile::tempdir().unwrap();
+    let store_dir = tree.path().join(".qurb");
+
+    let data = noisy(2 * 1024 * 1024);
+    let path = tree.path().join("held.bin");
+    std::fs::write(&path, &data).unwrap();
+
+    let mut store = Store::open(&store_dir, ChunkKey::from_bytes([13; 32]))
+        .unwrap()
+        .in_tree(tree.path());
+    store.put_file("held.bin", &path).unwrap();
+
+    let hash = blake3::hash(&data);
+    for chunk in store.chunk_hashes_for_content(&hash).unwrap().unwrap() {
+        assert!(store.has_chunk(&chunk).unwrap(), "a chunk the folder holds was called absent");
+    }
+
+    // And the whole-content read, which is the call that decides whether to
+    // fetch, finds it locally.
+    let mut out = Vec::new();
+    assert!(
+        store.read_content_into(&hash, &mut out).unwrap().is_some(),
+        "content in the folder was not found by hash"
+    );
+    assert_eq!(out, data);
+}
