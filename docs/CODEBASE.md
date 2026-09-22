@@ -891,6 +891,11 @@ cargo run --release -p qurb-tray -- ~/qurb
 ./packaging/install.sh
 ```
 
+Syncing from outside the house needs the rendezvous service somewhere both
+devices can reach; [anywhere.md](anywhere.md) is the recipe, including a free
+one. Only that service needs a public name — the files go directly between the
+devices and never touch it.
+
 The Android build needs the NDK, because SQLite is C. The script looks for one
 and says where to get it if there is none. Nothing else in the tree needs a
 cross-compiler.

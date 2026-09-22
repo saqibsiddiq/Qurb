@@ -184,10 +184,22 @@ fn is_local(url: &str) -> bool {
 
     match host.parse::<std::net::IpAddr>() {
         Ok(std::net::IpAddr::V4(ip)) => {
-            // Loopback, RFC 1918 private ranges, and link-local. Explicitly
-            // *not* carrier-grade NAT (100.64/10): a phone on mobile data sits
-            // inside one of those with the whole carrier, which is not a local
-            // network in any sense that makes plaintext acceptable.
+            // Loopback, RFC 1918 private ranges, and link-local.
+            //
+            // Not carrier-grade NAT (100.64/10), and the reason is worth
+            // stating because it is not obvious. That range is where overlay
+            // networks like Tailscale put their addresses, and traffic on one
+            // of those is already encrypted — plaintext there would be fine.
+            // It is also where a mobile carrier puts its subscribers. From a
+            // URL there is no way to tell the two apart, and the failure is
+            // one-directional: treating an overlay as untrusted costs a
+            // certificate, and treating a carrier's network as trusted costs
+            // the secret.
+            //
+            // An overlay has the better answer available anyway. Tailscale
+            // will issue a real certificate for a machine's name, so the right
+            // URL there is `wss://<machine>.<tailnet>.ts.net`, which needs no
+            // exception at all. See docs/anywhere.md.
             ip.is_loopback() || ip.is_private() || ip.is_link_local()
         }
         Ok(std::net::IpAddr::V6(ip)) => {

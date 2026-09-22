@@ -1,0 +1,121 @@
+# Syncing from anywhere
+
+qurb's promise is that a phone with an internet connection can reach a laptop
+at home, from any network. This is how to actually get there, and what stands
+in the way.
+
+**Status: the code is ready; the deployment is not.** Everything below works,
+but it needs a rendezvous service somewhere both devices can reach, and by
+default there is no such thing — it runs wherever someone runs it, which to
+begin with is a laptop on a home network.
+
+## What has to be reachable, and what does not
+
+Only the **rendezvous service**. It is a small WebSocket service whose entire
+job is letting two devices learn each other's addresses. It never sees a file,
+a filename, or a key.
+
+The files go **directly between the devices** over QUIC, encrypted end to end.
+That is not a detail of the current implementation, it is the point of the
+design: see [decisions/0006](decisions/0006-availability-gap.md).
+
+So "syncing from anywhere" needs one small service with a public name, and
+nothing else. Whether a direct connection can then be made depends on the two
+networks — run `qurb netcheck` on each to find out. A laptop behind an
+endpoint-independent NAT, which is the common case, can be reached from almost
+anywhere.
+
+A **relay** is the fallback for when it cannot. It carries encrypted packets it
+cannot read, and it is only used when a direct path fails. It has the same
+deployment question as the rendezvous service, and it is worth solving second
+rather than first, because most networks do not need it.
+
+## The free way: Tailscale
+
+The least work, no money, and no holes in anything.
+
+[Tailscale](https://tailscale.com) is a mesh VPN on WireGuard. Its personal
+plan is free. Devices on a tailnet reach each other from any network, behind
+any NAT, with no port forwarding — and it will issue a real certificate for a
+machine's name, which is what lets qurb use `wss://` without buying a domain.
+
+On the laptop:
+
+```bash
+sudo pacman -S tailscale          # or your distribution's package
+sudo systemctl enable --now tailscaled
+sudo tailscale up
+```
+
+Enable HTTPS for the tailnet once, in the Tailscale admin console under DNS,
+then publish the rendezvous service on the machine's name:
+
+```bash
+qurb signal 127.0.0.1:9000 &
+sudo tailscale serve --bg --https 443 http://127.0.0.1:9000
+tailscale serve status              # prints the https:// URL
+```
+
+`tailscale serve` terminates TLS with a certificate Tailscale obtains for you,
+and proxies WebSockets. The rendezvous service itself stays bound to loopback
+and is never exposed.
+
+On the phone: install Tailscale from the Play Store, sign in to the same
+account, then in qurb set the rendezvous address to the URL `serve status`
+printed, with `wss://` in place of `https://`:
+
+```
+wss://<machine>.<tailnet>.ts.net
+```
+
+That is the whole change. qurb is then reachable from mobile data, a café, or
+another country.
+
+### What it costs
+
+A dependency on somebody else's coordination service, which is exactly the kind
+of thing qurb exists to avoid. Two things make it a reasonable trade rather
+than a contradiction:
+
+- **Files never touch it.** Tailscale carries the rendezvous WebSocket and,
+  where it is used as the path, WireGuard-encrypted packets it cannot read. The
+  contents are encrypted by qurb before either.
+- **It is a stand-in, not an architecture.** The rendezvous service is qurb's
+  own; Tailscale is only making it reachable. Moving it to a host of your own
+  later changes one URL.
+
+It is honest to say that a product would not ship this way. A person who
+installs qurb should not have to install a VPN first. This is the free way to
+have the feature working today, and the hosted rendezvous service is the
+product answer.
+
+## The product way: a host of your own
+
+A small server with a public address, running `qurb signal` and `qurb relay`
+behind a TLS-terminating reverse proxy. Roughly $5 a month, plus a domain.
+
+Nothing in qurb needs to change for it: point the devices at
+`wss://rendezvous.example.com` and it behaves identically. The reverse proxy
+does TLS, the service stays on loopback, and the relay wants UDP forwarded to
+it directly.
+
+This is also the only arrangement where the relay fallback works, because
+tunnels and most free proxies carry TCP only.
+
+## What will not work
+
+**A private address from outside the house.** `ws://192.168.1.4:9000` is the
+laptop's address on its own network. From a mobile carrier it is not an address
+at all, and this is the single most likely reason syncing "just stops working"
+away from home.
+
+**Plaintext to a public address.** qurb refuses it. The identifiers devices
+announce under are bearer secrets, and sending them unencrypted across a
+carrier's network hands them to everyone on the path. See
+[decisions/0027](decisions/0027-plaintext-stops-at-the-local-network.md).
+
+**Anything, if the laptop is asleep.** qurb syncs between devices, so both have
+to be awake at the same moment. A laptop with the lid shut is not reachable
+from anywhere, by any arrangement. A storage-only replica on an always-on
+machine is the answer to that, and is a separate piece of work —
+[decisions/0006](decisions/0006-availability-gap.md).
