@@ -145,17 +145,28 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val engine = Engine.open(this@MainActivity)
-                val (listed, usage, peers) = withContext(Dispatchers.IO) {
+                val state = withContext(Dispatchers.IO) {
                     // A scan first: nothing delivers filesystem events to a
                     // process that was not running, so anything that changed
                     // while the app was closed produced no event at all.
                     engine.scan()
-                    Triple(engine.list(), engine.usage(), engine.peers().size)
+                    Snapshot(
+                        engine.list(),
+                        engine.usage(),
+                        engine.peers().size,
+                        engine.outstanding().files.size,
+                    )
                 }
 
-                files.submit(listed)
-                views.empty.visibility = if (listed.isEmpty()) View.VISIBLE else View.GONE
-                views.summary.text = summary(listed.size, usage.logical, usage.onDisk, peers)
+                files.submit(state.listed)
+                views.empty.visibility = if (state.listed.isEmpty()) View.VISIBLE else View.GONE
+                views.summary.text = summary(
+                    state.listed.size,
+                    state.usage.logical,
+                    state.usage.onDisk,
+                    state.peers,
+                    state.waiting,
+                )
             } catch (e: Exception) {
                 fail("Could not read the store", e)
             } finally {
@@ -164,7 +175,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun summary(count: Int, logical: ULong, onDisk: ULong, peers: Int): String {
+    /** What one refresh read, so the IO block returns one thing rather than four. */
+    private data class Snapshot(
+        val listed: List<FileEntry>,
+        val usage: uniffi.qurb_mobile.Usage,
+        val peers: Int,
+        val waiting: Int,
+    )
+
+    private fun summary(
+        count: Int,
+        logical: ULong,
+        onDisk: ULong,
+        peers: Int,
+        waiting: Int,
+    ): String {
         val saved = if (logical > 0uL) {
             " · ${size(onDisk)} on disk, from ${size(logical)}"
         } else ""
@@ -173,7 +198,16 @@ class MainActivity : AppCompatActivity() {
             1 -> "1 paired device"
             else -> "$peers paired devices"
         }
-        return "$count file${if (count == 1) "" else "s"}$saved · $devices"
+        // Said last and said plainly. While this is non-zero, losing the phone
+        // loses whatever is on it and nowhere else, and that is worth a line on
+        // the screen rather than being left to infer from a sync that reported
+        // no error.
+        val outstanding = when (waiting) {
+            0 -> ""
+            1 -> "\n1 file is only on this phone — waiting for another device"
+            else -> "\n$waiting files are only on this phone — waiting for another device"
+        }
+        return "$count file${if (count == 1) "" else "s"}$saved · $devices$outstanding"
     }
 
     private fun sync() {
@@ -421,32 +455,12 @@ class MainActivity : AppCompatActivity() {
     private fun addFile(uri: Uri) {
         lifecycleScope.launch {
             try {
-                val name = displayName(uri)
-                withContext(Dispatchers.IO) {
-                    val staging = File(cacheDir, name)
-                    contentResolver.openInputStream(uri).use { input ->
-                        staging.outputStream().use { output ->
-                            requireNotNull(input) { "could not read that file" }.copyTo(output)
-                        }
-                    }
-                    Engine.open(this@MainActivity).importFile(staging.absolutePath, name)
-                    staging.delete()
-                }
+                Engine.importUri(this@MainActivity, uri)
                 refresh()
             } catch (e: Exception) {
                 fail("Could not add that file", e)
             }
         }
-    }
-
-    private fun displayName(uri: Uri): String {
-        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            val column = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-            if (column >= 0 && cursor.moveToFirst()) {
-                cursor.getString(column)?.let { return it }
-            }
-        }
-        return uri.lastPathSegment?.substringAfterLast('/') ?: "file"
     }
 
     /**

@@ -8,4 +8,12 @@
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/on_primary</item>
     </style>
+
+    <!-- The share sheet's screen is a dialog rather than a page. It reports one
+         short outcome and gets out of the way, and framing it as a dialog keeps
+         the app the person was actually using visible behind it. -->
+    <style name="Theme.Qurb.Share" parent="Theme.Material3.DayNight.Dialog">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
+    </style>
 </resources>

@@ -537,6 +537,35 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
+    /// Live files this device made that no other device is known to hold.
+    ///
+    /// The honest answer to "has my photo reached the desktop yet". A file
+    /// counts as outstanding while this device is the only known holder of its
+    /// content — which is exactly the condition under which losing this device
+    /// would lose the file.
+    ///
+    /// Restricted to content this device *made*. A file received from
+    /// somewhere else is not this device's to deliver, and counting it would
+    /// make a phone that has merely not finished downloading look like a phone
+    /// with a backlog to push.
+    ///
+    /// Newest first, because that is the order someone recognises: the thing
+    /// they just shared is the thing they are asking about.
+    pub fn undelivered(&self) -> Result<Vec<(String, u64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT f.path, f.size
+               FROM files f
+              WHERE f.deleted_at IS NULL
+                AND f.modified_by = (SELECT device_id FROM local WHERE id = 1)
+                AND NOT EXISTS (
+                      SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash
+                    )
+              ORDER BY f.updated_at DESC, f.path",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64)))?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
     pub fn live_paths(&self) -> Result<Vec<String>> {
         let mut stmt = self
             .conn

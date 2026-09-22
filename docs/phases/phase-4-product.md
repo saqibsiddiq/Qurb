@@ -27,7 +27,7 @@ warns is not the fun part and is a full quarter.
 | a storage cap | ✅ limit, eviction, fetch-back |
 | garbage collection running | ✅ every 5 minutes, 7-day retention |
 
-470 tests pass across eleven crates; clippy is clean.
+475 tests pass across eleven crates; clippy is clean.
 
 ## The interface
 

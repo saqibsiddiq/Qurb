@@ -116,6 +116,25 @@ missing on purpose. Without that, a device running low on disk would delete the
 user's files on every other device. See
 [decisions/0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md).
 
+#### Nothing waits on the other device being awake
+
+A file can be added on any device at any time, with every other device switched
+off. There is no outbox and no retry queue: the file is written into the folder
+and indexed like any other, and it reaches the others whenever one is next
+reachable.
+
+"What is still waiting to be delivered" is therefore a *question*, not a list —
+asked of the index as "live files this device made, whose content no other
+device is known to hold". It cannot drift from the truth, because it is read
+fresh each time rather than maintained.
+
+For that question to have an answer, a device that finishes receiving content
+tells the device it got it from: `Got { content }`, the only message in the
+protocol that asks for nothing. Credited to the certificate the connection
+authenticated with, never to anything the message claims — a storage cap drops
+local copies on the strength of that record. See
+[decisions/0026](decisions/0026-sharing-while-the-other-device-is-off.md).
+
 ### 2.2 Chunk boundaries are chosen by content, not by position
 
 The obvious way to split a file is every N bytes. Dropbox does this with 4 MB
@@ -251,6 +270,8 @@ This is the single most useful trace to have in your head.
  9. Bump the vector clock           ✅ this device's counter += 1
 10. Tell peers what changed         ✅ the tree, over QUIC
 11. Peers request chunks they lack  ✅ only the missing ones move
+12. The peer says it has it now     ✅ so this device can stop calling
+                                       the file undelivered
 ```
 
 Steps 1–8 are built, tested, and joined together: step 1 in
@@ -657,6 +678,12 @@ syncs — all through that surface, with `sync_within(seconds)` because both
 platforms kill background work that outstays its window. The master key can be
 handed to the platform's own keystore, which the app supplies because neither
 Android's nor iOS's is reachable from Rust.
+
+The Android app is a **share target**: anything on the phone can be sent into
+qurb from the system share sheet, with no network and no other device switched
+on. The app's own screen and the share sheet's confirmation both say how many
+files are still held only by the phone, which is the honest form of "it will
+get there".
 
 **It runs on a phone.** `./scripts/android-test.sh` pushes the test binaries
 with `adb` and runs them: on a Samsung Galaxy S23 (Android 16, arm64-v8a) all 35

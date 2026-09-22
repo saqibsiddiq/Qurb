@@ -949,6 +949,12 @@ impl Store {
         self.db.evicted_paths()
     }
 
+    /// Live files this device made that no other device is known to hold.
+    /// See [`Db::undelivered`].
+    pub fn undelivered(&self) -> Result<Vec<(String, u64)>> {
+        self.db.undelivered()
+    }
+
     /// Note that another device has taken delivery of this content.
     pub fn note_replica(&self, content: &blake3::Hash, device: &DeviceId) -> Result<()> {
         self.db.note_replica(content, device)

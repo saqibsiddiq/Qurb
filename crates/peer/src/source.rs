@@ -42,6 +42,22 @@ impl ContentSource for NetworkSource<'_> {
         result.map_err(|e| qurb_engine::Error::Source { detail: e.to_string() })
     }
 
+    /// Tell the peer we now hold it.
+    ///
+    /// Failures are swallowed deliberately. This is a courtesy to the other
+    /// end, and a sync that succeeded must not be reported as failed because
+    /// the closing remark did not get through — the file is here either way.
+    /// The peer will learn of it on the next exchange.
+    fn received(&mut self, content: &[u8; 32]) {
+        let content = *content;
+        let outcome = tokio::task::block_in_place(|| {
+            self.runtime.block_on(self.client.got(content))
+        });
+        if let Err(e) = outcome {
+            tracing::debug!(error = %e, "could not tell the peer the content arrived");
+        }
+    }
+
     /// The streaming form, which is the one that actually runs.
     ///
     /// Without this the trait's default applies, and the default buffers the

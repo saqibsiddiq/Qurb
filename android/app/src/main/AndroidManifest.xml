@@ -38,6 +38,31 @@
             </intent-filter>
         </activity>
 
+        <!-- The share sheet's way in. Exported because that is what being a
+             share target means; it accepts only what another app explicitly
+             hands over, and does nothing with an intent carrying no file.
+
+             Its own task, so that dismissing it returns the person to whatever
+             they were sharing from rather than dropping them into qurb. -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:label="Save to qurb"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Qurb.Share">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name=".SetupActivity"
             android:exported="false"

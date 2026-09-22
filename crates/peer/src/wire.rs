@@ -54,6 +54,21 @@ pub enum Request {
     /// later than usual. A peer still cannot make anything happen here.
     Changes { since: u64 },
 
+    /// Tell a peer this device now holds that content.
+    ///
+    /// Sent after a transfer completes, by the device that received it. The
+    /// only message in the protocol that asks for nothing: the sender has
+    /// something the receiver wants to know, rather than the other way round.
+    ///
+    /// It is what lets a device tell "waiting to be delivered" from "delivered"
+    /// — the difference between a phone that can say your photo reached the
+    /// desktop and one that can only say it tried. It is also what makes it
+    /// safe for the *sender* to later drop its own copy under a storage cap.
+    ///
+    /// Which device sent it is taken from the connection's certificate, not
+    /// from the message, so a peer cannot claim delivery on another's behalf.
+    Got { content: [u8; 32] },
+
     /// Ask to be trusted, presenting the token from an out-of-band invite.
     ///
     /// The device id and name are claims; the fingerprint that ends up trusted
@@ -76,6 +91,9 @@ pub enum Response {
     /// Pairing accepted, with the accepting device's own identity.
     Paired { device_id: [u8; 32], name: String },
 
+    /// Acknowledgement of [`Request::Got`]. Carries nothing.
+    Noted,
+
     /// Where the peer's state has got to.
     ///
     /// Returned both when something changed and when the wait timed out, since
@@ -88,6 +106,7 @@ const TAG_MANIFEST: u8 = 2;
 const TAG_CHUNK: u8 = 3;
 const TAG_PAIR: u8 = 4;
 const TAG_CHANGES: u8 = 5;
+const TAG_GOT: u8 = 6;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
@@ -95,6 +114,7 @@ const STATUS_CHUNK: u8 = 3;
 const STATUS_NOT_FOUND: u8 = 4;
 const STATUS_PAIRED: u8 = 5;
 const STATUS_CHANGED: u8 = 6;
+const STATUS_NOTED: u8 = 7;
 
 impl Request {
     pub fn encode(&self) -> Vec<u8> {
@@ -113,6 +133,10 @@ impl Request {
                 out.push(TAG_CHANGES);
                 out.extend_from_slice(&since.to_le_bytes());
             }
+            Request::Got { content } => {
+                out.push(TAG_GOT);
+                out.extend_from_slice(content);
+            }
             Request::Pair { token, device_id, name } => {
                 out.push(TAG_PAIR);
                 out.extend_from_slice(token);
@@ -130,6 +154,7 @@ impl Request {
             TAG_MANIFEST => Request::Manifest { content: r.hash()? },
             TAG_CHUNK => Request::Chunk { hash: r.hash()? },
             TAG_CHANGES => Request::Changes { since: r.u64()? },
+            TAG_GOT => Request::Got { content: r.hash()? },
             TAG_PAIR => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
@@ -147,6 +172,7 @@ impl Response {
         let mut out = Vec::new();
         match self {
             Response::NotFound => out.push(STATUS_NOT_FOUND),
+            Response::Noted => out.push(STATUS_NOTED),
             Response::Changed { generation } => {
                 out.push(STATUS_CHANGED);
                 out.extend_from_slice(&generation.to_le_bytes());
@@ -183,6 +209,7 @@ impl Response {
         let mut r = Reader::new(bytes);
         let response = match r.u8()? {
             STATUS_NOT_FOUND => Response::NotFound,
+            STATUS_NOTED => Response::Noted,
             STATUS_CHANGED => Response::Changed { generation: r.u64()? },
             STATUS_PAIRED => {
                 Response::Paired { device_id: r.hash()?, name: r.name()? }

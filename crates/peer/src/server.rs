@@ -7,6 +7,7 @@
 
 use crate::error::{Error, Result};
 use crate::identity::{Fingerprint, Identity};
+use crate::pairing::fingerprint_of;
 use crate::tls;
 use crate::wire::{Request, Response, MAX_MESSAGE};
 use qurb_storage::Store;
@@ -215,12 +216,18 @@ async fn serve_connection_inner(
     // One request per bidirectional stream, served concurrently. This is the
     // property QUIC was chosen for: a large chunk in flight does not hold up
     // the small requests behind it.
+    // Taken once, from the certificate this connection authenticated with. A
+    // request that says something about the sender -- `Got` does -- must be
+    // attributed to whoever the TLS handshake proved them to be, never to
+    // whatever the message claims.
+    let asker = fingerprint_of(&connection);
+
     while let Ok((send, recv)) = connection.accept_bi().await {
         let store = Arc::clone(&store);
         let stats = Arc::clone(&stats);
         let generation = Arc::clone(&generation);
         tokio::spawn(async move {
-            if let Err(e) = serve_request(send, recv, store, stats, generation).await {
+            if let Err(e) = serve_request(send, recv, store, stats, generation, asker).await {
                 tracing::debug!(error = %e, "request failed");
             }
         });
@@ -233,6 +240,7 @@ async fn serve_request(
     store: Arc<Mutex<Store>>,
     stats: Arc<ServerStats>,
     generation: Arc<Generation>,
+    asker: Option<Fingerprint>,
 ) -> Result<()> {
     let raw = recv.read_to_end(MAX_MESSAGE).await?;
     let request = Request::decode(&raw)?;
@@ -245,7 +253,7 @@ async fn serve_request(
     } else {
         tokio::task::block_in_place(|| {
             let store = store.lock().expect("store mutex poisoned");
-            answer(&store, &request)
+            answer(&store, &request, asker)
         })?
     };
 
@@ -256,7 +264,10 @@ async fn serve_request(
             stats.bytes_served.fetch_add(bytes.len() as u64, Ordering::Relaxed);
             stats.chunks_served.fetch_add(1, Ordering::Relaxed)
         }
-        Response::NotFound | Response::Paired { .. } | Response::Changed { .. } => 0,
+        Response::NotFound
+        | Response::Noted
+        | Response::Paired { .. }
+        | Response::Changed { .. } => 0,
     };
 
     let encoded = response.encode();
@@ -265,7 +276,7 @@ async fn serve_request(
     Ok(())
 }
 
-fn answer(store: &Store, request: &Request) -> Result<Response> {
+fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Result<Response> {
     Ok(match request {
         Request::Tree => Response::Tree(store.tree()?),
 
@@ -285,6 +296,32 @@ fn answer(store: &Store, request: &Request) -> Result<Response> {
 
         // Handled before the store is locked, since it waits.
         Request::Changes { .. } => unreachable!("answered without locking the store"),
+
+        // A peer reporting that it now holds some content. Recorded against
+        // the device the connection proves it to be, not against anything the
+        // message says -- otherwise one peer could claim delivery on another's
+        // behalf, and this record is what a storage cap trusts before dropping
+        // a local copy.
+        //
+        // Best effort in both directions. An unknown fingerprint is ignored
+        // rather than refused, and the acknowledgement is the same either way:
+        // the sender has nothing useful to do with a failure, and this device
+        // failing to take a note is not the sender's problem.
+        Request::Got { content } => {
+            if let Some(fingerprint) = asker {
+                match store.db().peer_by_fingerprint(fingerprint.as_bytes()) {
+                    Ok(Some(peer)) => {
+                        let content = blake3::Hash::from(*content);
+                        if let Err(e) = store.note_replica(&content, &peer.device_id) {
+                            tracing::debug!(error = %e, "could not record delivery");
+                        }
+                    }
+                    Ok(None) => tracing::debug!("delivery reported by an untrusted device"),
+                    Err(e) => tracing::debug!(error = %e, "looking up the reporting device"),
+                }
+            }
+            Response::Noted
+        }
 
         Request::Chunk { hash } => {
             let hash = blake3::Hash::from(*hash);

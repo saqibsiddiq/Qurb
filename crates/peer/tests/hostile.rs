@@ -73,6 +73,11 @@ fn start_hostile(
                         }
                         // Pairing has its own listener; this one never serves it.
                         (_, Request::Pair { .. }) => Some(Response::NotFound.encode()),
+                        // Being told a peer holds something asks nothing of us
+                        // and gives a hostile peer nothing to work with: the
+                        // report is credited to the connection's certificate,
+                        // and this device records it or does not.
+                        (_, Request::Got { .. }) => Some(Response::Noted.encode()),
                         // A hostile peer that claims to have changed, endlessly,
                         // can waste our time and nothing else.
                         (_, Request::Changes { .. }) => {

@@ -356,7 +356,7 @@ pub async fn accept(
 ///
 /// Taken from the connection rather than from anything the peer said about
 /// itself, which is the difference between an identity and a claim.
-fn fingerprint_of(connection: &quinn::Connection) -> Option<Fingerprint> {
+pub(crate) fn fingerprint_of(connection: &quinn::Connection) -> Option<Fingerprint> {
     let identity = connection.peer_identity()?;
     let certs = identity.downcast::<Vec<rustls::pki_types::CertificateDer<'static>>>().ok()?;
     let first = certs.first()?;

@@ -71,6 +71,93 @@ object Engine {
     }
 
     /**
+     * Take a file from anywhere on the phone into the synced folder.
+     *
+     * The one path by which content enters qurb on Android, shared by the file
+     * picker and the share sheet so the two cannot drift apart.
+     *
+     * Staged through the cache rather than streamed straight in: `importFile`
+     * takes a path, a `content://` URI is not one, and the resolver's stream is
+     * the only way to read what another app is handing over. The staging copy
+     * is deleted whether or not the import works — a failed share must not
+     * leave the cache holding a copy of someone's photo.
+     *
+     * Needs no network and does not wait for one. The file is written and
+     * indexed here and now; reaching another device is a separate matter that
+     * happens whenever one is next reachable.
+     */
+    suspend fun importUri(context: Context, uri: android.net.Uri): String =
+        withContext(Dispatchers.IO) {
+            val name = freeName(context, safeName(displayName(context, uri)))
+            val staging = File(context.cacheDir, name)
+            try {
+                context.contentResolver.openInputStream(uri).use { input ->
+                    staging.outputStream().use { output ->
+                        requireNotNull(input) { "could not read that file" }.copyTo(output)
+                    }
+                }
+                open(context).importFile(staging.absolutePath, name)
+                name
+            } finally {
+                staging.delete()
+            }
+        }
+
+    /** What the other app calls this file, if it will say. */
+    fun displayName(context: Context, uri: android.net.Uri): String {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val column = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (column >= 0 && cursor.moveToFirst()) {
+                cursor.getString(column)?.let { return it }
+            }
+        }
+        return uri.lastPathSegment?.substringAfterLast('/') ?: "file"
+    }
+
+    /**
+     * A name that stays where it is put.
+     *
+     * The name comes from another application, which makes it untrusted input:
+     * separators and `..` in it would place the file somewhere other than the
+     * folder — outside it, given enough of them. Reduced to its last component
+     * with the remaining awkward characters replaced, and never empty.
+     */
+    private fun safeName(candidate: String): String {
+        val leaf = candidate.substringAfterLast('/').substringAfterLast('\\')
+        val cleaned = leaf.replace(Regex("""[\x00-\x1f]"""), "").trim().trimStart('.')
+        return cleaned.ifEmpty { "shared-${System.currentTimeMillis()}" }
+    }
+
+    /**
+     * A name nothing is using yet.
+     *
+     * Two apps produce files called `IMG_0001.jpg` without either being wrong,
+     * and importing over an existing path does not merge them — it records a
+     * new version of that file, and since content is stored once, the old
+     * version's bytes go with it. So a share would quietly destroy an unrelated
+     * file that happened to share a name.
+     *
+     * A suffix rather than a comparison. Checking whether the bytes are
+     * identical means hashing both files, which on a phone sharing a long video
+     * is two full reads to decide something that costs little to get wrong the
+     * safe way: re-sharing the same photo leaves a second copy, which someone
+     * can delete. The other way round they cannot.
+     */
+    private fun freeName(context: Context, name: String): String {
+        val folder = root(context)
+        if (!File(folder, name).exists()) return name
+
+        val stem = name.substringBeforeLast('.', name)
+        val extension = name.substringAfterLast('.', "")
+        val dot = if (extension.isEmpty()) "" else "."
+        for (n in 2..999) {
+            val candidate = "$stem ($n)$dot$extension"
+            if (!File(folder, candidate).exists()) return candidate
+        }
+        return "$stem-${System.currentTimeMillis()}$dot$extension"
+    }
+
+    /**
      * Where the rendezvous service is.
      *
      * Editable because there is no hosted one yet: to try this you run

@@ -159,6 +159,18 @@ pub struct Usage {
     pub on_disk: u64,
 }
 
+/// What this device is still the only holder of.
+///
+/// The answer to "did my photo get there yet". While this is non-empty, losing
+/// the phone loses work, which is worth being able to say plainly rather than
+/// leaving someone to guess from a sync that reported no error.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Outstanding {
+    /// Files this device made that no other device is known to hold.
+    pub files: Vec<FileEntry>,
+    pub bytes: u64,
+}
+
 // ---------------------------------------------------------------------------
 // Key protection
 // ---------------------------------------------------------------------------
@@ -686,6 +698,25 @@ impl Qurb {
     pub fn sync_within(&self, seconds: u32) -> Result<SyncOutcome, QurbError> {
         let deadline = std::time::Duration::from_secs(seconds.max(1) as u64);
         self.sync_inner(deadline)
+    }
+
+    /// What this device made and nothing else has taken yet.
+    ///
+    /// Not "what failed to sync" — there is no queue of failed transfers,
+    /// because there is no transfer to fail until the other device is
+    /// reachable. The file is simply here, indexed and waiting, and this says
+    /// which files those are. A share made with every other device switched
+    /// off looks exactly like a share made with them on, until one answers.
+    pub fn outstanding(&self) -> Result<Outstanding, QurbError> {
+        let engine = self.engine()?;
+        let waiting = engine.store().undelivered()?;
+
+        let bytes = waiting.iter().map(|(_, size)| size).sum();
+        let files = waiting
+            .into_iter()
+            .map(|(path, size)| FileEntry { path, size, modified_at: 0 })
+            .collect();
+        Ok(Outstanding { files, bytes })
     }
 
     /// How much space the store occupies on this device.

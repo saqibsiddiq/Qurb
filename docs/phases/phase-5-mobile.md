@@ -23,11 +23,13 @@ record](../roadmap.md).
 | **an Android app** | ✅ [`android/`](../../android/) — installs, sets up, syncs |
 | syncing unattended | ✅ WorkManager, every 15 minutes |
 | the files visible to other apps | ✅ a DocumentsProvider, verified in Files |
+| sharing into qurb from any app | ✅ a share target, works with no network |
+| knowing what has not been delivered | ✅ asked of the index, not kept as a queue |
 | **a phone syncing with a laptop, both ways** | ✅ verified on hardware |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-439 tests pass across ten crates on Linux, 426 of them on a Galaxy S23;
-clippy is clean.
+475 tests pass across eleven crates on Linux; the last run on a Galaxy S23 was
+426 of them, before this session's work. Clippy is clean.
 
 ## What the library costs
 
@@ -394,6 +396,48 @@ to tell a sync that works from one that has quietly stopped — and quietly
 stopping is the failure mode a sync app actually dies of. It now logs and
 records its last result.
 
+### Sharing when nothing is listening
+
+The app is a share target: `ACTION_SEND` and `ACTION_SEND_MULTIPLE` for any
+type, so anything on the phone can be sent into qurb from the system share
+sheet. The point of the screen is what it does *not* need. Saving a photo
+writes it into the folder and indexes it here and now, with every other device
+switched off and no network in sight; reaching them is a separate question,
+answered whenever one is next awake.
+
+There is **no outbox and no retry queue**, because nothing is queued. An outbox
+would be a second record of what needs to happen, and two records of one fact
+disagree eventually — an entry for a file since deleted retries forever, a file
+the outbox forgot is never sent and reports no error. Instead the index is
+asked each time: *live files this device made, whose content no other device is
+known to hold*. A file joins that answer when it is shared and leaves it when
+somebody takes delivery, with nothing to enqueue or clean up.
+
+For that to be answerable at all, the protocol gained its first message that
+asks for nothing: `Got { content }`, sent by a device that has just finished
+receiving content, to the device it came from. Before it, a device being
+fetched *from* learned nothing — it served some chunks, and whether they added
+up to a file someone wrote was not its business. That is fine for syncing and
+useless for telling a person their photo arrived. It is credited to the
+certificate the connection authenticated with, never to anything the message
+says, because [decision 0025](../decisions/0025-a-storage-cap-that-cannot-lose-data.md)
+lets a storage cap drop a local copy on exactly this record.
+
+Measured, two devices through a rendezvous service on loopback: a file shared
+with the desktop **not running at all** was saved, correctly reported as held
+only by the phone, survived a sync attempt that reached nobody, and arrived
+byte-for-byte once the desktop came up — with nothing further done on the
+phone. The phone then reported nothing outstanding.
+
+One thing worth fixing that was found writing this: importing over a name
+already in use records a *new version* of that file, and since content is
+stored once, the old version's bytes go with it. Two apps both producing
+`IMG_0001.jpg` is not unusual, so a share now takes the next free name instead.
+Re-sharing the same photo leaves two copies, which a person can delete; the
+other way round costs them a file they never touched.
+
+See [decision 0026](../decisions/0026-sharing-while-the-other-device-is-off.md).
+
 ### The files, from the rest of the phone
 
 `QurbDocumentsProvider` puts qurb in the system file picker and the Files app.
@@ -584,10 +628,15 @@ exactly the hard case that number is about. See
   never meet. This is the strongest argument for a storage-only replica in the
   picture, and it is the reason the roadmap plans iOS as a good viewer rather
   than a peer equal to a desktop.
-- **Background scheduling.** `sync_within` is the Rust half and it works. The
-  platform half — `WorkManager`, `BGTaskScheduler`, and the policy about when
-  to ask for a window at all — is platform-side work that needs an app to live
-  in.
+- **Being told, rather than looking.** A phone cannot be woken by another
+  device without push infrastructure, which qurb does not have and which would
+  mean a third party learning when someone's devices talk. So the phone decides
+  when to look and Android decides how often to allow it: a share made while a
+  laptop is shut arrives when the laptop returns plus up to one background
+  window. WorkManager's backoff is the entire retry policy, deliberately — the
+  alternative is an app that drains a battery hunting for a computer that is
+  off. (`BGTaskScheduler`, the iOS half, is untouched along with the rest of
+  iOS.)
 - **Upgrading a relayed connection back to direct.** Inherited from Phase 3 and
   worse on a phone, which changes network several times a day: a connection that
   fell back to the relay while on cellular stays relayed after it reaches Wi-Fi.

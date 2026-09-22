@@ -42,6 +42,19 @@ pub trait ContentSource {
         out.write_all(&bytes).map_err(|e| Error::Io { path: "the destination".into(), source: e })?;
         Ok(bytes.len() as u64)
     }
+
+    /// Told once content has been committed here, so the source can stop
+    /// counting it as undelivered.
+    ///
+    /// Nothing depends on it arriving — it is a courtesy to the other end, and
+    /// a source with nobody to tell does nothing. The default is therefore to
+    /// do nothing, which is right for a local store: reading from a directory
+    /// on this disk delivers nothing to anyone.
+    ///
+    /// Called only after the content is written and verified. Reporting a
+    /// delivery that then failed would be worse than reporting none, because
+    /// it is evidence the other device may drop its own copy on.
+    fn received(&mut self, _content: &[u8; 32]) {}
 }
 
 /// A source that has nothing, for plans expected not to need content.
@@ -304,6 +317,7 @@ impl Engine {
                         }
                     };
                     self.store_mut().adopt(version, Some(&bytes), version.modified_at)?;
+                    source.received(hash);
                     return Ok(());
                 }
 
@@ -354,6 +368,12 @@ impl Engine {
                 // does not immediately re-read what it just wrote.
                 let mtime = std::fs::metadata(&path).ok().map(|m| mtime_ns(&m)).unwrap_or(0);
                 self.store_mut().adopt_file(version, &path, mtime)?;
+
+                // Committed, so it is now true to say this device holds it.
+                // Told after the rename rather than after the fetch: the point
+                // at which this becomes a fact the other end may rely on is the
+                // point the file is in place, not the point the bytes arrived.
+                source.received(hash);
             }
         }
         Ok(())

@@ -353,3 +353,117 @@ fn a_cancelled_offer_cannot_be_joined() {
     // Waiting on a cancelled offer reports rather than blocking for ever.
     assert!(offer.wait().is_err());
 }
+
+/// Sharing while the other device is switched off, and having it arrive later
+/// without anybody doing anything.
+///
+/// The scenario the feature exists for: someone shares a photo from their
+/// phone, their computer is off, and they put the phone away. The promise is
+/// that the photo is on the computer afterwards and that they were never asked
+/// to do anything else about it.
+///
+/// Three properties, and the middle one is the load-bearing one:
+///
+/// 1. The share **works with nothing to sync to**. There is no network in the
+///    first half of this test at all.
+/// 2. The phone **knows it is outstanding** — that it holds the only copy —
+///    which is what it tells the person, and what a storage cap consults.
+/// 3. Nobody asks for the transfer. It happens on the next ordinary sync,
+///    which on a real phone is the periodic background worker.
+#[test]
+fn a_share_made_while_the_desktop_is_off_arrives_when_it_returns() {
+    logging();
+    let (_runtime, signal) = signalling();
+
+    let desktop_dir = tempfile::tempdir().unwrap();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let desktop_root = desktop_dir.path().display().to_string();
+    let phone_root = phone_dir.path().display().to_string();
+
+    let setup = create(desktop_root.clone()).unwrap();
+    restore(phone_root.clone(), setup.recovery_phrase.clone()).unwrap();
+
+    let desktop = Qurb::open_with(desktop_root, None, settings("desktop", &signal)).unwrap();
+    let phone = Qurb::open_with(phone_root, None, settings("phone", &signal)).unwrap();
+
+    // Paired first, as they would have been long before today's photo.
+    let offer = desktop.offer_pairing().unwrap();
+    let code = offer.code();
+    let waiting = std::thread::spawn(move || offer.wait());
+    phone.join_pairing(code).unwrap();
+    waiting.join().unwrap().unwrap();
+
+    // -- the desktop is off ---------------------------------------------------
+    //
+    // Nothing is listening and nothing is announced. This is the half that has
+    // to work without a network, so no server is started for it.
+
+    let source = phone_dir.path().join("outside.jpg");
+    std::fs::write(&source, b"a photograph taken on the phone").unwrap();
+    phone.import_file(source.display().to_string(), "holiday.jpg".into()).unwrap();
+
+    // Saved, listed, and known to be the only copy.
+    assert!(phone.contains("holiday.jpg".into()).unwrap(), "the share was not saved");
+    let outstanding = phone.outstanding().unwrap();
+    assert_eq!(
+        outstanding.files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(),
+        vec!["holiday.jpg"],
+        "the phone does not know it is holding the only copy"
+    );
+    assert_eq!(outstanding.bytes, b"a photograph taken on the phone".len() as u64);
+
+    // Trying to sync now reaches nobody, and loses nothing by it.
+    let attempt = phone.sync_within(2).unwrap();
+    assert_eq!(attempt.reached, 0, "something answered; the desktop was supposed to be off");
+    assert!(phone.contains("holiday.jpg".into()).unwrap(), "a failed sync lost the file");
+    assert_eq!(phone.outstanding().unwrap().files.len(), 1);
+
+    // -- the desktop comes back -----------------------------------------------
+
+    let desktop = Arc::new(desktop);
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let serving = Arc::clone(&desktop);
+    let stopping = Arc::clone(&stop);
+    let server = std::thread::spawn(move || {
+        while !stopping.load(std::sync::atomic::Ordering::Relaxed) {
+            let _ = serving.sync_within(5);
+        }
+    });
+
+    // Waited on the outcome rather than on the phone reaching the desktop,
+    // because those are not the same event and this direction is the slower
+    // one. Every device pulls what it wants: the phone connecting gets the
+    // phone up to date, and the photo only moves when the *desktop* dials the
+    // phone and pulls. So the condition is "the desktop has it", which is what
+    // the person actually waits for.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let mut arrived = false;
+    while std::time::Instant::now() < deadline {
+        let _ = phone.sync_within(5);
+        if desktop.contains("holiday.jpg".into()).unwrap_or(false) {
+            arrived = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    server.join().unwrap();
+
+    assert!(arrived, "the photo never reached the desktop");
+
+    // It arrived, byte for byte.
+    assert!(desktop.contains("holiday.jpg".into()).unwrap(), "the photo did not arrive");
+    let out = desktop_dir.path().join("checked.jpg");
+    desktop.export("holiday.jpg".into(), out.display().to_string()).unwrap();
+    assert_eq!(std::fs::read(&out).unwrap(), b"a photograph taken on the phone");
+
+    // And the phone now knows it is no longer the only holder, which is what
+    // lets it stop saying the share is waiting. The report travels on the
+    // connection that carried the content, so it is in hand by the time the
+    // desktop has the file.
+    assert!(
+        phone.outstanding().unwrap().files.is_empty(),
+        "the phone still reports the photo as undelivered: {:?}",
+        phone.outstanding().unwrap().files
+    );
+}

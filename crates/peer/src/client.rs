@@ -100,6 +100,24 @@ impl PeerClient {
         }
     }
 
+    /// Tell the peer this device now holds that content.
+    ///
+    /// Courtesy, not bookkeeping this device needs: the *peer* is the one who
+    /// learns something, namely that its copy is no longer the only one. That
+    /// is what lets a phone say a photo reached the desktop rather than only
+    /// that it tried, and what a storage cap consults before dropping a local
+    /// copy.
+    ///
+    /// Sent after the content is committed, never before — a report of a
+    /// delivery that then failed is worse than no report, because it is the
+    /// evidence someone else may drop their copy on.
+    pub async fn got(&self, content: [u8; 32]) -> Result<()> {
+        match self.request(Request::Got { content }).await? {
+            Response::Noted => Ok(()),
+            other => Err(unexpected("acknowledgement", &other)),
+        }
+    }
+
     /// Wait until the peer's state differs from `since`.
     ///
     /// Returns where the peer has got to, both when something changed and when
@@ -225,6 +243,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Manifest(_) => "manifest",
         Response::Chunk(_) => "chunk",
         Response::NotFound => "not-found",
+        Response::Noted => "acknowledgement",
         Response::Paired { .. } => "pairing reply",
         Response::Changed { .. } => "change notification",
     };

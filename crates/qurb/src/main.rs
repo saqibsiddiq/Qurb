@@ -362,6 +362,20 @@ fn status(root: &Path) -> Result<()> {
         println!("  not here   {} file(s) — contents dropped, `qurb fetch` to get one back", evicted.len());
     }
 
+    // Files this device made that no other device is known to hold. Worth
+    // saying out loud: while this is non-empty, losing this device loses work.
+    let waiting = store.undelivered()?;
+    if !waiting.is_empty() {
+        let bytes: u64 = waiting.iter().map(|(_, size)| size).sum();
+        println!("  only here  {} file(s), {} — no other device has these yet", waiting.len(), human(bytes));
+        for (path, _) in waiting.iter().take(3) {
+            println!("               {path}");
+        }
+        if waiting.len() > 3 {
+            println!("               and {} more", waiting.len() - 3);
+        }
+    }
+
     let peers = store.db().trusted_peers()?;
     if peers.is_empty() {
         println!("\n  no paired devices — run `qurb pair` here and `qurb join` there");

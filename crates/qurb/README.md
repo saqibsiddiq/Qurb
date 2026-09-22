@@ -124,6 +124,25 @@ On Linux a dropped file is simply absent from the folder — there is no
 placeholder API to keep its name visible, so `qurb status` is where you find
 out it still exists.
 
+## What is waiting to be delivered
+
+`qurb status` ends with a line like:
+
+```
+  only here  2 file(s), 2.9 MiB — no other device has these yet
+```
+
+Files this device made that no other device is known to hold. While that line
+is there, losing this device loses that work.
+
+It is a question asked of the index each time — live files made here whose
+content nothing else has taken — rather than a queue of pending transfers.
+There is nothing to queue: a file added while every other device is switched
+off is simply in the folder, and it moves when one is next reachable. A device
+learns it is no longer the only holder because the device that received the
+content says so, which is the only message in the protocol that asks for
+nothing.
+
 ## What it does not do yet
 
 

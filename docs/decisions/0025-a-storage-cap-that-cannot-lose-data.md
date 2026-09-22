@@ -45,20 +45,31 @@ Measured on the development laptop, 2026-09-22, two devices on loopback with a
 one and came in at 1.9 MiB; the device that made both files dropped nothing and
 reported itself 2.8 MB over, with nothing safe to drop.
 
-### What this does not cover
+### A second, stronger source of evidence
 
-If **every** device holding some content evicts it, the content is gone. The
+Since [0026](0026-sharing-while-the-other-device-is-off.md) there is also a
+direct report: a device that finishes receiving content sends `Got { content }`,
+and the device that served it records the sender as a holder. That is not an
+inference from who made the file — it is the receiver saying so, credited to
+the device its certificate proves it to be.
+
+This is the stronger of the two and it closes the case the `modified_by` rule
+could not: the device that *originated* content now learns when someone else
+takes a copy, and may drop its own.
+
+### What this still does not cover
+
+If **every** device holding some content drops it, the content is gone. The
 record says "device D had these bytes at time T", not "device D has them now".
-Today that cannot happen in practice — a device only evicts content it did not
-originate, so the originator is still holding it — but it becomes reachable the
-moment a device can lose content some other way while still being listed as a
-replica.
+Nothing today can produce that — a device drops only content another device is
+recorded as holding, and that record is only ever created by a device that
+actually received it — but the record is a memory rather than a question, and a
+memory can go stale.
 
-The fix, when it is needed, is to ask rather than remember: a `Have { content }`
-request answered by checking the peer can actually produce every chunk. That is
-a protocol addition and is not made now, because the evidence available without
-it is sufficient for the arrangement that exists today, and a protocol change
-should be made when it is needed rather than in anticipation.
+Asking instead of remembering would mean a `Have { content }` request answered
+by checking the peer can still produce every chunk. Not built, because it costs
+a round trip per candidate at exactly the moment a device is short of space,
+and nothing in the arrangement that exists today needs it.
 
 ## Eviction must never look like deletion
 
