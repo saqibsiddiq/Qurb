@@ -127,9 +127,35 @@ decides when to look, and Android decides how often to let it. Shares made
 while a laptop is shut can take as long as the laptop takes to come back plus
 one background window.
 
-**Nothing is retried faster after a failure than the platform allows.**
-WorkManager's backoff is the whole retry policy. This is deliberate: the
-alternative is an app that drains a battery looking for a computer that is off.
+**Nothing is retried faster than the platform allows** — about fifteen minutes,
+WorkManager's floor for periodic work, and longer on a dozing phone.
+
+It was very much worse than that until hardware testing caught it. "Nothing
+answered" was reported to WorkManager as a *retry*, on the reasoning that the
+other device being asleep is ordinary and exponential backoff would keep it
+from draining the battery. That is exactly backwards: every unanswered attempt
+doubled the delay, so a phone whose laptop had been off for a while scheduled
+its next attempt **three hours out** — measured on a Galaxy S23, with a file
+shared at 18:01 still sitting there at 18:06 with the laptop running beside it.
+The moment the other device came back was the moment this one had stopped
+looking.
+
+Backoff is for transient errors. "Nobody is awake yet" is the steady state, and
+its answer is the ordinary period, which only applies when the worker reports
+success. Retrying is now reserved for a sync that ran out of time with work
+still to do, and its backoff is linear rather than exponential.
+
+Two supporting fixes came from the same finding. A share asks for an
+**expedited** one-time sync and waits for that request to be written down
+before the screen closes — a process with no remaining components can be killed
+immediately afterwards, and a share that silently schedules nothing is the
+exact failure this feature exists to not have. And the periodic schedule is
+**versioned by name**, because one registered with `KEEP` survives reinstalls
+and so does the backoff it accumulated: a phone would otherwise carry its
+three-hour delay across the update that fixed it.
+
+Measured afterwards on the same phone: a file shared through the system share
+sheet reached the laptop in under five seconds, unattended.
 
 **Android only.** iOS has no app at all yet, and its share-extension model is
 different enough that this design should be revisited rather than copied.

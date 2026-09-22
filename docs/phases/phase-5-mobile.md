@@ -378,12 +378,24 @@ neither Doze nor a reboot, and a foreground service means a permanent
 notification plus, since Android 14, a declared type that "syncing files" does
 not cleanly fit.
 
-The outcomes are mapped deliberately. Running out of time is a *retry*, so
-another window comes sooner than the next period. **Nothing answering is also a
-retry, not a failure** — on a phone the other device being asleep is the
-ordinary case, and the exponential backoff is what stops that from becoming a
-battery drain. A locked keystore is a failure, because retrying in fifteen
+The outcomes are mapped deliberately, and one of them was mapped wrongly for a
+release. Running out of time is a *retry*, so another window comes sooner than
+the next period. A locked keystore is a failure, because retrying in fifteen
 minutes reaches the same conclusion.
+
+**Nothing answering used to be a retry too**, on the reasoning that the other
+device being asleep is ordinary and the backoff would keep it from draining the
+battery. That was exactly backwards. Every unanswered attempt doubled the
+delay, so a phone whose laptop had been off scheduled its next attempt three
+hours out — and the moment the laptop came back was the moment the phone had
+stopped looking. Caught on hardware, not on paper: a file shared at 18:01 was
+still sitting on the phone at 18:06 with the laptop running beside it and
+`jobscheduler` reporting `earliest=+3h5m58s`.
+
+Backoff is for transient errors. "Nobody is awake yet" is the steady state, and
+the answer to it is the ordinary fifteen-minute period, which only applies if
+the worker reports success — which also resets the attempt count, so an
+accumulated backoff unwinds by itself.
 
 Fifteen minutes is not a choice: it is the shortest period WorkManager accepts,
 and asking for less silently becomes fifteen anyway. In practice it is a floor

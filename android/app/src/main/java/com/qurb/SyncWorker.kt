@@ -8,6 +8,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -70,11 +71,23 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 // with its own backoff deciding how much sooner.
                 outcome.timedOut -> Result.retry()
 
-                // Nothing answered, though something was there to answer.
-                // On a phone this is ordinary -- the other device is asleep --
-                // so it is a retry rather than a failure, and the backoff stops
-                // it from becoming a battery drain.
-                outcome.reached == 0u && outcome.unreachable > 0u -> Result.retry()
+                // Nothing answered. This used to be a retry, on the reasoning
+                // that the other device being asleep is ordinary and the
+                // backoff would stop it becoming a battery drain. That was
+                // exactly backwards, and measured on a real phone: every
+                // unanswered attempt doubled the delay until the next sync was
+                // scheduled **three hours out**, so the moment the other
+                // device finally came back was the moment this one had stopped
+                // looking. A file shared while a laptop was shut sat on the
+                // phone for hours with the laptop running beside it.
+                //
+                // Backoff is for transient errors. "Nobody is awake yet" is
+                // not an error, it is the steady state, and the answer to it
+                // is the ordinary fifteen-minute period -- which only applies
+                // if this reports success. Success also resets the attempt
+                // count, so a long backoff already accumulated unwinds on the
+                // first run after this.
+                outcome.reached == 0u && outcome.unreachable > 0u -> Result.success()
 
                 else -> Result.success()
             }
@@ -100,7 +113,19 @@ class SyncWorker(context: Context, params: WorkerParameters) :
 
     companion object {
         private const val TAG = "qurb"
-        private const val NAME = "qurb-sync"
+        /**
+         * The schedule's name, versioned.
+         *
+         * A periodic schedule registered with `KEEP` survives reinstalls, and
+         * so does the exponential backoff it accumulated — a phone that had
+         * backed off to three hours would keep that delay across an update
+         * carrying the fix for it. Changing the name retires the old schedule
+         * once, for everyone, which is the only way to be sure.
+         */
+        private const val NAME = "qurb-sync-v2"
+
+        /** Schedules from earlier versions, cancelled on sight. */
+        private val RETIRED = listOf("qurb-sync")
         private const val BUDGET_SECONDS = 20u
         private const val PREFS = "qurb"
         private const val LAST_RESULT = "last-sync-result"
@@ -144,6 +169,10 @@ class SyncWorker(context: Context, params: WorkerParameters) :
          * the end of one and never sync.
          */
         fun schedule(context: Context) {
+            for (old in RETIRED) {
+                WorkManager.getInstance(context).cancelUniqueWork(old)
+            }
+
             val constraints = Constraints.Builder()
                 // Any network, not unmetered. Two devices on the same Wi-Fi is
                 // the common case and would be covered either way, but a phone
@@ -155,9 +184,14 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 .setRequiresBatteryNotLow(true)
                 .build()
 
+            // Linear, not exponential. The only thing that retries now is a
+            // sync that ran out of time with work still to do, and the right
+            // answer to that is another window shortly -- not a delay that
+            // doubles away into hours. Exponential backoff here is what put a
+            // phone three hours out from its next attempt.
             val request = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
                 .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+                .setBackoffCriteria(BackoffPolicy.LINEAR, 1, TimeUnit.MINUTES)
                 .build()
 
             WorkManager.getInstance(context)
@@ -201,17 +235,33 @@ class SyncWorker(context: Context, params: WorkerParameters) :
          * path works without waiting fifteen minutes for it to not.
          */
         fun runNow(context: Context) {
-            WorkManager.getInstance(context).enqueueUniqueWork(
+            val request = OneTimeWorkRequestBuilder<SyncWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                // Expedited, because the case this exists for is somebody
+                // having just shared a file and watching to see it go. Asking
+                // to run soon is the whole point; without it this waits in the
+                // same queue as work nobody is waiting on.
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+
+            val operation = WorkManager.getInstance(context).enqueueUniqueWork(
                 "$NAME-now",
                 androidx.work.ExistingWorkPolicy.REPLACE,
-                OneTimeWorkRequestBuilder<SyncWorker>()
-                    .setConstraints(
-                        Constraints.Builder()
-                            .setRequiredNetworkType(NetworkType.CONNECTED)
-                            .build()
-                    )
-                    .build(),
+                request,
             )
+
+            // Waited on, off the main thread. Enqueuing is asynchronous, and
+            // the caller is usually a share screen that finishes immediately
+            // afterwards -- and a process with no remaining components can be
+            // killed straight away, losing an enqueue that had not yet been
+            // written down. A share that silently schedules nothing is the
+            // failure this whole feature is supposed to not have.
+            runCatching { operation.result.get(5, TimeUnit.SECONDS) }
+                .onFailure { Log.w(TAG, "could not schedule a sync", it) }
         }
 
         /** Stop asking. Used when the store is torn down. */
