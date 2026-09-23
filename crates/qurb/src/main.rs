@@ -823,7 +823,7 @@ async fn signal(addr: Option<String>, push_credentials: Option<String>) -> Resul
         addr.unwrap_or_else(|| "0.0.0.0:9000".into()).parse().context("bad address")?;
     // Validated before the port is taken, so a mistyped credentials path says
     // so rather than surfacing as whatever the socket complains about.
-    let waker = push_waker(push_credentials)?;
+    let waker = push_waker(push_credentials).await?;
     let server = qurb_signal::SignalServer::bind(addr).await?;
     let server = match waker {
         Some(waker) => server.waking_with(waker),
@@ -847,16 +847,31 @@ async fn signal(addr: Option<String>, push_credentials: Option<String>) -> Resul
 /// Without credentials it behaves as it always has: devices sync when they
 /// next look. Push only shortens that wait; nothing depends on it.
 #[cfg(feature = "push")]
-fn push_waker(credentials: Option<String>) -> Result<Option<qurb_signal::wake::SharedWaker>> {
+async fn push_waker(
+    credentials: Option<String>,
+) -> Result<Option<qurb_signal::wake::SharedWaker>> {
     let Some(path) = credentials else { return Ok(None) };
     let account = qurb_signal::fcm::ServiceAccount::from_file(std::path::Path::new(&path))
         .map_err(|e| anyhow::anyhow!("{e}"))?;
-    println!("  waking sleeping devices through Firebase project {}", account.project_id);
-    Ok(Some(std::sync::Arc::new(qurb_signal::fcm::Fcm::new(account))))
+    let project = account.project_id.clone();
+    let sender = qurb_signal::fcm::Fcm::new(account);
+
+    // Checked now rather than on the first device that needs waking. A key
+    // that does not work is a thing to find out at startup, not months later
+    // when somebody's phone quietly stops being prompt.
+    sender
+        .check()
+        .await
+        .map_err(|e| anyhow::anyhow!("the push credentials do not work: {e}"))?;
+    println!("  waking sleeping devices through Firebase project {project}");
+
+    Ok(Some(std::sync::Arc::new(sender)))
 }
 
 #[cfg(not(feature = "push"))]
-fn push_waker(credentials: Option<String>) -> Result<Option<qurb_signal::wake::SharedWaker>> {
+async fn push_waker(
+    credentials: Option<String>,
+) -> Result<Option<qurb_signal::wake::SharedWaker>> {
     if credentials.is_some() {
         bail!(
             "this build cannot send push notifications.\n\

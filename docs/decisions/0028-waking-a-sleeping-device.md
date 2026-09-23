@@ -80,11 +80,31 @@ So they are bounded by count instead, oldest evicted first, and devices
 re-register on every connection — an eviction costs at most one missed wake-up
 and heals itself.
 
-## Not verified against the live service
+## Verified against the live service
 
-The FCM client is written from the HTTP v1 specification and has **not been run
-against Firebase**, because that needs a project, a service account and a real
-device. What is covered by tests is the decision logic — who gets woken and who
-does not — and the shape of the message, including that it mentions nothing
-about anybody's files. The first real send is unproven, and this says so rather
-than leaving it to be discovered.
+Measured on 2026-09-23, a Galaxy S23 asleep with its screen off, a laptop, and
+a rendezvous service holding real credentials:
+
+```
+13:22:18.579412  laptop   local changes stored=1
+13:22:18.579876  service  waking a device that is not connected
+13:22:19.281     phone    woken by another device
+13:22:35         phone    sync: reached=1 adopted=1
+```
+
+**Seven hundred milliseconds** from the change to the phone waking. The file
+arrived complete and the laptop then reported nothing outstanding, meaning the
+phone acknowledged holding it.
+
+The credential half — reading the key, signing the RS256 assertion, and Google
+accepting it — is exercised at startup rather than on the first device that
+needs waking. A key that does not work is a thing to find out then, not months
+later when somebody's phone quietly stops being prompt.
+
+## Tokens are held in memory, and that is survivable
+
+Restarting the service forgets every token, so the first change after a restart
+wakes nobody. Devices re-register on their next connection, so it heals itself
+and costs at most one delayed sync. Observed during testing and left as it is:
+persisting them means a database, and a database is the thing this service is
+valuable for not having.

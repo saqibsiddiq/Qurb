@@ -153,6 +153,17 @@ impl Fcm {
         .map_err(|e| format!("signing the assertion: {e}"))
     }
 
+    /// Prove the credentials work, before anything depends on them.
+    ///
+    /// Obtains an access token and throws it away — which exercises the whole
+    /// awkward half: reading the key, signing the assertion, and Google
+    /// accepting it. Without this a mistyped path or a revoked key is
+    /// discovered the first time somebody's phone fails to wake, which is
+    /// exactly when nobody is watching.
+    pub async fn check(&self) -> Result<(), String> {
+        self.access_token().await.map(|_| ())
+    }
+
     /// The message body for a poke.
     ///
     /// Data-only and high priority. Data-only because a notification message

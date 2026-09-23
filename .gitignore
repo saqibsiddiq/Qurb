@@ -28,3 +28,17 @@ android/app/src/main/java/uniffi/
 
 # Understand Anything knowledge-graph cache (regenerated locally by /understand)
 .ua/
+
+# Firebase, for waking sleeping devices. See
+# docs/decisions/0028-waking-a-sleeping-device.md.
+#
+# The Android config is not a secret -- it ships inside every APK -- but it
+# names one particular person's project, and a checkout carrying it would have
+# strangers' phones registering against it. The service account key *is* a
+# secret and must never be anywhere near a commit.
+android/app/google-services.json
+**/*firebase-adminsdk*.json
+**/service-account*.json
+
+# Gradle's Kotlin session directory.
+android/.kotlin/

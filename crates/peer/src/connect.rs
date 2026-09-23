@@ -211,8 +211,21 @@ impl Connector {
         .map_err(|e| Error::Signalling { detail: e.to_string() })?;
 
         let (signal, commands) = mpsc::unbounded_channel();
-        tokio::spawn(run_signalling(
+
+        // Reconnecting, not just connecting. A rendezvous service restarts --
+        // for a deploy, a reboot, a crash -- and before this a device whose
+        // connection went with it stayed silent until the daemon itself was
+        // restarted. It kept syncing on its timer, so nothing looked broken;
+        // it simply stopped being reachable and stopped being able to say it
+        // had news. Found by restarting the service during a test.
+        let reconnect = Reconnect {
+            url: signal_url,
+            group: GroupId::derive(&master),
+            member: MemberId::derive(&master, identity.fingerprint().as_bytes()),
+        };
+        tokio::spawn(stay_signalled(
             client,
+            reconnect,
             commands,
             endpoints.clone(),
             endpoint.clone(),
@@ -436,6 +449,91 @@ impl Connector {
     }
 }
 
+/// What it takes to open the signalling connection again.
+struct Reconnect {
+    url: String,
+    group: GroupId,
+    member: MemberId,
+}
+
+/// How long to wait before trying the rendezvous service again.
+///
+/// Doubling from a second to a minute. Short at first because the common cause
+/// is a restart that takes seconds, and capped because a service that is down
+/// for an hour should not be asked sixty times a minute — nor left unasked for
+/// an hour once it returns.
+const RECONNECT_FLOOR: Duration = Duration::from_secs(1);
+const RECONNECT_CEILING: Duration = Duration::from_secs(60);
+
+/// Keep a signalling connection up for as long as the device runs.
+///
+/// Each connection is served by [`run_signalling`] until it closes; this
+/// reopens it. Announcing happens on every connection, because to the service
+/// a reconnected device is a device it has never heard of.
+#[allow(clippy::too_many_arguments)]
+async fn stay_signalled(
+    first: SignalClient,
+    reconnect: Reconnect,
+    mut commands: mpsc::UnboundedReceiver<Command>,
+    endpoints: Endpoints,
+    endpoint: quinn::Endpoint,
+    identity: Identity,
+    arrivals_tx: broadcast::Sender<MemberId>,
+) {
+    let mut client = Some(first);
+    let mut wait = RECONNECT_FLOOR;
+
+    loop {
+        let connected = match client.take() {
+            Some(connected) => connected,
+            None => {
+                tokio::time::sleep(wait).await;
+                wait = (wait * 2).min(RECONNECT_CEILING);
+                match SignalClient::connect(
+                    &reconnect.url,
+                    reconnect.group,
+                    reconnect.member,
+                    endpoints.clone(),
+                )
+                .await
+                {
+                    Ok(fresh) => {
+                        tracing::info!("reconnected to the rendezvous service");
+                        fresh
+                    }
+                    Err(e) => {
+                        tracing::debug!(error = %e, "cannot reach the rendezvous service");
+                        continue;
+                    }
+                }
+            }
+        };
+
+        // A connection that lasted is evidence the service is healthy, so the
+        // next outage starts its backoff from the floor rather than from
+        // wherever the last one ended.
+        wait = RECONNECT_FLOOR;
+
+        run_signalling(
+            connected,
+            &mut commands,
+            endpoints.clone(),
+            endpoint.clone(),
+            identity.clone(),
+            arrivals_tx.clone(),
+        )
+        .await;
+
+        // `run_signalling` returns only when the connection is gone or the
+        // commands channel is closed. The second means the Connector was
+        // dropped and there is nothing left to serve.
+        if commands.is_closed() {
+            return;
+        }
+        tracing::debug!("the rendezvous connection dropped; reopening");
+    }
+}
+
 /// The one task that owns the signalling connection.
 ///
 /// It answers requests to connect, hands each `Punch` to whoever asked for it,
@@ -444,7 +542,7 @@ impl Connector {
 /// device reachable while it is busy reaching somebody.
 async fn run_signalling(
     mut client: SignalClient,
-    mut commands: mpsc::UnboundedReceiver<Command>,
+    commands: &mut mpsc::UnboundedReceiver<Command>,
     endpoints: Endpoints,
     endpoint: quinn::Endpoint,
     identity: Identity,

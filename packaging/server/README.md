@@ -83,6 +83,20 @@ The phone half needs a `google-services.json` from the same Firebase project in
 `android/app/` before building the app. Its presence is what switches push on:
 without it the SDK is not linked at all.
 
+Two things worth knowing, both learned the hard way:
+
+**A plain `cargo build --release` overwrites the push binary.** The feature is
+not on by default, so rebuilding the workspace without `--features push`
+replaces `target/release/qurb` with one that refuses `--push` at startup. It
+says so clearly rather than starting without push, which is the right
+behaviour — but it is a confusing minute if you have forgotten.
+
+**Restarting the service forgets every wake token.** They are held in memory,
+so the first change after a restart wakes nobody. Devices re-register on their
+next connection, so it heals itself at the cost of one delayed sync. Persisting
+them would mean a database, which is the thing this service is valuable for not
+having.
+
 ## What this does not give you
 
 **Availability when every device is off.** These services hold no content, so
