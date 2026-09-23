@@ -7,8 +7,9 @@ qurb-tray ~/qurb
 ```
 
 An icon showing whether things are in step, a menu with recent files and paired
-devices, and a way to open the folder or quit. It **runs the daemon** — the same
-one `qurb run` does.
+devices, and a way to open the folder or quit. Where there is no tray, a window
+with the same information **and the one setting people want to change**: how
+much disk qurb may use. It **runs the daemon** — the same one `qurb run` does.
 
 ## One process, not two
 
@@ -63,6 +64,37 @@ The check happens before GTK is touched for a second reason: `tray-icon` is
 GTK-backed on Linux and **panics** if a menu is constructed before `gtk::init`,
 so an error path alone would never have run.
 
+## The storage slider
+
+The window is where a person sets how much disk qurb may have: a usage bar, a
+checkbox for whether there is a limit at all, and a slider from 1 GiB to the
+size of the filesystem the folder is on. Offering more than the disk holds
+would be offering a number that cannot mean anything.
+
+**It writes the settings file and nothing else.** Not a socket to the daemon,
+not shared state — the same file `qurb config` writes and the daemon re-reads
+on every maintenance pass. So the command and the slider are literally the same
+act, a change applies without a restart, and neither can leave the other showing
+something stale.
+
+**It reads that file too**, rather than the daemon's published status. The
+daemon only republishes on a sync pass, so a slider driven from the status would
+sit at its old value for up to two minutes after somebody moved it — visibly
+snapping back under their finger.
+
+## One daemon per folder
+
+The desktop app and `qurb run` in a terminal are the same daemon with different
+faces, and it used to be possible to run both. Two on one store contend on the
+SQLite write lock, answer as the same device on the network, and both enforce
+the same storage cap — none of which reports an error. It is slow and confusing
+rather than broken, which is worse.
+
+An advisory `flock` on the store, taken for the life of the daemon, now makes
+the second one refuse with a sentence saying what is already running. The kernel
+releases it when the process dies, which a PID file could not promise after a
+crash.
+
 ## The icon
 
 Drawn at startup rather than shipped — a handful of RGBA pixels, because the
@@ -90,5 +122,9 @@ a setup step, the other is a network problem, and they want different actions.
   what this desktop does — but the icon and menu have never been seen. That
   needs KDE, XFCE, Windows, macOS, or the GNOME extension above.
 - **Clicking a recent file.** The list is shown, not actionable.
+- **Pairing a device.** Still `qurb pair` in a terminal, which is the step a
+  new person hits first.
+- **Anything about files.** No browsing what is synced, no fetching back a file
+  the storage cap dropped, no undeleting.
 - **Notifications.** `notify-rust` is a dependency and nothing sends one yet;
   conflicts are the obvious first use.

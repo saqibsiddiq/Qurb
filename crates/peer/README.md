@@ -89,6 +89,15 @@ device to change anything. Incoming versions are adopted by the *local* engine
 only after it has run them through reconciliation, so nothing a peer says is
 applied without this side deciding it should be.
 
+There is one message that goes the other way, and it is worth knowing why it is
+not an exception to the rule. `Got { content }` says "I now hold these bytes" —
+the only request in the protocol that asks for nothing. It changes no file and
+no version; it records that somebody else has a copy, which is what lets this
+device stop calling that content undelivered and what a storage cap consults
+before dropping a local copy. It is credited to the certificate the connection
+authenticated with, never to anything the message claims, so one peer cannot
+report delivery on another's behalf.
+
 ## Trying it
 
 ```bash

@@ -16,10 +16,24 @@ Keystore, lists files, pairs with another device and syncs.
 | setup | create an identity and show the 24 words, or restore from them |
 | main | the files, what they cost on disk, and a Sync button |
 | menu | pair, list paired devices, background sync, rendezvous service |
+| share | anything on the phone, sent into qurb from the system share sheet |
 
 The `+` button copies a file from elsewhere on the phone into the synced
 directory. Sync runs one pass with a 25-second deadline and reports what
 happened.
+
+**It is a share target.** `ACTION_SEND` and `ACTION_SEND_MULTIPLE`, for any
+type, and it needs no network to work: the file is written into the folder and
+indexed there and then, with every other device switched off. There is no
+outbox — "what is waiting to be delivered" is a question asked of the index,
+not a list that could drift from it. The main screen says how many files are
+held only by this phone, which is the honest form of "it will get there".
+
+**It can be woken.** When another device has something and this one is asleep,
+the rendezvous service pokes it and it syncs immediately — measured at seven
+hundred milliseconds from the change. That needs a Firebase project; without
+one the phone learns at its next scheduled look, and the SDK is not even linked.
+See [decision 0028](../docs/decisions/0028-waking-a-sleeping-device.md).
 
 **Tapping a file offers to open it, or save a copy to the phone.** That second
 one matters more than it sounds: the synced directory is this app's private
@@ -147,10 +161,14 @@ sync that works from one that silently stopped — and "silently stopped" is the
 failure mode a sync app actually dies of. Menu → **Background sync** shows it.
 
 ## Not built
-- **No FileProvider**, so the files are invisible to the rest of the phone.
-  This screen is the only way to see them.
-- **No QR scanning.** Pairing codes are typed. A scanner needs a camera
-  dependency and a permission; the code is designed to be read aloud anyway.
-- **No bulk save.** One file at a time; there is no "save everything".
 
+- **No bulk save.** One file at a time; there is no "save everything".
+- **No way back for a dropped file.** A file the storage cap evicted is absent
+  from the listing's point of view; `qurb fetch` exists on the desktop and has
+  no equivalent here.
+- **No reclaim or collection.** The desktop frees superseded chunks on a timer
+  and can drop duplicate payloads with `qurb reclaim`; neither is exposed on
+  the phone, so its store only grows.
+- **Nothing for conflicts.** They arrive as extra files with long names and no
+  explanation.
 - **Not signed.** `assembleRelease` produces an unsigned APK.

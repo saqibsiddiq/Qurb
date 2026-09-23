@@ -36,6 +36,10 @@ re-fetch from.
 Orphaned data is a cost. A dangling reference is a corruption. When only one is
 avoidable, prefer the cost.
 
+The invariant says the chunk *exists*, not that it exists in the chunk store.
+On a device that materialises files, the file in the folder is where most of
+them live — see below.
+
 **2. Reference counts equal the links that exist.**
 
 Deduplication means one chunk can belong to many files, so deletion has to be
@@ -43,6 +47,48 @@ counted rather than decided. The counts are maintained by SQL triggers, not by
 Rust code, so they update in the same transaction as the row that caused the
 change and cannot drift because a code path forgot. `Db::audit_refcounts`
 re-derives them from scratch and is asserted in tests.
+
+## The file in the folder is the payload store
+
+A syncing device writes every file into a folder somebody can see. Keeping an
+encrypted copy of those same bytes in `chunks/` as well makes every synced file
+cost **twice** its size — which is the difference between a 10 GB allowance
+holding 10 GB of files and holding 5.
+
+So with a folder attached — `Store::in_tree` — the chunk store keeps only what
+the folder cannot supply, and `read_chunk` falls back to the file: seeking to
+the chunk's offset, which `Db::locate_chunk` computes as the running sum of the
+chunks before it, and hashing what it finds before returning it. A file edited
+behind qurb's back therefore makes its *old* chunks fail to read rather than
+answer with the wrong content.
+
+Without a folder — a storage-only replica — every payload is kept, because
+nothing else has them. That is not a special case bolted on: a replica is
+precisely the device whose content is not materialised.
+
+Two things follow that are easy to get wrong, and both were:
+
+- **`has_chunk` must consult the folder.** Asking only the chunk store calls
+  almost every chunk absent on a device that syncs a folder, and the caller that
+  asks is usually deciding whether to pull content over the network — so it
+  silently re-transfers files the device already has.
+- **Deleting a file destroys its superseded versions.** Their bytes left with
+  the file, so a tombstone cannot keep them restorable however long it is held.
+  Those references are released at deletion instead, because a reference to a
+  payload that no longer exists is the index claiming content it cannot produce.
+
+`Store::reclaim` frees the duplicates a store written before this still holds.
+See [decision 0024](../../docs/decisions/0024-the-file-is-the-payload-store.md).
+
+## A storage cap
+
+`Store::evict` drops a file's bytes and keeps everything the index knows about
+it. It **refuses** unless another device is recorded as holding that exact
+content, which is the difference between eviction and deletion, and the check
+lives here rather than in the caller so that no caller can skip it.
+
+The record it consults is written when a peer says it holds something. See
+[decision 0025](../../docs/decisions/0025-a-storage-cap-that-cannot-lose-data.md).
 
 ## Concurrency
 
@@ -132,6 +178,7 @@ trustworthy until the call returns.
   this first.
 - **Key rotation.** There is no way to change the master secret without
   re-encrypting every chunk, and nothing does that.
-- **Streaming reads.** `read_file` builds the whole file in memory. Fine for the
-  desktop, not acceptable inside an iOS FileProvider extension, which will need
-  a chunk-at-a-time API.
+- **Dropping payloads without a folder.** `evict` removes a file from the
+  folder, so a replica — which has no folder — cannot free space under a
+  storage cap at all. It reports the overrun instead. Doing it properly means
+  dropping chunk payloads, which is a different operation.

@@ -106,6 +106,34 @@ cannot tell which device arrived — see
 recipient recovers the fingerprint by re-deriving the identifier for each peer
 it already trusts, which is a handful of hashes against a person's own devices.
 
+## Waking a device that cannot be told
+
+Everything above works only while a device is holding a socket open, and a
+phone does not: Android stops a background app's connection within minutes of
+the screen going off. So the device most in need of being told something is the
+one that cannot be told.
+
+[`wake::Waker`](src/wake.rs) is the seam. The default does nothing — a service
+with no credentials behaves exactly as it did before push existed, which is
+correct rather than degraded. [`fcm`](src/fcm.rs), behind the `push` feature,
+fills it in with Firebase.
+
+Two rules decide when, and the second is the one worth stating:
+
+- Only when the device could not simply be told.
+- Only because the device asking is **there to sync with**. Waking a phone for
+  a peer that is not itself online spends its battery to find nobody.
+
+The poke carries nothing — no filenames, no sizes, not even which peer. A woken
+device syncs with the peers it already knows, so there is nothing useful to put
+in it and every reason not to: the push service sees the message.
+
+Measured on a Galaxy S23 asleep with its screen off: a change on a laptop at
+`13:22:18.579412`, a push at `.579876`, and the phone logging "woken by another
+device" at `13:22:19.281` — **seven hundred milliseconds**. See
+[decision 0028](../../docs/decisions/0028-waking-a-sleeping-device.md) for what
+the dependency costs.
+
 ## Not yet built
 
 - **Serving TLS itself.** Termination is currently a reverse proxy's job.
@@ -113,7 +141,14 @@ it already trusts, which is a handful of hashes against a person's own devices.
   size, message rate and message size, and none of them survive an attacker with
   many addresses. That needs infrastructure this service does not have.
 - **Persistence.** The directory is in memory, so a restart makes every device
-  re-announce. Acceptable for a rendezvous point; not for anything else.
+  re-announce — and forgets every wake-up token, so the first change after a
+  restart wakes nobody. Both heal themselves on the next connection, which is
+  what makes it acceptable for a rendezvous point and nothing else. Persisting
+  tokens means a database, which is the thing this service is valuable for not
+  having.
+- **APNs.** The Android half of waking a device is built and measured; iOS
+  would use the same [`wake::Waker`](src/wake.rs) seam, and nothing has been
+  written against it.
 - **Horizontal scaling.** One process holds every connection, so devices must
   reach the same instance to find each other.
 

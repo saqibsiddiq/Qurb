@@ -74,7 +74,14 @@ qurb.export("album/photo.jpg", tmp)   // writes to tmp, returns bytes written
 qurb.importFile(tmp, "album/photo.jpg")
 qurb.remove("album/photo.jpg")
 qurb.usage()                          // logical vs on-disk
+qurb.outstanding()                    // what this device made and nobody else has
 ```
+
+`outstanding()` is the honest answer to "did it get there yet": live files this
+device made whose content no other device is known to hold. It is a question
+asked of the index each time, not a queue that could drift from it — and it
+empties when a peer says it holds the content, which is the one message in the
+protocol that asks for nothing.
 
 The second device, from the words:
 
@@ -94,6 +101,11 @@ qurb.peers()                          // who this device trusts
 
 qurb.syncWithin(25)                   // one pass, giving up after 25 seconds
 ```
+
+`Settings.wakeToken` carries the platform's push token, so the rendezvous
+service can poke this device when another has something and this one is asleep.
+`null` — the default, and right on a desktop — means it is never woken and
+syncs when it next looks.
 
 The pairing code carries this device's **full** fingerprint and must travel out
 of band — a QR code on screen, or digits read aloud. Sending it over the network

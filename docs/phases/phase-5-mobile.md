@@ -25,10 +25,11 @@ record](../roadmap.md).
 | the files visible to other apps | ✅ a DocumentsProvider, verified in Files |
 | sharing into qurb from any app | ✅ a share target, works with no network |
 | knowing what has not been delivered | ✅ asked of the index, not kept as a queue |
+| being woken by another device | ✅ push, when configured — 0.7s on hardware |
 | **a phone syncing with a laptop, both ways** | ✅ verified on hardware |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-494 tests pass across eleven crates on Linux; the last run on a Galaxy S23 was
+495 tests pass across eleven crates on Linux; the last run on a Galaxy S23 was
 426 of them, before this session's work. Clippy is clean.
 
 ## What the library costs
@@ -620,13 +621,45 @@ across different ones — and a phone on cellular, behind carrier-grade NAT, is
 exactly the hard case that number is about. See
 [measuring-connectivity.md](../measuring-connectivity.md).
 
+## Being woken, rather than looking
+
+A phone cannot hold a socket open in the background, so the device most in need
+of being told something is exactly the one that cannot be told. Telling a peer
+there is work for it — the Phase 4 change — only reaches a phone that happens
+to be connected.
+
+A push notification is the way through, and on both mobile platforms it is the
+only way through. With Firebase configured, the rendezvous service pokes the
+phone the moment another device has something.
+
+Measured on a Galaxy S23, asleep with its screen off:
+
+```
+13:22:18.579412  laptop   local changes stored=1
+13:22:18.579876  service  waking a device that is not connected
+13:22:19.281     phone    woken by another device
+13:22:35         phone    sync: reached=1 adopted=1
+```
+
+**Seven hundred milliseconds** from the change to the phone waking. The file
+arrived complete and was acknowledged.
+
+The poke carries nothing: no filenames, no sizes, not even which peer. What
+Google learns is that a device was poked and when, which is metadata this
+cannot avoid and [decision 0028](../decisions/0028-waking-a-sleeping-device.md)
+does not pretend to.
+
+It is optional in a way that is more than nominal. The Android build switches
+on the presence of a `google-services.json`, through a separate source set, so
+a checkout without a Firebase project does not link the SDK at all and behaves
+exactly as before.
+
 ## Deliberately left undone
 
-- **Keychain and Android Keystore.** The `keyring` crate the desktop uses does
-  not cover mobile. On a phone the vault is an owner-only file in app-private
-  storage, which the kernel enforces and the device's lock screen encrypts —
-  weaker than a keystore, stronger than the same arrangement on a desktop, and
-  worth nothing on a phone with no passcode. A passphrase works today.
+- **Keychain, on iOS.** The Android half is done and verified on a device —
+  the app supplies the keystore across the FFI, which is
+  [decision 0021](../decisions/0021-the-platform-supplies-the-keystore.md). The
+  same seam is what iOS would use, and nothing has been written against it.
 - **Selective sync.** A phone cannot hold a desktop's library, so it will need
   to choose what to keep locally and fetch the rest on demand. That is a design
   question, not a coding one, and it has not been answered. The machinery is
@@ -637,18 +670,17 @@ exactly the hard case that number is about. See
   announced at the same moment, because a QUIC handshake's opening packets are
   the hole punch. Two desktops manage this by being on all the time. Two phones,
   each awake for a few seconds a day at the platform's discretion, may simply
-  never meet. This is the strongest argument for a storage-only replica in the
-  picture, and it is the reason the roadmap plans iOS as a good viewer rather
-  than a peer equal to a desktop.
-- **Being told, rather than looking.** A phone cannot be woken by another
-  device without push infrastructure, which qurb does not have and which would
-  mean a third party learning when someone's devices talk. So the phone decides
-  when to look and Android decides how often to allow it: a share made while a
-  laptop is shut arrives when the laptop returns plus up to one background
-  window. WorkManager's backoff is the entire retry policy, deliberately — the
-  alternative is an app that drains a battery hunting for a computer that is
-  off. (`BGTaskScheduler`, the iOS half, is untouched along with the rest of
-  iOS.)
+  never meet. Push narrows it — one phone can now wake the other — but only
+  while the waking one is itself awake to ask. This is still the strongest
+  argument for a storage-only replica in the picture, and the reason the
+  roadmap plans iOS as a good viewer rather than a peer equal to a desktop.
+- **Being told without Firebase.** Push is built and measured, and it is a
+  dependency on Google. A deployment without one falls back to the phone
+  deciding when to look and Android deciding how often to allow it — about
+  fifteen minutes, longer while dozing. UnifiedPush would remove the
+  dependency at the cost of asking people to install a distributor app, and
+  has not been attempted. (`BGTaskScheduler` and APNs, the iOS halves, are
+  untouched along with the rest of iOS.)
 - **Upgrading a relayed connection back to direct.** Inherited from Phase 3 and
   worse on a phone, which changes network several times a day: a connection that
   fell back to the relay while on cellular stays relayed after it reaches Wi-Fi.

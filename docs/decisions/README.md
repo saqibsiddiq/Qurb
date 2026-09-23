@@ -50,3 +50,8 @@ is worth more than a tidy directory.
 | [0021](0021-the-platform-supplies-the-keystore.md) | On mobile, the app supplies the keystore | Accepted |
 | [0022](0022-the-service-announces-arrivals.md) | The rendezvous service announces arrivals | Accepted |
 | [0023](0023-one-person-per-account.md) | One person per operating-system account | Accepted |
+| [0024](0024-the-file-is-the-payload-store.md) | The file in the folder is the payload store | Accepted |
+| [0025](0025-a-storage-cap-that-cannot-lose-data.md) | A storage cap that cannot lose data | Accepted |
+| [0026](0026-sharing-while-the-other-device-is-off.md) | Sharing while the other device is off | Accepted |
+| [0027](0027-plaintext-stops-at-the-local-network.md) | Plaintext rendezvous stops at the local network | Accepted |
+| [0028](0028-waking-a-sleeping-device.md) | Waking a sleeping device, and what it costs | Accepted |

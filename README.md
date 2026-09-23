@@ -10,8 +10,10 @@ management, verified at 100,000 files and hardened against crashes, wrong
 clocks, long absences, damaged disks and hostile peers. Phase 3 built pairing,
 NAT traversal, a rendezvous service and a relay — its kill criterion, how often
 the direct path works, needs a second *network* and is still unmeasured. Phase 4
-has a daemon and no interface. Phase 5 has an Android app: a real phone and a
-real laptop sync in both directions, verified on hardware. iOS is untouched.
+has a daemon, a window with a storage slider, and no installer. Phase 5 has an
+Android app: a real phone and a real laptop sync in both directions, share into
+qurb from anywhere on the phone, and wake each other by push — all verified on
+hardware. iOS is untouched.
 
 ---
 

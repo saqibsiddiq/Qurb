@@ -26,9 +26,13 @@ warns is not the fun part and is a full quarter.
 | a folder that needs no path | ✅ `~/Downloads/qurb`, with a registry |
 | storing each file once | ✅ the folder *is* the payload store |
 | a storage cap | ✅ limit, eviction, fetch-back — and a slider |
+| a replica anybody can run | ✅ `qurb replica` |
+| syncing from another network | ✅ needs a reachable rendezvous; see anywhere.md |
+| changes crossing at once | ✅ ~1s between idle daemons, no polling |
+| the services deployable | ✅ systemd units, TLS, ports written down |
 | garbage collection running | ✅ every 5 minutes, 7-day retention |
 
-494 tests pass across eleven crates; clippy is clean.
+495 tests pass across eleven crates; clippy is clean.
 
 ## The interface
 
@@ -350,10 +354,72 @@ launched from the applications menu opened a throwaway directory in `/tmp`
 rather than the real one. That one is a lesson about test hygiene rather than a
 defect: the registry is per-user configuration, and tests must not write to it.
 
+## Nobody waits for a poll
+
+Two idle daemons, both connected to the same rendezvous service, still took up
+to two minutes to move a file neither was busy with — because a device that had
+just changed something had no way to say so, and the peer had no reason to ask.
+
+`Waiting { to }` says there is something for a member: who, never what. The
+service forwards it to peers that are connected and keeps it for peers that are
+not, delivering it the moment they appear. That second half is the one that
+matters, because the device most in need of telling is the one that was asleep
+when the change happened.
+
+Measured, two idle daemons on this laptop: a file written on one was on the
+other **one second later**. The sender recorded the change at 27.087, the
+recipient logged the notice at 27.088, and the transfer finished at 27.099.
+
+Notes collapse — fifty changes for one absent peer leave one note, since the
+answer to "should I sync" is the same either way — and a device never nudges
+back the peer the news came from, which would loop for ever.
+
+## Two devices that were never reachable enough
+
+Two connection defects turned up together, and both had been there all along.
+
+**A device announced one address**: whichever its default route used. On a
+laptop at home that is `192.168.1.5`, which is nothing at all to a phone on a
+mobile carrier — so every connection from outside the house depended on
+punching a hole through the home NAT, and an overlay network's address, which
+would have worked first time, was never mentioned. `Endpoints.local` was
+already a list and the candidates were already raced; only the filling-in was
+missing.
+
+That broke two tests immediately, and both were real.
+
+Announcing the machine's other interfaces when the socket is bound to *one*
+address advertises places nothing is accepting — a peer races addresses that
+can only fail and concludes the device is unreachable. It enumerates only for a
+wildcard bind now.
+
+And racing four addresses instead of one grew a 128 MiB transfer from about
+30 MiB of heap to 105. Dropping a handshake that has *already finished* leaves a
+connection established at the far end holding the buffers of a transfer nobody
+will use, and a device reachable on both a local network and an overlay hits
+that every time. The losing paths are closed as they land.
+
+**A rendezvous service restart disconnected every device permanently.** The
+signalling connection went with it and never came back; the daemon kept syncing
+on its timer, so nothing looked broken — it had simply stopped being reachable
+and stopped being able to say it had news. Every deploy of a hosted service
+would have done that to everyone. It reconnects now, doubling from a second to
+a minute and resetting after a connection that lasted. Verified live: a daemon
+left for two minutes with no service reconnected twenty-six seconds after one
+appeared.
+
 ## Still to do
 
-- **Running as a service** — a systemd unit, a launch agent, a Windows service.
-- **Installers**, and the update mechanism with rollback.
+- **Running the *daemon* as a service** — a user unit, a launch agent, a
+  Windows service. The two *server* services now have units; the thing a person
+  runs on their own laptop does not.
+- **Installers**, and the update mechanism with rollback. `packaging/install.sh`
+  puts qurb in one user's applications menu and is not a package.
+- **A replica that can free space.** It keeps every payload, because with no
+  folder there is nowhere else for the bytes to live — and eviction works by
+  deleting a file from a folder, so a cap on a replica reports the overrun
+  rather than acting on it. Dropping chunk payloads is a different operation
+  and is not written.
 - **The interface beyond the settings.** There is a window with status and a
   storage slider; there is no way to pair a device, browse what is synced, or
   recover a deleted file from it. The onboarding screen that asks someone to

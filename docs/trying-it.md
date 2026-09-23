@@ -101,8 +101,15 @@ The one measurement the project still needs, and the only one that requires
 hardware this codebase has not had access to.
 
 Same as section 3, except the second device is a different computer and
-`qurb signal` has to be reachable from both. The direct-connection rate is what
-determines the relay bandwidth bill, and it is unmeasured.
+`qurb signal` has to be reachable from both. Making it reachable is
+[anywhere.md](anywhere.md), which includes a way to do it for nothing.
+
+**A phone on mobile data has since been verified** — a file crossed to a laptop
+at home with the phone's Wi-Fi off. But that path ran over an overlay network
+(Tailscale), which is WireGuard doing the traversal rather than qurb's own hole
+punching, so it answers "can somebody use this from a train" and **not** the
+kill criterion. The direct-connection rate is what determines the relay
+bandwidth bill, and it is still unmeasured.
 
 Start with the cheap version:
 
@@ -192,16 +199,28 @@ UDP, and a rule that allows ping will still drop it. On Linux:
 sudo ufw allow from 192.168.0.0/16 to any proto udp
 ```
 
-## 7. What you cannot test yet
+## 7. Syncing from somewhere else
+
+Everything above is one network. To sync from a train, the rendezvous service
+has to be reachable from outside the house — and only it: the files go directly
+between the devices.
+
+[anywhere.md](anywhere.md) has the recipe, including a free one that needs no
+server and no port forwarding, and what it costs. For a host of your own,
+[packaging/server/](../packaging/server/README.md) has the unit files.
+
+## 8. What you cannot test yet
 
 - **A day of unattended sync.** The background worker is scheduled and runs
   when asked, but nobody has left a phone alone for a day to see what Android
   actually grants it, or what that costs in battery. If you try it, menu →
   **Background sync** records the last run. This is the single most useful
   thing left to measure.
-- **A second network.** Everything verified so far was one phone and one laptop
-  on one home Wi-Fi. A phone on cellular, behind carrier-grade NAT, is the hard
-  case Phase 3's direct-connection rate is actually about.
+- **Raw NAT traversal between two networks.** A phone on cellular has now
+  synced with a laptop at home — but through an overlay network, which does the
+  traversal itself. What remains unmeasured is qurb punching through a carrier
+  NAT unaided, which is the hard case Phase 3's direct-connection rate is
+  actually about.
 - **iOS, at all.** Building it needs Xcode, which needs a Mac. The Swift
   bindings generate and have never been compiled.
 - **Battery.** `syncWithin(seconds)` is built for short background windows and

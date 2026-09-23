@@ -16,8 +16,9 @@ qurb reclaim <dir>               free space the folder itself already holds
 qurb fetch <dir> <path>          ask for a dropped file's contents back
 qurb config <dir> [key=value]    show or change settings
 
-qurb signal [addr]               the rendezvous service
+qurb signal [addr] [--push <j>]  the rendezvous service
 qurb relay [addr]                the relay
+qurb netcheck                    what kind of router this machine is behind
 ```
 
 ## Two devices, start to finish

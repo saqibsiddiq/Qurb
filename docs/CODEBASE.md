@@ -8,12 +8,13 @@ goes deeper on one topic; this file is the map.
 It is a **living document**. Anything that changes how the system fits together
 should be reflected here in the same piece of work that changes it.
 
-**Last verified against the code:** 2026-09-18, during Phase 5 — the whole file
-checked against the source, not just the sections that changed. Phases 0–2 are
-complete. Phase 3 is built and its kill criterion is unmeasured, for want of a
-second *network*. Phase 4 has a daemon and nothing graphical. Phase 5 has an
-Android app on a real phone that syncs with a laptop in both directions; iOS is
-untouched.
+**Last verified against the code:** 2026-09-23 — the whole file checked against
+the source, not just the sections that changed. Phases 0–2 are complete.
+Phase 3 is built and its kill criterion is unmeasured, for want of a second
+*network*. Phase 4 has a daemon, a window with the one setting people want to
+change, and no installer. Phase 5 has an Android app on a real phone that syncs
+with a laptop in both directions, shares into qurb from anywhere on the phone,
+and can be woken by push; iOS is untouched.
 
 ---
 
@@ -94,17 +95,17 @@ costs, and `qurb reclaim` for freeing the duplicates an older store still holds.
 
 #### A device may be told how much disk it can use
 
-`qurb config <dir> limit=10G`. Over the limit, qurb frees space by deleting
-local copies of files while keeping everything the index knows about them —
-path, content hash, chunk list, version. The file leaves the folder; the file
-does not leave qurb, and `qurb fetch` brings it back.
+Set with `qurb config <dir> limit=10G`, or with the slider in the desktop app —
+the same act either way, because the slider writes the same settings file the
+command does, and the daemon re-reads it as it runs.
+
+Over the limit, qurb frees space by deleting local copies of files while keeping
+everything the index knows about them: path, content hash, chunk list, version.
+The file leaves the folder; the file does not leave qurb, and `qurb fetch`
+brings it back.
 
 Two things about this are worth carrying in your head, because both are places
 where a storage cap would otherwise destroy data.
-
-The allowance is set with `qurb config <dir> limit=10G`, or with the slider in
-the desktop app — the same act either way, because the slider writes the same
-settings file the command does and the daemon re-reads it as it runs.
 
 **It refuses rather than approximates.** A file is dropped only when another
 device is known to hold those exact bytes. A device that cannot free enough
@@ -239,8 +240,11 @@ genuinely cannot.
 That is why there is a recovery phrase — 24 words that *are* the key, in a form
 a person can write on paper — and why the onboarding flow that makes people
 write it down is the highest-stakes screen in the application. See
-[decisions/0012](decisions/0012-key-hierarchy-and-recovery.md), and note that
-protecting the key at rest on the device is still an open gap.
+[decisions/0012](decisions/0012-key-hierarchy-and-recovery.md). Protecting that
+key *at rest* was the largest security gap for a long time and is now a choice
+between a file, the operating system's keystore and a passphrase — see
+[crates/keys/README.md](../crates/keys/README.md) for what each defends
+against.
 
 ---
 
@@ -306,7 +310,7 @@ Steps 1–8 are built, tested, and joined together: step 1 in
 [`crates/engine`](../crates/engine/) deciding what each change means and driving
 the rest. A directory now syncs into a local store and stays in step with it.
 
-All eleven steps now run end to end between two devices over a real network
+All of them now run end to end between two devices over a real network
 connection, including the things around the pipeline: devices pair out of band,
 find each other through the rendezvous service, punch through NAT, and fall back
 to a relay when no direct path exists.
@@ -411,7 +415,9 @@ qurb/
 │   │   ├── src/rendezvous.rs  identifiers the server cannot link to anyone
 │   │   ├── src/message.rs     what is said; carries nothing about files
 │   │   ├── src/server.rs      holds a channel open per device
-│   │   └── src/client.rs      announce, ask, punch when told
+│   │   ├── src/client.rs      announce, ask, punch when told
+│   │   ├── src/wake.rs        the seam: how an absent device gets poked
+│   │   └── src/fcm.rs         that seam, filled in by Firebase (feature `push`)
 │   │
 │   ├── relay/             The fallback when no direct path exists.
 │   │   ├── src/frame.rs      opaque forwarding, binary and bounded
@@ -421,8 +427,12 @@ qurb/
 │   ├── qurb/              The program a person runs.
 │   │   ├── src/lib.rs       the daemon, as a library, so an interface can
 │   │   │                    run the same one the terminal does
-│   │   ├── src/main.rs      init, pair, join, run, status, verify, config
-│   │   ├── src/daemon.rs    watch, apply, sync, retry
+│   │   ├── src/main.rs      init, enrol, pair, join, run, replica, status,
+│   │   │                    verify, reclaim, fetch, config, protect
+│   │   ├── src/daemon.rs    watch, apply, sync, collect, stay under the limit
+│   │   ├── src/lock.rs      one daemon per folder, enforced not assumed
+│   │   ├── src/profiles.rs  which folders exist, so commands need no path
+│   │   ├── src/qr.rs        a pairing code a camera can read
 │   │   ├── src/status.rs    what the daemon is doing, for a display
 │   │   └── src/config.rs    a flat file meant to be edited by hand
 │   │
@@ -433,11 +443,24 @@ qurb/
 │       └── src/window.rs    the window: status, and the storage slider
 │
 ├── android/               The Android app. Kotlin over the FFI, no sync logic.
-│   └── app/src/main/java/com/qurb/
-│                          AndroidKeyStore.kt  the platform half of decision 0021
-│                          SyncWorker.kt       background sync, on WorkManager
-│                          QurbDocumentsProvider.kt
-│                                              the files, in the system picker
+│   └── app/src/
+│       ├── main/java/com/qurb/
+│       │                  MainActivity.kt     what is here, and a Sync button
+│       │                  SetupActivity.kt    the 24 words, once
+│       │                  ScanActivity.kt     reading a pairing QR code
+│       │                  ShareActivity.kt    the share sheet's way in
+│       │                  AndroidKeyStore.kt  the platform half of decision 0021
+│       │                  SyncWorker.kt       background sync, on WorkManager
+│       │                  QurbDocumentsProvider.kt
+│       │                                      the files, in the system picker
+│       ├── push/java/     being woken by Firebase — compiled only when a
+│       │                  google-services.json is present
+│       └── nopush/java/   the same surface, doing nothing, when it is not
+│
+├── packaging/             Getting it onto a machine.
+│   ├── install.sh         qurb in this user's applications menu
+│   ├── qurb.desktop       the launcher entry
+│   └── server/            systemd units and TLS for a host of your own
 │
 ├── scripts/
 │   ├── android-app.sh     build the app: libraries, bindings, then Gradle
@@ -484,7 +507,7 @@ product around it largely is not.
 | Deduplication | within a file, across files, across versions |
 | Single-copy storage | a materialised file *is* its own payload store |
 | Deletion, tombstones, restore | content survives a retention window |
-| Garbage collection | two-stage, never touches a referenced chunk — **but nothing calls it** |
+| Garbage collection | two-stage, never touches a referenced chunk; the daemon runs it every five minutes |
 | Integrity verification | detects missing, corrupt, and orphaned chunks |
 | Reclaiming duplicates | `qurb reclaim`, for stores written before single-copy |
 | A storage limit | drops local copies, keeps the index, never the only copy |
@@ -542,7 +565,10 @@ for the workspace as it stands.
 | Mutual authentication | pinned fingerprints, handshake signature verified |
 | Wire format | length-bounded; decoder has no panicking path |
 | Incremental transfer | only chunks the receiver lacks cross the wire |
-| Read-only serving | a peer can ask, never tell |
+| Read-only serving | a peer can ask, never tell — with one exception below |
+| Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
+| Every reachable address offered | LAN, overlay network and public, raced in parallel |
+| Signalling that reconnects | a rendezvous restart costs seconds, not a daemon restart |
 
 ### Built and tested (`crates/keys`, Phase 1)
 
@@ -554,8 +580,9 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-446 tests pass across eleven crates on Linux, 426 of them on a Galaxy S23;
-clippy is clean.
+495 tests pass across eleven crates on Linux; clippy is clean. The last run on
+a Galaxy S23 was 426 of them, before this week's work — see
+[phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 **Two devices now sync over a real network connection**, converging through
 concurrent edits, deletions and resurrections, with both sides computing the
@@ -616,9 +643,9 @@ Until now it could not be measured because there was nothing to run on a second
 machine; now there is, and
 [measuring-connectivity.md](measuring-connectivity.md) says how.
 
-**And the engine now cross-compiles for a phone.** All four Android
-architectures build, and [`crates/mobile-ffi`](../crates/mobile-ffi/) generates
-the Kotlin and Swift a phone would call. It has never run on a device.
+**And the engine cross-compiles for a phone.** All four Android architectures
+build, and [`crates/mobile-ffi`](../crates/mobile-ffi/) generates the Kotlin and
+Swift a phone calls. What that became is the Android section below.
 
 ### Hardened (Phase 2, complete)
 
@@ -765,7 +792,12 @@ network. iOS needs Xcode, which needs a Mac. See
 ### Designed but not built
 
 An iOS app, per-file keys, key rotation, relay selection and quotas, accounts
-and billing, the desktop UI, updates.
+and billing, installers and updates.
+
+The desktop interface is partly built rather than absent: a window showing what
+the daemon is doing, with a slider for how much disk it may use. What it cannot
+do is pair a device, browse what is synced, or recover a deleted file — and the
+onboarding that asks somebody to write down 24 words is still a terminal.
 
 Selective sync is half-built rather than unbuilt: a device drops local copies
 when it is over its storage limit and fetches them back on request, which is
@@ -775,9 +807,9 @@ coldest.
 
 ### The gaps that matter most
 
-Four things are known-missing rather than merely unbuilt:
+Five things are known-missing rather than merely unbuilt:
 
-11. **An evicted file simply vanishes from the folder on Linux.** Windows and
+1. **An evicted file simply vanishes from the folder on Linux.** Windows and
    macOS both have an API for a placeholder that keeps its name and size and
    fetches when opened; Linux has nothing short of a FUSE mount, whose failure
    would take the user's whole folder with it. So a file dropped for the
@@ -785,21 +817,28 @@ Four things are known-missing rather than merely unbuilt:
    still exists. See
    [decisions/0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md).
 
-12. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
+2. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
    consumer product in this space eventually adds some escape hatch — social
    recovery, an escrowed key, a printed kit — and each trades away part of the
    promise. Choosing which compromise to make is better done on paper now than
    under pressure from an upset user later. Still undecided.
 
-13. **Nobody has watched a phone sync for a day.** The background worker is
+3. **Nobody has watched a phone sync for a day.** The background worker is
    scheduled and runs when asked; what Android actually grants it over a day,
    and what that costs in battery, is unmeasured. Everything verified on
    hardware so far was one phone and one laptop on one home network.
 
-14. **Two kill criteria remain unmeasured**, both for want of hardware rather
+4. **Two kill criteria remain unmeasured**, both for want of hardware rather
    than for want of code: Phase 3's direct-connection rate needs a second
    machine on a different network, and Phase 5's battery-and-survival test needs
    a real phone. An emulator answers neither.
+
+5. **A replica cannot free space under a storage cap.** Eviction works by
+   deleting a file from a folder, and a replica has no folder — so a cap on one
+   reports the overrun rather than acting on it. Dropping chunk payloads is a
+   different operation and is not written. It matters for the small always-on
+   box a replica is most useful on. See
+   [decisions/0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md).
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:
@@ -860,6 +899,20 @@ introduce them, then `run` on both:
 # Ask for a file whose local copy was dropped. Acted on when a peer is next
 # reachable, so it works while offline.
 ./target/release/qurb fetch ~/Sync holiday/beach.jpg
+```
+
+```bash
+# A device that holds content so the others need not all be awake at once.
+# No folder, no files shown to anybody, nothing materialised.
+./target/release/qurb enrol /srv/qurb "<the same 24 words>"
+./target/release/qurb replica /srv/qurb
+```
+
+```bash
+# The two services. `--push` needs a build with `--features push` and a
+# Firebase service account; without it devices sync when they next look.
+./target/release/qurb signal 127.0.0.1:9000 --push /etc/qurb/firebase.json
+./target/release/qurb relay 0.0.0.0:9001
 ```
 
 ```bash
@@ -973,9 +1026,17 @@ Then the layers, bottom to top:
     about Android that dictated its shape: the keystore, the 16 KB page size,
     and a background scheduler that decides when you run.
 
+And when you want to run it for real, rather than on one machine:
+
+17. [anywhere.md](anywhere.md) — what has to be reachable for a phone to sync
+    from a train, what does not, and a way to get there for nothing.
+18. [packaging/server/README.md](../packaging/server/README.md) — the two
+    services on a host of your own: unit files, ports, and which of them may
+    face the internet.
+
 And when you want to close the measurements still outstanding:
 
-17. [measuring-connectivity.md](measuring-connectivity.md) — how to measure the
+19. [measuring-connectivity.md](measuring-connectivity.md) — how to measure the
     direct-connection rate, which is the number the relay bill depends on. The
     other open measurement, whether sync survives a phone's battery and its
     platform's patience, needs a device — see

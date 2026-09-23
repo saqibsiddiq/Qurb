@@ -132,13 +132,21 @@ prevention — and it is the component that costs money per byte forever.
 
 *Months 8–10.*
 
-The daemon runs: `qurb init`, `pair`, `join`, `run`, `status`, `verify`, plus
-`qurb signal` and `qurb relay` for the services. Running it found three bugs the
-whole test suite had missed. See
+The daemon runs: `qurb init`, `enrol`, `pair`, `join`, `run`, `replica`,
+`status`, `verify`, `reclaim`, `fetch` and `config`, plus `qurb signal` and
+`qurb relay` for the services. Running it kept finding bugs the whole test
+suite had missed — which is the phase's real lesson rather than an aside. See
 [phases/phase-4-product.md](phases/phase-4-product.md).
 
-Tauri UI, installers, onboarding, recovery-phrase flow, signed updates with
-rollback, observability.
+There is an interface, though not the one this plan imagined: a window showing
+what the daemon is doing, with a slider for how much disk it may use. GTK
+rather than Tauri, because the tray library already links it and a second
+toolkit for one window would double the dependency for nothing. Storage caps,
+single-copy storage and a replica anybody can run all landed here too, none of
+them planned.
+
+Still missing: installers, onboarding, the recovery-phrase flow, signed updates
+with rollback, and observability beyond a log.
 
 Onboarding for a zero-knowledge product is uniquely hard: a non-technical person
 must be persuaded to write down a recovery phrase *before* they have any
@@ -167,11 +175,17 @@ correct and cost more than expected: the receive path held whole files, which a
 FileProvider extension would not survive, and fixing it changed the engine
 rather than anything mobile-specific.
 
-The engine now runs on a real phone and syncs there — 426 tests pass on a Galaxy
-S23, and receiving a 512 MiB file over the network costs 6 MiB of heap. There is
-an Android app, with the key in the Android Keystore, syncing in the background
-through WorkManager and showing its files in the system picker. A phone and a
-laptop sync in both directions, verified on hardware.
+The engine now runs on a real phone and syncs there — 426 tests passed on a
+Galaxy S23 at the last run there, and receiving a 512 MiB file over the network
+costs 6 MiB of heap. There is an Android app, with the key in the Android
+Keystore, syncing in the background through WorkManager and showing its files in
+the system picker. A phone and a laptop sync in both directions, verified on
+hardware.
+
+Since then it has become a **share target** — anything on the phone goes into
+qurb from the system share sheet, with no network and no other device switched
+on — and it can be **woken by push**, which took a change on a sleeping Galaxy
+S23 from a quarter of an hour to seven hundred milliseconds.
 
 What does not exist is iOS, in any form. The prediction about `BGTaskScheduler`
 is answered on the Rust side by a sync that takes a deadline, and is untested on

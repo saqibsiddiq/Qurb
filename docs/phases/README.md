@@ -15,8 +15,8 @@ A number without its conditions is not evidence.
 | [1](phase-1-engine.md) | The engine | ✅ complete — kill criterion passed |
 | [2](phase-2-correctness.md) | Adversarial correctness | ✅ complete — 4 defects found |
 | [3](phase-3-networking.md) | Networking at scale | 🔨 built — kill criterion unmeasured |
-| [4](phase-4-product.md) | Desktop product | 🔨 in progress — the daemon runs |
-| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — Android app syncs; no iOS |
+| [4](phase-4-product.md) | Desktop product | 🔨 in progress — a daemon, a window, a storage cap; no installer |
+| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — Android shares, syncs and wakes; no iOS |
 | 6 | Commercial | not started |
 
 Phase definitions and kill criteria: [../roadmap.md](../roadmap.md).
