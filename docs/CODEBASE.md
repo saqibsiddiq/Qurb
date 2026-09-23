@@ -497,7 +497,12 @@ qurb/
 │   │   │                    history, outgoing, search — all read-only
 │   │   └── src/config.rs    a flat file meant to be edited by hand
 │   │
-│   └── tray/              The desktop app: the daemon with a face.
+│   ├── desktop/           The desktop application: the daemon in a window.
+│   │   ├── src/main.rs      opens the key, starts the daemon, opens the window
+│   │   ├── src/commands.rs  every question the window may ask
+│   │   └── ui/              five screens: HTML, one stylesheet, one script
+│   │
+│   └── tray/              An icon in the corner: the daemon with a face.
 │       ├── src/host.rs      whether a tray icon would be visible at all
 │       ├── src/icon.rs      the icon, drawn rather than shipped
 │       ├── src/ui.rs        the menu, and what to do when there is no tray
@@ -530,6 +535,8 @@ qurb/
 │   └── mobile-bindings.sh generate the Kotlin and Swift bindings
 │
 ├── experiments/
+│   ├── desktop-fixtures/  Throwaway. The window's screens against made-up
+│   │                      data, so layout can be worked on with no daemon.
 │   └── phase0-spike/      Throwaway. Proved the core ideas work.
 │       └── src/
 │           ├── lib.rs            chunker + content-addressable store
@@ -646,7 +653,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-531 tests pass across eleven crates on Linux; clippy is clean. The last run on
+531 tests pass across twelve crates on Linux; clippy is clean. The last run on
 a Galaxy S23 was 426 of them, before this week's work — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
@@ -862,6 +869,19 @@ observed, and everything verified so far was on one phone, one laptop and one
 network. iOS needs Xcode, which needs a Mac. See
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
+### Built and running (`crates/desktop`, Phase 4)
+
+| thing | status |
+|---|---|
+| A window | Tauri 2, five screens, no framework and no build step |
+| It hosts the daemon | the same one `qurb run` starts, on its own threads |
+| Home | live state, recent files, what is still on its way |
+| Files | listing, paging, search, and three-way availability |
+| Devices | who is paired, when each was last reached |
+| Activity | what this device did, paged, with the reason where there is one |
+| Storage | usage, the allowance, and a control that can change it |
+| Onboarding, pairing, sending, progress | **not built** — see the crate's README |
+
 ### Designed but not built
 
 An iOS app, per-file keys, key rotation, relay selection and quotas, accounts
@@ -1054,9 +1074,15 @@ cargo test --workspace
 ```
 
 ```bash
-# The desktop app: the same daemon, with a window showing what it is doing and
-# a slider for how much disk it may use. Falls back to a window where there is
-# no system tray, which on GNOME is always.
+# The desktop application: the same daemon, in a window. Five screens over the
+# same queries `qurb ls`, `qurb find` and `qurb activity` use.
+cargo build --release -p qurb-desktop
+./target/release/qurb-desktop ~/Sync
+```
+
+```bash
+# The tray icon: the same daemon, smaller. Falls back to a window where there
+# is no system tray, which on GNOME is always.
 cargo run --release -p qurb-tray -- ~/qurb
 ```
 

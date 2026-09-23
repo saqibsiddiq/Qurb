@@ -346,7 +346,19 @@ async fn rubbish_does_not_bring_the_relay_down() {
     // Still serving.
     let socket = RelaySocket::connect(addr, ALICE).await;
     assert!(socket.is_ok(), "the relay stopped working after junk input");
-    assert!(server.stats().connections.load(Ordering::Relaxed) >= 3);
+
+    // Waited for rather than asserted outright. A client's `connect` returns
+    // when *its* end is up; the server counts the connection in its accept
+    // loop, which may not have been scheduled yet. Asserting immediately
+    // passes on an idle machine and fails under load, which is the worst kind
+    // of test to own.
+    let counted = tokio::time::timeout(Duration::from_secs(2), async {
+        while server.stats().connections.load(Ordering::Relaxed) < 3 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(counted.is_ok(), "the relay did not count all three connections");
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qurb</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <nav id="tabs">
+    <button data-screen="home" class="on">Home</button>
+    <button data-screen="files">Files</button>
+    <button data-screen="devices">Devices</button>
+    <button data-screen="activity">Activity</button>
+    <button data-screen="storage">Storage</button>
+  </nav>
+
+  <main>
+    <section id="home" class="screen on">
+      <header>
+        <h1 id="state">starting</h1>
+        <p id="where" class="quiet"></p>
+      </header>
+      <p id="problem" class="problem hidden"></p>
+
+      <div class="cards">
+        <div class="card">
+          <span class="figure" id="card-devices">–</span>
+          <span class="label">devices reachable</span>
+        </div>
+        <div class="card">
+          <span class="figure" id="card-files">–</span>
+          <span class="label">files</span>
+        </div>
+        <div class="card">
+          <span class="figure" id="card-used">–</span>
+          <span class="label">in use</span>
+        </div>
+        <div class="card" id="card-risk-wrap">
+          <span class="figure" id="card-risk">–</span>
+          <span class="label">only on this device</span>
+        </div>
+      </div>
+
+      <h2>Recently</h2>
+      <ul id="recent" class="rows"><li class="quiet">nothing yet</li></ul>
+
+      <h2 id="outgoing-heading" class="hidden">On its way</h2>
+      <ul id="outgoing" class="rows hidden"></ul>
+    </section>
+
+    <section id="files" class="screen">
+      <header>
+        <h1>Files</h1>
+        <p class="quiet">Where each file's contents actually are.</p>
+      </header>
+      <input id="find" type="search" placeholder="Search names…" autocomplete="off" spellcheck="false">
+      <p id="crumbs" class="quiet"></p>
+      <ul id="file-list" class="rows"></ul>
+      <button id="more" class="hidden">Show more</button>
+    </section>
+
+    <section id="devices" class="screen">
+      <header>
+        <h1>Devices</h1>
+        <p class="quiet">Paired devices, and when each was last reached.</p>
+      </header>
+      <ul id="device-list" class="rows"></ul>
+      <p class="quiet note">
+        Pairing happens on the command line for now:
+        <code>qurb pair</code> here, <code>qurb join</code> there.
+      </p>
+    </section>
+
+    <section id="activity" class="screen">
+      <header>
+        <h1>Activity</h1>
+        <p class="quiet">What this device did. Survives a restart, which is when people ask.</p>
+      </header>
+      <ul id="activity-list" class="rows"></ul>
+      <button id="older" class="hidden">Older</button>
+    </section>
+
+    <section id="storage" class="screen">
+      <header>
+        <h1>Storage</h1>
+        <p class="quiet">How much of this disk qurb may use.</p>
+      </header>
+
+      <div id="bar"><div id="bar-fill"></div></div>
+      <p id="usage" class="quiet"></p>
+
+      <label class="check">
+        <input type="checkbox" id="capped">
+        Limit how much disk this folder may use
+      </label>
+
+      <div id="limit-controls" class="hidden">
+        <input type="range" id="limit" min="0" max="1000" step="1" value="300">
+        <p id="limit-label" class="quiet"></p>
+        <button id="apply">Save</button>
+        <span id="saved" class="quiet hidden">saved</span>
+      </div>
+
+      <p class="quiet note">
+        Over the limit, qurb drops local copies of files another device also
+        has, coldest first — and content it is holding for other devices before
+        any of your own. It will never drop the only copy of anything, so
+        staying over the limit is a possible and deliberate outcome.
+      </p>
+
+      <dl id="breakdown"></dl>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

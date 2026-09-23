@@ -128,7 +128,7 @@ The gap for most of these is an **API and a screen**, not an engine change.
 
 | thing | state |
 |---|---|
-| Desktop interface | one GTK window: status and a storage slider. Not a product shell |
+| Desktop interface | a Tauri window with five screens over the real engine. No onboarding, pairing or sending yet |
 | Selective sync (§29) | `PinSet` exists but is wired only to `Role::Replica`; an ordinary device takes everything |
 | Replica storage cap | a replica cannot free space at all — no folder to evict from |
 | Notifications (§45) | `notify-rust` is a dependency and nothing sends one |
@@ -188,8 +188,10 @@ and it answers "why isn't my file here" (§82) after a restart. What it does not
 yet carry is a transfer *in flight*: progress belongs to the daemon's live
 state, which is phase 1's job.
 
-**3. Desktop shell**: onboarding, storage selection, identity, recovery phrase,
-home, settings.
+**3. Desktop shell**: home, files, devices, activity, storage ✅ —
+[`crates/desktop`](../crates/desktop/README.md). Still owed from this phase:
+onboarding, storage selection at setup, identity and the recovery phrase
+screen, settings.
 
 **4. Pairing and devices**, on the existing pairing infrastructure.
 
@@ -253,7 +255,7 @@ hardware where hardware is involved. Not when it compiles.
 
 ## 10. Testing
 
-The existing suite is 531 tests across eleven crates, and the classes that
+The existing suite is 531 tests across twelve crates, and the classes that
 matter here already exist: property-based convergence, crash injection,
 corruption repair, hostile peers, concurrent collection. New work extends those
 rather than starting a parallel tradition.

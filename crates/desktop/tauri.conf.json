@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "qurb",
+  "version": "0.1.0",
+  "identifier": "app.qurb.desktop",
+  "build": {
+    "frontendDist": "ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "qurb",
+        "width": 960,
+        "height": 700,
+        "minWidth": 640,
+        "minHeight": 480,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "category": "Utility",
+    "shortDescription": "Private cloud storage on your own devices",
+    "longDescription": "qurb keeps your files on the devices you already own, end-to-end encrypted, and syncs them directly between those devices. Nothing is stored on anybody else's server."
+  }
+}

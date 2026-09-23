@@ -1172,9 +1172,16 @@ fn ago(then: i64) -> String {
     let seconds = (now() - then).max(0);
     match seconds {
         0..=90 => "just now".to_string(),
-        91..=5400 => format!("{} minutes ago", seconds / 60),
-        5401..=172_800 => format!("{} hours ago", seconds / 3600),
-        _ => format!("{} days ago", seconds / 86_400),
+        91..=5400 => plural(seconds / 60, "minute"),
+        5401..=172_800 => plural(seconds / 3600, "hour"),
+        _ => plural(seconds / 86_400, "day"),
+    }
+}
+
+fn plural(n: i64, unit: &str) -> String {
+    match n {
+        1 => format!("1 {unit} ago"),
+        n => format!("{n} {unit}s ago"),
     }
 }
 

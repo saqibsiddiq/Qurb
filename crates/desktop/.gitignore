@@ -1,0 +1,3 @@
+# Written by `tauri-build` on every build from `tauri.conf.json` and the
+# permissions the dependencies declare. Derived, not authored.
+gen/schemas/

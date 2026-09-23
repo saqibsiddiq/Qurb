@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qurb — fixtures</title>
+</head>
+<body>
+<p id="loading">loading the real window…</p>
+<script>
+// Load the desktop window's own markup rather than a copy of it.
+//
+// An earlier version of this page pasted the markup in, and it went stale
+// within the hour: a control gained a new range in the real window and the
+// fixture kept the old one, which showed up as a bug that did not exist.
+// Fetching it means there is nothing to keep in step.
+const REAL = "../../crates/desktop/ui/";
+
+(async () => {
+  const response = await fetch(REAL + "index.html");
+  if (!response.ok) {
+    document.getElementById("loading").textContent =
+      "could not read the window's markup — serve this from the repository root";
+    return;
+  }
+
+  const page = new DOMParser().parseFromString(await response.text(), "text/html");
+
+  const style = document.createElement("link");
+  style.rel = "stylesheet";
+  style.href = REAL + "app.css";
+  document.head.append(style);
+
+  // The real page's own script tag is dropped: `app.js` has to come *after*
+  // the stub, or it reads `window.__TAURI__` before there is one.
+  page.body.querySelectorAll("script").forEach((s) => s.remove());
+  document.body.replaceChildren(...page.body.children);
+
+  for (const src of ["fixtures.js", REAL + "app.js"]) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.body.append(script);
+    });
+  }
+})();
+</script>
+</body>
+</html>

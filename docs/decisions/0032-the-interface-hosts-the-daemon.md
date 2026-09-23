@@ -8,8 +8,8 @@
 Two parts, and they belong together.
 
 **One process.** A graphical interface runs the daemon inside itself rather
-than talking to one over a socket. `qurb-tray` already does this; the Tauri
-shell will do the same.
+than talking to one over a socket. `qurb-tray` already did this;
+[`qurb-desktop`](../../crates/desktop/README.md) does the same.
 
 **Two mechanisms for two kinds of question.** The daemon publishes its live
 state on a `watch` channel ([`status`](../../crates/qurb/src/status.rs)).
