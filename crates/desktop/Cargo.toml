@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 qurb-cli = { path = "../qurb" }
 qurb-keys = { path = "../keys" }
+qurb-peer = { path = "../peer" }
 qurb-storage = { path = "../storage" }
 
 anyhow.workspace = true

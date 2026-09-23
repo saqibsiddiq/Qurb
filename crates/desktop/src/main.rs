@@ -60,6 +60,10 @@ fn run() -> Result<()> {
         .manage(Arc::clone(&hosted))
         .invoke_handler(tauri::generate_handler![
             commands::situation,
+            commands::start_pairing,
+            commands::pairing_state,
+            commands::stop_pairing,
+            commands::join_device,
             commands::inspect_folder,
             commands::create_device,
             commands::shown_phrase,

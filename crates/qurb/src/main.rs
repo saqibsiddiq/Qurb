@@ -45,6 +45,8 @@ Settings live in <dir>/.qurb/config and can be edited by hand.
 ";
 
 fn main() {
+    allow_a_closed_pipe();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -188,6 +190,25 @@ fn new_directory(args: &[String]) -> Result<PathBuf> {
     match args.get(1) {
         Some(dir) => Ok(PathBuf::from(dir)),
         None => qurb_cli::profiles::default_root(),
+    }
+}
+
+/// Let `qurb ls | head` end quietly instead of panicking.
+///
+/// Rust ignores `SIGPIPE` at startup so that a write to a closed pipe returns
+/// an error rather than killing the process — which is right for a library and
+/// wrong for a command-line program, because `println!` then panics on that
+/// error. Piping any of these listings into `head` or `less` and closing it
+/// early produced a backtrace, which reads as a crash.
+///
+/// Restoring the default gets the behaviour every other command-line tool has:
+/// the process ends when the reader goes away, silently.
+fn allow_a_closed_pipe() {
+    // SAFETY: `signal` with `SIG_DFL` restores the disposition the process
+    // started with before Rust changed it. It touches no memory and is the
+    // documented way to undo that.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
 }
 

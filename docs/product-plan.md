@@ -105,7 +105,7 @@ running it, not by reading about it.
 
 | product requirement | engine reality |
 |---|---|
-| Pairing by QR or code (§8, §9) | built; `qurb pair` renders the QR, Android scans it |
+| Pairing by QR or code (§8, §9) | built; in the window and in `qurb pair`, and Android scans it |
 | Direct connection, relay fallback (§36, §37) | built; `Connector::race` then `reach_via_relay` |
 | "Connected directly" / "through an encrypted relay" | the distinction exists and is logged |
 | Storage allocation (§5A, §28) | built; `limit` in config, enforced by the daemon |
@@ -128,7 +128,7 @@ The gap for most of these is an **API and a screen**, not an engine change.
 
 | thing | state |
 |---|---|
-| Desktop interface | a Tauri window: six screens plus onboarding, over the real engine. No pairing or sending yet |
+| Desktop interface | a Tauri window: six screens, onboarding and pairing, over the real engine. No sending yet |
 | Selective sync (§29) | `PinSet` exists but is wired only to `Role::Replica`; an ordinary device takes everything |
 | Replica storage cap | a replica cannot free space at all — no folder to evict from |
 | Notifications (§45) | `notify-rust` is a dependency and nothing sends one |
@@ -197,7 +197,9 @@ is on the Storage screen rather than during setup, deliberately: asking
 somebody to budget disk before they have put a file in the folder is asking a
 question they cannot answer.
 
-**4. Pairing and devices**, on the existing pairing infrastructure.
+**4. Pairing and devices** ✅ — in the window, on the existing pairing
+infrastructure: a QR to scan, a code to type, a spoken form to read out, and a
+countdown to expiry. Cancelling stops the code as well as hiding it.
 
 **5. Transfers**: send, receive, progress, Downloads destination, notifications.
 The send and receive *mechanism* is built; this phase is the interface over it.
@@ -259,7 +261,7 @@ hardware where hardware is involved. Not when it compiles.
 
 ## 10. Testing
 
-The existing suite is 549 tests across twelve crates, and the classes that
+The existing suite is 565 tests across twelve crates, and the classes that
 matter here already exist: property-based convergence, crash injection,
 corruption repair, hostile peers, concurrent collection. New work extends those
 rather than starting a parallel tradition.

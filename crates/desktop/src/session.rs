@@ -24,9 +24,10 @@ use anyhow::{Context, Result};
 use qurb_cli::status::{Status, Watcher};
 use qurb_cli::{store_dir, Daemon};
 use qurb_keys::RecoveryPhrase;
-use qurb_storage::Store;
+use qurb_peer::Identity;
+use qurb_storage::{ChunkKey, Store};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// A device that exists and is being synced.
 pub struct Running {
@@ -36,6 +37,55 @@ pub struct Running {
     pub store: Store,
     /// The daemon's live account of itself.
     pub status: Watcher,
+    /// Kept so that pairing can open a store of its own. Pairing *writes* --
+    /// it records a peer -- and handing it the window's read handle would mean
+    /// passing a `&Store` where an owned one is needed.
+    pub key: ChunkKey,
+}
+
+/// How a pairing attempt is going.
+#[derive(Debug, Clone)]
+pub enum Pairing {
+    /// The code is on the screen and nobody has used it yet.
+    Waiting,
+    /// A device presented the right token.
+    Paired { name: String, fingerprint: String },
+    /// Five minutes passed. The code is dead and a new one is needed.
+    Expired,
+    Failed(String),
+}
+
+/// A code on the screen, and the wait behind it.
+pub struct Attempt {
+    pub code: String,
+    /// The same invite in a form somebody can read down a telephone.
+    pub spoken: String,
+    pub expires_at: i64,
+    state: Mutex<Pairing>,
+    /// Aborted when the attempt is called off, which closes the socket and
+    /// kills the code. A cancelled invite that still worked would be worse
+    /// than no cancel button.
+    task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+}
+
+impl Attempt {
+    pub fn state(&self) -> Pairing {
+        self.state.lock().expect("pairing state").clone()
+    }
+
+    pub fn settle(&self, outcome: Pairing) {
+        *self.state.lock().expect("pairing state") = outcome;
+    }
+
+    pub fn watch(&self, task: tauri::async_runtime::JoinHandle<()>) {
+        *self.task.lock().expect("pairing task") = Some(task);
+    }
+
+    pub fn call_off(&self) {
+        if let Some(task) = self.task.lock().expect("pairing task").take() {
+            task.abort();
+        }
+    }
 }
 
 /// Everything a command needs, handed to Tauri as managed state.
@@ -44,11 +94,20 @@ pub struct Hosted {
     running: Mutex<Option<Running>>,
     /// A phrase that has been shown and not yet confirmed. See the module note.
     pending: Mutex<Option<RecoveryPhrase>>,
+    /// The one pairing attempt at a time. A second code would mean two live
+    /// invites to the same device, and only one of them could be the one on
+    /// the screen.
+    pairing: Mutex<Option<Arc<Attempt>>>,
 }
 
 impl Hosted {
     pub fn new(root: PathBuf) -> Self {
-        Self { root: Mutex::new(root), running: Mutex::new(None), pending: Mutex::new(None) }
+        Self {
+            root: Mutex::new(root),
+            running: Mutex::new(None),
+            pending: Mutex::new(None),
+            pairing: Mutex::new(None),
+        }
     }
 
     pub fn root(&self) -> PathBuf {
@@ -175,12 +234,59 @@ impl Hosted {
         // Attached to the folder, so that a file the daemon materialised reads
         // as materialised here too: a reader without the tree would call every
         // synced file "not here".
-        let reader = Store::open(&store_dir(&root), key)
+        let reader = Store::open(&store_dir(&root), key.clone())
             .context("opening the index for the window")?
             .in_tree(&root);
 
-        *self.running.lock().expect("session") = Some(Running { store: reader, status: watcher });
+        *self.running.lock().expect("session") =
+            Some(Running { store: reader, status: watcher, key });
         Ok(())
+    }
+
+    /// Everything pairing needs: a store of its own, an identity, and a name.
+    ///
+    /// A separate handle rather than the window's, because pairing records a
+    /// peer and therefore writes. WAL mode makes a second writer safe; the
+    /// daemon is already one.
+    pub fn for_pairing(&self) -> Result<(Arc<std::sync::Mutex<Store>>, Identity, String)> {
+        let root = self.root();
+        let dir = store_dir(&root);
+        let key = {
+            let guard = self.running.lock().expect("session");
+            guard.as_ref().context("this device is not set up yet")?.key.clone()
+        };
+
+        let store = Store::open(&dir, key)?.in_tree(&root);
+        let identity = Identity::load_or_create(&dir)?;
+        let name = qurb_cli::Config::load(&dir).map(|c| c.name).unwrap_or_default();
+        Ok((Arc::new(std::sync::Mutex::new(store)), identity, name))
+    }
+
+    /// Begin an attempt, replacing and cancelling any already running.
+    pub fn begin_pairing(&self, code: String, spoken: String, expires_at: i64) -> Arc<Attempt> {
+        let attempt = Arc::new(Attempt {
+            code,
+            spoken,
+            expires_at,
+            state: Mutex::new(Pairing::Waiting),
+            task: Mutex::new(None),
+        });
+        let mut slot = self.pairing.lock().expect("pairing");
+        if let Some(previous) = slot.replace(Arc::clone(&attempt)) {
+            previous.call_off();
+        }
+        attempt
+    }
+
+    pub fn attempt(&self) -> Option<Arc<Attempt>> {
+        self.pairing.lock().expect("pairing").clone()
+    }
+
+    /// Stop showing a code and stop answering it.
+    pub fn end_pairing(&self) {
+        if let Some(attempt) = self.pairing.lock().expect("pairing").take() {
+            attempt.call_off();
+        }
     }
 }
 
@@ -253,6 +359,59 @@ mod tests {
         hosted.forget_phrase();
         assert!(!hosted.phrase_matches(&[(1, words[0].clone())]));
         assert!(hosted.pending_words().is_none());
+    }
+
+    fn attempt(hosted: &Hosted) -> Arc<Attempt> {
+        hosted.begin_pairing("qurb1-code".into(), "kilo seven".into(), 0)
+    }
+
+    #[test]
+    fn an_attempt_starts_out_waiting() {
+        let hosted = Hosted::new(PathBuf::from("/nowhere"));
+        assert!(matches!(attempt(&hosted).state(), Pairing::Waiting));
+        assert!(hosted.attempt().is_some());
+    }
+
+    /// Two live codes for one device would mean only one of them is the one on
+    /// the screen, and no way for somebody holding the other to know.
+    #[test]
+    fn a_second_code_replaces_the_first() {
+        let hosted = Hosted::new(PathBuf::from("/nowhere"));
+        let first = attempt(&hosted);
+        let second = hosted.begin_pairing("qurb1-other".into(), "romeo two".into(), 0);
+
+        assert_eq!(hosted.attempt().unwrap().code, second.code);
+        assert_ne!(first.code, second.code);
+    }
+
+    #[test]
+    fn ending_an_attempt_leaves_nothing_to_report() {
+        let hosted = Hosted::new(PathBuf::from("/nowhere"));
+        attempt(&hosted);
+        hosted.end_pairing();
+        assert!(hosted.attempt().is_none());
+    }
+
+    #[test]
+    fn an_outcome_is_what_gets_reported() {
+        let hosted = Hosted::new(PathBuf::from("/nowhere"));
+        let live = attempt(&hosted);
+        live.settle(Pairing::Paired { name: "phone".into(), fingerprint: "a1b2c3d4".into() });
+
+        match hosted.attempt().unwrap().state() {
+            Pairing::Paired { name, fingerprint } => {
+                assert_eq!(name, "phone");
+                assert_eq!(fingerprint, "a1b2c3d4");
+            }
+            other => panic!("expected a pairing, got {other:?}"),
+        }
+    }
+
+    /// Pairing needs a store, and there is none until the device exists.
+    #[test]
+    fn pairing_before_there_is_a_device_is_refused() {
+        let hosted = Hosted::new(PathBuf::from("/nowhere"));
+        assert!(hosted.for_pairing().is_err());
     }
 
     #[test]

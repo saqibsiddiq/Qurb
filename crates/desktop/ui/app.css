@@ -335,3 +335,53 @@ button.primary:disabled { opacity: .45; cursor: default; filter: none; }
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 18px; max-width: 34rem; }
 .field > span:first-child { font-weight: 600; }
 .field .quiet { font-size: 12px; }
+
+/* ------------------------------------------------------------------- pairing */
+
+.pairing { margin-top: 24px; max-width: 34rem; }
+
+/* White, always, whatever the desktop's colour scheme.
+ *
+ * A scanner finds a code by its finder patterns against a light ground. A code
+ * drawn dark-on-dark because somebody is in dark mode is not a code, and the
+ * failure looks like a broken camera rather than a broken idea. The padding is
+ * part of it: the quiet zone is in the SVG, and this keeps the panel behind it
+ * from eating the edge. */
+#qr {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 12px;
+  width: 15rem;
+  margin-bottom: 18px;
+}
+
+#qr svg { display: block; width: 100%; height: auto; }
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin: 4px 0 14px;
+  /* A pairing code is 107 characters and a spoken one is longer. Wrapped
+   * rather than scrolled, because somebody is copying it by eye. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+#pair-input {
+  width: 100%;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+#pair-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }

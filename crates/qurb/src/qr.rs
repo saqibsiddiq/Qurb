@@ -62,6 +62,53 @@ pub fn terminal(text: &str) -> Result<String, qrcode::types::QrError> {
     Ok(out)
 }
 
+/// Render `text` as a QR code in SVG, sized in module units.
+///
+/// One `<path>` of filled squares on a white ground, with a `viewBox` in
+/// modules so the caller decides how big it is on screen. No width or height
+/// attributes for the same reason: a pairing code is read by a camera held at
+/// whatever distance is comfortable, and the display knows more about that than
+/// this does.
+///
+/// White explicitly rather than transparently, whatever colour scheme is in
+/// use. A scanner looks for dark modules against a light ground; a code drawn
+/// dark-on-dark because the desktop is in dark mode is not a code.
+pub fn svg(text: &str) -> Result<String, qrcode::types::QrError> {
+    // Low correction, for the same reason as the terminal renderer: this is
+    // read off a screen rather than off something creased, and lower correction
+    // means a smaller symbol with larger modules at a given size.
+    let code = QrCode::with_error_correction_level(text, EcLevel::L)?;
+    let modules = code.to_colors();
+    let width = code.width();
+
+    // The specification requires four modules of blank margin, and scanners
+    // genuinely fail without it: the code is found by looking for its finder
+    // patterns against a clear background.
+    const QUIET: usize = 4;
+    let side = width + QUIET * 2;
+
+    let mut path = String::with_capacity(width * width * 8);
+    for y in 0..width {
+        for x in 0..width {
+            if modules[y * width + x] == qrcode::Color::Dark {
+                // One `M` and one `h1v1h-1z` per module. Rectangles would be
+                // clearer to read and produce one element each; a QR code is
+                // upwards of a thousand modules, and a thousand elements is a
+                // thousand things for a layout engine to think about.
+                path.push_str(&format!("M{} {}h1v1h-1z", x + QUIET, y + QUIET));
+            }
+        }
+    }
+
+    Ok(format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {side} {side}\" \
+         shape-rendering=\"crispEdges\">\
+         <rect width=\"{side}\" height=\"{side}\" fill=\"#ffffff\"/>\
+         <path d=\"{path}\" fill=\"#000000\"/>\
+         </svg>"
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,5 +158,71 @@ mod tests {
             "{} lines for {width} columns is not square",
             lines.len()
         );
+    }
+
+    /// The SVG has to encode the same matrix the terminal renderer draws.
+    /// They share `to_colors`, so if one scans the other does — and this is
+    /// what catches a renderer that transposed or offset it.
+    #[test]
+    fn the_svg_draws_one_square_per_dark_module() {
+        let drawn = svg(INVITE).unwrap();
+        let code = QrCode::with_error_correction_level(INVITE, EcLevel::L).unwrap();
+        let dark = code.to_colors().iter().filter(|c| **c == qrcode::Color::Dark).count();
+
+        assert_eq!(drawn.matches("h1v1h-1z").count(), dark);
+    }
+
+    /// The same quiet zone as the terminal form, and for the same reason.
+    #[test]
+    fn the_svg_leaves_four_modules_of_margin() {
+        let drawn = svg(INVITE).unwrap();
+        let code = QrCode::with_error_correction_level(INVITE, EcLevel::L).unwrap();
+        let side = code.width() + 8;
+
+        assert!(drawn.contains(&format!("viewBox=\"0 0 {side} {side}\"")));
+        // Nothing is drawn in the margin: every square starts at 4 or more.
+        assert!(!drawn.contains("M0 "), "a module was drawn in the quiet zone");
+        assert!(!drawn.contains(" 0h1v1h-1z"), "a module was drawn in the quiet zone");
+    }
+
+    /// Counting squares would not catch a renderer that transposed the matrix,
+    /// because a transposed code has exactly as many dark modules as an upright
+    /// one. This reads the positions back out and compares them cell by cell.
+    #[test]
+    fn every_square_is_where_the_matrix_says_it_is() {
+        let drawn = svg(INVITE).unwrap();
+        let code = QrCode::with_error_correction_level(INVITE, EcLevel::L).unwrap();
+        let width = code.width();
+        let modules = code.to_colors();
+
+        // Each square is `M<x> <y>h1v1h-1z`, so the path reads back exactly.
+        let mut found = std::collections::HashSet::new();
+        for piece in drawn.split('M').skip(1) {
+            let Some(coords) = piece.split('h').next() else { continue };
+            let mut parts = coords.split(' ');
+            let (Some(x), Some(y)) = (parts.next(), parts.next()) else { continue };
+            let (Ok(x), Ok(y)) = (x.parse::<usize>(), y.parse::<usize>()) else { continue };
+            found.insert((x - 4, y - 4));
+        }
+
+        for y in 0..width {
+            for x in 0..width {
+                let dark = modules[y * width + x] == qrcode::Color::Dark;
+                assert_eq!(
+                    found.contains(&(x, y)),
+                    dark,
+                    "module at ({x}, {y}) is drawn wrongly — is the matrix transposed?"
+                );
+            }
+        }
+    }
+
+    /// Whatever colour scheme the desktop is in. A code drawn dark-on-dark is
+    /// not a code, and the failure looks like a broken camera.
+    #[test]
+    fn the_svg_is_black_on_white_regardless() {
+        let drawn = svg(INVITE).unwrap();
+        assert!(drawn.contains("fill=\"#ffffff\""), "no light ground");
+        assert!(drawn.contains("fill=\"#000000\""), "no dark modules");
     }
 }

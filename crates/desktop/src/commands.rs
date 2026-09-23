@@ -334,6 +334,155 @@ fn expand(path: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(trimmed)
 }
 
+#[derive(Serialize)]
+pub struct Invitation {
+    /// The code itself: what a camera reads and what `qurb join` takes.
+    code: String,
+    /// The same thing in a form somebody can read down a telephone.
+    spoken: String,
+    /// Unix seconds. The code stops working at this point, and the screen
+    /// counts down to it rather than leaving somebody reading out a dead code.
+    expires_at: i64,
+    /// An SVG of the code, to put on the screen.
+    qr: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct PairingState {
+    /// "none", "waiting", "paired", "expired" or "failed".
+    state: &'static str,
+    name: Option<String>,
+    fingerprint: Option<String>,
+    message: Option<String>,
+}
+
+/// Show a code, and start answering it.
+///
+/// Returns as soon as there is something to put on the screen; the waiting
+/// happens behind it and is asked about with [`pairing_state`]. A command that
+/// only returned once somebody had paired would leave the code unobtainable
+/// for the five minutes it is valid, which is the one window in which it is
+/// any use.
+#[tauri::command]
+pub fn start_pairing(hosted: Host<'_>) -> Answer<Invitation> {
+    let (store, identity, name) = hosted.for_pairing().map_err(failed)?;
+    let now = now();
+
+    // Port zero, not the configured one. The daemon in this process is already
+    // listening on that, and a pairing host that failed to bind would be a
+    // pairing screen that could not open while syncing was working — which is
+    // every time somebody would use it. The invite carries whatever port this
+    // gets, so the far end dials the right one either way.
+    let host = qurb_peer::PairingHost::open("0.0.0.0:0".parse().unwrap(), &identity, now)
+        .map_err(failed)?;
+
+    let code = host.invite().encode();
+    let spoken = host.invite().for_humans();
+    let expires_at = host.invite().expires_at;
+    // A code that cannot be drawn is still a code. It can be typed, and it can
+    // be read aloud, so failing to render is worth noting and not worth
+    // refusing over.
+    let qr = qurb_cli::qr::svg(&code).ok();
+
+    let attempt = hosted.begin_pairing(code.clone(), spoken.clone(), expires_at);
+    let waiting = Arc::clone(&attempt);
+    attempt.watch(tauri::async_runtime::spawn(async move {
+        let outcome = match host.wait(store, &name, now).await {
+            Ok(peer) => crate::session::Pairing::Paired {
+                name: peer.name,
+                fingerprint: peer.fingerprint.short(),
+            },
+            // The ordinary ending when nobody types the code in time. Not an
+            // error to report as one: the only useful thing to say is that the
+            // code is dead and another can be had.
+            Err(qurb_peer::Error::InviteExpired) => crate::session::Pairing::Expired,
+            Err(e) => crate::session::Pairing::Failed(e.to_string()),
+        };
+        waiting.settle(outcome);
+    }));
+
+    Ok(Invitation { code, spoken, expires_at, qr })
+}
+
+/// How the attempt on screen is going. Polled while the code is up.
+#[tauri::command]
+pub fn pairing_state(hosted: Host<'_>) -> Answer<PairingState> {
+    use crate::session::Pairing;
+    let Some(attempt) = hosted.attempt() else {
+        return Ok(PairingState { state: "none", name: None, fingerprint: None, message: None });
+    };
+
+    Ok(match attempt.state() {
+        Pairing::Waiting => {
+            PairingState { state: "waiting", name: None, fingerprint: None, message: None }
+        }
+        Pairing::Paired { name, fingerprint } => PairingState {
+            state: "paired",
+            name: Some(name),
+            fingerprint: Some(fingerprint),
+            message: None,
+        },
+        Pairing::Expired => {
+            PairingState { state: "expired", name: None, fingerprint: None, message: None }
+        }
+        Pairing::Failed(message) => PairingState {
+            state: "failed",
+            name: None,
+            fingerprint: None,
+            message: Some(message),
+        },
+    })
+}
+
+/// Stop showing a code, and stop answering it.
+///
+/// Both halves matter. A cancelled invite that still worked would be worse
+/// than having no cancel button at all: the code would be off the screen and
+/// live, which is precisely the state somebody pressing cancel is trying to
+/// avoid.
+#[tauri::command]
+pub fn stop_pairing(hosted: Host<'_>) -> Answer<()> {
+    hosted.end_pairing();
+    Ok(())
+}
+
+/// Join a device that is showing a code.
+///
+/// Short enough to await directly: this dials an address that is on the screen
+/// in front of somebody, and either works or does not within seconds.
+#[tauri::command]
+pub async fn join_device(hosted: Host<'_>, code: String) -> Answer<PairingState> {
+    let invite = qurb_peer::Invite::parse(code.trim())
+        .map_err(|_| "that is not a pairing code — check it was copied whole".to_string())?;
+    let (store, identity, name) = hosted.for_pairing().map_err(failed)?;
+
+    let peer = qurb_peer::accept(&invite, &identity, store, &name, now())
+        .await
+        .map_err(|e| match e {
+            qurb_peer::Error::InviteExpired => {
+                "that code has expired — ask the other device for a new one".to_string()
+            }
+            other => other.to_string(),
+        })?;
+
+    Ok(PairingState {
+        state: "paired",
+        name: Some(peer.name),
+        fingerprint: Some(peer.fingerprint.short()),
+        message: None,
+    })
+}
+
+/// Unix seconds. Pairing is bounded by wall-clock time on both sides, which is
+/// the one place in this system a clock is load-bearing — an invite has to
+/// expire whether or not anybody is looking at it.
+fn now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 /// The headline, from the daemon's live state.
 ///
 /// Read from the watch channel rather than computed, because "is a device

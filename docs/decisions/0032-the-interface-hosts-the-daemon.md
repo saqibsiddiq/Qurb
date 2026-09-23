@@ -53,6 +53,24 @@ So: hold the status channel open, and poll the view for detail. The daemon
 bumps a generation when anything changes, which is the interface's cue to ask
 again.
 
+## Pairing from the window binds a different port
+
+A direct consequence of hosting the daemon, and worth stating because it is
+surprising. `qurb pair` binds the configured port; the window cannot, because
+the daemon in the same process already has it. A pairing screen that failed to
+open while syncing was working would fail every time anybody wanted it, so the
+window binds port zero and the invite carries whatever it gets.
+
+The cost: a pairing code from the window cannot be reached through a port
+somebody forwarded on purpose, where one from `qurb pair` can. That matters
+only for pairing across the internet without a rendezvous, which is not how
+anybody pairs — the code has to cross the room as light anyway.
+
+Cancelling has to stop *both* halves. A code taken off the screen that still
+answers would be the opposite of what pressing cancel asks for, so the task
+holding the pairing host is aborted, which drops the host and closes the
+socket.
+
 ## Why availability is three values, not two
 
 `Here`, `Elsewhere`, `OnlyHere`.

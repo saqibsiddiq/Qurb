@@ -23,6 +23,8 @@ const WORDS = [
   "silent", "harvest", "copper", "lantern", "marble", "thunder", "velvet", "orchid",
 ];
 
+let startedPairingAt = 0;
+
 const ANSWERS = {
   situation: () => ({
     set_up: !SETTING_UP,
@@ -61,6 +63,27 @@ const ANSWERS = {
   }),
 
   save_settings: () => null,
+
+  // Pairing. The code is the shape of a real one and is not a real one; the
+  // QR is generated here rather than by the Rust renderer, so it encodes the
+  // fixture string and nothing else.
+  start_pairing: () => ({
+    code: "qurb1-" + "k7fq".repeat(25),
+    spoken: "kilo seven foxtrot quebec · romeo two delta · sierra nine whiskey",
+    expires_at: now + 300,
+    qr: null,
+  }),
+
+  // Answers "waiting" for a few seconds and then "paired", so the countdown
+  // and the arrival can both be looked at without a second device.
+  pairing_state: () => {
+    const since = Math.floor(Date.now() / 1000) - startedPairingAt;
+    if (since < 6) return { state: "waiting", name: null, fingerprint: null, message: null };
+    return { state: "paired", name: "phone", fingerprint: "a1b2c3d4", message: null };
+  },
+
+  stop_pairing: () => null,
+  join_device: () => ({ state: "paired", name: "phone", fingerprint: "a1b2c3d4", message: null }),
   summary: () => ({
     state: "syncing",
     root: "/home/saqib/Sync",
@@ -130,6 +153,7 @@ const ANSWERS = {
 window.__TAURI__ = {
   core: {
     invoke: async (name, args = {}) => {
+      if (name === "start_pairing") startedPairingAt = Math.floor(Date.now() / 1000);
       const answer = ANSWERS[name];
       if (!answer) throw new Error(`no fixture for ${name}`);
       // A promise, like the real thing, so anything that depends on the call

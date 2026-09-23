@@ -162,10 +162,51 @@
         <p class="quiet">Paired devices, and when each was last reached.</p>
       </header>
       <ul id="device-list" class="rows"></ul>
-      <p class="quiet note">
-        Pairing happens on the command line for now:
-        <code>qurb pair</code> here, <code>qurb join</code> there.
-      </p>
+
+      <div id="pair-idle" class="buttons">
+        <button class="act primary" id="pair-show">Show a code</button>
+        <button class="act" id="pair-enter">Enter a code</button>
+      </div>
+
+      <!-- Showing a code. The QR is the way anyone will actually do this; the
+           text below it is for a device with no camera, and for reading out. -->
+      <div id="pair-showing" class="hidden pairing">
+        <h2>Scan this on the other device</h2>
+        <div id="qr"></div>
+        <p class="quiet">Or on another computer:</p>
+        <pre id="pair-code" class="code"></pre>
+        <p class="quiet">Or read this out:</p>
+        <pre id="pair-spoken" class="code"></pre>
+        <p id="pair-says" class="quiet"></p>
+        <p class="quiet note">
+          The code carries this device's full identity, which is why it has to
+          travel outside the network — somebody able to change what is on your
+          screen has already won. It works once.
+        </p>
+        <div class="buttons">
+          <button class="act" id="pair-cancel">Stop showing it</button>
+        </div>
+      </div>
+
+      <!-- Entering one. -->
+      <div id="pair-entering" class="hidden pairing">
+        <h2>The code from the other device</h2>
+        <textarea id="pair-input" rows="3" spellcheck="false" autocomplete="off"
+                  placeholder="qurb1-…"></textarea>
+        <p id="join-error" class="warn hidden"></p>
+        <div class="buttons">
+          <button class="act" id="pair-back">Cancel</button>
+          <button class="act primary" id="pair-go">Join</button>
+        </div>
+      </div>
+
+      <div id="pair-done" class="hidden pairing">
+        <h2>Paired</h2>
+        <p id="pair-with"></p>
+        <div class="buttons">
+          <button class="act primary" id="pair-finish">Done</button>
+        </div>
+      </div>
     </section>
 
     <section id="activity" class="screen">

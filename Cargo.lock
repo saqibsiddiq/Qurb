@@ -3835,6 +3835,7 @@ dependencies = [
  "libc",
  "qurb-cli",
  "qurb-keys",
+ "qurb-peer",
  "qurb-storage",
  "serde",
  "serde_json",

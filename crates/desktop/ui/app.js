@@ -449,6 +449,125 @@ async function drawDevices() {
   }
 }
 
+// ------------------------------------------------------------------- pairing
+
+// Which of the four panels under the device list is showing.
+function pairPanel(which) {
+  for (const name of ["idle", "showing", "entering", "done"]) {
+    $(`pair-${name}`).classList.toggle("hidden", name !== which);
+  }
+}
+
+let watching = null;
+
+$("pair-show").addEventListener("click", async () => {
+  pairPanel("showing");
+  $("qr").replaceChildren();
+  $("pair-code").textContent = "";
+  $("pair-spoken").textContent = "";
+  $("pair-says").textContent = "opening a port…";
+
+  let invitation;
+  try {
+    invitation = await invoke("start_pairing");
+  } catch (e) {
+    $("pair-says").textContent = String(e);
+    return;
+  }
+
+  // The SVG comes from our own renderer, not from anything a peer sent, and
+  // the only variable in it is the code this device just made.
+  //
+  // Hidden entirely when there is none, rather than left as an empty white
+  // panel: a blank where a code should be reads as a code that failed to load,
+  // and somebody will sit waiting for it.
+  $("qr").classList.toggle("hidden", !invitation.qr);
+  if (invitation.qr) $("qr").innerHTML = invitation.qr;
+  $("pair-code").textContent = `qurb join <dir> ${invitation.code}`;
+  $("pair-spoken").textContent = invitation.spoken;
+
+  clearInterval(watching);
+  watching = setInterval(() => followPairing(invitation.expires_at), 700);
+  followPairing(invitation.expires_at);
+});
+
+async function followPairing(expiresAt) {
+  let state;
+  try {
+    state = await invoke("pairing_state");
+  } catch (e) {
+    $("pair-says").textContent = String(e);
+    return;
+  }
+
+  if (state.state === "waiting") {
+    // Counted down rather than left saying "waiting". A code that stopped
+    // working five minutes ago, under a screen that still says it is waiting,
+    // is worse than no screen: somebody reads it out and is told it is wrong.
+    const left = Math.max(0, expiresAt - Math.floor(Date.now() / 1000));
+    const minutes = Math.floor(left / 60);
+    const seconds = String(left % 60).padStart(2, "0");
+    $("pair-says").textContent = `waiting — this code expires in ${minutes}:${seconds}`;
+    return;
+  }
+
+  clearInterval(watching);
+  watching = null;
+
+  if (state.state === "paired") {
+    donePairing(state);
+  } else if (state.state === "expired") {
+    $("pair-says").textContent = "that code has expired — show a new one";
+  } else if (state.state === "failed") {
+    $("pair-says").textContent = state.message ?? "pairing failed";
+  }
+}
+
+function donePairing(state) {
+  $("pair-with").textContent = `${state.name} (${state.fingerprint})`;
+  pairPanel("done");
+  drawDevices();
+}
+
+$("pair-cancel").addEventListener("click", async () => {
+  clearInterval(watching);
+  watching = null;
+  // Stopped at both ends: off the screen, and no longer answered. A cancelled
+  // code that still worked would be the opposite of what was asked for.
+  try { await invoke("stop_pairing"); } catch (e) { /* already gone */ }
+  pairPanel("idle");
+});
+
+$("pair-enter").addEventListener("click", () => {
+  $("pair-input").value = "";
+  $("join-error").classList.add("hidden");
+  pairPanel("entering");
+  $("pair-input").focus();
+});
+
+$("pair-back").addEventListener("click", () => pairPanel("idle"));
+
+$("pair-go").addEventListener("click", async () => {
+  const button = $("pair-go");
+  const error = $("join-error");
+  button.disabled = true;
+  button.textContent = "Joining…";
+  try {
+    const state = await invoke("join_device", { code: $("pair-input").value });
+    $("pair-input").value = "";
+    error.classList.add("hidden");
+    donePairing(state);
+  } catch (e) {
+    error.textContent = String(e);
+    error.classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Join";
+  }
+});
+
+$("pair-finish").addEventListener("click", () => pairPanel("idle"));
+
 // ----------------------------------------------------------------- activity
 
 let oldest = null;
@@ -694,5 +813,8 @@ setInterval(() => { if (screen === "home") drawHome(); }, 1500);
 // reading is a cost, not a feature.
 setInterval(() => {
   if (screen === "storage") drawStorage();
-  if (screen === "devices") drawDevices();
+  // Not while a code is up: the list is at the top of the screen and redrawing
+  // it is harmless, but `drawDevices` is also what a finished pairing calls,
+  // and two of them racing would be a list drawn twice for no reason.
+  if (screen === "devices" && !watching) drawDevices();
 }, 5000);

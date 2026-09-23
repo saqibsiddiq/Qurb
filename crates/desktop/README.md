@@ -19,7 +19,7 @@ a device up in the first place:
 |---|---|
 | Home | is it working, how many devices, what moved lately, what is still on its way |
 | Files | what is in the folder and **where each file's contents actually are** |
-| Devices | who is paired, when each was last reached |
+| Devices | who is paired, and pairing with another: show a code or enter one |
 | Activity | what this device did — the answer to "why is my file not here?" |
 | Storage | what qurb costs on this disk, and the allowance |
 | Settings | this device's name, how it finds the others, and the 24 words |
@@ -84,10 +84,22 @@ the folder — anybody who can read that folder can read the files, so this
 reveals nothing new. See
 [decision 0033](../../docs/decisions/0033-the-phrase-on-a-screen.md).
 
+## Pairing
+
+Show a code — a QR to scan, the same code to type, and a spoken form to read
+down a telephone — or enter one from another device. The screen counts down to
+the code's expiry rather than saying "waiting" under a code that stopped
+working five minutes ago.
+
+Two things worth knowing. The QR is drawn black on white whatever colour scheme
+the desktop is in, because a scanner finds a code by its finder patterns
+against a light ground and a code drawn dark-on-dark is not a code. And the
+window binds port zero rather than the configured port, because the daemon in
+this process already has that one — see
+[decision 0032](../../docs/decisions/0032-the-interface-hosts-the-daemon.md).
+
 ## What it does not do yet
 
-- **No pairing.** `qurb pair` here and `qurb join` there. The last setting-up
-  screen says so rather than implying the device is alone.
 - **No sending.** `qurb send` does it; the window shows what is outstanding but
   cannot start one.
 - **No transfer progress.** Outcomes are recorded and shown; a transfer in
