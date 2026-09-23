@@ -23,7 +23,7 @@ use std::path::Path;
 ///
 /// Migrations are append-only. Editing one that has already shipped would leave
 /// databases in the field at a schema nobody can reproduce.
-const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
+const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -208,6 +208,27 @@ CREATE TABLE IF NOT EXISTS reported (
     at           INTEGER NOT NULL,
     PRIMARY KEY (device_id, content_hash)
 ) STRICT;
+"#;
+
+const V7: &str = r#"
+-- Which vault a file belongs to.
+--
+-- NULL is the shared area: a path every paired device converges on, which is
+-- what every file was before this column existed and what every file still is
+-- unless something says otherwise. A device id means the file belongs to that
+-- device's private vault: other devices may send content into it and may not
+-- read it back.
+--
+-- The privacy has to be a property rather than a drawing, so this column is
+-- consulted when answering a peer -- for the tree it is shown, for the
+-- manifests it may resolve, and for the chunks it may fetch. A device that
+-- cannot see a path cannot reach its bytes either, which is the part a user
+-- interface could not have enforced on its own.
+ALTER TABLE files ADD COLUMN scope BLOB;
+
+-- Answering "what may this device see" is a per-request question, so it must
+-- not be a scan of every file.
+CREATE INDEX IF NOT EXISTS idx_files_scope ON files (scope);
 "#;
 
 pub struct Db {
@@ -721,6 +742,106 @@ impl Db {
         Ok(out)
     }
 
+    /// The versions an audience is entitled to know about.
+    ///
+    /// See [`Audience`]. The shared area is visible to everyone; a vault is
+    /// visible only to the device that owns it, which is the whole point and
+    /// the reason this is a database query rather than something an interface
+    /// chooses not to draw.
+    pub fn versions_for(&self, audience: Audience<'_>) -> Result<Vec<FileVersion>> {
+        match audience {
+            Audience::Ourselves => self.all_versions(),
+            Audience::Unplaced => {
+                let mut stmt = self.conn.prepare(&format!(
+                    "SELECT {FILE_COLUMNS} FROM files WHERE scope IS NULL ORDER BY path"
+                ))?;
+                let rows = stmt.query_map([], file_row)?;
+                rows.map(|row| Ok(row_to_version(&row?))).collect()
+            }
+            Audience::Device(asker) => {
+                let mut stmt = self.conn.prepare(&format!(
+                    "SELECT {FILE_COLUMNS} FROM files
+                      WHERE scope IS NULL OR scope = ?1
+                      ORDER BY path"
+                ))?;
+                let rows = stmt.query_map(params![asker.as_bytes().as_slice()], file_row)?;
+                rows.map(|row| Ok(row_to_version(&row?))).collect()
+            }
+        }
+    }
+
+    /// Whether a device may fetch the bytes of this chunk.
+    ///
+    /// Answered from the files that reference it: a chunk is reachable if any
+    /// file the asker may see uses it. Tombstones count, because a peer that
+    /// learned of a version before it was deleted may still be fetching it.
+    ///
+    /// Deduplication makes this the right shape rather than an awkward one. If
+    /// the same bytes appear in both the shared area and somebody's vault, the
+    /// shared copy already entitles everyone to them, and pretending otherwise
+    /// would refuse content the asker can obtain a different way.
+    pub fn chunk_visible_to(&self, hash: &blake3::Hash, audience: Audience<'_>) -> Result<bool> {
+        if matches!(audience, Audience::Ourselves) {
+            return Ok(true);
+        }
+        let owner = audience.device().map(|d| d.as_bytes().to_vec());
+        let visible: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT 1
+                   FROM file_chunks fc
+                   JOIN files f ON f.id = fc.file_id
+                  WHERE fc.chunk_hash = ?1
+                    AND (f.scope IS NULL OR f.scope = ?2)
+                  LIMIT 1",
+                params![hash.as_bytes().as_slice(), owner],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(visible.is_some())
+    }
+
+    /// Whether a device may resolve this content hash to a chunk list.
+    pub fn content_visible_to(
+        &self,
+        content: &blake3::Hash,
+        audience: Audience<'_>,
+    ) -> Result<bool> {
+        if matches!(audience, Audience::Ourselves) {
+            return Ok(true);
+        }
+        let owner = audience.device().map(|d| d.as_bytes().to_vec());
+        let visible: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM files
+                  WHERE content_hash = ?1 AND (scope IS NULL OR scope = ?2)
+                  LIMIT 1",
+                params![content.as_bytes().as_slice(), owner],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(visible.is_some())
+    }
+
+    /// Put a path in a device's private vault, or back in the shared area.
+    pub fn set_scope(&self, path: &str, vault: Option<&DeviceId>) -> Result<bool> {
+        let changed = self.conn.execute(
+            "UPDATE files SET scope = ?2 WHERE path = ?1",
+            params![path, vault.map(|d| d.as_bytes().to_vec())],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// Which vault a path belongs to, if any.
+    pub fn scope_of(&self, path: &str) -> Result<Option<DeviceId>> {
+        let raw: Option<Option<Vec<u8>>> = self
+            .conn
+            .query_row("SELECT scope FROM files WHERE path = ?1", params![path], |r| r.get(0))
+            .optional()?;
+        Ok(raw.flatten().map(|bytes| DeviceId::from_bytes(to_hash(&bytes).into())))
+    }
+
     /// Stamp a path with a version vector.
     ///
     /// Used both for local changes, where the caller has just allocated a
@@ -1055,4 +1176,36 @@ pub(crate) fn now() -> i64 {
 #[allow(dead_code)]
 fn _assert_error_conversion(e: rusqlite::Error) -> Error {
     e.into()
+}
+
+/// Who is asking, for the purpose of what they may see.
+///
+/// Three cases, and conflating any two of them is a bug with a security
+/// consequence — which is why this is an enum rather than an `Option`.
+#[derive(Debug, Clone, Copy)]
+pub enum Audience<'a> {
+    /// This device itself. Sees everything it holds: an interface showing
+    /// somebody their own files is not a peer.
+    Ourselves,
+    /// A peer whose device this store recognises. Sees the shared area and
+    /// that device's own vault, and never anybody else's.
+    Device(&'a DeviceId),
+    /// A peer that authenticated but whose device is not recorded here. Sees
+    /// the shared area only.
+    ///
+    /// It owns no vault as far as this device knows, so it is shown none — but
+    /// it is not refused outright, because the connection already proved it is
+    /// trusted and the shared area is what trust entitles a device to. Being
+    /// stricter here would break a paired device whose bookkeeping is
+    /// incomplete, and buy nothing: vaults are still invisible to it.
+    Unplaced,
+}
+
+impl<'a> Audience<'a> {
+    fn device(&self) -> Option<&'a DeviceId> {
+        match self {
+            Audience::Device(device) => Some(device),
+            _ => None,
+        }
+    }
 }

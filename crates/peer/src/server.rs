@@ -277,11 +277,46 @@ async fn serve_request(
 }
 
 fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Result<Response> {
+    // Which device is asking, as the connection proves rather than as anything
+    // claims. Every answer below is scoped to it: the shared area plus that
+    // device's own vault, never anybody else's.
+    //
+    // `None` -- an unrecognised certificate -- is treated as a device entitled
+    // to nothing rather than as a device entitled to everything. That is the
+    // safe direction, and the only one: a peer that cannot be identified
+    // cannot be shown a vault.
+    // A peer that authenticated but whose device this store does not recognise
+    // is `Unplaced`: it owns no vault here, so it is shown none, and it is not
+    // refused the shared area either. The connection already proved it is
+    // trusted, and being stricter would break a paired device whose
+    // bookkeeping is incomplete while buying nothing — vaults stay invisible
+    // to it either way.
+    let owner = asker.and_then(|fingerprint| {
+        store
+            .db()
+            .peer_by_fingerprint(fingerprint.as_bytes())
+            .ok()
+            .flatten()
+            .map(|peer| peer.device_id)
+    });
+    let audience = match &owner {
+        Some(device) => qurb_storage::db::Audience::Device(device),
+        None => qurb_storage::db::Audience::Unplaced,
+    };
+
     Ok(match request {
-        Request::Tree => Response::Tree(store.tree()?),
+        Request::Tree => Response::Tree(store.tree_for(audience)?),
 
         Request::Manifest { content } => {
-            match store.chunk_hashes_for_content(&blake3::Hash::from(*content))? {
+            let content = blake3::Hash::from(*content);
+            if !store.content_visible_to(&content, audience)? {
+                // Indistinguishable from content this device does not hold,
+                // which is deliberate: "you may not have this" and "there is
+                // no such thing" should look the same from outside, or the
+                // refusal itself tells a peer what exists.
+                return Ok(Response::NotFound);
+            }
+            match store.chunk_hashes_for_content(&content)? {
                 Some(hashes) => {
                     Response::Manifest(hashes.iter().map(|h| *h.as_bytes()).collect())
                 }
@@ -308,23 +343,28 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // the sender has nothing useful to do with a failure, and this device
         // failing to take a note is not the sender's problem.
         Request::Got { content } => {
-            if let Some(fingerprint) = asker {
-                match store.db().peer_by_fingerprint(fingerprint.as_bytes()) {
-                    Ok(Some(peer)) => {
-                        let content = blake3::Hash::from(*content);
-                        if let Err(e) = store.note_replica(&content, &peer.device_id) {
-                            tracing::debug!(error = %e, "could not record delivery");
-                        }
+            match &owner {
+                Some(device) => {
+                    let content = blake3::Hash::from(*content);
+                    if let Err(e) = store.note_replica(&content, device) {
+                        tracing::debug!(error = %e, "could not record delivery");
                     }
-                    Ok(None) => tracing::debug!("delivery reported by an untrusted device"),
-                    Err(e) => tracing::debug!(error = %e, "looking up the reporting device"),
                 }
+                None => tracing::debug!("delivery reported by an unrecognised device"),
             }
             Response::Noted
         }
 
         Request::Chunk { hash } => {
             let hash = blake3::Hash::from(*hash);
+
+            // The bytes, checked the same way as the manifest above. Without
+            // this a device could skip the tree entirely and fetch anything it
+            // could name, which is exactly what a hash is.
+            if !store.chunk_visible_to(&hash, audience)? {
+                return Ok(Response::NotFound);
+            }
+
             // read_chunk verifies the payload against its own hash, so a
             // corrupt chunk is reported as missing rather than served.
             match store.read_chunk(&hash) {

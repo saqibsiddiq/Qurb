@@ -814,6 +814,38 @@ impl Store {
         Ok(matches!(self.chunk_from_tree(hash), Ok(Some(_))))
     }
 
+    /// Every path one device is entitled to know about.
+    ///
+    /// The shared area plus that device's own vault, and never anybody else's.
+    /// See [`db::Audience`], which distinguishes the three cases this depends
+    /// on getting right.
+    pub fn tree_for(&self, audience: db::Audience<'_>) -> Result<Vec<FileVersion>> {
+        self.db.versions_for(audience)
+    }
+
+    /// Whether an audience may fetch this chunk's bytes.
+    pub fn chunk_visible_to(
+        &self,
+        hash: &blake3::Hash,
+        audience: db::Audience<'_>,
+    ) -> Result<bool> {
+        self.db.chunk_visible_to(hash, audience)
+    }
+
+    /// Whether an audience may resolve this content hash.
+    pub fn content_visible_to(
+        &self,
+        content: &blake3::Hash,
+        audience: db::Audience<'_>,
+    ) -> Result<bool> {
+        self.db.content_visible_to(content, audience)
+    }
+
+    /// Put a path in a device's private vault, or back in the shared area.
+    pub fn set_scope(&self, logical_path: &str, vault: Option<&DeviceId>) -> Result<bool> {
+        self.db.set_scope(logical_path, vault)
+    }
+
     /// Every path this device knows about, tombstones included: what it would
     /// advertise to a peer.
     pub fn tree(&self) -> Result<Vec<FileVersion>> {

@@ -4,8 +4,9 @@ A plan written against what the repository actually contains, not against what
 the architecture document describes. Read
 [CODEBASE.md](CODEBASE.md) first; this assumes it.
 
-**Status: not started.** This is the plan, and it contains one decision that has
-to be made before any of it can begin.
+**Status: phase 0 done.** The data model is settled and built — see
+[decisions/0029](decisions/0029-two-areas-shared-and-private.md). The rest of
+this plan stands as written.
 
 ---
 
@@ -81,11 +82,14 @@ resolution, transport, pairing and the storage cap are all unaffected. It is an
 addition of scope and access control around them, and it is the largest single
 piece of work in this plan.
 
-### The decision
+### The decision, made
 
-This is the ambiguity §86 says to stop on rather than invent, because it
-changes the data model and the security model together. See
-[the question at the end](#12-what-i-need-decided).
+**Both.** The shared area stays and behaves as it always has; private vaults
+are added beside it, enforced in the protocol rather than in the interface.
+[Decision 0029](decisions/0029-two-areas-shared-and-private.md) records why,
+and the three audiences the first attempt got wrong.
+
+The desktop shell will be **Tauri**, which the roadmap originally called for.
 
 ---
 
@@ -141,10 +145,9 @@ The gap for most of these is an **API and a screen**, not an engine change.
 Each of these changes architecture and therefore needs a decision record, per
 CLAUDE.md:
 
-1. **Vaults, or one namespace** — §1 above. Blocks almost everything else.
-2. **The desktop UI toolkit.** Today GTK 3, because `tray-icon` already links
-   it. A product shell of this size is a different question, and the roadmap's
-   old answer (Tauri) was written before any of the current UI existed.
+1. ~~**Vaults, or one namespace.**~~ Decided: both —
+   [0029](decisions/0029-two-areas-shared-and-private.md).
+2. ~~**The desktop UI toolkit.**~~ Decided: Tauri.
 3. **What sharing means** (§23) — copy or reference, whether deletion
    propagates, how revocation works. The specification requires this be defined
    rather than implied.
@@ -157,9 +160,9 @@ CLAUDE.md:
 The specification's phases (§74) are sound. Reordered only where the repository
 says something must come first.
 
-**0. Decide the data model.** Nothing below is safe to build until §1 is
-settled, because it determines whether "send to device" is a transfer or a
-write into a shared tree.
+**0. Decide the data model.** ✅ Done. Two areas, enforced in the protocol.
+What remains from it: nothing yet *writes* to a vault, which is the transfer
+primitive phase 5 needs.
 
 **1. An API the UI can use.** The engine's surface is `reconcile`,
 `plan_against`, `apply_plan`. A product needs to ask "what devices, what

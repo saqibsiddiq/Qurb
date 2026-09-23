@@ -55,3 +55,4 @@ is worth more than a tidy directory.
 | [0026](0026-sharing-while-the-other-device-is-off.md) | Sharing while the other device is off | Accepted |
 | [0027](0027-plaintext-stops-at-the-local-network.md) | Plaintext rendezvous stops at the local network | Accepted |
 | [0028](0028-waking-a-sleeping-device.md) | Waking a sleeping device, and what it costs | Accepted |
+| [0029](0029-two-areas-shared-and-private.md) | Two areas: one shared, one private per device | Accepted |
