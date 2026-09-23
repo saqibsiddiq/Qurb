@@ -87,6 +87,40 @@ served to everyone. That looks like a hole and is not: the shared copy already
 entitles every device to those bytes, and refusing them would deny content the
 asker can obtain another way while revealing that a vault holds the same thing.
 
+## A path is no longer a unique handle
+
+The `files` table carried `path TEXT NOT NULL UNIQUE`, which was right when
+there was one namespace and is wrong now: a device could not hold `photo.jpg`
+for two different phones, nor hold one for a phone while having its own in the
+shared area.
+
+SQLite cannot drop a column-level UNIQUE, so the table is rebuilt. Three things
+about that were easy to get wrong and are worth recording:
+
+**`UNIQUE(scope, path)` would not have worked.** SQL treats NULLs as distinct,
+so two shared rows with the same path would both have been allowed — the exact
+bug the constraint exists to prevent. It is two *partial* unique indexes
+instead: one on `path` where the scope is null, one on `(scope, path)` where it
+is not.
+
+**Foreign keys have to be off while a table is rebuilt.** `file_chunks`
+cascades from `files`, and dropping the old table with them enforced would take
+every chunk reference in the store with it. Migrations now run with them off —
+they are the only place schema changes happen — and `foreign_key_check` runs
+afterwards, so a migration that got a reference wrong fails at startup instead
+of surfacing later as missing content.
+
+**Every path-keyed query had to say which namespace it meant.** They all meant
+the folder, which is the shared area, so saying so was the correct and minimal
+change. The exception is content lookups: whether this device holds some bytes
+has nothing to do with which namespace they sit in, and filtering those would
+have hidden a device's own vault from itself. The vault tests caught exactly
+that when the filters went in too broadly.
+
+Verified against a copy of a real store: nineteen files and 1,294 chunk
+references migrated from version 6 to 8, foreign keys intact, and
+`qurb verify --deep` reading and hashing every chunk afterwards.
+
 ## What this does not yet do
 
 **Nothing puts a path in a vault.** `Store::set_scope` exists and the

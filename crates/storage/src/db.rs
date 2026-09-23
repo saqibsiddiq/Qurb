@@ -23,7 +23,7 @@ use std::path::Path;
 ///
 /// Migrations are append-only. Editing one that has already shipped would leave
 /// databases in the field at a schema nobody can reproduce.
-const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
+const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -231,6 +231,62 @@ ALTER TABLE files ADD COLUMN scope BLOB;
 CREATE INDEX IF NOT EXISTS idx_files_scope ON files (scope);
 "#;
 
+const V8: &str = r#"
+-- One path per place, rather than one path anywhere.
+--
+-- `path` carried a column-level UNIQUE, which was right when there was one
+-- shared namespace and is wrong now there are vaults: a device could not hold
+-- `photo.jpg` for two different phones, nor hold one for a phone while having
+-- its own in the shared area.
+--
+-- A column-level UNIQUE cannot be dropped in SQLite, so the table is rebuilt.
+-- Migrations run with foreign keys off for exactly this reason -- `file_chunks`
+-- cascades from `files`, and dropping the old table with them on would take
+-- every chunk reference with it.
+--
+-- The replacement is two *partial* unique indexes rather than UNIQUE(scope,
+-- path), because SQL treats NULLs as distinct: under that constraint two
+-- shared rows with the same path would both be allowed, which is the bug this
+-- is meant to prevent.
+CREATE TABLE files_rebuilt (
+    id           INTEGER PRIMARY KEY,
+    path         TEXT NOT NULL,
+    size         INTEGER NOT NULL,
+    content_hash BLOB NOT NULL,
+    mtime_ns     INTEGER NOT NULL,
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL,
+    deleted_at   INTEGER,
+    vector       BLOB NOT NULL DEFAULT x'',
+    modified_by  BLOB,
+    materialised INTEGER NOT NULL DEFAULT 1,
+    touched_at   INTEGER NOT NULL DEFAULT 0,
+    wanted       INTEGER NOT NULL DEFAULT 0,
+    scope        BLOB
+) STRICT;
+
+-- `id` is preserved, so every `file_chunks.file_id` stays valid.
+INSERT INTO files_rebuilt
+    (id, path, size, content_hash, mtime_ns, created_at, updated_at, deleted_at,
+     vector, modified_by, materialised, touched_at, wanted, scope)
+SELECT id, path, size, content_hash, mtime_ns, created_at, updated_at, deleted_at,
+       vector, modified_by, materialised, touched_at, wanted, scope
+  FROM files;
+
+DROP TABLE files;
+ALTER TABLE files_rebuilt RENAME TO files;
+
+CREATE UNIQUE INDEX idx_files_shared_path ON files (path) WHERE scope IS NULL;
+CREATE UNIQUE INDEX idx_files_vault_path ON files (scope, path) WHERE scope IS NOT NULL;
+
+CREATE INDEX idx_files_deleted ON files (deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_files_content ON files (content_hash) WHERE deleted_at IS NULL;
+CREATE INDEX idx_files_evicted ON files (materialised)
+    WHERE materialised = 0 AND deleted_at IS NULL;
+CREATE INDEX idx_files_wanted ON files (wanted) WHERE wanted = 1 AND deleted_at IS NULL;
+CREATE INDEX idx_files_scope ON files (scope);
+"#;
+
 pub struct Db {
     conn: Connection,
 }
@@ -279,8 +335,15 @@ impl Db {
         // which the sync engine can recover from peers.
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
-        // Required for the file_chunks -> files cascade, and off by default.
-        conn.pragma_update(None, "foreign_keys", "ON")?;
+        // Deliberately off until the migrations have run, and on afterwards.
+        //
+        // A migration that rebuilds a table has to drop the old one, and
+        // `file_chunks` cascades from `files` — dropping it with foreign keys
+        // enforced would delete every chunk reference in the store. SQLite's
+        // own documented procedure for a schema change of that shape is to
+        // turn them off around it, and migrations are the only place schema
+        // changes happen.
+        conn.pragma_update(None, "foreign_keys", "OFF")?;
 
         // SQLite permits one writer at a time, and this system genuinely has
         // several: the engine writing, the peer server reading, and garbage
@@ -297,6 +360,18 @@ impl Db {
         for (i, migration) in MIGRATIONS.iter().enumerate().skip(applied as usize) {
             conn.execute_batch(migration)?;
             conn.pragma_update(None, "user_version", (i + 1) as i64)?;
+        }
+
+        // On for the life of the connection, and checked once: a migration that
+        // rebuilt a table and got a reference wrong would otherwise be
+        // discovered later, as missing content rather than as an error here.
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+        let broken: i64 =
+            conn.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| r.get(0))?;
+        if broken > 0 {
+            return Err(Error::Corrupt {
+                detail: format!("{broken} broken reference(s) after migrating the index"),
+            });
         }
 
         let db = Self { conn };
@@ -365,7 +440,7 @@ impl Db {
     pub fn file_by_path(&self, path: &str) -> Result<Option<FileRow>> {
         self.conn
             .query_row(
-                &format!("SELECT {FILE_COLUMNS} FROM files WHERE path = ?1"),
+                &format!("SELECT {FILE_COLUMNS} FROM files WHERE path = ?1 AND scope IS NULL"),
                 params![path],
                 file_row,
             )
@@ -443,7 +518,8 @@ impl Db {
     /// is exactly what deduplication saved.
     pub fn live_bytes(&self) -> Result<u64> {
         let total: i64 = self.conn.query_row(
-            "SELECT coalesce(sum(size), 0) FROM files WHERE deleted_at IS NULL",
+            "SELECT coalesce(sum(size), 0) FROM files
+              WHERE deleted_at IS NULL AND scope IS NULL",
             [],
             |r| r.get(0),
         )?;
@@ -478,7 +554,7 @@ impl Db {
     /// Note that a path was just read or written here.
     pub fn touch(&self, path: &str) -> Result<()> {
         self.conn.execute(
-            "UPDATE files SET touched_at = unixepoch() WHERE path = ?1",
+            "UPDATE files SET touched_at = unixepoch() WHERE path = ?1 AND scope IS NULL",
             params![path],
         )?;
         Ok(())
@@ -503,6 +579,7 @@ impl Db {
                FROM files f
               WHERE f.deleted_at IS NULL
                 AND f.materialised = 1
+                AND f.scope IS NULL
                 AND EXISTS (SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash)
               ORDER BY f.touched_at ASC, f.size DESC",
         )?;
@@ -516,7 +593,8 @@ impl Db {
     /// Mark a path as held or not held here. Returns whether anything changed.
     pub fn set_materialised(&self, path: &str, held: bool) -> Result<bool> {
         let changed = self.conn.execute(
-            "UPDATE files SET materialised = ?2 WHERE path = ?1 AND deleted_at IS NULL",
+            "UPDATE files SET materialised = ?2
+             WHERE path = ?1 AND deleted_at IS NULL AND scope IS NULL",
             params![path, held as i64],
         )?;
         Ok(changed > 0)
@@ -529,7 +607,8 @@ impl Db {
     pub fn is_materialised(&self, path: &str) -> Result<Option<bool>> {
         self.conn
             .query_row(
-                "SELECT materialised FROM files WHERE path = ?1 AND deleted_at IS NULL",
+                "SELECT materialised FROM files
+                  WHERE path = ?1 AND deleted_at IS NULL AND scope IS NULL",
                 params![path],
                 |r| Ok(r.get::<_, i64>(0)? != 0),
             )
@@ -541,7 +620,7 @@ impl Db {
     pub fn evicted_paths(&self) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT path FROM files
-              WHERE deleted_at IS NULL AND materialised = 0
+              WHERE deleted_at IS NULL AND materialised = 0 AND scope IS NULL
               ORDER BY path",
         )?;
         let rows = stmt.query_map([], |r| r.get(0))?;
@@ -552,7 +631,7 @@ impl Db {
     pub fn materialised_bytes(&self) -> Result<u64> {
         let n: i64 = self.conn.query_row(
             "SELECT coalesce(sum(size), 0) FROM files
-              WHERE deleted_at IS NULL AND materialised = 1",
+              WHERE deleted_at IS NULL AND materialised = 1 AND scope IS NULL",
             [],
             |r| r.get(0),
         )?;
@@ -562,7 +641,8 @@ impl Db {
     /// Ask for a file's bytes back. Acted on the next time a peer is reachable.
     pub fn want(&self, path: &str) -> Result<bool> {
         let changed = self.conn.execute(
-            "UPDATE files SET wanted = 1 WHERE path = ?1 AND deleted_at IS NULL",
+            "UPDATE files SET wanted = 1
+             WHERE path = ?1 AND deleted_at IS NULL AND scope IS NULL",
             params![path],
         )?;
         Ok(changed > 0)
@@ -572,7 +652,7 @@ impl Db {
     pub fn wanted_paths(&self) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT path FROM files
-              WHERE wanted = 1 AND materialised = 0 AND deleted_at IS NULL
+              WHERE wanted = 1 AND materialised = 0 AND deleted_at IS NULL AND scope IS NULL
               ORDER BY path",
         )?;
         let rows = stmt.query_map([], |r| r.get(0))?;
@@ -598,6 +678,7 @@ impl Db {
             "SELECT f.path, f.size
                FROM files f
               WHERE f.deleted_at IS NULL
+                AND f.scope IS NULL
                 AND f.modified_by = (SELECT device_id FROM local WHERE id = 1)
                 AND NOT EXISTS (
                       SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash
@@ -652,7 +733,10 @@ impl Db {
     pub fn live_paths(&self) -> Result<Vec<String>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT path FROM files WHERE deleted_at IS NULL ORDER BY path")?;
+            .prepare(
+                "SELECT path FROM files
+                  WHERE deleted_at IS NULL AND scope IS NULL ORDER BY path",
+            )?;
         let rows = stmt.query_map([], |r| r.get(0))?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
@@ -669,7 +753,8 @@ impl Db {
         let pattern = format!("{}/%", prefix.trim_end_matches('/'));
         let mut stmt = self.conn.prepare(
             "SELECT path FROM files
-              WHERE deleted_at IS NULL AND (path = ?1 OR path LIKE ?2 ESCAPE '\\')
+              WHERE deleted_at IS NULL AND scope IS NULL
+                AND (path = ?1 OR path LIKE ?2 ESCAPE '\\')
               ORDER BY path",
         )?;
         let rows = stmt.query_map(rusqlite::params![prefix, escape_like(&pattern)], |r| r.get(0))?;
@@ -855,7 +940,8 @@ impl Db {
         modified_at: i64,
     ) -> Result<()> {
         self.conn.execute(
-            "UPDATE files SET vector = ?2, modified_by = ?3, updated_at = ?4 WHERE path = ?1",
+            "UPDATE files SET vector = ?2, modified_by = ?3, updated_at = ?4
+              WHERE path = ?1 AND scope IS NULL",
             params![path, vector.encode(), modified_by.as_bytes().as_slice(), modified_at],
         )?;
         Ok(())
@@ -904,6 +990,28 @@ impl Db {
     ///
     /// Live paths are preferred, so the common case still reads a file that is
     /// certainly intact.
+    /// Any file holding exactly this content, by id rather than by name.
+    ///
+    /// Content is resolved to a row directly because a path is no longer a
+    /// unique handle: the same name can be in the shared area and in a vault,
+    /// and going by way of the path would find whichever the namespace filter
+    /// happened to allow — which for content lookups is the wrong question
+    /// entirely. Whether this device *holds the bytes* has nothing to do with
+    /// which namespace they sit in.
+    pub fn any_file_with_content(&self, hash: &blake3::Hash) -> Result<Option<i64>> {
+        self.conn
+            .query_row(
+                "SELECT id FROM files
+                  WHERE content_hash = ?1
+                  ORDER BY deleted_at IS NOT NULL, id
+                  LIMIT 1",
+                params![hash.as_bytes().as_slice()],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub fn any_path_with_content(&self, hash: &blake3::Hash) -> Result<Option<String>> {
         self.conn
             .query_row(
@@ -996,7 +1104,8 @@ impl Db {
         self.conn
             .query_row(
                 "SELECT path FROM files
-                  WHERE deleted_at IS NULL AND lower(path) = lower(?1) AND path <> ?1
+                  WHERE deleted_at IS NULL AND scope IS NULL
+                    AND lower(path) = lower(?1) AND path <> ?1
                   LIMIT 1",
                 params![path],
                 |r| r.get(0),

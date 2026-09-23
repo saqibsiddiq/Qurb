@@ -477,7 +477,7 @@ impl Store {
                  (path, size, content_hash, mtime_ns, created_at, updated_at, deleted_at,
                   vector, modified_by, materialised, touched_at, wanted)
              VALUES (?1, ?2, ?3, ?4, unixepoch(), ?5, NULL, ?6, ?7, ?8, unixepoch(), 0)
-             ON CONFLICT (path) DO UPDATE SET
+             ON CONFLICT (path) WHERE scope IS NULL DO UPDATE SET
                  size = excluded.size,
                  content_hash = excluded.content_hash,
                  mtime_ns = excluded.mtime_ns,
@@ -677,7 +677,7 @@ impl Store {
                  (path, size, content_hash, mtime_ns, created_at, updated_at, deleted_at,
                   vector, modified_by)
              VALUES (?1, 0, zeroblob(32), 0, unixepoch(), ?2, ?2, ?3, ?4)
-             ON CONFLICT (path) DO UPDATE SET
+             ON CONFLICT (path) WHERE scope IS NULL DO UPDATE SET
                  deleted_at = excluded.updated_at,
                  updated_at = excluded.updated_at,
                  vector = excluded.vector,
@@ -721,13 +721,13 @@ impl Store {
         &self,
         content: &blake3::Hash,
     ) -> Result<Option<Vec<blake3::Hash>>> {
-        let Some(path) = self.db.any_path_with_content(content)? else {
+        // By id, not by way of the path: a path is no longer a unique handle,
+        // and this question is about whether the bytes are here rather than
+        // about which namespace holds them.
+        let Some(id) = self.db.any_file_with_content(content)? else {
             return Ok(None);
         };
-        let Some(file) = self.db.file_by_path(&path)? else {
-            return Ok(None);
-        };
-        Ok(Some(self.db.chunk_hashes_for(file.id)?))
+        Ok(Some(self.db.chunk_hashes_for(id)?))
     }
 
     /// Reassemble content this device holds, by hash rather than by name.
