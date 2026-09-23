@@ -1,0 +1,41 @@
+# The relay: the way round, when there is no way through.
+#
+# Faces the internet directly on UDP, unlike the rendezvous service. It has to:
+# it carries QUIC between two devices that could not reach each other, and
+# there is nothing for a reverse proxy to terminate. It needs no TLS of its own
+# because what it carries is already an encrypted session it has no key for --
+# see crates/relay/README.md and the test `the_relay_never_sees_the_content`.
+#
+# Every byte through it is a byte somebody pays for, so it is the fallback
+# rather than the path: devices use it only when a direct connection fails.
+
+[Unit]
+Description=qurb relay
+Documentation=https://github.com/saqibsiddiq/Qurb
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qurb
+Group=qurb
+ExecStart=/usr/local/bin/qurb relay 0.0.0.0:9001
+Restart=always
+RestartSec=2
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

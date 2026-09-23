@@ -1,0 +1,44 @@
+# The rendezvous service, able to wake sleeping phones.
+#
+# The same service with push credentials. Use this one *instead of*
+# qurb-signal.service -- they listen on the same port.
+#
+# Needs a build with the feature:  cargo build --release --features push
+# And a Firebase service account JSON readable only by the qurb user:
+#     install -o qurb -g qurb -m400 firebase.json /etc/qurb/firebase.json
+#
+# What it costs is in docs/decisions/0028-waking-a-sleeping-device.md. Short
+# version: Google learns that a device was poked and when, never what changed.
+
+[Unit]
+Description=qurb rendezvous service (with push wake-up)
+Documentation=https://github.com/saqibsiddiq/Qurb
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qurb
+Group=qurb
+ExecStart=/usr/local/bin/qurb signal 127.0.0.1:9000 --push /etc/qurb/firebase.json
+Restart=always
+RestartSec=2
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+# Only the credentials, and only to read.
+ReadOnlyPaths=/etc/qurb
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

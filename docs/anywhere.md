@@ -130,13 +130,15 @@ give away.
 A small server with a public address, running `qurb signal` and `qurb relay`
 behind a TLS-terminating reverse proxy. Roughly $5 a month, plus a domain.
 
-Nothing in qurb needs to change for it: point the devices at
-`wss://rendezvous.example.com` and it behaves identically. The reverse proxy
-does TLS, the service stays on loopback, and the relay wants UDP forwarded to
-it directly.
+The systemd units, the Caddy configuration and the step-by-step are in
+[packaging/server/](../packaging/server/README.md). Nothing in qurb needs to
+change for it: point the devices at `wss://rendezvous.example.com` and it
+behaves identically.
 
 This is also the only arrangement where the relay fallback works, because
-tunnels and most free proxies carry TCP only.
+tunnels and most free proxies carry TCP only. And it is where push belongs: a
+service that can wake a sleeping phone is what makes the whole thing feel
+immediate rather than eventual.
 
 ## What will not work
 

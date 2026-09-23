@@ -1,0 +1,15 @@
+# TLS for the rendezvous service.
+#
+# Caddy rather than nginx because the certificate is the whole job here and
+# Caddy does it without being asked. Replace the name with yours; it must
+# resolve to this machine for the certificate to be issued.
+#
+# The rendezvous service itself stays on loopback. Nothing about it faces the
+# internet except through this.
+
+rendezvous.example.com {
+	# WebSockets need no special handling in Caddy: reverse_proxy upgrades
+	# them. HTTP/2 is negotiated for ordinary requests and the upgrade falls
+	# back to HTTP/1.1, which is what the client asks for.
+	reverse_proxy 127.0.0.1:9000
+}
