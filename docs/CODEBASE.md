@@ -352,6 +352,8 @@ qurb/
 │
 ├── docs/
 │   ├── CODEBASE.md        ← you are here
+│   ├── product-plan.md    Turning the engine into a product, and the one
+│   │                      decision that blocks it
 │   ├── glossary.md        Every term, defined plainly
 │   ├── trying-it.md       Running it yourself, from one machine to a phone
 │   ├── architecture.md    The target design, all subsystems
