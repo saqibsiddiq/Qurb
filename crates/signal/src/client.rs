@@ -141,6 +141,15 @@ impl SignalClient {
         }
     }
 
+    /// Tell a peer, through the service, that there is something for it.
+    ///
+    /// Says who, never what. The service forwards it if the peer is connected
+    /// and keeps it if not, so a device that was asleep at the moment of the
+    /// change hears about it when it wakes rather than at its next poll.
+    pub fn waiting_for(&self, peer: MemberId) -> Result<()> {
+        self.send(FromClient::Waiting { to: peer })
+    }
+
     pub fn member(&self) -> MemberId {
         self.member
     }

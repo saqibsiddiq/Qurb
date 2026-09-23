@@ -111,6 +111,15 @@ impl RateLimit {
 #[derive(Default)]
 struct Directory {
     groups: HashMap<GroupId, HashMap<MemberId, Member>>,
+    /// Who has been told somebody has something for them, but was not here to
+    /// hear it. Delivered when they next announce.
+    ///
+    /// Only *that* there is work, never what: a set of member ids per absent
+    /// member. Two devices that change a thousand files between them leave one
+    /// entry, because the answer to "should I sync" is the same either way.
+    /// That also bounds it — a group of sixty-four members cannot leave more
+    /// than sixty-four ids waiting for any one of them.
+    waiting: HashMap<(GroupId, MemberId), std::collections::HashSet<MemberId>>,
 }
 
 struct Member {
@@ -126,6 +135,18 @@ impl Directory {
         endpoints: Endpoints,
         outbox: Outbox,
     ) -> Vec<Presence> {
+        // Anything noted while this member was away, delivered now.
+        //
+        // The reason the note is kept at all: a device that was asleep when
+        // the change happened would otherwise not learn of it until its own
+        // next poll, which on a phone is a quarter of an hour away. Sent
+        // before this member joins the directory, so the borrow of `groups`
+        // below does not have to be interrupted, and taken rather than copied,
+        // because it has now been said.
+        for from in self.waiting.remove(&(group, member)).unwrap_or_default() {
+            let _ = outbox.send(FromServer::Waiting { from });
+        }
+
         let members = self.groups.entry(group).or_default();
         members.insert(member, Member { endpoints: endpoints.clone(), outbox });
 
@@ -157,6 +178,21 @@ impl Directory {
         others
     }
 
+    /// Note that `from` has something for `to`, and say whether it was
+    /// delivered now.
+    ///
+    /// `false` means the recipient is not connected and the note was kept. The
+    /// caller is the one that knows whether there is another way to reach them
+    /// — a push notification — and this is the moment to use it.
+    fn note_waiting(&mut self, group: GroupId, from: MemberId, to: MemberId) -> bool {
+        if let Some(m) = self.groups.get(&group).and_then(|g| g.get(&to)) {
+            let _ = m.outbox.send(FromServer::Waiting { from });
+            return true;
+        }
+        self.waiting.entry((group, to)).or_default().insert(from);
+        false
+    }
+
     fn leave(&mut self, group: GroupId, member: MemberId) {
         if let Some(members) = self.groups.get_mut(&group) {
             members.remove(&member);
@@ -165,6 +201,9 @@ impl Directory {
             // something an attacker can generate for free.
             if members.is_empty() {
                 self.groups.remove(&group);
+                // Nothing left to deliver to, and an entry per group ever seen
+                // is a slow leak keyed on something anyone can generate.
+                self.waiting.retain(|(g, _), _| *g != group);
             }
         }
     }
@@ -344,6 +383,18 @@ async fn serve_one(
                 };
                 identity = Some((group, member));
                 let _ = outbox.send(FromServer::Peers { members: peers });
+            }
+
+            FromClient::Waiting { to } => {
+                let Some((group, from)) = identity else {
+                    let _ = outbox.send(FromServer::Error { detail: "announce first".into() });
+                    continue;
+                };
+                // Refused for a member of another group by construction: the
+                // note is filed under the group this connection announced into.
+                let delivered =
+                    directory.lock().expect("directory").note_waiting(group, from, to);
+                tracing::debug!(?from, ?to, delivered, "work waiting");
             }
 
             FromClient::Connect { to } => {

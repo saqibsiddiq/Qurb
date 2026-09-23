@@ -54,6 +54,23 @@ pub enum FromClient {
     ///
     /// The reply that lets the server tell both sides to punch at once.
     Accept { to: MemberId, endpoints: Endpoints },
+
+    /// I have something for this member, whenever it is next able to hear it.
+    ///
+    /// Carries no content and no filenames — the fact that there is work, and
+    /// who it is for. That is the whole point: the service arranges meetings
+    /// and never learns what is said at them.
+    ///
+    /// Sent when a device's own state advances. It is a request to have the
+    /// other device woken *if the server can*, not a request to transfer
+    /// anything: the two devices do that directly once both are awake.
+    ///
+    /// Delivered immediately if the recipient is connected, and remembered if
+    /// not, so it arrives the moment they appear. Remembering it is what makes
+    /// a device that was asleep at the moment of the change learn about it
+    /// without waiting for its own next poll — the difference between a photo
+    /// arriving in seconds and arriving in a quarter of an hour.
+    Waiting { to: MemberId },
 }
 
 /// Server to client.
@@ -85,6 +102,13 @@ pub enum FromServer {
     /// needs both routers to see an outbound packet at roughly the same time;
     /// a device that has to poll to find out will always be late.
     Punch { peer: MemberId, endpoints: Endpoints },
+
+    /// Somebody in your group has something for you. Sync with them.
+    ///
+    /// The counterpart of [`FromClient::Waiting`], and equally empty: it says
+    /// who, never what. A device that receives one should sync with that peer
+    /// now rather than at its next scheduled attempt.
+    Waiting { from: MemberId },
 
     /// Something was wrong with what you sent.
     Error { detail: String },

@@ -76,8 +76,29 @@ absent, so the two drift further apart the longer it goes on.
 
 Measured before this existed: a laptop retrying every 120 seconds against a
 phone announcing for 25 never once caught it, across repeated attempts. With the
-push, the daemon logs `peer appeared; syncing now` within a second and the
+push, the daemon logs `a peer is reachable and has news` within a second and the
 transfer completes inside the phone's window.
+
+## Saying you have something for someone
+
+Appearing is one half. The other is a device that is *already* connected and
+has just changed something: the peer has no reason to ask, so without being
+told it waits for its own next poll — up to two minutes on a desktop, a quarter
+of an hour on a phone.
+
+`Waiting { to }` says there is something for a member. It carries who and never
+what: no filenames, no sizes, no counts. The service forwards it if that member
+is connected, and **keeps it if not**, delivering it the moment they announce.
+Keeping it is the point — the device that most needs telling is exactly the one
+that was asleep when the change happened.
+
+Notes collapse: fifty changes for one absent peer leave one note, because the
+answer to "should I sync" is the same either way. That also bounds the memory,
+since a group cannot hold more members than its limit.
+
+Measured on one machine, two idle daemons: a file written on one appeared on
+the other **one second later**, with the recipient logging the notice one
+millisecond after the sender recorded the change.
 
 The notice carries a blinded `MemberId`, not a fingerprint, so the service still
 cannot tell which device arrived — see

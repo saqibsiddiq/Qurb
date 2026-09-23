@@ -144,6 +144,23 @@ counted as delivered nowhere for ever, since a file both devices already have
 is never transferred again. See
 [decisions/0026](decisions/0026-sharing-while-the-other-device-is-off.md).
 
+#### Nobody waits for a poll to find out
+
+A device that changes something tells the rendezvous service it has work for
+each of its peers — who, never what. The service forwards that to peers that
+are connected and **keeps it for peers that are not**, delivering it the moment
+they appear.
+
+That is the difference between a change crossing in a second and crossing at
+the recipient's next scheduled attempt, which on a phone is a quarter of an
+hour. Measured with two idle daemons: a file written on one was on the other
+**one second later**.
+
+It is also the input a push notification needs. The service knows both who has
+work and who is absent, which is exactly the condition for waking a phone —
+and the condition for *not* waking one, when the peer it would sync with is
+not there either.
+
 ### 2.2 Chunk boundaries are chosen by content, not by position
 
 The obvious way to split a file is every N bytes. Dropbox does this with 4 MB

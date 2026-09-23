@@ -152,6 +152,30 @@ impl Daemon {
         ChunkKey::from_bytes(self.master.derive(Purpose::ChunkEncryption).to_bytes())
     }
 
+    /// Tell every trusted peer that this device has something for it.
+    ///
+    /// Sent through the rendezvous service, which forwards it to those that
+    /// are connected and keeps it for those that are not — so a device asleep
+    /// at the moment of a change hears about it when it wakes, rather than at
+    /// its own next poll. On a phone that is the difference between seconds
+    /// and a quarter of an hour.
+    ///
+    /// `except` skips the peer the news came *from*, which is how two devices
+    /// avoid telling each other about the same change for ever.
+    ///
+    /// Carries who, never what, and is best effort throughout: a peer that
+    /// never hears it syncs on its own schedule, exactly as before.
+    fn announce_news(&self, connector: &Connector, peers: &Peers, except: Option<Fingerprint>) {
+        for peer in peers.known.iter().copied() {
+            if Some(peer) == except {
+                continue;
+            }
+            if let Err(e) = connector.tell_waiting(peer) {
+                tracing::debug!(peer = %peer.short(), error = %e, "could not say we have news");
+            }
+        }
+    }
+
     /// Collect garbage, then bring disk use under the configured limit.
     ///
     /// In that order, and the order is the point: collection frees superseded
@@ -410,6 +434,7 @@ impl Daemon {
                                     );
                                     // Anyone holding a request open hears now.
                                     generation.bump();
+                                    self.announce_news(&connector, &peers, None);
                                 }
                                 for failure in &stats.failures {
                                     tracing::warn!(
@@ -430,6 +455,7 @@ impl Daemon {
                             tracing::error!(error = %e, "reconciling failed");
                         }
                         generation.bump();
+                        self.announce_news(&connector, &peers, None);
                         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
 
@@ -481,7 +507,7 @@ impl Daemon {
                 // gone.
                 Ok(member) = arrivals.recv() => {
                     if let Some(peer) = peers.member(&self.master, member) {
-                        tracing::info!(peer = %peer.short(), "peer appeared; syncing now");
+                        tracing::info!(peer = %peer.short(), "a peer is reachable and has news; syncing now");
                         peers.ready_now(peer);
                         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
@@ -551,6 +577,9 @@ impl Daemon {
         generation: &Arc<qurb_peer::Generation>,
     ) {
         let mut reached = 0usize;
+        // Set by whichever peer brought something new, so the others can be
+        // told once at the end rather than per peer.
+        let mut news_from: Option<Fingerprint> = None;
         let attempted = peers.ready();
         if !attempted.is_empty() {
             self.report(|status| status.state = crate::status::State::Working);
@@ -570,7 +599,11 @@ impl Daemon {
                     if moved > 0 {
                         tracing::info!(peer = %peer.short(), files = moved, "synced");
                         // What arrived from one peer is news for the others.
+                        // Not for the peer it came from, which already knows —
+                        // telling it back would have the two of them nudging
+                        // each other about the same change indefinitely.
                         generation.bump();
+                        news_from = Some(peer);
                     }
                 }
                 Err(e) => {
@@ -581,6 +614,10 @@ impl Daemon {
                     peers.failed(peer);
                 }
             }
+        }
+
+        if news_from.is_some() {
+            self.announce_news(connector, peers, news_from);
         }
 
         // Counted per pass rather than accumulated, because the question an

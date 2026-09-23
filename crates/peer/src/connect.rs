@@ -75,6 +75,9 @@ pub struct Connector {
 /// What the signalling task is asked to do.
 enum Command {
     Introduce { to: MemberId, reply: oneshot::Sender<Result<Endpoints>> },
+    /// Tell a peer, through the rendezvous service, that there is something
+    /// for it. No reply: this is a courtesy, not a request.
+    Waiting { to: MemberId },
 }
 
 struct RelayPath {
@@ -230,6 +233,21 @@ impl Connector {
     /// a nudge to try now, not a log to be replayed.
     pub fn arrivals(&self) -> broadcast::Receiver<MemberId> {
         self.arrivals.subscribe()
+    }
+
+    /// Tell a peer there is something for it.
+    ///
+    /// Sent through the rendezvous service, which forwards it if the peer is
+    /// connected and keeps it if not — so a device asleep at the moment of a
+    /// change learns of it on waking rather than at its own next poll.
+    ///
+    /// Carries who, never what. Best effort: a peer that never hears it syncs
+    /// on its own schedule, which is what happens today.
+    pub fn tell_waiting(&self, peer: Fingerprint) -> Result<()> {
+        let to = MemberId::derive(&self.master, peer.as_bytes());
+        self.signal
+            .send(Command::Waiting { to })
+            .map_err(|_| Error::Signalling { detail: "signalling has stopped".into() })
     }
 
     /// Reach a peer through the relay without trying a direct path first.
@@ -424,6 +442,12 @@ async fn run_signalling(
     loop {
         tokio::select! {
             command = commands.recv() => match command {
+                Some(Command::Waiting { to }) => {
+                    // Failing is not worth reporting. The peer syncs on its
+                    // own schedule regardless; this only makes it sooner.
+                    let _ = client.waiting_for(to);
+                }
+
                 Some(Command::Introduce { to, reply }) => {
                     if client.connect_to(to).is_err() {
                         let _ = reply.send(Err(Error::Signalling {
@@ -476,6 +500,15 @@ async fn run_signalling(
                     // No receivers is the ordinary case -- nothing is obliged
                     // to care -- so a send error is not a problem.
                     let _ = arrivals_tx.send(peer.member);
+                }
+
+                // Somebody has something for this device. Reported on the same
+                // channel as an arrival, because it asks for the same thing:
+                // sync with that peer, now. The distinction between "they just
+                // appeared" and "they have news" does not change what to do.
+                Some(FromServer::Waiting { from }) => {
+                    tracing::debug!(?from, "a peer says it has something for us");
+                    let _ = arrivals_tx.send(from);
                 }
 
                 None => {
