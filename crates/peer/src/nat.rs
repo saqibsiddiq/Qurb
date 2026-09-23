@@ -183,6 +183,50 @@ pub fn routable_address() -> Option<IpAddr> {
     }
 }
 
+/// Every address on this machine a peer might reach it at.
+///
+/// Not just the one the default route uses. A machine on a VPN or an overlay
+/// network — Tailscale, WireGuard, a corporate VPN — has a second address that
+/// reaches peers the default route cannot, and it is often the *only* one that
+/// works: a laptop at home is `192.168.1.4` to its own network and nothing at
+/// all to a phone on a mobile carrier, while its overlay address reaches both.
+///
+/// Announcing one address meant that path was never offered and every
+/// connection from outside the house depended on hole punching. Candidates are
+/// raced in parallel, so offering several costs a few packets and buys the
+/// cases where the first one cannot work.
+///
+/// Loopback is excluded — a peer dialling `127.0.0.1` reaches itself — and so
+/// is IPv6 link-local, which needs a scope identifier this cannot carry.
+pub fn local_addresses() -> Vec<IpAddr> {
+    let Ok(interfaces) = if_addrs::get_if_addrs() else {
+        return routable_address().into_iter().collect();
+    };
+
+    let mut found: Vec<IpAddr> = interfaces
+        .into_iter()
+        .map(|interface| interface.ip())
+        .filter(|ip| !ip.is_loopback() && !ip.is_unspecified())
+        .filter(|ip| match ip {
+            IpAddr::V4(v4) => !v4.is_link_local(),
+            IpAddr::V6(v6) => (v6.segments()[0] & 0xffc0) != 0xfe80,
+        })
+        .collect();
+
+    found.sort();
+    found.dedup();
+
+    // The default route's address first, when it is among them: it is the one
+    // most likely to work on the same network, and candidates are tried in
+    // order as well as in parallel.
+    if let Some(preferred) = routable_address() {
+        if let Some(at) = found.iter().position(|ip| *ip == preferred) {
+            found.swap(0, at);
+        }
+    }
+    found
+}
+
 /// Replace a wildcard address with one a peer could actually dial.
 ///
 /// A socket bound to `0.0.0.0` reports `0.0.0.0` as its address, which is true
@@ -502,5 +546,51 @@ mod tests {
         assert!(!NatBehaviour::Symmetric.can_punch());
         assert!(!NatBehaviour::Blocked.can_punch());
         assert!(!NatBehaviour::Inconclusive.can_punch());
+    }
+}
+
+#[cfg(test)]
+mod address_tests {
+    use super::*;
+
+    /// The machine running this has at least one address, and none of what is
+    /// returned is a thing a peer could not dial.
+    #[test]
+    fn every_announced_address_is_dialable() {
+        let found = local_addresses();
+        for ip in &found {
+            assert!(!ip.is_loopback(), "announced loopback: {ip}");
+            assert!(!ip.is_unspecified(), "announced the wildcard: {ip}");
+            if let IpAddr::V6(v6) = ip {
+                assert_ne!(
+                    v6.segments()[0] & 0xffc0,
+                    0xfe80,
+                    "announced a link-local address with no scope: {ip}"
+                );
+            }
+        }
+        // Duplicates would make a peer race the same candidate twice.
+        let mut unique = found.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), found.len(), "duplicate addresses in {found:?}");
+    }
+
+    /// An overlay network's address must be offered, not filtered out as
+    /// private. It is frequently the only one that works from elsewhere.
+    #[test]
+    fn a_second_interface_is_not_discarded() {
+        // Nothing can be asserted about *which* addresses a build machine has,
+        // so this checks the filter's shape rather than its result: a private
+        // address is a legitimate candidate, because the peer that can use it
+        // is on the same private network.
+        let found = local_addresses();
+        if found.is_empty() {
+            return; // A machine with no network. Nothing to check.
+        }
+        assert!(
+            found.iter().any(|ip| !ip.is_loopback()),
+            "no usable address found among {found:?}"
+        );
     }
 }

@@ -23,6 +23,10 @@ qurb-sync = { path = "../sync" }
 
 quinn = "0.11"
 rand = "0.8"
+# Every address this machine can be reached at, not just the one the default
+# route uses. A device on a VPN or overlay network has a second address that
+# peers elsewhere can reach and the default route never mentions.
+if-addrs = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 rcgen = "0.13"
 thiserror = "2"

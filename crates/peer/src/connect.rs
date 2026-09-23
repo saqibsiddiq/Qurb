@@ -159,7 +159,31 @@ impl Connector {
         // loses nothing it cannot rediscover on its next sweep.
         let (arrivals, _) = broadcast::channel(16);
 
-        let endpoints = Endpoints { public, local: vec![nat::dialable(local)] };
+        // Every address this machine has, when the socket is listening on all
+        // of them. On a laptop with an overlay network that is the difference
+        // between a phone elsewhere having a path to it and having none.
+        //
+        // Only for a wildcard bind, and the distinction is not pedantic: a
+        // socket bound to one address is listening on exactly that address, so
+        // announcing the machine's other interfaces advertises places nothing
+        // is accepting. A peer then races addresses that can only fail and
+        // concludes the device is unreachable — which is what happened to a
+        // test binding loopback the first time this was written.
+        let candidates = match local.ip().is_unspecified() {
+            false => vec![local],
+            true => {
+                let port = local.port();
+                let found: Vec<SocketAddr> = nat::local_addresses()
+                    .into_iter()
+                    .map(|ip| SocketAddr::new(ip, port))
+                    .collect();
+                match found.is_empty() {
+                    true => vec![nat::dialable(local)],
+                    false => found,
+                }
+            }
+        };
+        let endpoints = Endpoints { public, local: candidates };
         let signal_url = signal_url.into();
         let signal_url: String = signal_url;
 
@@ -346,12 +370,35 @@ impl Connector {
 
         while !attempts.is_empty() {
             let (outcome, _index, rest) = futures_select(attempts).await;
-            attempts = rest;
             if let Some((candidate, connection)) = outcome {
                 tracing::info!(peer = %peer.short(), %candidate, "connected");
-                // The losers are dropped with `attempts`, which cancels them.
+
+                // Close the other paths as they land, rather than dropping
+                // them and leaving the peer to time them out.
+                //
+                // Dropping a handshake that has not finished cancels it, which
+                // is free. Dropping one that *has* finished leaves a
+                // connection established at the far end, holding the send and
+                // receive buffers of a transfer nobody will use — and a device
+                // reachable on both a local network and an overlay offers
+                // several addresses that all work, so this is the ordinary
+                // case rather than a rare one. Measured: racing four addresses
+                // instead of one grew a 128 MiB transfer's memory from about
+                // 30 MiB to 105.
+                //
+                // Spawned, so the caller gets its connection now and the
+                // tidying happens behind it.
+                tokio::spawn(async move {
+                    for attempt in rest {
+                        if let Some((_, spare)) = attempt.await {
+                            spare.close(0u32.into(), b"another path won");
+                        }
+                    }
+                });
+
                 return Ok(PeerClient::from_parts(self.endpoint.clone(), connection));
             }
+            attempts = rest;
         }
 
         Err(Error::Unreachable { peer: peer.short() })

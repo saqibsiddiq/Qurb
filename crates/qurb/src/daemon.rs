@@ -324,6 +324,10 @@ impl Daemon {
         };
         tracing::info!(
             address = %connector.local_addr()?,
+            // Every address this device offers peers, not just the default
+            // route's. When a device elsewhere cannot connect, the first
+            // question is what it was given to try.
+            reachable = ?connector.endpoints().local,
             public = ?connector.endpoints().public,
             relay = ?self.config.relay,
             "listening"

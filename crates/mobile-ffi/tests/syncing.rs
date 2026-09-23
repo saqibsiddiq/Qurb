@@ -12,6 +12,19 @@ use qurb_mobile::{create, restore, Qurb, Settings};
 use qurb_signal::SignalServer;
 use std::sync::Arc;
 
+/// Keeps the memory measurement away from everything else in this file.
+///
+/// `receiving_a_large_file_does_not_hold_it_in_memory` reads the *process's*
+/// anonymous memory, and cargo runs the tests in one binary as threads of one
+/// process — so another test syncing a file at the same moment is counted as
+/// the heap growing, and the measurement blames it on buffering. Seven tests
+/// share this process and the reading moved by 70 MiB depending on what else
+/// happened to be running.
+///
+/// The measurement takes the write lock; everything else takes a read lock, so
+/// the rest still run concurrently with each other.
+static ALONE: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
 /// Logs, when `RUST_LOG` asks for them. Off otherwise, so a passing run is quiet.
 fn logging() {
     let _ = tracing_subscriber::fmt()
@@ -58,6 +71,7 @@ fn settings(name: &str, signal: &str) -> Settings {
 /// The whole point, end to end. If this passes, the phone is a peer.
 #[test]
 fn a_phone_pairs_with_a_desktop_and_takes_its_files() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
     logging();
     let (_runtime, signal) = signalling();
 
@@ -149,6 +163,7 @@ fn a_phone_pairs_with_a_desktop_and_takes_its_files() {
 /// expensive — which is why this is a test rather than a comment.
 #[test]
 fn receiving_a_large_file_does_not_hold_it_in_memory() {
+    let _alone = ALONE.write().unwrap_or_else(|e| e.into_inner());
     let (_runtime, signal) = signalling();
 
     let sender_dir = tempfile::tempdir().unwrap();
@@ -275,6 +290,7 @@ fn write_incompressible(path: &std::path::Path, size: usize) {
 /// The commonest state a freshly installed app is in.
 #[test]
 fn syncing_with_no_peers_does_nothing_quickly() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().display().to_string();
     create(root.clone()).unwrap();
@@ -294,6 +310,7 @@ fn syncing_with_no_peers_does_nothing_quickly() {
 /// must be counted and reported, never raised as an error.
 #[test]
 fn an_unreachable_peer_is_counted_not_raised() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
     let (_runtime, signal) = signalling();
 
     let a_dir = tempfile::tempdir().unwrap();
@@ -328,6 +345,7 @@ fn an_unreachable_peer_is_counted_not_raised() {
 /// wrong" and "the network is down" want completely different advice on screen.
 #[test]
 fn a_bad_pairing_code_is_refused_as_a_bad_code() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().display().to_string();
     create(root.clone()).unwrap();
@@ -342,6 +360,7 @@ fn a_bad_pairing_code_is_refused_as_a_bad_code() {
 /// Cancelling an offer stops it, and the code cannot then be used.
 #[test]
 fn a_cancelled_offer_cannot_be_joined() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().display().to_string();
     create(root.clone()).unwrap();
@@ -372,6 +391,7 @@ fn a_cancelled_offer_cannot_be_joined() {
 ///    which on a real phone is the periodic background worker.
 #[test]
 fn a_share_made_while_the_desktop_is_off_arrives_when_it_returns() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
     logging();
     let (_runtime, signal) = signalling();
 
