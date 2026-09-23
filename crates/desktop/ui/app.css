@@ -223,3 +223,115 @@ dl {
 
 dt { color: var(--quiet); }
 dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- setting up
+ *
+ * Replaces the whole window rather than sitting inside it. There is nothing to
+ * display about a device that does not exist yet, so a tab strip above an empty
+ * screen would be five promises none of which can be kept.
+ */
+
+#setup {
+  flex: 1;
+  overflow-y: auto;
+  padding: 48px 32px;
+  display: flex;
+  justify-content: center;
+}
+
+#setup .step { display: none; width: 100%; max-width: 44rem; }
+#setup .step.on { display: block; }
+
+#setup h1 { font-size: 28px; margin-bottom: 12px; }
+.lead { font-size: 15px; color: var(--quiet); max-width: 46ch; margin-bottom: 24px; }
+
+.choices { display: grid; gap: 12px; }
+
+.choice {
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.choice:hover { border-color: var(--accent); }
+.choice strong { font-weight: 600; }
+
+#setup input[type="text"], #setup textarea, .field input {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+#setup textarea { resize: vertical; font-family: ui-monospace, SFMono-Regular, monospace; }
+
+#setup input:focus, #setup textarea:focus, .field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.buttons { display: flex; align-items: center; gap: 10px; margin-top: 20px; }
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.primary:hover { filter: brightness(1.08); color: #fff; }
+button.primary:disabled { opacity: .45; cursor: default; filter: none; }
+
+.warn { color: var(--warn); max-width: 52ch; }
+
+/* The words themselves.
+ *
+ * Numbered, because the order is part of the key and somebody copying them onto
+ * paper needs to know they have not dropped one. Monospaced and widely spaced,
+ * because this is being read letter by letter. */
+.words {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 6px 14px;
+  margin: 0 0 20px;
+  padding: 16px 20px 16px 36px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  /* Selectable: somebody may reasonably want to put these in a password
+   * manager, and making that awkward pushes them towards a screenshot. */
+  user-select: text;
+}
+
+.words li { padding: 3px 0; }
+.words li::marker { color: var(--quiet); font-size: 12px; }
+
+.asks { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 14px; }
+.ask { display: flex; flex-direction: column; gap: 6px; }
+.ask span { font-size: 12px; color: var(--quiet); }
+
+.ask input {
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 18px; max-width: 34rem; }
+.field > span:first-child { font-weight: 600; }
+.field .quiet { font-size: 12px; }

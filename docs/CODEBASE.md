@@ -495,12 +495,15 @@ qurb/
 │   │   ├── src/status.rs    what the daemon is doing now, on a watch channel
 │   │   ├── src/view.rs      what an interface asks: devices, files, storage,
 │   │   │                    history, outgoing, search — all read-only
+│   │   ├── src/setup.rs     creating a device, joining one, describing a folder
+│   │   │                    — one definition, used by the terminal and the window
 │   │   └── src/config.rs    a flat file meant to be edited by hand
 │   │
 │   ├── desktop/           The desktop application: the daemon in a window.
-│   │   ├── src/main.rs      opens the key, starts the daemon, opens the window
+│   │   ├── src/main.rs      opens the window, and the daemon if there is one
+│   │   ├── src/session.rs   unmade or running, and the phrase in between
 │   │   ├── src/commands.rs  every question the window may ask
-│   │   └── ui/              five screens: HTML, one stylesheet, one script
+│   │   └── ui/              the screens: HTML, one stylesheet, one script
 │   │
 │   └── tray/              An icon in the corner: the daemon with a face.
 │       ├── src/host.rs      whether a tray icon would be visible at all
@@ -653,7 +656,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-531 tests pass across twelve crates on Linux; clippy is clean. The last run on
+549 tests pass across twelve crates on Linux; clippy is clean. The last run on
 a Galaxy S23 was 426 of them, before this week's work — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
@@ -880,7 +883,9 @@ network. iOS needs Xcode, which needs a Mac. See
 | Devices | who is paired, when each was last reached |
 | Activity | what this device did, paged, with the reason where there is one |
 | Storage | usage, the allowance, and a control that can change it |
-| Onboarding, pairing, sending, progress | **not built** — see the crate's README |
+| Settings | name, rendezvous, relay, port, and the 24 words again |
+| Setting a device up | make a new one or join an existing, with the phrase shown and confirmed |
+| Pairing, sending, progress | **not built** — see the crate's README |
 
 ### Designed but not built
 

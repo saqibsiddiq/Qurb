@@ -56,6 +56,232 @@ function oops(list, error) {
   list.append(row);
 }
 
+// ------------------------------------------------------------- which of the two
+
+// The window opens on one of two things: setting a device up, or showing one.
+// Asked before anything is drawn, because the answer decides which.
+async function decide() {
+  let where;
+  try {
+    where = await invoke("situation");
+  } catch (e) {
+    // Nothing can be shown and nothing can be set up. Saying so beats an empty
+    // window that looks like it is still loading.
+    document.body.textContent = String(e);
+    return;
+  }
+
+  const settingUp = !where.set_up;
+  $("setup").classList.toggle("hidden", !settingUp);
+  $("tabs").classList.toggle("hidden", settingUp);
+  document.querySelector("main").classList.toggle("hidden", settingUp);
+
+  if (settingUp) {
+    $("folder-path").value = where.root;
+    step("welcome");
+    return;
+  }
+
+  if (!where.running) {
+    // A folder with a key that could not be opened. The commands will refuse,
+    // so say why once rather than showing five screens of the same failure.
+    $("state").textContent = "cannot open this folder";
+    $("where").textContent = where.problem ?? "";
+    return;
+  }
+
+  refreshScreen();
+}
+
+// ------------------------------------------------------------------ setting up
+
+/** Which onboarding step is showing. */
+function step(name) {
+  document.querySelectorAll("#setup .step").forEach((s) => {
+    s.classList.toggle("on", s.dataset.step === name);
+  });
+}
+
+/** The path chosen, and whether the next button may be pressed. */
+let joining = false;
+
+$("choose-new").addEventListener("click", () => { joining = false; step("folder"); lookAtFolder(); });
+$("choose-join").addEventListener("click", () => { joining = true; step("folder"); lookAtFolder(); });
+
+document.querySelectorAll("#setup [data-back]").forEach((b) => {
+  b.addEventListener("click", () => step(b.dataset.back));
+});
+
+let looking = null;
+$("folder-path").addEventListener("input", () => {
+  clearTimeout(looking);
+  looking = setTimeout(lookAtFolder, 200);
+});
+
+async function lookAtFolder() {
+  const next = $("folder-next");
+  const says = $("folder-says");
+  const path = $("folder-path").value.trim();
+  if (!path) {
+    says.textContent = "";
+    next.disabled = true;
+    return;
+  }
+
+  let folder;
+  try {
+    folder = await invoke("inspect_folder", { path });
+  } catch (e) {
+    says.textContent = String(e);
+    next.disabled = true;
+    return;
+  }
+
+  // Each of these is a reason not to continue, and each says what to do about
+  // it. "Invalid" on its own is the least useful thing an interface can say.
+  if (folder.set_up && !joining) {
+    says.textContent = "there is already a device here — choose somewhere else, or open it instead";
+    next.disabled = true;
+    return;
+  }
+  if (folder.set_up && joining) {
+    says.textContent = "there is already a device here, with its own key";
+    next.disabled = true;
+    return;
+  }
+  if (!folder.writable) {
+    says.textContent = "this cannot be written to";
+    next.disabled = true;
+    return;
+  }
+
+  const disk = folder.disk === "0" ? "" : ` · ${size(folder.free)} free of ${size(folder.disk)}`;
+  if (!folder.exists) {
+    says.textContent = `will be created${disk}`;
+  } else if (folder.existing_files === 0) {
+    says.textContent = `empty${disk}`;
+  } else {
+    // Said plainly: everything already in there is about to appear on every
+    // other device, which is a surprise worth not having.
+    const count = folder.counted_all ? `${folder.existing_files}` : `over ${folder.existing_files}`;
+    says.textContent = `${count} things already here — all of them will sync${disk}`;
+  }
+  next.disabled = false;
+}
+
+$("folder-next").addEventListener("click", async () => {
+  const path = $("folder-path").value.trim();
+  if (joining) { step("join"); return; }
+
+  const next = $("folder-next");
+  next.disabled = true;
+  try {
+    await invoke("create_device", { path });
+    await showPhrase();
+    step("phrase");
+  } catch (e) {
+    $("folder-says").textContent = String(e);
+  } finally {
+    next.disabled = false;
+  }
+});
+
+async function showPhrase() {
+  const words = await invoke("shown_phrase");
+  const list = $("words");
+  list.replaceChildren();
+  for (const word of words) list.append(el("li", null, word));
+  // Nothing keeps a copy: the list in the document is the only one here, and
+  // confirmation is checked against the copy the session holds.
+}
+
+$("phrase-next").addEventListener("click", () => {
+  askForWords();
+  step("verify");
+});
+
+/** Which three positions are being asked about this time. */
+let asked = [];
+
+function askForWords() {
+  // Three, chosen at random each time, so that pressing "show me them again"
+  // and coming back is not a way to learn the answer to the same question.
+  const positions = new Set();
+  while (positions.size < 3) positions.add(1 + Math.floor(Math.random() * 24));
+  asked = [...positions].sort((a, b) => a - b);
+
+  const box = $("asks");
+  box.replaceChildren();
+  for (const position of asked) {
+    const field = el("label", "ask");
+    field.append(el("span", null, `word ${position}`));
+    const input = el("input");
+    input.type = "text";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.dataset.position = String(position);
+    field.append(input);
+    box.append(field);
+  }
+  $("verify-says").classList.add("hidden");
+  box.querySelector("input")?.focus();
+}
+
+$("verify-back").addEventListener("click", () => step("phrase"));
+
+$("verify-next").addEventListener("click", async () => {
+  const answers = [...$("asks").querySelectorAll("input")]
+    .map((i) => [Number(i.dataset.position), i.value]);
+
+  let ok;
+  try {
+    ok = await invoke("confirm_phrase", { answers });
+  } catch (e) {
+    $("verify-says").textContent = String(e);
+    $("verify-says").classList.remove("hidden");
+    return;
+  }
+
+  if (!ok) {
+    $("verify-says").textContent =
+      "that is not right — look at the paper again, and check the numbers";
+    $("verify-says").classList.remove("hidden");
+    return;
+  }
+
+  // Confirmed, so the words come off the screen. The session has already
+  // dropped its copy; this drops the only other one.
+  $("words").replaceChildren();
+  $("asks").replaceChildren();
+  $("ready-says").textContent = "This device is set up and watching your folder.";
+  step("ready");
+});
+
+$("join-next").addEventListener("click", async () => {
+  const says = $("join-says");
+  const button = $("join-next");
+  button.disabled = true;
+  try {
+    await invoke("enrol_device", {
+      path: $("folder-path").value.trim(),
+      phrase: $("given-phrase").value,
+    });
+    // Off the screen as soon as it has been used.
+    $("given-phrase").value = "";
+    says.classList.add("hidden");
+    $("ready-says").textContent =
+      "This device now shares a key with your others, and is watching your folder.";
+    step("ready");
+  } catch (e) {
+    says.textContent = String(e);
+    says.classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("ready-next").addEventListener("click", () => decide());
+
 // ---------------------------------------------------------------- navigation
 
 let screen = "home";
@@ -380,9 +606,84 @@ function refreshScreen() {
   if (screen === "devices") drawDevices();
   if (screen === "activity") drawActivity();
   if (screen === "storage") drawStorage();
+  if (screen === "settings") drawSettings();
 }
 
-refreshScreen();
+decide();
+
+// ----------------------------------------------------------------- settings
+
+async function drawSettings() {
+  let s;
+  try {
+    s = await invoke("settings");
+  } catch (e) {
+    $("settings-says").textContent = String(e);
+    return;
+  }
+
+  // Not rewritten under somebody who is in the middle of typing.
+  const editing = document.activeElement?.closest?.(".field");
+  if (!editing) {
+    $("set-name").value = s.name;
+    $("set-signal").value = s.signal;
+    $("set-relay").value = s.relay ?? "";
+    $("set-port").value = String(s.port);
+  }
+
+  const facts = $("facts");
+  facts.replaceChildren();
+  for (const [term, value] of [
+    ["Folder", s.root],
+    ["This device", s.identity || "—"],
+    ["Key kept", s.protection],
+  ]) {
+    facts.append(el("dt", null, term));
+    facts.append(el("dd", null, value));
+  }
+}
+
+$("settings-save").addEventListener("click", async () => {
+  const says = $("settings-says");
+  try {
+    await invoke("save_settings", {
+      name: $("set-name").value,
+      signal: $("set-signal").value,
+      relay: $("set-relay").value,
+      port: Number($("set-port").value) || 0,
+    });
+    says.textContent = "saved";
+    setTimeout(() => { says.textContent = ""; }, 1600);
+  } catch (e) {
+    says.textContent = String(e);
+  }
+});
+
+$("show-phrase").addEventListener("click", async () => {
+  const list = $("revealed");
+  const says = $("phrase-says");
+
+  // A second press hides them again, so they are not left on a screen somebody
+  // walks away from.
+  if (!list.classList.contains("hidden")) {
+    list.replaceChildren();
+    list.classList.add("hidden");
+    $("show-phrase").textContent = "Show the 24 words";
+    return;
+  }
+
+  try {
+    const words = await invoke("reveal_phrase");
+    list.replaceChildren();
+    for (const word of words) list.append(el("li", null, word));
+    list.classList.remove("hidden");
+    says.classList.add("hidden");
+    $("show-phrase").textContent = "Hide them";
+  } catch (e) {
+    says.textContent = String(e);
+    says.classList.remove("hidden");
+  }
+});
 
 // The live state, often. A poll rather than a subscription because the value is
 // one small struct and the window is in the same process as the daemon that

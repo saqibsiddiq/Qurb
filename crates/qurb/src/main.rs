@@ -7,7 +7,7 @@
 use anyhow::{bail, Context, Result};
 use qurb_cli::config::Config;
 use qurb_cli::daemon::Daemon;
-use qurb_keys::{MasterKey, Opened, Purpose, RecoveryPhrase, Vault};
+use qurb_keys::{MasterKey, Purpose, RecoveryPhrase, Vault};
 use qurb_peer::{Identity, PairingHost};
 use qurb_storage::{ChunkKey, Store};
 use std::path::{Path, PathBuf};
@@ -238,64 +238,34 @@ fn open(root: &Path) -> Result<(MasterKey, Identity, Store, Config)> {
 // -- commands ----------------------------------------------------------------
 
 fn init(root: &Path) -> Result<()> {
-    let store_dir = store_dir(root);
-    std::fs::create_dir_all(root)
-        .with_context(|| format!("creating {}", root.display()))?;
-
-    let vault = Vault::at(&store_dir);
-    if vault.exists() {
+    if qurb_cli::is_set_up(root) {
         bail!("{} already has a key. Use `qurb status` to see it.", root.display());
     }
 
-    match vault.open_or_create()? {
-        Opened::Created { key, phrase } => {
-            Identity::load_or_create(&store_dir)?;
-            Config::default().save(&store_dir)?;
-            let chunk_key =
-                ChunkKey::from_bytes(key.derive(Purpose::ChunkEncryption).to_bytes());
-            Store::open(&store_dir, chunk_key)?;
+    let phrase = qurb_cli::setup::create(root)?;
 
-            println!("Set up {}\n", root.display());
-            println!("{}", "=".repeat(68));
-            println!("{}", phrase.numbered());
-            println!("{}", "=".repeat(68));
-            println!();
-            println!("Write these 24 words down on paper, in order, now.");
-            println!();
-            println!("They are not a backup of your key. They ARE your key, in a form you");
-            println!("can hold. Nobody else has a copy — not us, not a server. If you lose");
-            println!("them and lose this device, your files cannot be recovered by anyone,");
-            println!("including us. That is not a policy we could choose to relax.");
-            println!();
-            // Recorded so later commands can be run with no path at all.
-    let _ = qurb_cli::profiles::remember(root);
-
+    println!("Set up {}\n", root.display());
+    println!("{}", "=".repeat(68));
+    println!("{}", phrase.numbered());
+    println!("{}", "=".repeat(68));
+    println!();
+    println!("Write these 24 words down on paper, in order, now.");
+    println!();
+    println!("They are not a backup of your key. They ARE your key, in a form you");
+    println!("can hold. Nobody else has a copy — not us, not a server. If you lose");
+    println!("them and lose this device, your files cannot be recovered by anyone,");
+    println!("including us. That is not a policy we could choose to relax.");
+    println!();
     println!("To add another device:");
-            println!("  qurb enrol <dir> \"{} ...\"", phrase.words()[..3].join(" "));
-            Ok(())
-        }
-        Opened::Existing(_) => bail!("a key appeared while we were creating one"),
-    }
+    println!("  qurb enrol <dir> \"{} ...\"", phrase.words()[..3].join(" "));
+    Ok(())
 }
 
 fn enrol(root: &Path, phrase: &str) -> Result<()> {
-    let store_dir = store_dir(root);
-    std::fs::create_dir_all(root)
-        .with_context(|| format!("creating {}", root.display()))?;
-
     let phrase = RecoveryPhrase::parse(phrase).context("that is not a valid recovery phrase")?;
-    let key = Vault::at(&store_dir)
-        .restore(&phrase)
-        .context("installing the key")?;
-
-    Identity::load_or_create(&store_dir)?;
-    Config::default().save(&store_dir)?;
-    let chunk_key = ChunkKey::from_bytes(key.derive(Purpose::ChunkEncryption).to_bytes());
-    Store::open(&store_dir, chunk_key)?;
+    qurb_cli::setup::enrol(root, &phrase)?;
 
     println!("Set up {} with an existing key.\n", root.display());
-    let _ = qurb_cli::profiles::remember(root);
-
     println!("This device shares a key with your others, which is what makes them");
     println!("yours. They still have to be introduced: run `qurb pair` on one and");
     println!("`qurb join` here with the code it shows.");

@@ -12,7 +12,8 @@ applications menu and running `qurb status` in a terminal address the same one.
 
 ## What it is
 
-Five screens over `qurb_cli::View` and the daemon's status channel:
+Six screens over `qurb_cli::View` and the daemon's status channel, plus setting
+a device up in the first place:
 
 | screen | what it answers |
 |---|---|
@@ -21,6 +22,11 @@ Five screens over `qurb_cli::View` and the daemon's status channel:
 | Devices | who is paired, when each was last reached |
 | Activity | what this device did — the answer to "why is my file not here?" |
 | Storage | what qurb costs on this disk, and the allowance |
+| Settings | this device's name, how it finds the others, and the 24 words |
+
+A folder with no device in it opens the setting-up flow instead: make a new
+qurb, or add this device to one that exists. Setting a device up is the job of
+a screen, so it cannot be a precondition of the screen existing.
 
 The distinction the Files screen exists for is three-way. A file that is here
 and also on the phone, and a file that is here and nowhere else in the world,
@@ -36,11 +42,13 @@ no build step: the application is five screens of lists and numbers, and a
 bundler would be more moving parts than the thing it was moving.
 
 ```
-src/main.rs       opens the key, starts the daemon on its own threads, opens
-                  the window on this one
+src/main.rs       opens the window, and the daemon too if there is a device
+src/session.rs    whether there is a device yet, the daemon once there is, and
+                  the recovery phrase for the moment between showing it and
+                  having it confirmed
 src/commands.rs   every question the window may ask, each a thin wrapper over
                   the engine
-ui/index.html     the five screens
+ui/index.html     the screens, and the setting-up steps
 ui/app.css        one stylesheet, both colour schemes from the system
 ui/app.js         what to do with an answer
 ```
@@ -63,18 +71,32 @@ a feature. See
 window's real markup, stylesheet and script against made-up data, so layout can
 be worked on without a folder, a paired device or a running daemon.
 
+## The 24 words
+
+The phrase is held in the session rather than in the page: created, fetched
+once to be drawn, checked against when three of the words are confirmed, and
+dropped the moment that succeeds. The page can therefore drop its copy as soon
+as it has drawn the list, and what crosses back is a yes or no rather than a
+key. It is never logged, never persisted, and never put in debugging output.
+
+It can be shown again from Settings, derived from the key that is already in
+the folder — anybody who can read that folder can read the files, so this
+reveals nothing new. See
+[decision 0033](../../docs/decisions/0033-the-phrase-on-a-screen.md).
+
 ## What it does not do yet
 
-- **No onboarding.** The folder has to be set up with `qurb init` first; the
-  window says so and stops.
-- **No pairing.** `qurb pair` here and `qurb join` there.
+- **No pairing.** `qurb pair` here and `qurb join` there. The last setting-up
+  screen says so rather than implying the device is alone.
 - **No sending.** `qurb send` does it; the window shows what is outstanding but
   cannot start one.
 - **No transfer progress.** Outcomes are recorded and shown; a transfer in
   flight is not.
 - **No passphrase prompt.** A passphrase-protected key is asked for on the
-  terminal the application was launched from, and launching from a menu with
-  one fails with a message saying so. The window cannot ask, because opening
-  the key is what decides whether there is anything to show.
+  terminal the application was launched from. The window cannot ask, because
+  opening the key is what decides whether there is anything to show; launched
+  from a menu it says so on the first screen.
+- **No folder picker.** A text field with `~` expansion and a live description
+  of what is already there.
 - **Linux only, in practice.** The Rust is portable and Tauri is
   cross-platform; this has never been built or run on Windows or macOS.

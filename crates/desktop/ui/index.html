@@ -7,12 +7,108 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
+  <!-- Setting up. Replaces everything else: there is nothing to display about a
+       device that does not exist yet. -->
+  <div id="setup" class="hidden">
+    <section class="step on" data-step="welcome">
+      <h1>qurb</h1>
+      <p class="lead">
+        Your files stay on the devices you already own, encrypted, and sync
+        directly between them. Nothing is kept on anybody else's server.
+      </p>
+      <div class="choices">
+        <button class="choice" id="choose-new">
+          <strong>Set up a new qurb</strong>
+          <span class="quiet">Makes a key. This is the first of your devices.</span>
+        </button>
+        <button class="choice" id="choose-join">
+          <strong>Add this device to an existing qurb</strong>
+          <span class="quiet">You will need the 24 words from your first device.</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="step" data-step="folder">
+      <h1>Which folder?</h1>
+      <p class="lead">
+        Everything in it syncs to your other devices. It can be empty, or it can
+        be a folder you already use.
+      </p>
+      <input type="text" id="folder-path" spellcheck="false" autocomplete="off">
+      <p id="folder-says" class="quiet"></p>
+      <div class="buttons">
+        <button class="act" data-back="welcome">Back</button>
+        <button class="act primary" id="folder-next" disabled>Continue</button>
+      </div>
+    </section>
+
+    <section class="step" data-step="phrase">
+      <h1>Write these down</h1>
+      <p class="lead">
+        These 24 words are not a backup of your key. They <em>are</em> your key,
+        in a form you can hold.
+      </p>
+      <ol id="words" class="words"></ol>
+      <p class="warn">
+        Nobody else has a copy — not us, not a server. If you lose these words
+        and lose this device, your files cannot be recovered by anyone,
+        including us. That is not a policy we could choose to relax.
+      </p>
+      <div class="buttons">
+        <button class="act primary" id="phrase-next">I have written them down</button>
+      </div>
+    </section>
+
+    <section class="step" data-step="verify">
+      <h1>Check you have them</h1>
+      <p class="lead">
+        Three of the words, from the paper rather than the screen. Capitals do
+        not matter.
+      </p>
+      <div id="asks" class="asks"></div>
+      <p id="verify-says" class="warn hidden"></p>
+      <div class="buttons">
+        <button class="act" id="verify-back">Show me them again</button>
+        <button class="act primary" id="verify-next">Confirm</button>
+      </div>
+    </section>
+
+    <section class="step" data-step="join">
+      <h1>The 24 words</h1>
+      <p class="lead">
+        From the device you set up first. Order matters; spacing and capitals do
+        not.
+      </p>
+      <textarea id="given-phrase" rows="4" spellcheck="false" autocomplete="off"
+                placeholder="wheel push industry …"></textarea>
+      <p id="join-says" class="warn hidden"></p>
+      <div class="buttons">
+        <button class="act" data-back="folder">Back</button>
+        <button class="act primary" id="join-next">Set up this device</button>
+      </div>
+    </section>
+
+    <section class="step" data-step="ready">
+      <h1>Ready</h1>
+      <p class="lead" id="ready-says"></p>
+      <p class="quiet">
+        Sharing a key is what makes two devices <em>yours</em>. They still have
+        to be introduced, which happens on the command line for now:
+        <code>qurb pair</code> on one, <code>qurb join</code> on the other.
+      </p>
+      <div class="buttons">
+        <button class="act primary" id="ready-next">Open my folder</button>
+      </div>
+    </section>
+  </div>
+
   <nav id="tabs">
     <button data-screen="home" class="on">Home</button>
     <button data-screen="files">Files</button>
     <button data-screen="devices">Devices</button>
     <button data-screen="activity">Activity</button>
     <button data-screen="storage">Storage</button>
+    <button data-screen="settings">Settings</button>
   </nav>
 
   <main>
@@ -110,6 +206,64 @@
       </p>
 
       <dl id="breakdown"></dl>
+    </section>
+    <section id="settings" class="screen">
+      <header>
+        <h1>Settings</h1>
+        <p class="quiet">This device, and how it finds the others.</p>
+      </header>
+
+      <dl id="facts"></dl>
+
+      <label class="field">
+        <span>Name</span>
+        <input type="text" id="set-name" spellcheck="false" autocomplete="off">
+        <span class="quiet">What your other devices call this one.</span>
+      </label>
+
+      <label class="field">
+        <span>Rendezvous service</span>
+        <input type="text" id="set-signal" spellcheck="false" autocomplete="off">
+        <span class="quiet">
+          Where devices leave word that they are awake. It never sees your files.
+        </span>
+      </label>
+
+      <label class="field">
+        <span>Relay</span>
+        <input type="text" id="set-relay" spellcheck="false" autocomplete="off"
+               placeholder="none — devices must reach each other directly">
+        <span class="quiet">
+          Used only when a direct connection cannot be made. It carries
+          encrypted datagrams and cannot read them.
+        </span>
+      </label>
+
+      <label class="field">
+        <span>Port</span>
+        <input type="number" id="set-port" min="0" max="65535">
+        <span class="quiet">Zero means any. A fixed one helps if you forward it.</span>
+      </label>
+
+      <div class="buttons">
+        <button class="act primary" id="settings-save">Save</button>
+        <span id="settings-says" class="quiet"></span>
+      </div>
+      <p class="quiet note">
+        The name takes effect at once. A changed service, relay or port applies
+        when qurb next starts.
+      </p>
+
+      <h2>Recovery phrase</h2>
+      <p class="quiet note">
+        The same 24 words you were shown when this device was set up, derived
+        from the key that is already in this folder. Anybody who can read the
+        folder can already read your files, so this reveals nothing new — but it
+        is still the key, so do not show it to a screen anybody else can see.
+      </p>
+      <button class="act" id="show-phrase">Show the 24 words</button>
+      <ol id="revealed" class="words hidden"></ol>
+      <p id="phrase-says" class="warn hidden"></p>
     </section>
   </main>
 

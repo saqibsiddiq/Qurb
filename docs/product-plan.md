@@ -113,7 +113,7 @@ running it, not by reading about it.
 | Available locally / remotely (§19) | built; `files.materialised` |
 | Download a freed file (§30) | built; `qurb fetch` sets a durable want |
 | Conflicts keep both versions (§24) | built; vector clocks, deterministic conflict names |
-| Recovery phrase (§34) | built; 24-word BIP-39 with verification |
+| Recovery phrase (§34) | built; 24-word BIP-39, shown and confirmed in the window, never written down |
 | Android share sheet (§39) | built; works with no network |
 | DocumentsProvider (§40) | built |
 | Background sync (§38) | built; WorkManager, and push when configured |
@@ -128,7 +128,7 @@ The gap for most of these is an **API and a screen**, not an engine change.
 
 | thing | state |
 |---|---|
-| Desktop interface | a Tauri window with five screens over the real engine. No onboarding, pairing or sending yet |
+| Desktop interface | a Tauri window: six screens plus onboarding, over the real engine. No pairing or sending yet |
 | Selective sync (§29) | `PinSet` exists but is wired only to `Role::Replica`; an ordinary device takes everything |
 | Replica storage cap | a replica cannot free space at all — no folder to evict from |
 | Notifications (§45) | `notify-rust` is a dependency and nothing sends one |
@@ -188,10 +188,14 @@ and it answers "why isn't my file here" (§82) after a restart. What it does not
 yet carry is a transfer *in flight*: progress belongs to the daemon's live
 state, which is phase 1's job.
 
-**3. Desktop shell**: home, files, devices, activity, storage ✅ —
-[`crates/desktop`](../crates/desktop/README.md). Still owed from this phase:
-onboarding, storage selection at setup, identity and the recovery phrase
-screen, settings.
+**3. Desktop shell** ✅ — [`crates/desktop`](../crates/desktop/README.md).
+Home, files, devices, activity, storage, settings, and setting a device up from
+nothing: make a new qurb or join an existing one, with the 24 words shown,
+confirmed and never written down — see
+[decisions/0033](decisions/0033-the-phrase-on-a-screen.md). Storage selection
+is on the Storage screen rather than during setup, deliberately: asking
+somebody to budget disk before they have put a file in the folder is asking a
+question they cannot answer.
 
 **4. Pairing and devices**, on the existing pairing infrastructure.
 
@@ -255,7 +259,7 @@ hardware where hardware is involved. Not when it compiles.
 
 ## 10. Testing
 
-The existing suite is 531 tests across twelve crates, and the classes that
+The existing suite is 549 tests across twelve crates, and the classes that
 matter here already exist: property-based convergence, crash injection,
 corruption repair, hostile peers, concurrent collection. New work extends those
 rather than starting a parallel tradition.

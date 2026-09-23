@@ -14,7 +14,53 @@ const FILES = [
   { path: "work/archive.tar.gz", size: "912000000", updated_at: now - 900000, availability: "not here" },
 ];
 
+// Flip this to see the setting-up screens instead of the running window.
+const SETTING_UP = new URLSearchParams(location.search).has("setup");
+
+const WORDS = [
+  "wheel", "push", "industry", "gospel", "vault", "canyon", "ribbon", "plastic",
+  "orbit", "salmon", "fabric", "gentle", "meadow", "kitten", "bronze", "puzzle",
+  "silent", "harvest", "copper", "lantern", "marble", "thunder", "velvet", "orchid",
+];
+
 const ANSWERS = {
+  situation: () => ({
+    set_up: !SETTING_UP,
+    running: !SETTING_UP,
+    root: "/home/saqib/Sync",
+    problem: null,
+  }),
+
+  inspect_folder: ({ path }) => ({
+    path,
+    exists: !path.endsWith("new"),
+    set_up: path.endsWith("taken"),
+    writable: !path.startsWith("/etc"),
+    existing_files: path.endsWith("full") ? 2000 : 0,
+    counted_all: !path.endsWith("full"),
+    disk: "494384795648",
+    free: "201326592000",
+  }),
+
+  create_device: () => null,
+  shown_phrase: () => WORDS,
+  // Any answer is accepted here; the real one checks against the phrase the
+  // session is holding, which a fixture has no way to be.
+  confirm_phrase: () => true,
+  enrol_device: () => null,
+  reveal_phrase: () => WORDS,
+
+  settings: () => ({
+    name: "laptop",
+    signal: "wss://rendezvous.example:9000",
+    relay: null,
+    port: 0,
+    protection: "file",
+    root: "/home/saqib/Sync",
+    identity: "cfe05b03",
+  }),
+
+  save_settings: () => null,
   summary: () => ({
     state: "syncing",
     root: "/home/saqib/Sync",

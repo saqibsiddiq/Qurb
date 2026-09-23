@@ -40,3 +40,11 @@ python3 -m http.server 8731
 ```
 
 Then open `http://localhost:8731/experiments/desktop-fixtures/`.
+
+Add `?setup` to see the setting-up screens instead of the running window:
+`http://localhost:8731/experiments/desktop-fixtures/?setup`.
+
+The phrase shown there is a fixed list of words that is **not** a valid
+recovery phrase and is not a key to anything. Confirmation accepts any answer,
+because the real check is against the phrase the session is holding and a
+fixture has no way to be that.

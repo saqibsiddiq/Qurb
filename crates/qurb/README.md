@@ -48,6 +48,13 @@ necessary: it is how they learn each other's network identity, and it happens
 out of band because someone able to change what is on your screen has already
 won.
 
+## Setting a device up
+
+`qurb init` and `qurb enrol` both go through `qurb_cli::setup`, which is the
+one definition of what a set-up device is — a key, an identity, a config and an
+index. The desktop window calls the same functions, so a device created there
+and one created here are the same thing rather than two similar things.
+
 ## What an interface asks
 
 `qurb_cli::View` is the read-only query surface a front end uses: devices,
