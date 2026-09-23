@@ -268,7 +268,22 @@ belongs to a process that exited. `qurb activity` reads it. See
 [decisions/0031](decisions/0031-what-happened-is-written-down.md), including
 what the table deliberately does *not* hold.
 
-### 2.7 Encryption happens before anything leaves the device
+### 2.7 An interface is a display of the engine, not a second one
+
+A graphical front end runs the daemon inside itself rather than talking to one
+over a socket, and asks it two different kinds of question. The daemon
+publishes its live state — syncing, up to date, this many devices — on a
+`watch` channel, because only the latest value is ever useful. Everything else
+is a read-only query against the index: what devices, what files, what is
+available where, what happened, what is still on its way.
+
+Those queries are `qurb_cli::View`, and the terminal uses the same ones
+(`qurb ls`, `qurb find`, `qurb activity`). See
+[decisions/0032](decisions/0032-the-interface-hosts-the-daemon.md) — including
+why a file's availability has three values rather than two, which is the
+difference between "free up space" and "delete my only copy".
+
+### 2.8 Encryption happens before anything leaves the device
 
 Chunks are compressed, then encrypted, then written to disk and sent over the
 network. The keys never leave your devices. Our servers see encrypted bytes and
@@ -471,12 +486,15 @@ qurb/
 │   │   ├── src/lib.rs       the daemon, as a library, so an interface can
 │   │   │                    run the same one the terminal does
 │   │   ├── src/main.rs      init, enrol, pair, join, run, replica, status,
-│   │   │                    verify, reclaim, fetch, config, protect
+│   │   │                    verify, reclaim, fetch, send, activity, ls, find,
+│   │   │                    config, protect
 │   │   ├── src/daemon.rs    watch, apply, sync, collect, stay under the limit
 │   │   ├── src/lock.rs      one daemon per folder, enforced not assumed
 │   │   ├── src/profiles.rs  which folders exist, so commands need no path
 │   │   ├── src/qr.rs        a pairing code a camera can read
-│   │   ├── src/status.rs    what the daemon is doing, for a display
+│   │   ├── src/status.rs    what the daemon is doing now, on a watch channel
+│   │   ├── src/view.rs      what an interface asks: devices, files, storage,
+│   │   │                    history, outgoing, search — all read-only
 │   │   └── src/config.rs    a flat file meant to be edited by hand
 │   │
 │   └── tray/              The desktop app: the daemon with a face.
@@ -628,7 +646,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-520 tests pass across eleven crates on Linux; clippy is clean. The last run on
+531 tests pass across eleven crates on Linux; clippy is clean. The last run on
 a Galaxy S23 was 426 of them, before this week's work — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
@@ -954,6 +972,18 @@ introduce them, then `run` on both:
 # Ask for a file whose local copy was dropped. Acted on when a peer is next
 # reachable, so it works while offline.
 ./target/release/qurb fetch ~/Sync holiday/beach.jpg
+```
+
+```bash
+# What this folder holds and whether the bytes are actually here. "only here"
+# means no other device has it — losing this device would lose the file.
+./target/release/qurb ls ~/Sync
+./target/release/qurb ls ~/Sync photos
+```
+
+```bash
+# Files whose name contains something. Names only, not contents.
+./target/release/qurb find ~/Sync beach
 ```
 
 ```bash

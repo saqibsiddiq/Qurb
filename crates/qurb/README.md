@@ -16,6 +16,8 @@ qurb reclaim <dir>               free space the folder itself already holds
 qurb fetch <dir> <path>          ask for a dropped file's contents back
 qurb send <dir> <file> to <dev>  send a file to one device, privately
 qurb activity <dir> [path]       what happened, newest first
+qurb ls <dir> [path]             what this folder holds, and where
+qurb find <dir> <text>           files whose name contains something
 qurb config <dir> [key=value]    show or change settings
 
 qurb signal [addr] [--push <j>]  the rendezvous service
@@ -45,6 +47,17 @@ Sharing a key is what makes two devices *yours*. Pairing is separate and still
 necessary: it is how they learn each other's network identity, and it happens
 out of band because someone able to change what is on your screen has already
 won.
+
+## What an interface asks
+
+`qurb_cli::View` is the read-only query surface a front end uses: devices,
+files with their availability, storage, history, what is still on its way, and
+search. `qurb ls` and `qurb find` are the terminal's use of it.
+
+The three-way availability is the part worth knowing about. A file that is here
+and also on the phone, and a file that is here and nowhere else, look identical
+to anything that only checks whether the bytes are on disk — and offering to
+free the second would be offering to delete it.
 
 ## Why is my file not here?
 

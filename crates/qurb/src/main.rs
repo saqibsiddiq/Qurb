@@ -29,6 +29,8 @@ qurb — private cloud storage
   qurb fetch [dir] <path>             ask for a dropped file's contents back
   qurb send [dir] <file> to <device>  send a file to one device, privately
   qurb activity [dir] [path]          what happened, newest first
+  qurb ls [dir] [path]                what this folder holds, and where
+  qurb find [dir] <text>              files whose name contains something
   qurb config [dir] [key=value ...]   show or change settings
   qurb protect [dir] <how>            change how the key is kept
                                         file | keystore | passphrase
@@ -129,19 +131,17 @@ fn run() -> Result<()> {
             send(&root, Path::new(file), recipient)
         }
         "activity" => {
-            // `qurb activity`, `qurb activity <dir>`, `qurb activity <path>`,
-            // or both. A path is anything the index knows; a directory is
-            // anything on disk that holds a store.
-            let rest = &args[1..];
-            let (root, about) = match rest {
-                [] => (directory(&args)?, None),
-                [one] => match PathBuf::from(one).join(".qurb").is_dir() {
-                    true => (PathBuf::from(one), None),
-                    false => (directory(&args)?, Some(one.clone())),
-                },
-                [dir, path, ..] => (PathBuf::from(dir), Some(path.clone())),
-            };
+            let (root, about) = split_path(&args)?;
             activity(&root, about.as_deref())
+        }
+        "ls" | "list" => {
+            let (root, under) = split_path(&args)?;
+            list(&root, under.as_deref())
+        }
+        "find" | "search" => {
+            let (root, text) = split_path(&args)?;
+            let text = text.context("give something to look for")?;
+            find(&root, &text)
         }
         "config" => configure(&directory(&args)?, &args[2..]),
         "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
@@ -617,6 +617,85 @@ fn send(root: &Path, file: &Path, recipient: &str) -> Result<()> {
     println!("  {} stored, waiting for the device to collect it", human(stats.bytes_written));
     println!("  it stays here until then, even if this device restarts");
     Ok(())
+}
+
+/// Split `<command> [dir] [argument]` into the two, without a flag to say which.
+///
+/// A single argument is ambiguous — `qurb ls photos` could mean a directory to
+/// open or a folder inside one — and asking people to remember an order they
+/// never think about is worse than looking. A directory is a directory on disk
+/// that has a store in it; anything else is the argument.
+fn split_path(args: &[String]) -> Result<(PathBuf, Option<String>)> {
+    match &args[1..] {
+        [] => Ok((directory(args)?, None)),
+        [one] => match PathBuf::from(one).join(".qurb").is_dir() {
+            true => Ok((PathBuf::from(one), None)),
+            false => Ok((directory(args)?, Some(one.clone()))),
+        },
+        [dir, rest, ..] => Ok((PathBuf::from(dir), Some(rest.clone()))),
+    }
+}
+
+/// What this folder holds, and whether the bytes are actually here.
+fn list(root: &Path, under: Option<&str>) -> Result<()> {
+    const PAGE: usize = 200;
+    let (_, _, store, _) = open(root)?;
+    let limit = Config::load(&qurb_cli::store_dir(root)).map(|c| c.limit).unwrap_or(0);
+    let view = qurb_cli::View::new(&store, limit);
+
+    let under = under.map(|u| u.trim_start_matches("./").to_string());
+    let files = view.files(under.as_deref(), PAGE, 0)?;
+    if files.is_empty() {
+        match &under {
+            Some(path) => println!("nothing under {path}"),
+            None => println!("this folder is empty"),
+        }
+        return Ok(());
+    }
+
+    for file in &files {
+        println!("  {:<9} {:>10}  {}", mark(file.availability), human(file.size), file.path);
+    }
+
+    let total = view.storage()?.file_count;
+    if under.is_none() && total > files.len() {
+        println!("\n  showing {} of {total} — name a folder to narrow it", files.len());
+    }
+    Ok(())
+}
+
+/// Files whose name contains something.
+fn find(root: &Path, text: &str) -> Result<()> {
+    const SHOWN: usize = 100;
+    let (_, _, store, _) = open(root)?;
+    let view = qurb_cli::View::new(&store, 0);
+
+    let hits = view.search(text, SHOWN)?;
+    if hits.is_empty() {
+        println!("nothing matching {text}");
+        println!("  names only, and case is folded for ASCII — `CAFÉ` will not find `café`");
+        return Ok(());
+    }
+    for file in &hits {
+        println!("  {:<9} {:>10}  {}", mark(file.availability), human(file.size), file.path);
+    }
+    if hits.len() == SHOWN {
+        println!("\n  stopped at {SHOWN} — narrow it to see the rest");
+    }
+    Ok(())
+}
+
+/// One word for where a file's bytes are.
+///
+/// "only here" is the one worth a column of its own: it means losing this
+/// device loses the file, and it is otherwise indistinguishable from a file
+/// that is safely on three devices.
+fn mark(availability: qurb_cli::Availability) -> &'static str {
+    match availability {
+        qurb_cli::Availability::Here => "here",
+        qurb_cli::Availability::Elsewhere => "not here",
+        qurb_cli::Availability::OnlyHere => "only here",
+    }
 }
 
 /// What this device did, newest first.

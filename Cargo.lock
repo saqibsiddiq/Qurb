@@ -2748,6 +2748,7 @@ name = "qurb-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blake3",
  "libc",
  "qrcode",
  "qurb-engine",

@@ -13,6 +13,7 @@ pub mod lock;
 pub mod profiles;
 pub mod qr;
 pub mod status;
+pub mod view;
 
 use anyhow::{bail, Result};
 use qurb_keys::{MasterKey, Purpose, Vault};
@@ -23,6 +24,7 @@ use std::path::{Path, PathBuf};
 pub use config::Config;
 pub use daemon::Daemon;
 pub use status::{Status, State, Watcher};
+pub use view::{Availability, Device, File, Outgoing, Storage, View};
 
 /// Where the store lives inside a synced root.
 pub fn store_dir(root: &Path) -> PathBuf {

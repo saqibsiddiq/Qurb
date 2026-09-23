@@ -58,3 +58,4 @@ is worth more than a tidy directory.
 | [0029](0029-two-areas-shared-and-private.md) | Two areas: one shared, one private per device | Accepted |
 | [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted |
 | [0031](0031-what-happened-is-written-down.md) | What happened is written down | Accepted |
+| [0032](0032-the-interface-hosts-the-daemon.md) | The interface hosts the daemon, and asks it nouns | Accepted |

@@ -640,6 +640,72 @@ impl Db {
         Ok(())
     }
 
+    /// A page of live files, with everything a listing needs, in path order.
+    ///
+    /// The shared area only. A device's own vault is a different list with a
+    /// different meaning, and mixing the two would put content somebody sent
+    /// you in the middle of your own folder listing.
+    ///
+    /// `under` restricts to one directory and everything beneath it, spelled
+    /// the way [`Db::live_paths_under`] spells it, so that a listing and a
+    /// deletion agree about what "in this folder" means.
+    pub fn listing(&self, under: Option<&str>, limit: usize, offset: usize) -> Result<Vec<Listed>> {
+        let pattern = under.map(|u| format!("{}/%", u.trim_end_matches('/')));
+        let exact = under.map(|u| u.trim_end_matches('/').to_string());
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size, updated_at, materialised, content_hash
+               FROM files
+              WHERE deleted_at IS NULL
+                AND scope IS NULL
+                AND (?1 IS NULL OR path = ?1 OR path LIKE ?2 ESCAPE '\\')
+              ORDER BY path
+              LIMIT ?3 OFFSET ?4",
+        )?;
+        let rows =
+            stmt.query_map(params![exact, pattern, limit as i64, offset as i64], listed_row)?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// How many live files the shared area holds, for paging.
+    pub fn live_count(&self) -> Result<usize> {
+        let n: i64 = self.conn.query_row(
+            "SELECT count(*) FROM files WHERE deleted_at IS NULL AND scope IS NULL",
+            [],
+            |r| r.get(0),
+        )?;
+        Ok(n as usize)
+    }
+
+    /// Live files whose path contains `text`, case-insensitively.
+    ///
+    /// By path, not by content. Searching contents would mean an index of what
+    /// every file says — a second database, and a much larger promise than this
+    /// product has made. Searching names is what people do most of the time and
+    /// is answerable from what the index already holds.
+    ///
+    /// SQLite folds case for ASCII only, so `CAFÉ` does not match `café`. Said
+    /// plainly rather than papered over: the alternative is carrying a
+    /// Unicode-aware collation for a feature nobody has asked to be perfect.
+    ///
+    /// Newest first, because a search is usually for something recent.
+    pub fn search(&self, text: &str, limit: usize) -> Result<Vec<Listed>> {
+        // `%` and `_` in what somebody typed are literal, not wildcards. A
+        // search for `report_final` must not match `reportXfinal`.
+        let escaped = text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+        let pattern = format!("%{escaped}%");
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size, updated_at, materialised, content_hash
+               FROM files
+              WHERE deleted_at IS NULL
+                AND scope IS NULL
+                AND path LIKE ?1 ESCAPE '\\'
+              ORDER BY updated_at DESC, path
+              LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![pattern, limit as i64], listed_row)?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
     /// Live files this device could drop the bytes of, coldest first.
     ///
     /// Three conditions, all of them necessary:
@@ -1604,6 +1670,29 @@ fn file_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<FileRow> {
         vector: VersionVector::decode(&encoded).unwrap_or_default(),
         modified_by: modified_by.and_then(to_device),
         updated_at: r.get(8)?,
+    })
+}
+
+/// One row of a listing: what a file browser needs and nothing more.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Listed {
+    pub path: String,
+    pub size: u64,
+    /// Unix seconds, when this device last changed its mind about the file.
+    pub updated_at: i64,
+    /// Whether the bytes are in the folder here, or only known about.
+    pub here: bool,
+    pub content: blake3::Hash,
+}
+
+fn listed_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Listed> {
+    let raw: Vec<u8> = r.get(4)?;
+    Ok(Listed {
+        path: r.get(0)?,
+        size: r.get::<_, i64>(1)? as u64,
+        updated_at: r.get(2)?,
+        here: r.get::<_, i64>(3)? != 0,
+        content: to_hash(&raw),
     })
 }
 

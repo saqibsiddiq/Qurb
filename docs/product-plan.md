@@ -119,7 +119,8 @@ running it, not by reading about it.
 | Background sync (§38) | built; WorkManager, and push when configured |
 | Send a copy to one device (§11, §12, §21, §22) | built; `qurb send`, held until collected, no interface yet |
 | Activity / transfers data (§26, §27) | records exist and are written; `qurb activity` reads them. No API, no progress |
-| Search (§31) | `Db` has the index; there is no search API |
+| Search (§31) | built; by name, `View::search` and `qurb find`. Not by content |
+| Available locally / remotely, shown honestly (§19) | built; `Availability` distinguishes "also elsewhere" from "only here" |
 
 The gap for most of these is an **API and a screen**, not an engine change.
 
@@ -138,8 +139,7 @@ The gap for most of these is an **API and a screen**, not an engine change.
 ## 4. What does not exist at all
 
 - A sharing model (§23)
-- Transfer history and activity storage (§26, §27)
-- Search (§31)
+- Transfer *progress* (§26) — outcomes are recorded, a transfer in flight is not
 - A design system (§73)
 - Android↔Android verified in practice (§20) — the peers are symmetric, so it
   should work, and it has never been run
@@ -170,11 +170,16 @@ a vault, the recipient collects it once, and the sender releases its copy first
 under storage pressure. What phase 5 still owes is the interface, the progress
 reporting and the Downloads destination.
 
-**1. An API the UI can use.** The engine's surface is `reconcile`,
-`plan_against`, `apply_plan`. A product needs to ask "what devices, what
-transfers, what is available where" and to be *told* when those change. That is
-a query-and-subscribe layer over the existing store and daemon — not a second
-engine, and not a second database.
+**1. An API the UI can use.** ✅ Done —
+[decisions/0032](decisions/0032-the-interface-hosts-the-daemon.md).
+`qurb_cli::View` answers the nouns (devices, files, availability, storage,
+history, outgoing, search) as read-only queries against the index; the daemon's
+existing `watch` channel carries the live state. One process hosts both, which
+is what `qurb-tray` already does and what Tauri will do. `qurb ls` and
+`qurb find` exercise it from the terminal.
+
+What it deliberately does not carry: transfer progress, notifications, and any
+write path.
 
 **2. Transfer and activity as first-class records.** ✅ Done for outcomes —
 [decisions/0031](decisions/0031-what-happened-is-written-down.md). One table in
@@ -248,7 +253,7 @@ hardware where hardware is involved. Not when it compiles.
 
 ## 10. Testing
 
-The existing suite is 520 tests across eleven crates, and the classes that
+The existing suite is 531 tests across eleven crates, and the classes that
 matter here already exist: property-based convergence, crash injection,
 corruption repair, hostile peers, concurrent collection. New work extends those
 rather than starting a parallel tradition.
