@@ -56,3 +56,4 @@ is worth more than a tidy directory.
 | [0027](0027-plaintext-stops-at-the-local-network.md) | Plaintext rendezvous stops at the local network | Accepted |
 | [0028](0028-waking-a-sleeping-device.md) | Waking a sleeping device, and what it costs | Accepted |
 | [0029](0029-two-areas-shared-and-private.md) | Two areas: one shared, one private per device | Accepted |
+| [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted |

@@ -263,6 +263,12 @@ fn encode_version(out: &mut Vec<u8>, v: &FileVersion) {
 
     out.extend_from_slice(v.modified_by.as_bytes());
     out.extend_from_slice(&v.modified_at.to_le_bytes());
+
+    // Whether this entry belongs in the receiver's private vault. Sent
+    // explicitly because the receiver cannot tell from the path, and gets one
+    // chance to file it correctly: a private version adopted as shared content
+    // would be advertised onward to every other device.
+    out.push(v.private as u8);
 }
 
 fn decode_version(r: &mut Reader<'_>) -> Result<FileVersion> {
@@ -292,6 +298,7 @@ fn decode_version(r: &mut Reader<'_>) -> Result<FileVersion> {
         vector,
         modified_by: DeviceId::from_bytes(r.hash()?),
         modified_at: r.u64()? as i64,
+        private: r.u8()? != 0,
     })
 }
 

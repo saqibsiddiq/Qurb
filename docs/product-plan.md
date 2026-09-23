@@ -4,9 +4,14 @@ A plan written against what the repository actually contains, not against what
 the architecture document describes. Read
 [CODEBASE.md](CODEBASE.md) first; this assumes it.
 
-**Status: phase 0 done.** The data model is settled and built — see
-[decisions/0029](decisions/0029-two-areas-shared-and-private.md). The rest of
-this plan stands as written.
+**Status: phase 0 done, and the transfer primitive with it.** The data model is
+settled and built — see
+[decisions/0029](decisions/0029-two-areas-shared-and-private.md) — and a device
+can now put a file in another device's vault and have it arrive, on the command
+line, with the retention rule recorded in
+[decisions/0030](decisions/0030-sending-a-file-to-one-device.md). What is
+missing from phase 5 is the *interface*, not the mechanism. The rest of this
+plan stands as written.
 
 ---
 
@@ -112,6 +117,7 @@ running it, not by reading about it.
 | Android share sheet (§39) | built; works with no network |
 | DocumentsProvider (§40) | built |
 | Background sync (§38) | built; WorkManager, and push when configured |
+| Send a copy to one device (§11, §12, §21, §22) | built; `qurb send`, held until collected, no interface yet |
 | Activity / transfers data (§26, §27) | the events exist; there is no store or API for them |
 | Search (§31) | `Db` has the index; there is no search API |
 
@@ -131,8 +137,6 @@ The gap for most of these is an **API and a screen**, not an engine change.
 
 ## 4. What does not exist at all
 
-- Per-device vaults and their access control (§3, §4)
-- Send-a-copy transfers (§11, §12, §21, §22)
 - A sharing model (§23)
 - Transfer history and activity storage (§26, §27)
 - Search (§31)
@@ -160,9 +164,11 @@ CLAUDE.md:
 The specification's phases (§74) are sound. Reordered only where the repository
 says something must come first.
 
-**0. Decide the data model.** ✅ Done. Two areas, enforced in the protocol.
-What remains from it: nothing yet *writes* to a vault, which is the transfer
-primitive phase 5 needs.
+**0. Decide the data model.** ✅ Done. Two areas, enforced in the protocol, and
+the transfer primitive phase 5 needs: `qurb send <file> to <device>` writes into
+a vault, the recipient collects it once, and the sender releases its copy first
+under storage pressure. What phase 5 still owes is the interface, the progress
+reporting and the Downloads destination.
 
 **1. An API the UI can use.** The engine's surface is `reconcile`,
 `plan_against`, `apply_plan`. A product needs to ask "what devices, what
@@ -180,6 +186,7 @@ home, settings.
 **4. Pairing and devices**, on the existing pairing infrastructure.
 
 **5. Transfers**: send, receive, progress, Downloads destination, notifications.
+The send and receive *mechanism* is built; this phase is the interface over it.
 
 **6. Android product UI.**
 
@@ -229,10 +236,16 @@ hardware where hardware is involved. Not when it compiles.
   number the relay bill depends on.
 - **Two devices that are never awake together never meet**, unless something
   always-on is in the picture.
+- **A send cannot be withdrawn** once the recipient has collected it, and a
+  replica cannot usefully carry one — see
+  [decisions/0030](decisions/0030-sending-a-file-to-one-device.md).
+- **Every device must be rebuilt together.** The wire protocol moved to
+  `qurb/1` when tree entries gained a private flag; an older build refuses to
+  connect rather than mishandling it.
 
 ## 10. Testing
 
-The existing suite is 495 tests across eleven crates, and the classes that
+The existing suite is 510 tests across eleven crates, and the classes that
 matter here already exist: property-based convergence, crash injection,
 corruption repair, hostile peers, concurrent collection. New work extends those
 rather than starting a parallel tradition.
@@ -248,4 +261,5 @@ Those are Phase 6 in [roadmap.md](roadmap.md) and unchanged by this.
 
 ## 12. What I need decided
 
-See §5. The first one blocks the rest.
+See §5. The first two are decided; §5.3, §5.4 and §5.5 remain, and none of them
+blocks the sequence above before phase 8.

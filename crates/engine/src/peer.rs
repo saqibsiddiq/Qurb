@@ -143,14 +143,55 @@ impl Engine {
     /// Tombstones included. A peer not told about a deletion still holds the
     /// file, offers it back, and the deletion undoes itself.
     pub fn tree(&self) -> Result<Vec<FileVersion>> {
-        Ok(self.store().tree()?)
+        Ok(self.store().shared_tree()?)
+    }
+
+    /// What this device would tell one particular peer it has: the shared area,
+    /// plus anything sitting in that peer's vault waiting to be collected.
+    ///
+    /// This is what the network server answers with. [`Engine::tree`] is the
+    /// same thing for a peer with nothing waiting.
+    pub fn tree_for(&self, peer: &qurb_sync::DeviceId) -> Result<Vec<FileVersion>> {
+        Ok(self.store().tree_for(qurb_storage::db::Audience::Device(peer))?)
     }
 
     /// Work out what should happen, given the peer's view.
     ///
     /// Pure: it reads the index and decides, but changes nothing.
     pub fn plan_against(&self, remote: &[FileVersion]) -> Result<Vec<Action>> {
-        Ok(qurb_sync::reconcile(&self.tree()?, remote))
+        // Vault entries are *delivered*, not reconciled. Reconciliation asks
+        // which of two histories of a shared path should win; a file somebody
+        // sent you has no shared history and no counterpart here to lose to.
+        // Running it through the same machinery would have the recipient offer
+        // the sender their own file back, and a deletion on either side argue
+        // with the other.
+        let (offered, shared): (Vec<_>, Vec<_>) =
+            remote.iter().cloned().partition(|v| v.private);
+
+        let mut actions = qurb_sync::reconcile(&self.tree()?, &shared);
+        actions.extend(self.deliveries(&offered)?);
+        Ok(actions)
+    }
+
+    /// Content waiting in this device's vault that it has not taken yet.
+    ///
+    /// Keyed by content rather than by path, and counting tombstones, so that a
+    /// delivery is taken exactly once. Keyed by path it would arrive again
+    /// under a new name every time the sender reappeared; ignoring tombstones,
+    /// deleting something somebody sent you would be impossible.
+    fn deliveries(&self, offered: &[FileVersion]) -> Result<Vec<Action>> {
+        let mut out = Vec::new();
+        for version in offered {
+            // A tombstone in a vault is the sender tidying up their side. What
+            // the recipient does with content it has already taken is the
+            // recipient's business.
+            let Some(hash) = version.content.hash() else { continue };
+            if self.store().vault_knows(&blake3::Hash::from(*hash))? {
+                continue;
+            }
+            out.push(Action::Adopt { remote: version.clone() });
+        }
+        Ok(out)
     }
 
     /// Actions that bring back files whose local copy was dropped.
@@ -252,6 +293,24 @@ impl Engine {
         source: &mut dyn ContentSource,
         stats: &mut PlanStats,
     ) -> Result<()> {
+        // Content sent to this device's vault is filed under a name that is
+        // free here. The sender named it the way *they* think of it, so a
+        // clash with something the recipient already has is ordinary rather
+        // than exceptional -- two people can both have a `report.pdf` -- and
+        // neither file may be overwritten.
+        let version = &if version.private && !version.is_deleted() {
+            match self.store().db().live_path_anywhere(&version.path)? {
+                true => {
+                    let renamed = qurb_sync::received_path(version);
+                    tracing::info!(sent_as = %version.path, filed_as = %renamed, "that name was taken");
+                    FileVersion { path: renamed, ..version.clone() }
+                }
+                false => version.clone(),
+            }
+        } else {
+            version.clone()
+        };
+
         let path = self.root().join(&version.path);
 
         match &version.content {
@@ -283,8 +342,17 @@ impl Engine {
                 //
                 // [decision 0025]: ../../../docs/decisions/0025-a-storage-cap-that-cannot-lose-data.md
                 if version.modified_by != self.store().device_id()? {
-                    self.store()
-                        .note_replica(&blake3::Hash::from(*hash), &version.modified_by)?;
+                    let content = blake3::Hash::from(*hash);
+                    if version.private {
+                        // The sender is holding this *for us*, and will stop as
+                        // soon as we confirm we have it. Recorded as the vault
+                        // delivery it is, so the storage cap never treats the
+                        // sender as a copy this device can fall back on -- the
+                        // two of us releasing in turn would lose the file.
+                        self.store().note_replica_in_vault(&content, &version.modified_by)?;
+                    } else {
+                        self.store().note_replica(&content, &version.modified_by)?;
+                    }
                 }
 
                 // Refuse a path this filesystem cannot keep separate from one
@@ -367,7 +435,11 @@ impl Engine {
                 // so the engine's size-and-mtime fast path recognises it and
                 // does not immediately re-read what it just wrote.
                 let mtime = std::fs::metadata(&path).ok().map(|m| mtime_ns(&m)).unwrap_or(0);
-                self.store_mut().adopt_file(version, &path, mtime)?;
+                if version.private {
+                    self.store_mut().adopt_file_privately(version, &path, mtime)?;
+                } else {
+                    self.store_mut().adopt_file(version, &path, mtime)?;
+                }
 
                 // Committed, so it is now true to say this device holds it.
                 // Told after the rename rather than after the fetch: the point

@@ -14,6 +14,7 @@ qurb status <dir>                what this device holds and trusts
 qurb verify <dir> [--deep]       check the store against itself
 qurb reclaim <dir>               free space the folder itself already holds
 qurb fetch <dir> <path>          ask for a dropped file's contents back
+qurb send <dir> <file> to <dev>  send a file to one device, privately
 qurb config <dir> [key=value]    show or change settings
 
 qurb signal [addr] [--push <j>]  the rendezvous service
@@ -43,6 +44,22 @@ Sharing a key is what makes two devices *yours*. Pairing is separate and still
 necessary: it is how they learn each other's network identity, and it happens
 out of band because someone able to change what is on your screen has already
 won.
+
+## Sending a file to one device
+
+```bash
+qurb send ~/Sync ~/Downloads/tickets.pdf to phone
+```
+
+The file goes into that device's private vault: it appears in their folder and
+on no other device, and nothing about it is advertised to the rest of the
+fleet. Name the recipient the way `qurb status` lists it, or by its short id if
+two devices share a name.
+
+The bytes stay on this device until the recipient confirms they arrived, so
+sending to a phone that is switched off works — it collects the file the next
+time it syncs. After that the copy here is the first thing dropped when the
+storage limit bites, before any of this device's own files.
 
 ## How news travels
 

@@ -59,6 +59,43 @@ enum Payloads {
     Rewrite,
 }
 
+/// The three things about a write that the caller decides and the bytes cannot.
+///
+/// Grouped because they travel together through every path into the index, and
+/// because seven positional arguments of which three are `Some(_)`/`None` is a
+/// shape that invites silent mistakes at the call site.
+struct Placement<'a> {
+    stamp: Stamp<'a>,
+    payloads: Payloads,
+    /// Whose vault this belongs in. `None` is the shared area — everything the
+    /// product had before vaults existed.
+    vault: Option<&'a DeviceId>,
+}
+
+impl<'a> Placement<'a> {
+    /// A change made on this device, in the shared area.
+    fn local() -> Self {
+        Self { stamp: Stamp::Local, payloads: Payloads::TrustIndex, vault: None }
+    }
+
+    /// A version decided elsewhere, in the shared area.
+    fn remote(version: &'a FileVersion) -> Self {
+        Self { stamp: Stamp::Remote(version), payloads: Payloads::TrustIndex, vault: None }
+    }
+
+    /// The same, but into a vault rather than the shared area.
+    fn in_vault(mut self, owner: Option<&'a DeviceId>) -> Self {
+        self.vault = owner;
+        self
+    }
+
+    /// Write every payload, whatever the index believes. Repair only.
+    fn rewriting(mut self) -> Self {
+        self.payloads = Payloads::Rewrite;
+        self
+    }
+}
+
 /// What a write actually cost.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct PutStats {
@@ -183,18 +220,18 @@ impl Store {
         // Mapping a zero-length file fails, and there is nothing to map anyway.
         if meta.len() == 0 {
             let manifest = chunker::chunk_bytes(&[]);
-            return self.put_manifest(logical_path, &manifest, &[], mtime_ns, Stamp::Local, Payloads::TrustIndex);
+            return self.put_manifest(logical_path, &manifest, &[], mtime_ns, Placement::local());
         }
 
         let mmap = unsafe { memmap2::Mmap::map(&file) }.map_err(|e| Error::io(source, e))?;
         let manifest = chunker::chunk_bytes(&mmap);
-        self.put_manifest(logical_path, &manifest, &mmap, mtime_ns, Stamp::Local, Payloads::TrustIndex)
+        self.put_manifest(logical_path, &manifest, &mmap, mtime_ns, Placement::local())
     }
 
     /// Store an in-memory buffer under a logical path, as a change made here.
     pub fn put_bytes(&mut self, logical_path: &str, data: &[u8], mtime_ns: i64) -> Result<PutStats> {
         let manifest = chunker::chunk_bytes(data);
-        self.put_manifest(logical_path, &manifest, data, mtime_ns, Stamp::Local, Payloads::TrustIndex)
+        self.put_manifest(logical_path, &manifest, data, mtime_ns, Placement::local())
     }
 
     /// Take on a version decided elsewhere, keeping the vector it arrived with.
@@ -220,8 +257,7 @@ impl Store {
                     &manifest,
                     data,
                     mtime_ns,
-                    Stamp::Remote(version),
-                    Payloads::TrustIndex,
+                    Placement::remote(version),
                 )
             }
             Content::Deleted => {
@@ -243,6 +279,34 @@ impl Store {
         source: &Path,
         mtime_ns: i64,
     ) -> Result<PutStats> {
+        self.adopt_file_scoped(version, source, mtime_ns, None)
+    }
+
+    /// Take on a version that was sent to this device privately.
+    ///
+    /// Written into the folder exactly like anything else — the user asked for
+    /// a file and should find a file. What differs is the index row: it is
+    /// scoped to this device, so it is never advertised to any peer. A
+    /// received file that entered the shared area would be pushed to every
+    /// other device the next time they synced, which is the opposite of what
+    /// sending something to one device means.
+    pub fn adopt_file_privately(
+        &mut self,
+        version: &FileVersion,
+        source: &Path,
+        mtime_ns: i64,
+    ) -> Result<PutStats> {
+        let me = self.db.local_device()?;
+        self.adopt_file_scoped(version, source, mtime_ns, Some(&me))
+    }
+
+    fn adopt_file_scoped(
+        &mut self,
+        version: &FileVersion,
+        source: &Path,
+        mtime_ns: i64,
+        vault: Option<&DeviceId>,
+    ) -> Result<PutStats> {
         let file = std::fs::File::open(source).map_err(|e| Error::io(source, e))?;
         let meta = file.metadata().map_err(|e| Error::io(source, e))?;
 
@@ -253,8 +317,7 @@ impl Store {
                 &manifest,
                 &[],
                 mtime_ns,
-                Stamp::Remote(version),
-                Payloads::TrustIndex,
+                Placement::remote(version).in_vault(vault),
             );
         }
 
@@ -265,8 +328,7 @@ impl Store {
             &manifest,
             &mmap,
             mtime_ns,
-            Stamp::Remote(version),
-            Payloads::TrustIndex,
+            Placement::remote(version).in_vault(vault),
         )
     }
 
@@ -302,9 +364,9 @@ impl Store {
         manifest: &Manifest,
         data: &[u8],
         mtime_ns: i64,
-        stamp: Stamp<'_>,
-        payloads: Payloads,
+        placement: Placement<'_>,
     ) -> Result<PutStats> {
+        let Placement { stamp, payloads, vault } = placement;
         let mut stats = PutStats { chunks_total: manifest.chunks.len(), ..Default::default() };
 
         // Short-circuit an unchanged file: the content hash already matches, so
@@ -351,7 +413,24 @@ impl Store {
         // first, but nothing in the type system says so, and skipping the
         // write for a file that is *not* in the tree would lose the content
         // entirely.
-        let materialised = self.supplies(logical_path);
+        // A vault entry is held on somebody else's behalf and is never in this
+        // device's folder, whatever a file of the same name there might
+        // suggest. Saying otherwise would make its payloads depend on a file
+        // the owner of the vault has no say over: delete your own `report.pdf`
+        // and the copy you sent someone would stop being readable.
+        // A vault entry held for *someone else* is never backed by a file in
+        // this device's folder, even when a file of that name and content
+        // happens to be sitting there. Letting it lean on that file would mean
+        // deleting your own `report.pdf` quietly destroyed the copy you sent
+        // somebody — which is not a say you should have over their data.
+        //
+        // This device's *own* vault is different: content sent here is written
+        // into the folder like anything else, and is read from there.
+        let backed_by_folder = match vault {
+            None => true,
+            Some(owner) => *owner == self.db.local_device()?,
+        };
+        let materialised = backed_by_folder && self.supplies(logical_path);
 
         // Phase 1: get every payload on disk. Distinct hashes only -- a file
         // that repeats a chunk internally should not write it twice.
@@ -472,12 +551,17 @@ impl Store {
         // remember to clear it.
         let holding = materialised || self.tree.is_none();
 
+        let conflict = match vault {
+            None => "ON CONFLICT (path) WHERE scope IS NULL DO UPDATE SET",
+            Some(_) => "ON CONFLICT (scope, path) WHERE scope IS NOT NULL DO UPDATE SET",
+        };
         let file_id: i64 = tx.query_row(
+            &format!(
             "INSERT INTO files
                  (path, size, content_hash, mtime_ns, created_at, updated_at, deleted_at,
-                  vector, modified_by, materialised, touched_at, wanted)
-             VALUES (?1, ?2, ?3, ?4, unixepoch(), ?5, NULL, ?6, ?7, ?8, unixepoch(), 0)
-             ON CONFLICT (path) WHERE scope IS NULL DO UPDATE SET
+                  vector, modified_by, materialised, touched_at, wanted, scope)
+             VALUES (?1, ?2, ?3, ?4, unixepoch(), ?5, NULL, ?6, ?7, ?8, unixepoch(), 0, ?9)
+             {conflict}
                  size = excluded.size,
                  content_hash = excluded.content_hash,
                  mtime_ns = excluded.mtime_ns,
@@ -488,7 +572,8 @@ impl Store {
                  materialised = excluded.materialised,
                  touched_at = excluded.touched_at,
                  wanted = CASE WHEN excluded.materialised = 1 THEN 0 ELSE wanted END
-             RETURNING id",
+             RETURNING id"
+            ),
             rusqlite::params![
                 logical_path,
                 manifest.size as i64,
@@ -498,6 +583,7 @@ impl Store {
                 vector.encode(),
                 modified_by.as_bytes().as_slice(),
                 holding as i64,
+                vault.map(|d| d.as_bytes().to_vec()),
             ],
             |r| r.get(0),
         )?;
@@ -814,6 +900,89 @@ impl Store {
         Ok(matches!(self.chunk_from_tree(hash), Ok(Some(_))))
     }
 
+    /// Hold content on another device's behalf, in its private vault.
+    ///
+    /// The bytes are kept here so the recipient can collect them whenever it
+    /// next appears — a send to a phone that is switched off must not need the
+    /// sender to still be holding a file open when it wakes. The recipient
+    /// learns of it from the tree, which shows a device its own vault.
+    ///
+    /// Always kept as chunks, never as a file in this device's folder. That is
+    /// not an optimisation: a vault entry that leaned on a same-named file in
+    /// the sender's folder would stop being readable the moment the sender
+    /// deleted their own copy, which is not a say the sender should have over
+    /// somebody else's data.
+    ///
+    /// The path is the one the *recipient* will see, so it is theirs to
+    /// organise. Two recipients may be sent the same name without collision.
+    pub fn send_to_vault(
+        &mut self,
+        logical_path: &str,
+        source: &Path,
+        recipient: &DeviceId,
+    ) -> Result<PutStats> {
+        let file = std::fs::File::open(source).map_err(|e| Error::io(source, e))?;
+        let meta = file.metadata().map_err(|e| Error::io(source, e))?;
+        let mtime_ns = mtime_from(&meta);
+
+        if meta.len() == 0 {
+            let manifest = chunker::chunk_bytes(&[]);
+            return self.put_manifest(
+                logical_path,
+                &manifest,
+                &[],
+                mtime_ns,
+                Placement::local().in_vault(Some(recipient)),
+            );
+        }
+
+        // SAFETY: the same mapping the ordinary write path uses, for the same
+        // reason — chunking and storing from one map rather than reading every
+        // byte twice.
+        let mapped = unsafe { memmap2::Mmap::map(&file) }.map_err(|e| Error::io(source, e))?;
+        let manifest = chunker::chunk_bytes(&mapped);
+        self.put_manifest(
+            logical_path,
+            &manifest,
+            &mapped,
+            mtime_ns,
+            Placement::local().in_vault(Some(recipient)),
+        )
+    }
+
+    /// Drop payloads this device is holding only on somebody else's behalf.
+    ///
+    /// Vault content is kept after the recipient has taken it, so a send is
+    /// never silently the only copy — but it is the first thing to go when
+    /// disk runs short, before any of this device's own files. Somebody else's
+    /// safety net should yield before your own work does.
+    ///
+    /// Only content another device is recorded as holding, and only chunks no
+    /// other file still needs from the chunk store. A chunk shared with a file
+    /// that has nowhere else to read it is left alone, however tempting its
+    /// size — which is the same rule the storage cap follows and the reason
+    /// this is safe to run unattended.
+    ///
+    /// Returns what it freed.
+    pub fn release_held_payloads(&mut self) -> Result<GcStats> {
+        let mut stats = GcStats::default();
+
+        for hash in self.db.releasable_held_chunks()? {
+            if !self.cas.contains(&hash) {
+                continue;
+            }
+            let freed = self.cas.stored_size(&hash).unwrap_or(0);
+            self.cas.remove(&hash)?;
+            self.db.conn().execute(
+                "UPDATE chunks SET stored_size = 0 WHERE hash = ?1",
+                rusqlite::params![hash.as_bytes().as_slice()],
+            )?;
+            stats.chunks_removed += 1;
+            stats.bytes_reclaimed += freed;
+        }
+        Ok(stats)
+    }
+
     /// Every path one device is entitled to know about.
     ///
     /// The shared area plus that device's own vault, and never anybody else's.
@@ -846,10 +1015,16 @@ impl Store {
         self.db.set_scope(logical_path, vault)
     }
 
-    /// Every path this device knows about, tombstones included: what it would
-    /// advertise to a peer.
+    /// Every path this device knows about, vaults included, tombstones
+    /// included. This device's own complete view.
     pub fn tree(&self) -> Result<Vec<FileVersion>> {
         self.db.all_versions()
+    }
+
+    /// The shared area only: what this device advertises to a peer with
+    /// nothing waiting for it.
+    pub fn shared_tree(&self) -> Result<Vec<FileVersion>> {
+        self.db.versions_for(db::Audience::Unplaced)
     }
 
     /// This device's identity.
@@ -884,8 +1059,7 @@ impl Store {
             &manifest,
             data,
             mtime_ns,
-            Stamp::Remote(version),
-            Payloads::Rewrite,
+            Placement::remote(version).rewriting(),
         )
     }
 
@@ -995,9 +1169,37 @@ impl Store {
         self.db.undelivered()
     }
 
-    /// Note that another device has taken delivery of this content.
+    /// Note that another device has taken delivery of this content, into the
+    /// shared area where this device could ask for it back.
     pub fn note_replica(&self, content: &blake3::Hash, device: &DeviceId) -> Result<()> {
         self.db.note_replica(content, device)
+    }
+
+    /// Note that another device has taken this content into its private vault.
+    ///
+    /// Enough to stop holding it for them; never enough to drop something of
+    /// this device's own. See [`Db::note_replica_in_vault`](crate::db::Db::note_replica_in_vault).
+    pub fn note_replica_in_vault(&self, content: &blake3::Hash, device: &DeviceId) -> Result<()> {
+        self.db.note_replica_in_vault(content, device)
+    }
+
+    /// Devices with content waiting in their vault here. See
+    /// [`Db::awaiting_collection`](crate::db::Db::awaiting_collection).
+    pub fn awaiting_collection(&self) -> Result<Vec<DeviceId>> {
+        self.db.awaiting_collection()
+    }
+
+    /// Files sent to another device that it has not collected yet. See
+    /// [`Db::pending_deliveries`](crate::db::Db::pending_deliveries).
+    pub fn pending_deliveries(&self) -> Result<Vec<(String, u64, DeviceId)>> {
+        self.db.pending_deliveries()
+    }
+
+    /// Whether this device has already taken delivery of these bytes into its
+    /// own vault. Tombstones count -- see
+    /// [`Db::vault_knows`](crate::db::Db::vault_knows).
+    pub fn vault_knows(&self, content: &blake3::Hash) -> Result<bool> {
+        self.db.vault_knows(content)
     }
 
     /// Files whose bytes could be dropped, coldest first. See [`Db::evictable`].

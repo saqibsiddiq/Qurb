@@ -137,13 +137,34 @@ fn wins_path(local: &FileVersion, remote: &FileVersion) -> bool {
 }
 
 /// Where a losing version is written: `name.conflict-<device>-<when>.ext`.
+pub fn conflict_path(version: &FileVersion) -> String {
+    decorate(version, "conflict")
+}
+
+/// Where content sent into this device's vault is written when its path is
+/// already taken: `name.from-<device>-<when>.ext`.
 ///
-/// The suffix goes before the final extension so the file still opens in the
+/// A send names the file the way the *sender* thinks of it, so a collision
+/// with something the recipient already has is ordinary rather than
+/// exceptional — two people can both have a `report.pdf`. Neither file is
+/// wrong and neither may be overwritten, so the arriving one is renamed and
+/// both are kept, by the same rule and the same machinery as a conflict.
+///
+/// Worded "from" rather than "conflict" because nothing went wrong: the user
+/// should be able to tell at a glance that this is something somebody sent
+/// them, not a sync failure they need to resolve.
+pub fn received_path(version: &FileVersion) -> String {
+    decorate(version, "from")
+}
+
+/// Insert `.{marker}-<device>-<when>` before the final extension.
+///
+/// The suffix goes before the extension so the file still opens in the
 /// application it belongs to. `report.docx` becomes
 /// `report.conflict-a1b2c3d4-2026-09-09-143022.docx`, not
 /// `report.docx.conflict-…`, which most systems would treat as having no known
 /// type at all.
-pub fn conflict_path(version: &FileVersion) -> String {
+fn decorate(version: &FileVersion, marker: &str) -> String {
     let (dir, name) = match version.path.rfind('/') {
         Some(i) => (&version.path[..=i], &version.path[i + 1..]),
         None => ("", version.path.as_str()),
@@ -158,7 +179,7 @@ pub fn conflict_path(version: &FileVersion) -> String {
     };
 
     format!(
-        "{dir}{stem}.conflict-{}-{}{ext}",
+        "{dir}{stem}.{marker}-{}-{}{ext}",
         version.modified_by.short(),
         format_utc(version.modified_at)
     )

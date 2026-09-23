@@ -227,7 +227,35 @@ and its most important clause is: **never silently discard a user's edit.**
 Both versions are kept; only the question of which one keeps the original
 filename is decided automatically.
 
-### 2.5 Encryption happens before anything leaves the device
+### 2.5 A path lives in one of two places
+
+Everything above describes one namespace that every paired device converges on.
+That is the **shared area**, and it is where a path lives unless something says
+otherwise — put a file in the folder on your laptop and it appears on your
+phone.
+
+Alongside it, each device has a **private vault**. Other devices may put content
+into it; nobody but the owner may list it or read it back. It is the difference
+between "our files" and "here, this is for you".
+
+In the index this is one nullable column, `files.scope`: `NULL` is the shared
+area, a device id is that device's vault. In the protocol it is an
+authorisation check on every request that could reveal content — the tree, a
+manifest, a chunk — because a user interface that declines to draw a listing
+stops nothing, and a peer can ask for content by hash without ever looking at a
+listing.
+
+Sending is the operation built on top: `qurb send <file> to <device>` puts a
+file in that device's vault, the sender holds the bytes until the recipient
+confirms they arrived, and the recipient files it in their own folder without
+advertising it onward. See
+[decisions/0029](decisions/0029-two-areas-shared-and-private.md) for the data
+model and [decisions/0030](decisions/0030-sending-a-file-to-one-device.md) for
+what a send promises — including the rule that a copy in somebody's vault is a
+copy this device may *not* count on, which is the difference between eviction
+and data loss.
+
+### 2.6 Encryption happens before anything leaves the device
 
 Chunks are compressed, then encrypted, then written to disk and sent over the
 network. The keys never leave your devices. Our servers see encrypted bytes and
@@ -513,6 +541,8 @@ product around it largely is not.
 | Integrity verification | detects missing, corrupt, and orphaned chunks |
 | Reclaiming duplicates | `qurb reclaim`, for stores written before single-copy |
 | A storage limit | drops local copies, keeps the index, never the only copy |
+| Per-device private vaults | `files.scope`: `NULL` is shared, a device id is that device's vault |
+| Sending to one device | `qurb send <file> to <device>`; held until collected, released first afterwards |
 
 ### Built and tested (`crates/watcher`, Phase 1)
 
@@ -543,6 +573,7 @@ product around it largely is not.
 | Version vectors | partial order, merge, deterministic encoding |
 | Conflict detection | by causality, never by wall-clock time |
 | Conflict resolution | both versions kept; a concurrent edit beats a delete |
+| Deliveries | vault entries are collected once, not reconciled |
 | Tree reconciliation | plans describing end states, not decisions |
 | Convergence | two and three devices, 320 random seeds |
 
@@ -568,6 +599,7 @@ for the workspace as it stands.
 | Wire format | length-bounded; decoder has no panicking path |
 | Incremental transfer | only chunks the receiver lacks cross the wire |
 | Read-only serving | a peer can ask, never tell — with one exception below |
+| Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
 | Every reachable address offered | LAN, overlay network and public, raced in parallel |
 | Signalling that reconnects | a rendezvous restart costs seconds, not a daemon restart |
@@ -582,9 +614,16 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-495 tests pass across eleven crates on Linux; clippy is clean. The last run on
+510 tests pass across eleven crates on Linux; clippy is clean. The last run on
 a Galaxy S23 was 426 of them, before this week's work — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
+
+**The wire protocol is `qurb/1`.** It was `qurb/0` until tree entries gained a
+flag saying "this belongs in your vault", which is not a byte an older build can
+safely ignore — it would adopt somebody else's private content as shared and
+advertise it to the whole fleet. Devices negotiate it during the TLS handshake,
+so a mismatch is a clean refusal to connect. Every device has to be rebuilt
+together.
 
 **Two devices now sync over a real network connection**, converging through
 concurrent edits, deletions and resurrections, with both sides computing the
@@ -901,6 +940,12 @@ introduce them, then `run` on both:
 # Ask for a file whose local copy was dropped. Acted on when a peer is next
 # reachable, so it works while offline.
 ./target/release/qurb fetch ~/Sync holiday/beach.jpg
+```
+
+```bash
+# Send a file to one device and to nobody else. The bytes stay here until that
+# device confirms it has them, so it works while the recipient is switched off.
+./target/release/qurb send ~/Sync ~/Downloads/tickets.pdf to phone
 ```
 
 ```bash

@@ -23,7 +23,16 @@ use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
 use rustls::{DigitallySignedStruct, DistinguishedName, SignatureScheme};
 use std::sync::Arc;
 
-pub const ALPN: &[u8] = b"qurb/0";
+/// The protocol this build speaks. Negotiated during the TLS handshake, so a
+/// mismatch is a clean refusal to connect rather than two devices exchanging
+/// messages neither can parse.
+///
+/// Bumped from `qurb/0` when tree entries gained a private flag. That byte is
+/// not optional: a build that ignored it would adopt content sent to another
+/// device's vault as ordinary shared content and advertise it to the whole
+/// fleet. Refusing to talk to an older build is the correct outcome, and the
+/// reason this constant exists at all.
+pub const ALPN: &[u8] = b"qurb/1";
 
 fn hex(bytes: &[u8; 32]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()

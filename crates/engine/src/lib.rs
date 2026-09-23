@@ -301,6 +301,25 @@ impl Engine {
         }
 
         let mut over = stats.used_before - limit;
+
+        // Somebody else's copy goes before any of this device's own files. A
+        // vault entry the recipient already has is pure courtesy storage; the
+        // user's own work is not.
+        match self.store.release_held_payloads() {
+            Ok(released) if released.bytes_reclaimed > 0 => {
+                tracing::info!(
+                    chunks = released.chunks_removed,
+                    freed = released.bytes_reclaimed,
+                    "released content held for other devices to stay under the limit"
+                );
+                stats.released += released.chunks_removed;
+                stats.freed += released.bytes_reclaimed;
+                over = over.saturating_sub(released.bytes_reclaimed);
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = %e, "releasing held content failed"),
+        }
+
         for (path, size, _) in self.store.evictable()? {
             if over == 0 {
                 break;
@@ -611,6 +630,9 @@ pub struct CapStats {
     pub freed: u64,
     /// Candidates the store declined to drop, having found them unsafe.
     pub refused: usize,
+    /// Chunks dropped that were held only for another device, which has them.
+    /// Released before any of this device's own files.
+    pub released: usize,
     /// Bytes still over the limit after doing everything permitted. Non-zero
     /// means the device holds content nothing else has, and is keeping it.
     pub still_over: u64,

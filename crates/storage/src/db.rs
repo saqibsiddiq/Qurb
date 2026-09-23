@@ -23,7 +23,7 @@ use std::path::Path;
 ///
 /// Migrations are append-only. Editing one that has already shipped would leave
 /// databases in the field at a schema nobody can reproduce.
-const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
+const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -287,6 +287,22 @@ CREATE INDEX idx_files_wanted ON files (wanted) WHERE wanted = 1 AND deleted_at 
 CREATE INDEX idx_files_scope ON files (scope);
 "#;
 
+const V9: &str = r#"
+-- Not every copy elsewhere is a copy you can ask for back.
+--
+-- A device that collected content into its *private vault* holds the bytes,
+-- but this device may not read another device's vault -- that is the whole
+-- point of a vault. Counting such a delivery as "the content exists
+-- elsewhere" would let the storage cap drop a shared-area file whose only
+-- other copy is behind a door this device cannot open. That is data loss
+-- wearing eviction's clothes.
+--
+-- Existing rows default to 0: every replica recorded before vaults existed
+-- was an ordinary shared-area delivery, and treating them as such is both
+-- true and the conservative reading.
+ALTER TABLE replicas ADD COLUMN private INTEGER NOT NULL DEFAULT 0;
+"#;
+
 pub struct Db {
     conn: Connection,
 }
@@ -532,19 +548,44 @@ impl Db {
     /// a peer that fetched it from us has it, and a peer we fetched it from had
     /// it. This is what makes eviction safe -- see [`Db::evictable`].
     pub fn note_replica(&self, content: &blake3::Hash, device: &DeviceId) -> Result<()> {
+        self.record_replica(content, device, false)
+    }
+
+    /// Record that `device` took these bytes into its own private vault.
+    ///
+    /// Distinguished from an ordinary delivery because this device cannot ask
+    /// for them back: a vault is readable only by the device that owns it. The
+    /// row is enough to release content held *for* that device, and not enough
+    /// to evict anything from this device's shared area. See the `V9`
+    /// migration for what goes wrong when the two are conflated.
+    ///
+    /// A device that later acquires the same content in the shared area is
+    /// upgraded to an ordinary replica; the reverse never happens, because
+    /// knowing less than before is not something a delivery can teach us.
+    pub fn note_replica_in_vault(&self, content: &blake3::Hash, device: &DeviceId) -> Result<()> {
+        self.record_replica(content, device, true)
+    }
+
+    fn record_replica(&self, content: &blake3::Hash, device: &DeviceId, private: bool) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO replicas (content_hash, device_id, at)
-             VALUES (?1, ?2, unixepoch())
-             ON CONFLICT (content_hash, device_id) DO UPDATE SET at = excluded.at",
-            params![content.as_bytes().as_slice(), device.as_bytes().as_slice()],
+            "INSERT INTO replicas (content_hash, device_id, at, private)
+             VALUES (?1, ?2, unixepoch(), ?3)
+             ON CONFLICT (content_hash, device_id) DO UPDATE SET
+                 at = excluded.at,
+                 private = min(replicas.private, excluded.private)",
+            params![content.as_bytes().as_slice(), device.as_bytes().as_slice(), private as i64],
         )?;
         Ok(())
     }
 
-    /// How many other devices are known to hold these bytes.
+    /// How many other devices hold these bytes somewhere we could ask for them.
+    ///
+    /// Vault deliveries are excluded on purpose: they are copies that exist and
+    /// cannot be retrieved, which is no help to a device deciding whether it is
+    /// safe to drop its own.
     pub fn replica_count(&self, content: &blake3::Hash) -> Result<usize> {
         let n: i64 = self.conn.query_row(
-            "SELECT count(*) FROM replicas WHERE content_hash = ?1",
+            "SELECT count(*) FROM replicas WHERE content_hash = ?1 AND private = 0",
             params![content.as_bytes().as_slice()],
             |r| r.get(0),
         )?;
@@ -580,7 +621,10 @@ impl Db {
               WHERE f.deleted_at IS NULL
                 AND f.materialised = 1
                 AND f.scope IS NULL
-                AND EXISTS (SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash)
+                AND EXISTS (
+                      SELECT 1 FROM replicas r
+                       WHERE r.content_hash = f.content_hash AND r.private = 0
+                    )
               ORDER BY f.touched_at ASC, f.size DESC",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -844,15 +888,110 @@ impl Db {
                 rows.map(|row| Ok(row_to_version(&row?))).collect()
             }
             Audience::Device(asker) => {
-                let mut stmt = self.conn.prepare(&format!(
-                    "SELECT {FILE_COLUMNS} FROM files
-                      WHERE scope IS NULL OR scope = ?1
-                      ORDER BY path"
+                // Two queries rather than one, so that each version is marked
+                // with where it came from. The asker cannot tell a shared file
+                // from something sent to it privately by looking at the path,
+                // and it has exactly one chance to file it correctly.
+                let mut out = Vec::new();
+                let mut shared = self.conn.prepare(&format!(
+                    "SELECT {FILE_COLUMNS} FROM files WHERE scope IS NULL ORDER BY path"
                 ))?;
-                let rows = stmt.query_map(params![asker.as_bytes().as_slice()], file_row)?;
-                rows.map(|row| Ok(row_to_version(&row?))).collect()
+                for row in shared.query_map([], file_row)? {
+                    out.push(row_to_version(&row?));
+                }
+                let mut theirs = self.conn.prepare(&format!(
+                    "SELECT {FILE_COLUMNS} FROM files WHERE scope = ?1 ORDER BY path"
+                ))?;
+                for row in theirs.query_map(params![asker.as_bytes().as_slice()], file_row)? {
+                    out.push(row_to_version(&row?).into_private());
+                }
+                Ok(out)
             }
         }
+    }
+
+    /// Whether any live file claims this path, in the shared area or in any
+    /// vault. Asked before filing a delivery, because one path is one file on
+    /// disk however many index rows point at it.
+    pub fn live_path_anywhere(&self, path: &str) -> Result<bool> {
+        let taken: bool = self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM files WHERE path = ?1 AND deleted_at IS NULL)",
+            params![path],
+            |r| r.get(0),
+        )?;
+        Ok(taken)
+    }
+
+    /// Files sitting in somebody's vault here that they have not taken yet:
+    /// what a send is still waiting on, newest first.
+    ///
+    /// "Not taken yet" means no record of that device holding those bytes, of
+    /// either kind. A delivery they collected into their own vault counts as
+    /// collected, which is the whole point of recording it.
+    ///
+    /// The sender's side of a delivery: a file put in somebody's vault is not
+    /// in the watched folder, so nothing in the ordinary change stream will
+    /// ever mention it. This is what the daemon asks in order to know there is
+    /// somebody to wake, and what `qurb status` asks in order to say so.
+    pub fn pending_deliveries(&self) -> Result<Vec<(String, u64, DeviceId)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT f.path, f.size, f.scope
+               FROM files f
+              WHERE f.deleted_at IS NULL
+                AND f.scope IS NOT NULL
+                AND NOT EXISTS (
+                      SELECT 1 FROM replicas r
+                       WHERE r.content_hash = f.content_hash
+                         AND r.device_id = f.scope
+                    )
+              ORDER BY f.updated_at DESC, f.path",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let raw: Vec<u8> = r.get(2)?;
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, to_device(raw)))
+        })?;
+        Ok(rows
+            .collect::<std::result::Result<Vec<_>, _>>()?
+            .into_iter()
+            .filter_map(|(path, size, who)| who.map(|w| (path, size, w)))
+            .collect())
+    }
+
+    /// The same question, answered as the set of devices to wake.
+    pub fn awaiting_collection(&self) -> Result<Vec<DeviceId>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT f.scope
+               FROM files f
+              WHERE f.deleted_at IS NULL
+                AND f.scope IS NOT NULL
+                AND NOT EXISTS (
+                      SELECT 1 FROM replicas r
+                       WHERE r.content_hash = f.content_hash
+                         AND r.device_id = f.scope
+                    )",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let raw: Vec<u8> = r.get(0)?;
+            Ok(to_device(raw))
+        })?;
+        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?.into_iter().flatten().collect())
+    }
+
+    /// Whether this device has already taken delivery of these bytes.
+    ///
+    /// Tombstones count. A delivery the user accepted and then deleted has
+    /// been taken, and offering it again every time the sender reappears would
+    /// make deleting a received file impossible.
+    pub fn vault_knows(&self, content: &blake3::Hash) -> Result<bool> {
+        let me = self.local_device()?;
+        let known: bool = self.conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM files WHERE content_hash = ?1 AND scope = ?2
+             )",
+            params![content.as_bytes().as_slice(), me.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(known)
     }
 
     /// Whether a device may fetch the bytes of this chunk.
@@ -907,6 +1046,98 @@ impl Db {
             )
             .optional()?;
         Ok(visible.is_some())
+    }
+
+    /// Whether the only way `device` could have got this content from here was
+    /// out of its own vault.
+    ///
+    /// Asked when a peer reports a delivery, to decide which kind of record to
+    /// write. If this device also holds the content in the shared area then the
+    /// peer has it somewhere ordinary and reachable; if the only live file with
+    /// those bytes is the one sitting in that device's vault, the copy now
+    /// exists behind a door this device cannot open.
+    ///
+    /// Content this device does not hold at all answers `false`: the peer got
+    /// it from somewhere else, and nothing here says that somewhere was
+    /// private.
+    pub fn delivery_is_vault_only(&self, content: &blake3::Hash, device: &DeviceId) -> Result<bool> {
+        let shared: bool = self.conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM files
+                  WHERE content_hash = ?1 AND deleted_at IS NULL AND scope IS NULL
+             )",
+            params![content.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        if shared {
+            return Ok(false);
+        }
+        let theirs: bool = self.conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM files
+                  WHERE content_hash = ?1 AND deleted_at IS NULL AND scope = ?2
+             )",
+            params![content.as_bytes().as_slice(), device.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(theirs)
+    }
+
+    /// Chunks held only on another device's behalf, which that device has.
+    ///
+    /// Two conditions, and the second is the one that makes this safe to run
+    /// without asking. The chunk must belong to a vault entry whose content
+    /// another device is recorded as holding — and **no** live file anywhere in
+    /// this store may still need it from the chunk store. A chunk shared with a
+    /// file that has no other way to be read is left alone, whatever else
+    /// references it.
+    ///
+    /// "No other way to be read" means: not materialised in this device's
+    /// folder, and no record of the content living somewhere reachable. Two
+    /// records count as reachable, and the distinction is the whole reason
+    /// `replicas.private` exists:
+    ///
+    /// - an ordinary replica (`private = 0`) -- some device holds it in the
+    ///   shared area and will hand it back on request;
+    /// - a vault delivery to the very device whose vault the entry is in --
+    ///   the recipient has their own copy, so this one was only ever a
+    ///   courtesy.
+    ///
+    /// A vault delivery to *someone else* counts as neither, because this
+    /// device cannot read another device's vault. Phrased per chunk rather
+    /// than per file because deduplication means one payload can serve
+    /// several, and the most cautious file wins.
+    pub fn releasable_held_chunks(&self) -> Result<Vec<blake3::Hash>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT fc.chunk_hash
+               FROM file_chunks fc
+               JOIN files f ON f.id = fc.file_id
+              WHERE f.deleted_at IS NULL
+                AND f.scope IS NOT NULL
+                AND EXISTS (
+                      SELECT 1 FROM replicas r
+                       WHERE r.content_hash = f.content_hash
+                         AND r.device_id = f.scope
+                    )
+                AND NOT EXISTS (
+                      SELECT 1
+                        FROM file_chunks other
+                        JOIN files g ON g.id = other.file_id
+                       WHERE other.chunk_hash = fc.chunk_hash
+                         AND g.deleted_at IS NULL
+                         AND g.materialised = 0
+                         AND NOT EXISTS (
+                               SELECT 1 FROM replicas r2
+                                WHERE r2.content_hash = g.content_hash
+                                  AND (r2.private = 0 OR r2.device_id = g.scope)
+                             )
+                    )",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let raw: Vec<u8> = r.get(0)?;
+            Ok(to_hash(&raw))
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
     /// Put a path in a device's private vault, or back in the shared area.
@@ -1240,6 +1471,9 @@ fn row_to_version(row: &FileRow) -> FileVersion {
         // the only thing it affects is a conflict filename.
         modified_by: row.modified_by.unwrap_or(DeviceId::from_bytes([0; 32])),
         modified_at: row.updated_at,
+        // Set by the caller that knows the audience: the same row is private
+        // to one device and invisible to every other.
+        private: false,
     }
 }
 

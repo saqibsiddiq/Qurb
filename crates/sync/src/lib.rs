@@ -34,5 +34,5 @@ pub mod version;
 pub use clock::{Causality, VersionVector};
 pub use device::DeviceId;
 pub use reconcile::{reconcile, Action};
-pub use resolve::{conflict_path, resolve, Outcome, Resolution, Side};
+pub use resolve::{conflict_path, received_path, resolve, Outcome, Resolution, Side};
 pub use version::{Content, FileVersion};

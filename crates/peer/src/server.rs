@@ -346,7 +346,19 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
             match &owner {
                 Some(device) => {
                     let content = blake3::Hash::from(*content);
-                    if let Err(e) = store.note_replica(&content, device) {
+                    // A delivery out of the peer's own vault is recorded
+                    // differently: the bytes exist, and this device can never
+                    // ask for them back. Letting that count as an ordinary
+                    // replica would let the storage cap drop a local file
+                    // whose only other copy is unreachable.
+                    let vault_only =
+                        store.db().delivery_is_vault_only(&content, device).unwrap_or(false);
+                    let recorded = if vault_only {
+                        store.note_replica_in_vault(&content, device)
+                    } else {
+                        store.note_replica(&content, device)
+                    };
+                    if let Err(e) = recorded {
                         tracing::debug!(error = %e, "could not record delivery");
                     }
                 }

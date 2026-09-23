@@ -176,6 +176,43 @@ impl Daemon {
         }
     }
 
+    /// Tell devices with something waiting for them that there is.
+    ///
+    /// This is what turns a send into a delivery while the recipient is
+    /// asleep: the same "there is news for you" signal a local change raises,
+    /// which the rendezvous service turns into a push wake-up. Sent every tick
+    /// while anything is outstanding, because the recipient may have been
+    /// unreachable for every previous one.
+    fn announce_deliveries(&self, engine: &Engine, connector: &Connector, peers: &Peers) {
+        let waiting = match engine.store().awaiting_collection() {
+            Ok(devices) if !devices.is_empty() => devices,
+            Ok(_) => return,
+            Err(e) => {
+                tracing::debug!(error = %e, "could not check for waiting deliveries");
+                return;
+            }
+        };
+
+        for device in waiting {
+            // Matched through the trust list, because `tell_waiting` addresses
+            // a peer by fingerprint and a vault is scoped by device id.
+            let found = engine
+                .store()
+                .db()
+                .trusted_peers()
+                .ok()
+                .and_then(|list| list.into_iter().find(|p| p.device_id == device));
+            let Some(peer) = found else { continue };
+            let fingerprint = Fingerprint::from_bytes(peer.fingerprint);
+            if !peers.known.contains(&fingerprint) {
+                continue;
+            }
+            if let Err(e) = connector.tell_waiting(fingerprint) {
+                tracing::debug!(peer = %fingerprint.short(), error = %e, "could not say there is a delivery");
+            }
+        }
+    }
+
     /// Collect garbage, then bring disk use under the configured limit.
     ///
     /// In that order, and the order is the point: collection frees superseded
@@ -482,6 +519,13 @@ impl Daemon {
                         // just scanned the code is waiting to see their files.
                         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
+                    // A file sent to somebody's vault never touches the watched
+                    // folder, so no change event will ever mention it and the
+                    // announcement above would not fire. Asked here instead:
+                    // one indexed query every few seconds, against the
+                    // alternative of a send sitting unnoticed until the next
+                    // five-minute maintenance tick.
+                    self.announce_deliveries(&engine, &connector, &peers);
                 }
 
                 // A peer said it changed. This is how news travels now; the

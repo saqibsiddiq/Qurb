@@ -235,3 +235,165 @@ async fn shared_content_stays_reachable_even_if_a_vault_holds_it_too() {
     );
     client.close();
 }
+
+/// The whole round trip: one device sends a file to another, and it lands.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sent_file_arrives_in_the_recipients_folder() {
+    let mut host = Device::new();
+    let mut guest = Device::new();
+    let third = Device::new();
+    introduce(&host, &guest);
+    introduce(&host, &third);
+
+    host.write("shared.txt", b"everybody sees this");
+
+    // The sender picks a file from anywhere -- a share sheet hands over a path
+    // outside the synced folder -- and names it for the recipient.
+    let outgoing = host.root.parent().unwrap().join("outgoing.bin");
+    fs::write(&outgoing, b"for the guest, and nobody else").unwrap();
+    host.engine
+        .store_mut()
+        .send_to_vault("holiday.jpg", &outgoing, &guest.device_id())
+        .unwrap();
+
+    let (addr, fingerprint) = serve(&host, &[guest.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
+    let tree = client.tree().await.unwrap();
+
+    let sent = tree.iter().find(|v| v.path == "holiday.jpg").expect("not offered to the recipient");
+    assert!(sent.private, "a vault entry must arrive marked private");
+
+    let plan = guest.engine.plan_against(&tree).unwrap();
+    let reader = Store::open(&guest.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&guest.root);
+    guest.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    client.close();
+
+    // It is a real file in the recipient's folder, not a listing entry.
+    assert_eq!(
+        fs::read(guest.root.join("holiday.jpg")).unwrap(),
+        b"for the guest, and nobody else"
+    );
+
+    // And it stops there. The recipient advertises the shared file it just
+    // synced and nothing else: a received file pushed onward would put it on
+    // every device its owner has, which is not what sending to one device
+    // means.
+    let onward = guest.engine.tree().unwrap();
+    assert!(
+        !onward.iter().any(|v| v.path == "holiday.jpg"),
+        "a received file leaked into the shared area"
+    );
+}
+
+/// Taken once. Offered again on every sync, a delivery would either duplicate
+/// itself or come back from the dead after being deleted.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_delivery_is_taken_once_and_stays_deleted() {
+    let mut host = Device::new();
+    let mut guest = Device::new();
+    introduce(&host, &guest);
+
+    let outgoing = host.root.parent().unwrap().join("outgoing.bin");
+    fs::write(&outgoing, b"take me once").unwrap();
+    host.engine.store_mut().send_to_vault("once.txt", &outgoing, &guest.device_id()).unwrap();
+
+    let (addr, fingerprint) = serve(&host, &[guest.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&guest.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&guest.root);
+
+    let tree = client.tree().await.unwrap();
+    let plan = guest.engine.plan_against(&tree).unwrap();
+    guest.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+
+    // Second pass, nothing in between: no work.
+    let tree = client.tree().await.unwrap();
+    assert!(guest.engine.plan_against(&tree).unwrap().is_empty(), "the delivery arrived twice");
+
+    // The recipient deletes what they were sent. That is their decision, and
+    // the sender reappearing must not undo it.
+    fs::remove_file(guest.root.join("once.txt")).unwrap();
+    guest.engine.reconcile().unwrap();
+    let tree = client.tree().await.unwrap();
+    assert!(
+        guest.engine.plan_against(&tree).unwrap().is_empty(),
+        "a deleted delivery came back"
+    );
+    client.close();
+    assert!(!guest.root.join("once.txt").exists());
+}
+
+/// Both people can have a `report.pdf`. Neither loses it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_delivery_onto_an_occupied_name_is_filed_beside_it() {
+    let mut host = Device::new();
+    let mut guest = Device::new();
+    introduce(&host, &guest);
+
+    guest.write("report.pdf", b"the guest's own report");
+
+    let outgoing = host.root.parent().unwrap().join("outgoing.bin");
+    fs::write(&outgoing, b"the host's report").unwrap();
+    host.engine.store_mut().send_to_vault("report.pdf", &outgoing, &guest.device_id()).unwrap();
+
+    let (addr, fingerprint) = serve(&host, &[guest.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&guest.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&guest.root);
+    let tree = client.tree().await.unwrap();
+    let plan = guest.engine.plan_against(&tree).unwrap();
+    guest.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    client.close();
+
+    assert_eq!(fs::read(guest.root.join("report.pdf")).unwrap(), b"the guest's own report");
+
+    let filed: Vec<String> = fs::read_dir(&guest.root)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("report.from-"))
+        .collect();
+    assert_eq!(filed.len(), 1, "the sent file was not filed under a free name: {filed:?}");
+    assert_eq!(fs::read(guest.root.join(&filed[0])).unwrap(), b"the host's report");
+}
+
+/// The retention rule the product promises: the sender keeps its copy until
+/// the recipient confirms, and drops it first once they have.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_sender_holds_the_copy_until_the_recipient_confirms() {
+    let mut host = Device::new();
+    let mut guest = Device::new();
+    introduce(&host, &guest);
+
+    let outgoing = host.root.parent().unwrap().join("outgoing.bin");
+    fs::write(&outgoing, vec![7u8; 400_000]).unwrap();
+    host.engine.store_mut().send_to_vault("big.bin", &outgoing, &guest.device_id()).unwrap();
+
+    // Nobody has it yet, so nothing may be released -- this is the only copy
+    // the recipient will ever get.
+    assert_eq!(host.engine.store_mut().release_held_payloads().unwrap().chunks_removed, 0);
+
+    let (addr, fingerprint) = serve(&host, &[guest.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&guest.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&guest.root);
+    let tree = client.tree().await.unwrap();
+    let plan = guest.engine.plan_against(&tree).unwrap();
+    guest.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    client.close();
+
+    assert_eq!(fs::read(guest.root.join("big.bin")).unwrap(), vec![7u8; 400_000]);
+
+    // The host served it from the same store the server holds, so the release
+    // is checked through a fresh handle on that store.
+    let mut host_store = Store::open(&host.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&host.root);
+    let released = host_store.release_held_payloads().unwrap();
+    assert!(released.bytes_reclaimed > 0, "the sender is still paying for a delivered file");
+}

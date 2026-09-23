@@ -27,6 +27,7 @@ qurb — private cloud storage
   qurb verify [dir] [--deep]          check the store against itself
   qurb reclaim [dir]                  free space the folder itself already holds
   qurb fetch [dir] <path>             ask for a dropped file's contents back
+  qurb send [dir] <file> to <device>  send a file to one device, privately
   qurb config [dir] [key=value ...]   show or change settings
   qurb protect [dir] <how>            change how the key is kept
                                         file | keystore | passphrase
@@ -106,6 +107,25 @@ fn run() -> Result<()> {
                 _ => PathBuf::from(&args[1]),
             };
             fetch(&root, &wanted)
+        }
+        "send" => {
+            // `qurb send report.pdf to laptop`, or with an explicit directory
+            // first. The word `to` is what tells the two apart, so the
+            // arguments either side of it are found rather than counted.
+            let rest = &args[1..];
+            let at = rest
+                .iter()
+                .position(|a| a == "to")
+                .context("say which device: qurb send <file> to <device>")?;
+            let (before, after) = rest.split_at(at);
+            let recipient =
+                after.get(1).context("say which device: qurb send <file> to <device>")?;
+            let file = before.last().context("give a file to send")?;
+            let root = match before.len() {
+                0 | 1 => directory(&args)?,
+                _ => PathBuf::from(&before[0]),
+            };
+            send(&root, Path::new(file), recipient)
         }
         "config" => configure(&directory(&args)?, &args[2..]),
         "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
@@ -435,6 +455,27 @@ fn status(root: &Path) -> Result<()> {
     }
 
     let peers = store.db().trusted_peers()?;
+
+    // Files sent to another device that it has not collected. These are not in
+    // the folder and appear in none of the counts above, so without this line
+    // a send is invisible until it lands.
+    let sent = store.pending_deliveries()?;
+    if !sent.is_empty() {
+        let bytes: u64 = sent.iter().map(|(_, size, _)| size).sum();
+        println!("  sending    {} file(s), {} — not collected yet", sent.len(), human(bytes));
+        for (path, _, to) in sent.iter().take(3) {
+            let name = peers
+                .iter()
+                .find(|p| &p.device_id == to)
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| to.short());
+            println!("               {path} → {name}");
+        }
+        if sent.len() > 3 {
+            println!("               and {} more", sent.len() - 3);
+        }
+    }
+
     if peers.is_empty() {
         println!("\n  no paired devices — run `qurb pair` here and `qurb join` there");
     } else {
@@ -503,6 +544,62 @@ fn fetch(root: &Path, logical: &str) -> Result<()> {
     store.db().want(logical)?;
     println!("asked for {logical}");
     println!("  it will arrive the next time a device holding it is reachable");
+    Ok(())
+}
+
+/// Put a file into one device's private vault.
+///
+/// Not a copy into the shared folder: the file goes to that device and to no
+/// other, and nothing about it is advertised to the rest of the fleet. The
+/// bytes are held here until the recipient confirms it arrived, which is what
+/// makes sending to a phone that is switched off work at all.
+///
+/// The recipient is named the way the user names it — `qurb status` shows the
+/// list. A short id is accepted too, so that two devices sharing a name can
+/// still be told apart; both the fingerprint shown by `qurb status` and the
+/// device id work, because a person reading either should not have to know
+/// which one they are looking at.
+fn send(root: &Path, file: &Path, recipient: &str) -> Result<()> {
+    let (_, _, mut store, _) = open(root)?;
+
+    let peers = store.db().trusted_peers()?;
+    let matches: Vec<_> = peers
+        .iter()
+        .filter(|p| {
+            p.name.eq_ignore_ascii_case(recipient)
+                || hex_short(&p.fingerprint).eq_ignore_ascii_case(recipient)
+                || p.device_id.short().eq_ignore_ascii_case(recipient)
+        })
+        .collect();
+
+    let peer = match matches.as_slice() {
+        [one] => *one,
+        [] => {
+            let known: Vec<String> = peers
+                .iter()
+                .map(|p| format!("{} ({})", p.name, hex_short(&p.fingerprint)))
+                .collect();
+            if known.is_empty() {
+                bail!("this device has not been paired with anything yet");
+            }
+            bail!("no paired device called {recipient} — known: {}", known.join(", "));
+        }
+        several => {
+            let ids: Vec<String> = several.iter().map(|p| hex_short(&p.fingerprint)).collect();
+            bail!("more than one device is called {recipient} — use one of: {}", ids.join(", "));
+        }
+    };
+
+    let name = file
+        .file_name()
+        .context("give a file, not a directory")?
+        .to_string_lossy()
+        .into_owned();
+
+    let stats = store.send_to_vault(&name, file, &peer.device_id)?;
+    println!("sending {name} to {} ({})", peer.name, hex_short(&peer.fingerprint));
+    println!("  {} stored, waiting for the device to collect it", human(stats.bytes_written));
+    println!("  it stays here until then, even if this device restarts");
     Ok(())
 }
 
