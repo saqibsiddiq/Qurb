@@ -150,6 +150,14 @@ impl SignalClient {
         self.send(FromClient::Waiting { to: peer })
     }
 
+    /// Say how this device can be woken while it is not connected.
+    ///
+    /// For devices that cannot hold a socket open — phones. A desktop never
+    /// needs this: it is already here. `None` withdraws it.
+    pub fn reachable_via(&self, token: Option<String>) -> Result<()> {
+        self.send(FromClient::Reachable { via: token })
+    }
+
     pub fn member(&self) -> MemberId {
         self.member
     }

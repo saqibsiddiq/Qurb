@@ -25,7 +25,18 @@ futures-util = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+
+# Only for the `push` feature: talking to Firebase needs an HTTP client and a
+# signed JWT. Kept optional so a service with no push credentials -- which is
+# every test and every self-hosted deployment -- does not carry them.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"], optional = true }
+jsonwebtoken = { version = "9", optional = true }
+
 tracing = "0.1"
+
+[features]
+default = []
+push = ["dep:reqwest", "dep:jsonwebtoken"]
 
 [dev-dependencies]
 tempfile = "3"

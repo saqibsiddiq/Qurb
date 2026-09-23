@@ -78,6 +78,8 @@ enum Command {
     /// Tell a peer, through the rendezvous service, that there is something
     /// for it. No reply: this is a courtesy, not a request.
     Waiting { to: MemberId },
+    /// Say how this device can be woken while it is not connected.
+    Reachable { via: Option<String> },
 }
 
 struct RelayPath {
@@ -233,6 +235,17 @@ impl Connector {
     /// a nudge to try now, not a log to be replayed.
     pub fn arrivals(&self) -> broadcast::Receiver<MemberId> {
         self.arrivals.subscribe()
+    }
+
+    /// Say how this device can be woken while it is not connected.
+    ///
+    /// For devices that cannot hold a socket open — phones. A desktop needs
+    /// nothing here: it is already connected, and the service can simply tell
+    /// it. `None` withdraws a token that is no longer valid.
+    pub fn reachable_via(&self, token: Option<String>) -> Result<()> {
+        self.signal
+            .send(Command::Reachable { via: token })
+            .map_err(|_| Error::Signalling { detail: "signalling has stopped".into() })
     }
 
     /// Tell a peer there is something for it.
@@ -446,6 +459,10 @@ async fn run_signalling(
                     // Failing is not worth reporting. The peer syncs on its
                     // own schedule regardless; this only makes it sooner.
                     let _ = client.waiting_for(to);
+                }
+
+                Some(Command::Reachable { via }) => {
+                    let _ = client.reachable_via(via);
                 }
 
                 Some(Command::Introduce { to, reply }) => {

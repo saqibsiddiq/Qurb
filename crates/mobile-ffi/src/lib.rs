@@ -274,6 +274,18 @@ pub struct Settings {
     /// device's public IP to that server, as any VPN or video call does.
     #[uniffi(default = true)]
     pub discover: bool,
+    /// How this device can be woken while it is not connected.
+    ///
+    /// A push token, from the platform's own service. A phone cannot hold a
+    /// socket open in the background, so without one it learns about a change
+    /// at its next scheduled look — a quarter of an hour, or longer while
+    /// dozing. With one, the rendezvous service can poke it the moment another
+    /// device has something, and the poke carries nothing but "go and sync".
+    ///
+    /// `None` on a desktop, which is already connected and needs no waking,
+    /// and on a phone whose owner has not set up push.
+    #[uniffi(default = None)]
+    pub wake_token: Option<String>,
 }
 
 impl Default for Settings {
@@ -284,6 +296,7 @@ impl Default for Settings {
             relay: None,
             port: 0,
             discover: true,
+            wake_token: None,
         }
     }
 }
@@ -317,6 +330,9 @@ pub struct Qurb {
     port: u16,
     /// Whether to ask a public STUN server for this device's public address.
     discover: bool,
+    /// How this device can be woken while it is not connected. See
+    /// [`Settings::wake_token`].
+    wake_token: Option<String>,
     /// Built on first use and kept.
     ///
     /// Lazy because a phone that only browses its files should not pay for a
@@ -768,6 +784,7 @@ impl Qurb {
             relay: settings.relay,
             port: settings.port,
             discover: settings.discover,
+            wake_token: settings.wake_token,
             runtime: Mutex::new(None),
         })
     }
@@ -876,6 +893,15 @@ impl Qurb {
                 relay,
             ))
             .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+
+        // Say how this device can be woken, so the service can poke it when
+        // another device has something and this one is asleep. Registered on
+        // every pass rather than once: push tokens are reissued, and the
+        // service holds them in memory, so re-stating it costs one small
+        // message and removes a whole class of "it stopped working".
+        if self.wake_token.is_some() {
+            let _ = connector.reachable_via(self.wake_token.clone());
+        }
 
         // Answer as well as ask, for the length of this pass.
         //

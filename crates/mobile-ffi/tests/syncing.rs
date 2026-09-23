@@ -63,6 +63,9 @@ fn settings(name: &str, signal: &str) -> Settings {
         // it is slow, it fails offline, and it tells a third party the address
         // of every machine that runs `cargo test`.
         discover: false,
+        // No push in tests: the devices here are both awake, and a test that
+        // depended on Google would not be a test.
+        wake_token: None,
     }
 }
 

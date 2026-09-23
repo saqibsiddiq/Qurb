@@ -71,6 +71,18 @@ pub enum FromClient {
     /// without waiting for its own next poll — the difference between a photo
     /// arriving in seconds and arriving in a quarter of an hour.
     Waiting { to: MemberId },
+
+    /// This is how to wake me when I am not connected.
+    ///
+    /// A phone cannot hold a socket open in the background, so the device most
+    /// in need of being told something is the one that cannot be told. The
+    /// token is whatever the platform's push service issued; qurb never looks
+    /// inside it and does nothing with it but hand it back.
+    ///
+    /// `None` withdraws it — on signing out, or when the platform revokes one.
+    /// A device that never sends this is simply never woken, which is how
+    /// every desktop behaves: it is already connected.
+    Reachable { via: Option<String> },
 }
 
 /// Server to client.

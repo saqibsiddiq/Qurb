@@ -3,6 +3,22 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Push is optional, and the build has to work without it.
+//
+// Waking a sleeping phone needs Firebase, which needs a `google-services.json`
+// from a project somebody owns. Without that file the Google plugin fails the
+// build outright — so the whole thing is switched on the file's presence, and
+// a checkout with no Firebase project builds and runs exactly as before. The
+// phone then learns about changes at its next scheduled look rather than the
+// moment they happen.
+//
+// Two source sets rather than a runtime check, because the alternative is
+// compiling against an SDK that is not there.
+val firebaseConfigured = file("google-services.json").exists()
+if (firebaseConfigured) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.qurb"
     compileSdk = 36
@@ -47,6 +63,10 @@ android {
         viewBinding = true
     }
 
+    sourceSets["main"].java.srcDir(
+        if (firebaseConfigured) "src/push/java" else "src/nopush/java"
+    )
+
     // Nothing here about stripping: scripts/android-app.sh strips the .so with
     // the NDK it already located before copying it into jniLibs, so Gradle
     // packages something that is 3.7 MB rather than 61 MB and does not need an
@@ -54,6 +74,13 @@ android {
 }
 
 dependencies {
+    if (firebaseConfigured) {
+        // Being woken when another device has something. Only the messaging
+        // library: qurb uses no other part of Firebase, and does not want to.
+        implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+        implementation("com.google.firebase:firebase-messaging")
+    }
+
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")

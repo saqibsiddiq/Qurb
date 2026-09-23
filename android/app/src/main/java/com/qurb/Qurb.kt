@@ -55,6 +55,12 @@ object Engine {
      * one store would contend on the database lock.
      */
     suspend fun open(context: Context): Qurb = withContext(Dispatchers.IO) {
+        // Fetched before the lock, because it is a network round trip and the
+        // lock is held while the store opens. Null whenever push is not set
+        // up, which is the ordinary case for a build with no Firebase project:
+        // the phone then syncs on its schedule instead of being poked.
+        val wake = runCatching { Push.token(context) }.getOrNull()
+
         handle ?: synchronized(this@Engine) {
             handle ?: Qurb.openProtected(
                 root(context).absolutePath,
@@ -65,6 +71,7 @@ object Engine {
                     relay = null,
                     port = 0u,
                     discover = true,
+                    wakeToken = wake,
                 ),
             ).also { handle = it }
         }

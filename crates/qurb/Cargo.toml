@@ -37,3 +37,9 @@ qrcode = { version = "0.14.1", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"
+
+[features]
+default = []
+# Lets `qurb signal --push` wake sleeping devices. Pulls in an HTTP client and
+# a JWT signer, so it is off unless asked for.
+push = ["qurb-signal/push"]

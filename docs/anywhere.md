@@ -89,6 +89,42 @@ installs qurb should not have to install a VPN first. This is the free way to
 have the feature working today, and the hosted rendezvous service is the
 product answer.
 
+## Being woken, rather than looking
+
+A device that is connected can be told there is something for it, and acts
+within a second. A phone that is asleep cannot be told anything — Android stops
+a background app's socket within minutes of the screen going off — so it finds
+out at its next scheduled look, about fifteen minutes away and longer while
+dozing.
+
+A push notification is the way through, and on both mobile platforms it is the
+only way through. With one configured, the rendezvous service pokes the phone
+the moment another device has something, and the phone syncs immediately.
+
+Turning it on:
+
+```bash
+# On the host, with the service account JSON from your Firebase project
+qurb signal 127.0.0.1:9000 --push /etc/qurb/firebase.json
+```
+
+That needs a build with the feature compiled in:
+
+```bash
+cargo build --release --features push
+```
+
+And on the phone, a `google-services.json` from the same Firebase project
+dropped into `android/app/` before building. Its presence is what switches the
+whole thing on: without it the Firebase SDK is not even linked, and the app
+behaves exactly as it does today.
+
+The poke carries nothing — no filenames, no sizes, not even which peer. What
+Google learns is that a device was poked and when.
+[decisions/0028](decisions/0028-waking-a-sleeping-device.md) sets out that
+trade in full, including why there is no alternative and what it does *not*
+give away.
+
 ## The product way: a host of your own
 
 A small server with a public address, running `qurb signal` and `qurb relay`

@@ -63,6 +63,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Being woken when another device has something. Present only in a
+             build with a google-services.json; without one the class does not
+             exist and Android simply never starts it, which is the behaviour
+             wanted. Not exported: only the messaging library starts it. -->
+        <service
+            android:name=".Wakeup"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".SetupActivity"
             android:exported="false"

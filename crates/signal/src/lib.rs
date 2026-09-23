@@ -29,6 +29,11 @@ pub mod error;
 pub mod message;
 pub mod rendezvous;
 pub mod server;
+pub mod wake;
+
+/// Waking a device through Firebase. Needs the `push` feature and credentials.
+#[cfg(feature = "push")]
+pub mod fcm;
 
 pub use client::SignalClient;
 pub use error::{Error, Result};

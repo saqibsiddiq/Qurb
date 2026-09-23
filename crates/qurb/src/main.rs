@@ -33,7 +33,7 @@ qurb — private cloud storage
 
 Running the services yourself:
 
-  qurb signal [addr]                  the rendezvous service (default :9000)
+  qurb signal [addr] [--push <json>]  the rendezvous service (default :9000)
   qurb relay [addr]                   the relay (default :9001)
   qurb netcheck                       what this network will let you do
 
@@ -109,7 +109,15 @@ fn run() -> Result<()> {
         }
         "config" => configure(&directory(&args)?, &args[2..]),
         "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
-        "signal" => block_on(signal(args.get(1).cloned())),
+        "signal" => {
+            let credentials = args
+                .iter()
+                .skip_while(|a| a.as_str() != "--push")
+                .nth(1)
+                .cloned();
+            let addr = args.get(1).filter(|a| !a.starts_with("--")).cloned();
+            block_on(signal(addr, credentials))
+        }
         "relay" => block_on(relay(args.get(1).cloned())),
         "netcheck" => netcheck(),
         "-h" | "--help" | "help" => {
@@ -810,10 +818,17 @@ fn netcheck() -> Result<()> {
 /// moment. It never learns a filename, and the identifiers devices announce
 /// under are derived from a key it does not hold, so it cannot tell whose
 /// devices these are.
-async fn signal(addr: Option<String>) -> Result<()> {
+async fn signal(addr: Option<String>, push_credentials: Option<String>) -> Result<()> {
     let addr: std::net::SocketAddr =
         addr.unwrap_or_else(|| "0.0.0.0:9000".into()).parse().context("bad address")?;
+    // Validated before the port is taken, so a mistyped credentials path says
+    // so rather than surfacing as whatever the socket complains about.
+    let waker = push_waker(push_credentials)?;
     let server = qurb_signal::SignalServer::bind(addr).await?;
+    let server = match waker {
+        Some(waker) => server.waking_with(waker),
+        None => server,
+    };
 
     println!("rendezvous service on {}", server.local_addr()?);
     println!();
@@ -822,9 +837,33 @@ async fn signal(addr: Option<String>) -> Result<()> {
     println!("Put it behind TLS before it faces the internet. The identifiers");
     println!("devices announce under are bearer secrets: anyone who sees one can");
     println!("list that group's addresses. The client refuses plain ws:// to");
-    println!("anywhere but this machine for exactly that reason.");
+    println!("anywhere but the local network for exactly that reason.");
     server.serve().await;
     Ok(())
+}
+
+/// Give the service a way to wake devices that are not connected.
+///
+/// Without credentials it behaves as it always has: devices sync when they
+/// next look. Push only shortens that wait; nothing depends on it.
+#[cfg(feature = "push")]
+fn push_waker(credentials: Option<String>) -> Result<Option<qurb_signal::wake::SharedWaker>> {
+    let Some(path) = credentials else { return Ok(None) };
+    let account = qurb_signal::fcm::ServiceAccount::from_file(std::path::Path::new(&path))
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!("  waking sleeping devices through Firebase project {}", account.project_id);
+    Ok(Some(std::sync::Arc::new(qurb_signal::fcm::Fcm::new(account))))
+}
+
+#[cfg(not(feature = "push"))]
+fn push_waker(credentials: Option<String>) -> Result<Option<qurb_signal::wake::SharedWaker>> {
+    if credentials.is_some() {
+        bail!(
+            "this build cannot send push notifications.\n\
+             Rebuild with:  cargo build --release --features push"
+        );
+    }
+    Ok(None)
 }
 
 /// Run the relay.

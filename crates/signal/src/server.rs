@@ -48,6 +48,12 @@ pub struct Limits {
     /// Devices in one group. A person with more than this has a different
     /// problem.
     pub max_members_per_group: usize,
+    /// Longest wake-up token accepted. Real ones are a few hundred bytes;
+    /// anything much larger is somebody using the service as storage.
+    pub max_wake_token: usize,
+    /// How many wake-up tokens to hold before dropping the oldest. They
+    /// outlive connections on purpose, so something has to bound them.
+    pub max_wake_tokens: usize,
     /// Messages one connection may send per second, averaged.
     pub messages_per_second: u32,
     /// How much of a burst to tolerate before the average applies. Announcing
@@ -62,6 +68,8 @@ impl Default for Limits {
         Self {
             max_connections: 10_000,
             max_members_per_group: 64,
+            max_wake_token: 4096,
+            max_wake_tokens: 100_000,
             messages_per_second: 20,
             burst: 60,
             max_message: 16 * 1024,
@@ -120,6 +128,19 @@ struct Directory {
     /// That also bounds it — a group of sixty-four members cannot leave more
     /// than sixty-four ids waiting for any one of them.
     waiting: HashMap<(GroupId, MemberId), std::collections::HashSet<MemberId>>,
+    /// How to wake each member that has said it can be.
+    ///
+    /// Outlives both the connection and the group, and that is not an
+    /// oversight. A token is only ever useful for a device that is *not*
+    /// here — and the case that matters most is everybody being away at once:
+    /// a laptop shut overnight beside a sleeping phone empties the group, and
+    /// dropping the token then would mean the laptop could never wake the
+    /// phone when it came back.
+    ///
+    /// So it is bounded by count instead, oldest first. Devices re-register on
+    /// every connection, so an eviction costs at most one missed wake-up and
+    /// heals itself.
+    wake: HashMap<(GroupId, MemberId), (crate::wake::WakeToken, std::time::Instant)>,
 }
 
 struct Member {
@@ -193,6 +214,47 @@ impl Directory {
         false
     }
 
+    /// How to wake a member, if it has said.
+    fn wake_token(&self, group: GroupId, member: MemberId) -> Option<crate::wake::WakeToken> {
+        self.wake.get(&(group, member)).map(|(token, _)| token.clone())
+    }
+
+    fn set_wake_token(
+        &mut self,
+        group: GroupId,
+        member: MemberId,
+        token: Option<crate::wake::WakeToken>,
+        most: usize,
+    ) {
+        match token {
+            Some(token) => {
+                self.wake.insert((group, member), (token, std::time::Instant::now()));
+                self.evict_wake_tokens(most);
+            }
+            None => {
+                self.wake.remove(&(group, member));
+            }
+        }
+    }
+
+    /// Keep the number of tokens under `most`, dropping the oldest.
+    ///
+    /// Unbounded growth here is a slow leak keyed on something anyone can
+    /// generate for free. Oldest-first because the newest registration is the
+    /// one most likely to still be valid — a push token is reissued, and the
+    /// device tells us again each time it connects.
+    fn evict_wake_tokens(&mut self, most: usize) {
+        if self.wake.len() <= most {
+            return;
+        }
+        let mut by_age: Vec<((GroupId, MemberId), std::time::Instant)> =
+            self.wake.iter().map(|(k, (_, at))| (*k, *at)).collect();
+        by_age.sort_by_key(|(_, at)| *at);
+        for (key, _) in by_age.into_iter().take(self.wake.len() - most) {
+            self.wake.remove(&key);
+        }
+    }
+
     fn leave(&mut self, group: GroupId, member: MemberId) {
         if let Some(members) = self.groups.get_mut(&group) {
             members.remove(&member);
@@ -204,6 +266,8 @@ impl Directory {
                 // Nothing left to deliver to, and an entry per group ever seen
                 // is a slow leak keyed on something anyone can generate.
                 self.waiting.retain(|(g, _), _| *g != group);
+                // Wake tokens deliberately survive. See the field's comment:
+                // everybody being away at once is exactly when one is needed.
             }
         }
     }
@@ -219,6 +283,9 @@ pub struct SignalServer {
     directory: Arc<Mutex<Directory>>,
     limits: Limits,
     connections: Arc<std::sync::atomic::AtomicUsize>,
+    /// How to reach devices that are not connected. Does nothing unless the
+    /// deployment supplies one — see [`crate::wake`].
+    waker: crate::wake::SharedWaker,
 }
 
 impl SignalServer {
@@ -231,6 +298,16 @@ impl SignalServer {
         Self::bind_with(addr, Limits::default()).await
     }
 
+    /// Supply a way to wake devices that are not connected.
+    ///
+    /// Without one the service behaves exactly as it did before push existed:
+    /// devices sync when they next look. That is the right default, and it is
+    /// what a deployment with no push credentials gets.
+    pub fn waking_with(mut self, waker: crate::wake::SharedWaker) -> Self {
+        self.waker = waker;
+        self
+    }
+
     /// Listen with limits other than the defaults.
     pub async fn bind_with(addr: SocketAddr, limits: Limits) -> Result<Self> {
         let listener = TcpListener::bind(addr).await?;
@@ -239,6 +316,7 @@ impl SignalServer {
             directory: Arc::new(Mutex::new(Directory::default())),
             limits,
             connections: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            waker: crate::wake::none(),
         })
     }
 
@@ -269,11 +347,12 @@ impl SignalServer {
 
             let directory = Arc::clone(&self.directory);
             let limits = self.limits;
+            let waker = Arc::clone(&self.waker);
             let counter = Arc::clone(&self.connections);
             counter.fetch_add(1, Ordering::Relaxed);
 
             tokio::spawn(async move {
-                if let Err(e) = serve_one(stream, directory, limits).await {
+                if let Err(e) = serve_one(stream, directory, limits, waker).await {
                     tracing::debug!(%from, error = %e, "signalling connection ended");
                 }
                 counter.fetch_sub(1, Ordering::Relaxed);
@@ -286,6 +365,7 @@ async fn serve_one(
     stream: TcpStream,
     directory: Arc<Mutex<Directory>>,
     limits: Limits,
+    waker: crate::wake::SharedWaker,
 ) -> Result<()> {
     // Bounded by the library, before a frame is ever assembled in memory.
     let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
@@ -385,6 +465,25 @@ async fn serve_one(
                 let _ = outbox.send(FromServer::Peers { members: peers });
             }
 
+            FromClient::Reachable { via } => {
+                let Some((group, member)) = identity else {
+                    let _ = outbox.send(FromServer::Error { detail: "announce first".into() });
+                    continue;
+                };
+                if via.as_ref().is_some_and(|t| t.len() > limits.max_wake_token) {
+                    let _ = outbox.send(FromServer::Error { detail: "token too long".into() });
+                    continue;
+                }
+                let held = via.is_some();
+                directory.lock().expect("directory").set_wake_token(
+                    group,
+                    member,
+                    via,
+                    limits.max_wake_tokens,
+                );
+                tracing::debug!(?member, held, "a device said how to wake it");
+            }
+
             FromClient::Waiting { to } => {
                 let Some((group, from)) = identity else {
                     let _ = outbox.send(FromServer::Error { detail: "announce first".into() });
@@ -392,8 +491,24 @@ async fn serve_one(
                 };
                 // Refused for a member of another group by construction: the
                 // note is filed under the group this connection announced into.
-                let delivered =
-                    directory.lock().expect("directory").note_waiting(group, from, to);
+                let (delivered, token) = {
+                    let mut directory = directory.lock().expect("directory");
+                    let delivered = directory.note_waiting(group, from, to);
+                    let token = match delivered {
+                        true => None,
+                        false => directory.wake_token(group, to),
+                    };
+                    (delivered, token)
+                };
+
+                // Woken only when it could not simply be told, and only
+                // because the device asking is here to sync with: that is the
+                // whole condition. Waking a phone for a peer that is not there
+                // spends its battery to find nobody.
+                if let Some(token) = token {
+                    tracing::debug!(?to, "waking a device that is not connected");
+                    waker.wake(&token);
+                }
                 tracing::debug!(?from, ?to, delivered, "work waiting");
             }
 
@@ -455,4 +570,137 @@ async fn serve_one(
     drop(outbox);
     let _ = writer.await;
     Ok(())
+}
+
+#[cfg(test)]
+mod wake_tests {
+    use super::*;
+    use crate::wake::testing::Recorder;
+    use qurb_keys::MasterKey;
+
+    fn group_and_members() -> (GroupId, MemberId, MemberId) {
+        let key = MasterKey::generate();
+        (
+            GroupId::derive(&key),
+            MemberId::derive(&key, &[1u8; 32]),
+            MemberId::derive(&key, &[2u8; 32]),
+        )
+    }
+
+    fn nowhere() -> Endpoints {
+        Endpoints { public: None, local: Vec::new() }
+    }
+
+    /// The rule the whole feature turns on: a device is woken when somebody
+    /// has something for it and it is not here to be told.
+    #[test]
+    fn an_absent_device_with_a_token_is_woken() {
+        let (group, one, two) = group_and_members();
+        let mut directory = Directory::default();
+        directory.set_wake_token(group, two, Some("token-for-two".into()), 16);
+
+        let delivered = directory.note_waiting(group, one, two);
+        assert!(!delivered, "nobody was connected, so nothing could be delivered");
+
+        let recorder = Recorder::default();
+        if let Some(token) = directory.wake_token(group, two) {
+            crate::wake::Waker::wake(&recorder, &token);
+        }
+        assert_eq!(recorder.woken(), vec!["token-for-two".to_string()]);
+    }
+
+    /// And the rule that keeps it from being a battery drain: a device that is
+    /// already connected is told, not woken.
+    #[test]
+    fn a_connected_device_is_told_rather_than_woken() {
+        let (group, one, two) = group_and_members();
+        let mut directory = Directory::default();
+        directory.set_wake_token(group, two, Some("token-for-two".into()), 16);
+
+        let (outbox, _inbox) = tokio::sync::mpsc::unbounded_channel();
+        directory.announce(group, two, nowhere(), outbox);
+
+        let delivered = directory.note_waiting(group, one, two);
+        assert!(delivered, "a connected device should have been told directly");
+        assert!(
+            directory.wake_token(group, two).is_some(),
+            "the token should survive being connected, for next time"
+        );
+    }
+
+    /// A token has to outlive the connection that supplied it. It is only ever
+    /// useful for a device that is *not* here.
+    #[test]
+    fn a_token_survives_disconnection() {
+        let (group, _one, two) = group_and_members();
+        let mut directory = Directory::default();
+
+        let (outbox, _inbox) = tokio::sync::mpsc::unbounded_channel();
+        directory.announce(group, two, nowhere(), outbox);
+        directory.set_wake_token(group, two, Some("token-for-two".into()), 16);
+        directory.leave(group, two);
+
+        assert_eq!(
+            directory.wake_token(group, two),
+            Some("token-for-two".to_string()),
+            "the token was thrown away with the connection"
+        );
+    }
+
+    /// Withdrawing one is honoured: a signed-out device must stop being poked.
+    #[test]
+    fn a_withdrawn_token_is_forgotten() {
+        let (group, _one, two) = group_and_members();
+        let mut directory = Directory::default();
+        directory.set_wake_token(group, two, Some("token-for-two".into()), 16);
+        directory.set_wake_token(group, two, None, 16);
+        assert_eq!(directory.wake_token(group, two), None);
+    }
+
+    /// A token outlives the whole group emptying, and that is the case that
+    /// matters most: a laptop shut overnight beside a sleeping phone leaves
+    /// nobody connected, and the laptop must still be able to wake the phone
+    /// when it comes back.
+    #[test]
+    fn a_token_outlives_everybody_leaving() {
+        let (group, _one, two) = group_and_members();
+        let mut directory = Directory::default();
+
+        let (outbox, _inbox) = tokio::sync::mpsc::unbounded_channel();
+        directory.announce(group, two, nowhere(), outbox);
+        directory.set_wake_token(group, two, Some("token-for-two".into()), 16);
+        directory.leave(group, two);
+
+        assert!(directory.groups.is_empty(), "setup: the group should be gone");
+        assert_eq!(
+            directory.wake_token(group, two),
+            Some("token-for-two".to_string()),
+            "the token went with the empty group, so nobody could ever be woken"
+        );
+    }
+
+    /// Something has to bound them, since they outlive everything else.
+    #[test]
+    fn the_oldest_tokens_are_dropped_when_there_are_too_many() {
+        let mut directory = Directory::default();
+        let key = qurb_keys::MasterKey::generate();
+        let group = GroupId::derive(&key);
+
+        let members: Vec<MemberId> =
+            (0u8..8).map(|n| MemberId::derive(&key, &[n; 32])).collect();
+        for (n, member) in members.iter().enumerate() {
+            directory.set_wake_token(group, *member, Some(format!("token-{n}")), 4);
+            // Distinguishable ages; `Instant` has finer resolution than this
+            // but sorting needs the order to be unambiguous.
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+
+        assert_eq!(directory.wake.len(), 4, "the cap was not applied");
+        assert_eq!(directory.wake_token(group, members[0]), None, "the oldest survived");
+        assert_eq!(
+            directory.wake_token(group, members[7]),
+            Some("token-7".to_string()),
+            "the newest was dropped"
+        );
+    }
 }
