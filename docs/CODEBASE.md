@@ -255,7 +255,20 @@ what a send promises — including the rule that a copy in somebody's vault is a
 copy this device may *not* count on, which is the difference between eviction
 and data loss.
 
-### 2.6 Encryption happens before anything leaves the device
+### 2.6 The index remembers what happened, not just what is
+
+Everything above describes the index as a picture of the present: these paths,
+these chunks, this version. It also keeps a history — one row per thing that
+happened, with the path, the size and the device at the other end.
+
+The reason is that the interesting questions are about the past. "Why is this
+file not here?" is not answerable from the current state; it is answerable from
+`evicted`, or `failed`, or `conflicted`, and the log that would have said so
+belongs to a process that exited. `qurb activity` reads it. See
+[decisions/0031](decisions/0031-what-happened-is-written-down.md), including
+what the table deliberately does *not* hold.
+
+### 2.7 Encryption happens before anything leaves the device
 
 Chunks are compressed, then encrypted, then written to disk and sent over the
 network. The keys never leave your devices. Our servers see encrypted bytes and
@@ -542,6 +555,7 @@ product around it largely is not.
 | Reclaiming duplicates | `qurb reclaim`, for stores written before single-copy |
 | A storage limit | drops local copies, keeps the index, never the only copy |
 | Per-device private vaults | `files.scope`: `NULL` is shared, a device id is that device's vault |
+| A history of what happened | one table, pruned by age and count; `qurb activity` reads it |
 | Sending to one device | `qurb send <file> to <device>`; held until collected, released first afterwards |
 
 ### Built and tested (`crates/watcher`, Phase 1)
@@ -614,7 +628,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-510 tests pass across eleven crates on Linux; clippy is clean. The last run on
+520 tests pass across eleven crates on Linux; clippy is clean. The last run on
 a Galaxy S23 was 426 of them, before this week's work — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
@@ -940,6 +954,13 @@ introduce them, then `run` on both:
 # Ask for a file whose local copy was dropped. Acted on when a peer is next
 # reachable, so it works while offline.
 ./target/release/qurb fetch ~/Sync holiday/beach.jpg
+```
+
+```bash
+# What this device did, newest first. With a path, what happened to that file —
+# which is the question a log cannot answer once the process has exited.
+./target/release/qurb activity ~/Sync
+./target/release/qurb activity ~/Sync holiday/beach.jpg
 ```
 
 ```bash

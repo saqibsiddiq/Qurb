@@ -37,9 +37,29 @@ pub use peer::{ContentSource, NoContent, PlanStats, StoreSource};
 pub use repair::RepairStats;
 pub use role::{PinSet, Role};
 
+use qurb_storage::db;
 use qurb_storage::Store;
 use qurb_watcher::{Change, ChangeKind, Event, IgnoreRules, Watcher};
 use std::path::{Path, PathBuf};
+
+/// Write down that something happened, and carry on if it cannot be written.
+///
+/// History is worth having and is never worth failing an operation over: a
+/// sync that worked must not be reported as failed because the note about it
+/// did not land. Every recording site in this crate goes through here so that
+/// the decision is made once.
+fn note(
+    store: &Store,
+    kind: db::Event,
+    path: Option<&str>,
+    size: Option<u64>,
+    device: Option<&qurb_sync::DeviceId>,
+    detail: Option<&str>,
+) {
+    if let Err(e) = store.db().record(kind, path, size, device, detail) {
+        tracing::debug!(error = %e, "could not write down what happened");
+    }
+}
 
 /// What a run of the engine did.
 #[derive(Debug, Default)]
@@ -66,6 +86,24 @@ impl SyncStats {
     fn record(&mut self, path: &Path, error: Error) {
         tracing::warn!(path = %path.display(), %error, "file failed, continuing");
         self.failures.push(FileFailure { path: path.to_path_buf(), error });
+    }
+
+    /// Write the failures down, now that the run is over.
+    ///
+    /// Separate from [`SyncStats::record`] because that runs deep inside a
+    /// borrow of the store and this needs one of its own. Called by whoever
+    /// owns both.
+    fn write_failures(&self, store: &Store) {
+        for failure in &self.failures {
+            note(
+                store,
+                db::Event::Failed,
+                Some(&failure.path.to_string_lossy()),
+                None,
+                None,
+                Some(&failure.error.to_string()),
+            );
+        }
     }
 
     fn merge(&mut self, other: SyncStats) {
@@ -274,6 +312,7 @@ impl Engine {
             }
         }
 
+        stats.write_failures(&self.store);
         Ok(stats)
     }
 
@@ -364,6 +403,7 @@ impl Engine {
             }
         }
 
+        stats.write_failures(&self.store);
         Ok(stats)
     }
 

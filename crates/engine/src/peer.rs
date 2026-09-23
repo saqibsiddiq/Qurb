@@ -15,6 +15,7 @@
 //! one method.
 
 use crate::{Engine, Error, Result};
+use qurb_storage::db;
 use qurb_storage::Store;
 use qurb_sync::{Action, Content, FileVersion};
 use std::io::Write;
@@ -268,6 +269,14 @@ impl Engine {
                 }
                 Action::Conflict { keeps_path, renamed } => {
                     stats.conflicts += 1;
+                    crate::note(
+                        self.store(),
+                        db::Event::Conflicted,
+                        Some(&keeps_path.path),
+                        None,
+                        Some(&renamed.modified_by),
+                        Some(&format!("the other version was kept as {}", renamed.path)),
+                    );
                     // Order matters. The renamed copy is written first, so an
                     // interruption leaves the losing version saved beside the
                     // original rather than lost with the original overwritten.
@@ -279,6 +288,14 @@ impl Engine {
             if let Err(e) = outcome {
                 let path = self.root().join(action.path());
                 tracing::warn!(path = %path.display(), error = %e, "plan step failed, continuing");
+                crate::note(
+                    self.store(),
+                    db::Event::Failed,
+                    Some(action.path()),
+                    None,
+                    None,
+                    Some(&e.to_string()),
+                );
                 stats.failures.push(crate::FileFailure { path, error: e });
             }
         }
@@ -389,6 +406,10 @@ impl Engine {
                     return Ok(());
                 }
 
+                // Asked before the write, because writing it is what makes it
+                // stop being true.
+                let was_evicted = self.store().is_materialised(&version.path)? == Some(false);
+
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent)
                         .map_err(|e| Error::Io { path: parent.to_path_buf(), source: e })?;
@@ -440,6 +461,23 @@ impl Engine {
                 } else {
                     self.store_mut().adopt_file(version, &path, mtime)?;
                 }
+
+                // A file this device had dropped to stay under its limit is
+                // coming *back*, which is a different thing to tell somebody
+                // than a file arriving for the first time -- especially since
+                // they are the ones who asked for it.
+                let kind = match was_evicted {
+                    true => db::Event::Restored,
+                    false => db::Event::Received,
+                };
+                crate::note(
+                    self.store(),
+                    kind,
+                    Some(&version.path),
+                    Some(*size),
+                    Some(&version.modified_by),
+                    version.private.then_some("sent to this device"),
+                );
 
                 // Committed, so it is now true to say this device holds it.
                 // Told after the rename rather than after the fetch: the point

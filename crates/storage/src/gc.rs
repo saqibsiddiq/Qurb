@@ -100,8 +100,32 @@ pub fn collect(db: &mut Db, cas: &Cas, retention: Duration) -> Result<GcStats> {
     }
 
     tx.commit()?;
+
+    // History is pruned here rather than on its own schedule: it is the same
+    // question -- how far back does this device remember -- and running it in
+    // the same pass means one place to look when the answer surprises someone.
+    match db.prune_activity(ACTIVITY_RETENTION, ACTIVITY_ROWS) {
+        Ok(gone) if gone > 0 => tracing::debug!(rows = gone, "pruned history"),
+        Ok(_) => {}
+        Err(e) => tracing::debug!(error = %e, "could not prune history"),
+    }
+
     Ok(stats)
 }
+
+/// How long the activity history is kept.
+///
+/// Longer than content retention, because history costs bytes where content
+/// costs megabytes, and "what happened to this file last month" is a question
+/// people actually ask. Not unbounded: a record of every file a person touched
+/// is worth keeping small on principle as well as on disk.
+const ACTIVITY_RETENTION: Duration = Duration::from_secs(90 * 24 * 60 * 60);
+
+/// And a ceiling, for a device busy enough to fill ninety days quickly.
+///
+/// Ten thousand rows is a few megabytes at most, and more than any interface
+/// will page through.
+const ACTIVITY_ROWS: usize = 10_000;
 
 /// Remove payloads on disk that the index does not know about.
 ///

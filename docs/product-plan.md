@@ -118,7 +118,7 @@ running it, not by reading about it.
 | DocumentsProvider (§40) | built |
 | Background sync (§38) | built; WorkManager, and push when configured |
 | Send a copy to one device (§11, §12, §21, §22) | built; `qurb send`, held until collected, no interface yet |
-| Activity / transfers data (§26, §27) | the events exist; there is no store or API for them |
+| Activity / transfers data (§26, §27) | records exist and are written; `qurb activity` reads them. No API, no progress |
 | Search (§31) | `Db` has the index; there is no search API |
 
 The gap for most of these is an **API and a screen**, not an engine change.
@@ -176,9 +176,12 @@ transfers, what is available where" and to be *told* when those change. That is
 a query-and-subscribe layer over the existing store and daemon — not a second
 engine, and not a second database.
 
-**2. Transfer and activity as first-class records.** The daemon knows what it
-did; nothing writes it down. Both screens need it, and so does "why isn't my
-file here" (§82).
+**2. Transfer and activity as first-class records.** ✅ Done for outcomes —
+[decisions/0031](decisions/0031-what-happened-is-written-down.md). One table in
+the index, written by the layer that does the work, read by `qurb activity`,
+and it answers "why isn't my file here" (§82) after a restart. What it does not
+yet carry is a transfer *in flight*: progress belongs to the daemon's live
+state, which is phase 1's job.
 
 **3. Desktop shell**: onboarding, storage selection, identity, recovery phrase,
 home, settings.
@@ -245,7 +248,7 @@ hardware where hardware is involved. Not when it compiles.
 
 ## 10. Testing
 
-The existing suite is 510 tests across eleven crates, and the classes that
+The existing suite is 520 tests across eleven crates, and the classes that
 matter here already exist: property-based convergence, crash injection,
 corruption repair, hostile peers, concurrent collection. New work extends those
 rather than starting a parallel tradition.

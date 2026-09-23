@@ -225,7 +225,22 @@ impl Store {
 
         let mmap = unsafe { memmap2::Mmap::map(&file) }.map_err(|e| Error::io(source, e))?;
         let manifest = chunker::chunk_bytes(&mmap);
-        self.put_manifest(logical_path, &manifest, &mmap, mtime_ns, Placement::local())
+        let stats = self.put_manifest(logical_path, &manifest, &mmap, mtime_ns, Placement::local())?;
+        // Recorded here rather than in the engine, because the bulk pass stores
+        // through worker threads with their own handles and would otherwise
+        // have to remember to. A file that turned out to be identical is not
+        // something that happened: re-reading an unchanged file is the hot path
+        // and runs on every reconciliation.
+        if !stats.unchanged {
+            let _ = self.db.record(
+                db::Event::Stored,
+                Some(logical_path),
+                Some(manifest.size),
+                None,
+                None,
+            );
+        }
+        Ok(stats)
     }
 
     /// Store an in-memory buffer under a logical path, as a change made here.
@@ -713,6 +728,7 @@ impl Store {
             return Err(Error::NotFound { path: logical_path.to_string() });
         }
         self.tombstone(logical_path, Stamp::Local)?;
+        let _ = self.db.record(db::Event::Deleted, Some(logical_path), None, None, None);
         self.release_unbacked(logical_path)
     }
 
@@ -941,13 +957,21 @@ impl Store {
         // byte twice.
         let mapped = unsafe { memmap2::Mmap::map(&file) }.map_err(|e| Error::io(source, e))?;
         let manifest = chunker::chunk_bytes(&mapped);
-        self.put_manifest(
+        let stats = self.put_manifest(
             logical_path,
             &manifest,
             &mapped,
             mtime_ns,
             Placement::local().in_vault(Some(recipient)),
-        )
+        )?;
+        let _ = self.db.record(
+            db::Event::Sent,
+            Some(logical_path),
+            Some(manifest.size),
+            Some(recipient),
+            None,
+        );
+        Ok(stats)
     }
 
     /// Drop payloads this device is holding only on somebody else's behalf.
@@ -1150,6 +1174,13 @@ impl Store {
             }
         }
 
+        let _ = self.db.record(
+            db::Event::Evicted,
+            Some(logical_path),
+            Some(freed),
+            None,
+            Some("dropped to stay under the storage limit; `qurb fetch` brings it back"),
+        );
         Ok(freed)
     }
 

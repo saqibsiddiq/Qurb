@@ -16,6 +16,7 @@
 use crate::error::{Error, Result};
 use qurb_sync::{Content, DeviceId, FileVersion, VersionVector};
 use rusqlite::{params, Connection, OptionalExtension};
+use std::fmt;
 use std::path::Path;
 
 /// Schema migrations, applied in order. `user_version` records how many have
@@ -23,7 +24,7 @@ use std::path::Path;
 ///
 /// Migrations are append-only. Editing one that has already shipped would leave
 /// databases in the field at a schema nobody can reproduce.
-const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
+const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -301,6 +302,44 @@ const V9: &str = r#"
 -- was an ordinary shared-area delivery, and treating them as such is both
 -- true and the conservative reading.
 ALTER TABLE replicas ADD COLUMN private INTEGER NOT NULL DEFAULT 0;
+"#;
+
+const V10: &str = r#"
+-- What happened, in order.
+--
+-- The daemon has always known what it did and never written it down, so the
+-- only account of a sync was the log of whichever process happened to be
+-- running. That answers nothing after a restart, and "why is my file not
+-- here?" is a question about the past.
+--
+-- One row per event, with the pieces an interface needs to render a line
+-- without joining anything: what kind of thing, which path, how big, which
+-- other device, and a sentence for the cases where the rest is not enough.
+--
+-- This adds no privacy exposure that the index did not already have: `files`
+-- has held every path in plaintext since V1, and this table holds no content.
+-- It is pruned on the same schedule as everything else -- see `Db::prune_activity`.
+CREATE TABLE IF NOT EXISTS activity (
+    id     INTEGER PRIMARY KEY,
+    at     INTEGER NOT NULL,
+    kind   TEXT NOT NULL,
+    path   TEXT,
+    size   INTEGER,
+    -- The device at the other end, where there is one: who sent it, who took
+    -- it, who we paired with.
+    device BLOB,
+    -- Free text, for the cases a kind cannot carry on its own: the reason a
+    -- transfer failed, the name a conflict was filed under.
+    detail TEXT
+) STRICT;
+
+-- Newest first is the only order anything asks for, and `id` breaks ties
+-- within a second so that paging cannot repeat or skip a row.
+CREATE INDEX IF NOT EXISTS idx_activity_recent ON activity (at DESC, id DESC);
+
+-- "What happened to this file" is the other question, and it is asked about
+-- one path at a time.
+CREATE INDEX IF NOT EXISTS idx_activity_path ON activity (path, at DESC);
 "#;
 
 pub struct Db {
@@ -922,6 +961,94 @@ impl Db {
         Ok(taken)
     }
 
+    /// Write down that something happened.
+    ///
+    /// Best-effort by construction: it returns a `Result`, and every caller in
+    /// this workspace logs and continues rather than failing the operation it
+    /// was describing. A sync that worked must not be reported as failed
+    /// because the note about it could not be written.
+    pub fn record(
+        &self,
+        kind: Event,
+        path: Option<&str>,
+        size: Option<u64>,
+        device: Option<&DeviceId>,
+        detail: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO activity (at, kind, path, size, device, detail)
+             VALUES (unixepoch(), ?1, ?2, ?3, ?4, ?5)",
+            params![
+                kind.as_str(),
+                path,
+                size.map(|n| n as i64),
+                device.map(|d| d.as_bytes().to_vec()),
+                detail,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// The shorter form for the common case: a kind and a path.
+    pub fn note(&self, kind: Event, path: &str) -> Result<()> {
+        self.record(kind, Some(path), None, None, None)
+    }
+
+    /// What happened, newest first.
+    ///
+    /// `before` pages backwards: pass the `id` of the oldest row already shown
+    /// and the next page follows it. By `id` rather than by time because two
+    /// events in the same second are indistinguishable by time, and a page
+    /// boundary landing between them would repeat or skip one.
+    pub fn activity(&self, limit: usize, before: Option<i64>) -> Result<Vec<Activity>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, at, kind, path, size, device, detail
+               FROM activity
+              WHERE ?1 IS NULL OR id < ?1
+              ORDER BY at DESC, id DESC
+              LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![before, limit as i64], activity_row)?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// What happened to one path, newest first.
+    ///
+    /// This is the answer to "why is my file not here?" — the question the
+    /// product specification asks for and the one a log cannot answer after a
+    /// restart.
+    pub fn activity_for(&self, path: &str, limit: usize) -> Result<Vec<Activity>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, at, kind, path, size, device, detail
+               FROM activity
+              WHERE path = ?1
+              ORDER BY at DESC, id DESC
+              LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![path, limit as i64], activity_row)?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// Drop history past its window, and cap what is left.
+    ///
+    /// Two limits rather than one because they fail differently. Age alone
+    /// lets a busy week grow the table without bound; a count alone lets a
+    /// quiet device keep rows from years ago. Returns how many rows went.
+    pub fn prune_activity(&self, keep_for: std::time::Duration, keep_at_most: usize) -> Result<usize> {
+        let cutoff = now() - keep_for.as_secs() as i64;
+        let mut gone = self
+            .conn
+            .execute("DELETE FROM activity WHERE at <= ?1", params![cutoff])?;
+        gone += self.conn.execute(
+            "DELETE FROM activity
+              WHERE id NOT IN (
+                    SELECT id FROM activity ORDER BY at DESC, id DESC LIMIT ?1
+                  )",
+            params![keep_at_most as i64],
+        )?;
+        Ok(gone)
+    }
+
     /// Files sitting in somebody's vault here that they have not taken yet:
     /// what a send is still waiting on, newest first.
     ///
@@ -975,6 +1102,23 @@ impl Db {
             Ok(to_device(raw))
         })?;
         Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?.into_iter().flatten().collect())
+    }
+
+    /// The path a given device's vault holds this content under, here.
+    ///
+    /// For describing a delivery after the fact: the sender knows the name it
+    /// used, and a content hash on its own makes an unreadable history line.
+    pub fn vault_path_for(&self, content: &blake3::Hash, device: &DeviceId) -> Result<Option<String>> {
+        self.conn
+            .query_row(
+                "SELECT path FROM files
+                  WHERE content_hash = ?1 AND scope = ?2 AND deleted_at IS NULL
+                  LIMIT 1",
+                params![content.as_bytes().as_slice(), device.as_bytes().as_slice()],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(Into::into)
     }
 
     /// Whether this device has already taken delivery of these bytes.
@@ -1272,6 +1416,15 @@ impl Db {
         fingerprint: &[u8; 32],
         name: &str,
     ) -> Result<()> {
+        let new = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM peers WHERE device_id = ?1",
+                params![device.as_bytes().as_slice()],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_none();
         self.conn.execute(
             "INSERT INTO peers (device_id, fingerprint, name, paired_at)
              VALUES (?1, ?2, ?3, unixepoch())
@@ -1280,6 +1433,12 @@ impl Db {
                  name = excluded.name",
             params![device.as_bytes().as_slice(), fingerprint.as_slice(), name],
         )?;
+        // Only a genuinely new device is worth a line in the history. Trust is
+        // re-asserted on a schedule, and a device that appeared once a day
+        // would fill the list with an event nobody made happen.
+        if new {
+            let _ = self.record(Event::Paired, None, None, Some(device), Some(name));
+        }
         Ok(())
     }
 
@@ -1448,6 +1607,20 @@ fn file_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<FileRow> {
     })
 }
 
+fn activity_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Activity> {
+    let kind: String = r.get(2)?;
+    let device: Option<Vec<u8>> = r.get(5)?;
+    Ok(Activity {
+        id: r.get(0)?,
+        at: r.get(1)?,
+        kind: Event::parse(&kind),
+        path: r.get(3)?,
+        size: r.get::<_, Option<i64>>(4)?.map(|n| n as u64),
+        device: device.and_then(to_device),
+        detail: r.get(6)?,
+    })
+}
+
 fn to_device(raw: Vec<u8>) -> Option<DeviceId> {
     let bytes: [u8; 32] = raw.try_into().ok()?;
     Some(DeviceId::from_bytes(bytes))
@@ -1519,6 +1692,99 @@ pub(crate) fn now() -> i64 {
 #[allow(dead_code)]
 fn _assert_error_conversion(e: rusqlite::Error) -> Error {
     e.into()
+}
+
+/// One thing that happened, in a form an interface can render directly.
+///
+/// Deliberately flat. An enum with a payload per variant reads better in Rust
+/// and turns every query into a match; what the two screens this exists for
+/// actually do is show a line and a time, so the row is the line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Activity {
+    pub id: i64,
+    /// Unix seconds.
+    pub at: i64,
+    pub kind: Event,
+    pub path: Option<String>,
+    pub size: Option<u64>,
+    /// The device at the other end, where there is one.
+    pub device: Option<DeviceId>,
+    /// A sentence for what the rest cannot carry: why something failed, what a
+    /// conflict was filed as.
+    pub detail: Option<String>,
+}
+
+/// What kind of thing happened.
+///
+/// Stored as text rather than as an integer so that a database opened by hand
+/// — which is how most of this project's debugging happens — reads as
+/// sentences instead of as a legend to look up. An unknown string from a newer
+/// build is kept rather than dropped, because losing history to a downgrade is
+/// worse than showing one unfamiliar word.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Event {
+    /// A file changed here and was stored.
+    Stored,
+    /// A path was deleted here.
+    Deleted,
+    /// A version arrived from another device.
+    Received,
+    /// A file was put in another device's vault.
+    Sent,
+    /// That device collected it.
+    Collected,
+    /// A local copy was dropped to stay under the storage limit.
+    Evicted,
+    /// A dropped file's contents came back.
+    Restored,
+    /// Two concurrent edits; both kept.
+    Conflicted,
+    /// A device was paired with.
+    Paired,
+    /// Something went wrong that a person may need to know about.
+    Failed,
+    /// Written by a build that knew a kind this one does not.
+    Other(String),
+}
+
+impl Event {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Event::Stored => "stored",
+            Event::Deleted => "deleted",
+            Event::Received => "received",
+            Event::Sent => "sent",
+            Event::Collected => "collected",
+            Event::Evicted => "evicted",
+            Event::Restored => "restored",
+            Event::Conflicted => "conflicted",
+            Event::Paired => "paired",
+            Event::Failed => "failed",
+            Event::Other(word) => word,
+        }
+    }
+
+    fn parse(word: &str) -> Self {
+        match word {
+            "stored" => Event::Stored,
+            "deleted" => Event::Deleted,
+            "received" => Event::Received,
+            "sent" => Event::Sent,
+            "collected" => Event::Collected,
+            "evicted" => Event::Evicted,
+            "restored" => Event::Restored,
+            "conflicted" => Event::Conflicted,
+            "paired" => Event::Paired,
+            "failed" => Event::Failed,
+            other => Event::Other(other.to_string()),
+        }
+    }
+}
+
+impl fmt::Display for Event {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// Who is asking, for the purpose of what they may see.

@@ -15,6 +15,7 @@ qurb verify <dir> [--deep]       check the store against itself
 qurb reclaim <dir>               free space the folder itself already holds
 qurb fetch <dir> <path>          ask for a dropped file's contents back
 qurb send <dir> <file> to <dev>  send a file to one device, privately
+qurb activity <dir> [path]       what happened, newest first
 qurb config <dir> [key=value]    show or change settings
 
 qurb signal [addr] [--push <j>]  the rendezvous service
@@ -44,6 +45,17 @@ Sharing a key is what makes two devices *yours*. Pairing is separate and still
 necessary: it is how they learn each other's network identity, and it happens
 out of band because someone able to change what is on your screen has already
 won.
+
+## Why is my file not here?
+
+```bash
+qurb activity ~/Sync holiday/beach.jpg
+```
+
+Every device writes down what it did — stored, deleted, received, sent,
+collected, evicted, restored, conflicted, paired, failed — so the question is
+still answerable after a restart, which is when people ask it. Without a path
+it lists everything, newest first.
 
 ## Sending a file to one device
 

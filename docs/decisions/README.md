@@ -57,3 +57,4 @@ is worth more than a tidy directory.
 | [0028](0028-waking-a-sleeping-device.md) | Waking a sleeping device, and what it costs | Accepted |
 | [0029](0029-two-areas-shared-and-private.md) | Two areas: one shared, one private per device | Accepted |
 | [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted |
+| [0031](0031-what-happened-is-written-down.md) | What happened is written down | Accepted |

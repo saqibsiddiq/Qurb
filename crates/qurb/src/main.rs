@@ -28,6 +28,7 @@ qurb — private cloud storage
   qurb reclaim [dir]                  free space the folder itself already holds
   qurb fetch [dir] <path>             ask for a dropped file's contents back
   qurb send [dir] <file> to <device>  send a file to one device, privately
+  qurb activity [dir] [path]          what happened, newest first
   qurb config [dir] [key=value ...]   show or change settings
   qurb protect [dir] <how>            change how the key is kept
                                         file | keystore | passphrase
@@ -126,6 +127,21 @@ fn run() -> Result<()> {
                 _ => PathBuf::from(&before[0]),
             };
             send(&root, Path::new(file), recipient)
+        }
+        "activity" => {
+            // `qurb activity`, `qurb activity <dir>`, `qurb activity <path>`,
+            // or both. A path is anything the index knows; a directory is
+            // anything on disk that holds a store.
+            let rest = &args[1..];
+            let (root, about) = match rest {
+                [] => (directory(&args)?, None),
+                [one] => match PathBuf::from(one).join(".qurb").is_dir() {
+                    true => (PathBuf::from(one), None),
+                    false => (directory(&args)?, Some(one.clone())),
+                },
+                [dir, path, ..] => (PathBuf::from(dir), Some(path.clone())),
+            };
+            activity(&root, about.as_deref())
         }
         "config" => configure(&directory(&args)?, &args[2..]),
         "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
@@ -600,6 +616,56 @@ fn send(root: &Path, file: &Path, recipient: &str) -> Result<()> {
     println!("sending {name} to {} ({})", peer.name, hex_short(&peer.fingerprint));
     println!("  {} stored, waiting for the device to collect it", human(stats.bytes_written));
     println!("  it stays here until then, even if this device restarts");
+    Ok(())
+}
+
+/// What this device did, newest first.
+///
+/// The daemon's account of itself used to be its log, which is gone the moment
+/// the process is. This reads the history the index keeps, so it answers after
+/// a restart — and with a path, it answers the question the log never could:
+/// why is this file not here?
+fn activity(root: &Path, about: Option<&str>) -> Result<()> {
+    const SHOWN: usize = 40;
+    let (_, _, store, _) = open(root)?;
+
+    let rows = match about {
+        Some(path) => store.db().activity_for(path.trim_start_matches("./"), SHOWN)?,
+        None => store.db().activity(SHOWN, None)?,
+    };
+
+    if rows.is_empty() {
+        match about {
+            Some(path) => println!("nothing recorded about {path}"),
+            None => println!("nothing recorded yet"),
+        }
+        return Ok(());
+    }
+
+    // Names, so a line reads "sent to phone" rather than as a hex string.
+    let peers = store.db().trusted_peers()?;
+    let name_of = |id: &qurb_sync::DeviceId| {
+        peers
+            .iter()
+            .find(|p| &p.device_id == id)
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| id.short())
+    };
+
+    for row in rows {
+        let who = row.device.as_ref().map(&name_of);
+        let subject = match (&row.path, &who) {
+            (Some(path), Some(name)) => format!("{path}  ({name})"),
+            (Some(path), None) => path.clone(),
+            (None, Some(name)) => name.clone(),
+            (None, None) => String::new(),
+        };
+        let size = row.size.map(|n| format!("  {}", human(n))).unwrap_or_default();
+        println!("  {:>14}  {:<10} {subject}{size}", ago(row.at), row.kind.as_str());
+        if let Some(detail) = &row.detail {
+            println!("                                {detail}");
+        }
+    }
     Ok(())
 }
 
