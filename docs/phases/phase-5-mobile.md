@@ -28,7 +28,7 @@ record](../roadmap.md).
 | **a phone syncing with a laptop, both ways** | ✅ verified on hardware |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-475 tests pass across eleven crates on Linux; the last run on a Galaxy S23 was
+494 tests pass across eleven crates on Linux; the last run on a Galaxy S23 was
 426 of them, before this session's work. Clippy is clean.
 
 ## What the library costs

@@ -708,7 +708,11 @@ Android's nor iOS's is reachable from Rust.
 
 The Android app is a **share target**: anything on the phone can be sent into
 qurb from the system share sheet, with no network and no other device switched
-on. The app's own screen and the share sheet's confirmation both say how many
+on. It can also be **woken** when another device has something, if a push
+service is configured — without one it learns at its next scheduled look, about
+fifteen minutes away. See
+[decisions/0028](decisions/0028-waking-a-sleeping-device.md), which sets out
+what that costs and why nothing else works. The app's own screen and the share sheet's confirmation both say how many
 files are still held only by the phone, which is the honest form of "it will
 get there".
 
@@ -913,7 +917,9 @@ cargo run --release -p qurb-tray -- ~/qurb
 Syncing from outside the house needs the rendezvous service somewhere both
 devices can reach; [anywhere.md](anywhere.md) is the recipe, including a free
 one. Only that service needs a public name — the files go directly between the
-devices and never touch it.
+devices and never touch it. To run the services on a host of your own, unit
+files and the step-by-step are in
+[packaging/server/](../packaging/server/README.md).
 
 The Android build needs the NDK, because SQLite is C. The script looks for one
 and says where to get it if there is none. Nothing else in the tree needs a
