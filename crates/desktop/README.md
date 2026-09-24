@@ -22,6 +22,7 @@ a device up in the first place:
 | Devices | who is paired, and pairing with another: show a code or enter one |
 | Activity | what this device did — the answer to "why is my file not here?" |
 | Storage | what qurb costs on this disk, and the allowance |
+| Send | a file to one device, by dropping it on the window or choosing one |
 | Settings | this device's name, how it finds the others, and the 24 words |
 
 A folder with no device in it opens the setting-up flow instead: make a new
@@ -98,12 +99,37 @@ window binds port zero rather than the configured port, because the daemon in
 this process already has that one — see
 [decision 0032](../../docs/decisions/0032-the-interface-hosts-the-daemon.md).
 
+## Sending
+
+Drop a file on the window, or choose one, then pick a device. It goes to that
+device and to nowhere else: your other devices never see it, and it is not added
+to the synced folder.
+
+Dragging is the better gesture and needs no plugin — Tauri reports the drop to
+the window, and only the *path* crosses into the page, never the contents. The
+"Choose a file…" button does the same thing for anybody who cannot drag.
+
+## Notifications
+
+Three things, and nothing else:
+
+- somebody sent you a file — a thing another person did, on purpose, for you;
+- a device collected what you sent it;
+- something failed.
+
+Ordinary syncing is silent, and so is pairing, eviction, and every file that
+arrives because it was in a shared folder. A sync application that announced
+every file it moved would be switched off within a day.
+
+Raised from Rust rather than from the page, because a notification is most
+useful exactly when nobody is looking at the window.
+
 ## What it does not do yet
 
-- **No sending.** `qurb send` does it; the window shows what is outstanding but
-  cannot start one.
 - **No transfer progress.** Outcomes are recorded and shown; a transfer in
   flight is not.
+- **One file at a time.** Dropping several takes the first and says so. A queue
+  is a different interaction, with something to say about partial failure.
 - **No passphrase prompt.** A passphrase-protected key is asked for on the
   terminal the application was launched from. The window cannot ask, because
   opening the key is what decides whether there is anything to show; launched

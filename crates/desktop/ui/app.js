@@ -286,13 +286,16 @@ $("ready-next").addEventListener("click", () => decide());
 
 let screen = "home";
 
+function showScreen(name) {
+  screen = name;
+  document.querySelectorAll("nav button").forEach((b) =>
+    b.classList.toggle("on", b.dataset.screen === name));
+  document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === name));
+  refreshScreen();
+}
+
 document.querySelectorAll("nav button").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b === button));
-    screen = button.dataset.screen;
-    document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === screen));
-    refreshScreen();
-  });
+  button.addEventListener("click", () => showScreen(button.dataset.screen));
 });
 
 // --------------------------------------------------------------------- home
@@ -339,23 +342,7 @@ async function drawHome() {
     $("card-files").textContent = "–";
   }
 
-  try {
-    const out = await invoke("outgoing");
-    const list = $("outgoing");
-    list.replaceChildren();
-    $("outgoing-heading").classList.toggle("hidden", out.length === 0);
-    list.classList.toggle("hidden", out.length === 0);
-    for (const o of out) {
-      const row = el("li");
-      row.append(el("span", "name", o.path));
-      row.append(el("span", "size", size(o.size)));
-      row.append(el("span", "when", `waiting for ${o.to}`));
-      list.append(row);
-    }
-  } catch (e) {
-    // An empty outgoing list is the ordinary case; a failure here is not worth
-    // displacing the rest of the screen over.
-  }
+  await drawOutgoing();
 }
 
 // -------------------------------------------------------------------- files
@@ -446,6 +433,138 @@ async function drawDevices() {
     }
   } catch (e) {
     oops(list, e);
+  }
+}
+
+// ---------------------------------------------------------------------- send
+
+// The file waiting to be sent, as an absolute path. Held rather than read,
+// because reading it is the Rust side's job and a window that loaded a 4 GB
+// file into a JavaScript variable to hand it back would be a poor way to move
+// it four inches.
+let picked = null;
+
+function showPicked() {
+  $("chosen").textContent = picked ? picked.split("/").pop() : "";
+  drawSendTo();
+}
+
+$("choose").addEventListener("click", async () => {
+  // The plugin's own API, which `withGlobalTauri` exposes alongside the core
+  // one. A native dialog rather than a page of our own: the file system is the
+  // platform's, and every platform already has a good way to look at it.
+  const dialog = window.__TAURI__?.dialog;
+  if (!dialog) {
+    $("send-says").textContent = "no file chooser available — drag a file in instead";
+    return;
+  }
+  const chosen = await dialog.open({ multiple: false, directory: false });
+  if (chosen) {
+    picked = typeof chosen === "string" ? chosen : chosen.path;
+    showPicked();
+  }
+});
+
+// Dragging a file onto the window. Tauri reports these as window events rather
+// than DOM ones, because the drag is happening to the *window* — the page never
+// sees the file, and that is the point: a path crosses, not the contents.
+const dropZone = $("drop");
+
+if (window.__TAURI__?.event) {
+  const { listen } = window.__TAURI__.event;
+
+  listen("tauri://drag-over", () => {
+    // Only meaningful on the send screen. Highlighting a zone nobody is looking
+    // at is harmless; not highlighting one somebody is dragging onto is not.
+    if (screen === "send") dropZone.classList.add("over");
+  });
+
+  listen("tauri://drag-leave", () => dropZone.classList.remove("over"));
+
+  listen("tauri://drag-drop", (event) => {
+    dropZone.classList.remove("over");
+    const paths = event.payload?.paths ?? [];
+    if (paths.length === 0) return;
+
+    // One file. Sending several at once is a reasonable thing to want and a
+    // different interaction — a queue, and something to say about partial
+    // failure — so it is deliberately not pretended at here.
+    picked = paths[0];
+    if (paths.length > 1) {
+      $("send-says").textContent = "one file at a time — taking the first";
+    }
+    showScreen("send");
+    showPicked();
+  });
+}
+
+async function drawSendTo() {
+  const list = $("send-to");
+  try {
+    const devices = await invoke("devices");
+    list.replaceChildren();
+
+    if (devices.length === 0) {
+      list.append(el("li", "quiet", "no paired devices yet — pair one first"));
+      return;
+    }
+
+    for (const d of devices) {
+      const row = el("li", "pickable");
+      // Disabled until there is something to send, rather than hidden: the list
+      // of devices is useful information on its own, and a row that appears
+      // only after a file is chosen looks like it arrived from nowhere.
+      row.setAttribute("aria-disabled", picked ? "false" : "true");
+
+      const pick = el("button", "pick");
+      pick.append(el("span", "name", d.name));
+      pick.append(el("span", "when", d.last_seen ? `last reached ${when(d.last_seen)}` : "not reached yet"));
+      pick.disabled = !picked;
+      pick.addEventListener("click", () => sendTo(d));
+      row.append(pick);
+      list.append(row);
+    }
+  } catch (e) {
+    oops(list, e);
+  }
+}
+
+async function sendTo(device) {
+  const says = $("send-says");
+  if (!picked) return;
+
+  says.textContent = `sending to ${device.name}…`;
+  try {
+    const name = await invoke("send_file", { path: picked, to: device.fingerprint });
+    says.textContent =
+      `${name} is waiting for ${device.name}. It will arrive the next time that device syncs.`;
+    picked = null;
+    showPicked();
+    drawOutgoing();
+  } catch (e) {
+    says.textContent = String(e);
+  }
+}
+
+/** What is still waiting to be collected, on the send screen and on home. */
+async function drawOutgoing() {
+  try {
+    const out = await invoke("outgoing");
+    for (const [heading, list] of [["sending-heading", "sending"], ["outgoing-heading", "outgoing"]]) {
+      $(heading).classList.toggle("hidden", out.length === 0);
+      $(list).classList.toggle("hidden", out.length === 0);
+      $(list).replaceChildren();
+      for (const o of out) {
+        const row = el("li");
+        row.append(el("span", "name", o.path));
+        row.append(el("span", "size", size(o.size)));
+        row.append(el("span", "when", `waiting for ${o.to}`));
+        $(list).append(row);
+      }
+    }
+  } catch (e) {
+    // An empty list is the ordinary case; a failure here is not worth
+    // displacing the rest of the screen over.
   }
 }
 
@@ -726,6 +845,7 @@ function refreshScreen() {
   if (screen === "activity") drawActivity();
   if (screen === "storage") drawStorage();
   if (screen === "settings") drawSettings();
+  if (screen === "send") { drawSendTo(); drawOutgoing(); }
 }
 
 decide();

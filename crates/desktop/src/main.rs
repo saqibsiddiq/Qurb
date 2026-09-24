@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 mod commands;
+mod notify;
 mod session;
 
 pub use session::Hosted;
@@ -56,10 +57,17 @@ fn run() -> Result<()> {
         }
     }
 
+    // Watching for the few things worth interrupting somebody about. Started
+    // before the window, because a notification is most useful when nobody is
+    // looking at one.
+    notify::watch(Arc::clone(&hosted));
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(Arc::clone(&hosted))
         .invoke_handler(tauri::generate_handler![
             commands::situation,
+            commands::send_file,
             commands::start_pairing,
             commands::pairing_state,
             commands::stop_pairing,

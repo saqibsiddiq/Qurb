@@ -82,6 +82,7 @@ const ANSWERS = {
     return { state: "paired", name: "phone", fingerprint: "a1b2c3d4", message: null };
   },
 
+  send_file: ({ path }) => path.split("/").pop(),
   stop_pairing: () => null,
   join_device: () => ({ state: "paired", name: "phone", fingerprint: "a1b2c3d4", message: null }),
   summary: () => ({
@@ -151,6 +152,24 @@ const ANSWERS = {
 };
 
 window.__TAURI__ = {
+  // The file chooser, and the window events a real drag-and-drop arrives on.
+  // Both are Tauri's rather than the page's, so a fixture has to stand in for
+  // them or the whole send screen is untouchable here.
+  dialog: {
+    open: async () => "/home/saqib/Downloads/holiday-photos.zip",
+  },
+
+  event: {
+    listen: async (name, handler) => {
+      // Exposed so the page can be driven from a console: calling
+      // `window.__fixtureDrop("/some/path")` does what dropping a file does.
+      if (name === "tauri://drag-drop") {
+        window.__fixtureDrop = (path) => handler({ payload: { paths: [path] } });
+      }
+      return () => {};
+    },
+  },
+
   core: {
     invoke: async (name, args = {}) => {
       if (name === "start_pairing") startedPairingAt = Math.floor(Date.now() / 1000);

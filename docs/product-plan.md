@@ -128,11 +128,11 @@ The gap for most of these is an **API and a screen**, not an engine change.
 
 | thing | state |
 |---|---|
-| Desktop interface | a Tauri window: six screens, onboarding and pairing, over the real engine. No sending yet |
+| Desktop interface | a Tauri window: seven screens, onboarding, pairing and sending, over the real engine |
 | Selective sync (§29) | `PinSet` exists but is wired only to `Role::Replica`; an ordinary device takes everything |
 | Replica storage cap | a replica cannot free space at all — no folder to evict from |
 | Notifications (§45) | `notify-rust` is a dependency and nothing sends one |
-| Windows (§44) | never built, never run, no CI. The engine is portable Rust; the daemon, watcher and tray on Windows are unverified |
+| Windows (§44) | **out of scope for now** — see §5A. Never built, never run, no CI |
 | Installers (§69) | `packaging/install.sh` puts it in one user's menu. Not a package |
 | Updates (§70) | nothing |
 
@@ -158,6 +158,23 @@ CLAUDE.md:
 4. **Replica eviction**, before any storage UI promises apply to replicas.
 5. **Selective sync for ordinary devices** — extending `PinSet` beyond
    replicas, and what happens to content a device un-pins.
+
+## 5A. Scope: Linux and Android, completely, before anything else
+
+The product is finished for four device pairs — Linux↔Linux, Linux↔Android,
+Android↔Linux, Android↔Android — before support expands to any other operating
+system or architecture.
+
+Windows is explicitly out of scope until then. The engine is portable Rust and
+would probably build; nothing has ever run on it, and shipping a platform
+nobody has watched work is a claim this project has not earned. The existing
+Windows gaps stay recorded as gaps rather than being closed speculatively.
+
+What this means for every phase below: a feature is done when it has been seen
+to work **between a laptop and a phone**, not when it works desktop-to-desktop.
+Two of the four pairs involve Android, and Android is where the surprises have
+been — doze, background windows, multicast filtering, a keystore that is a Java
+API.
 
 ## 6. Sequence
 
@@ -201,8 +218,13 @@ question they cannot answer.
 infrastructure: a QR to scan, a code to type, a spoken form to read out, and a
 countdown to expiry. Cancelling stops the code as well as hiding it.
 
-**5. Transfers**: send, receive, progress, Downloads destination, notifications.
-The send and receive *mechanism* is built; this phase is the interface over it.
+**5. Transfers.** Mostly done. Sending from the window is built — drop a file
+on it or choose one, then pick a device — and so are notifications, which are
+deliberately limited to three things: somebody sent you a file, a device
+collected what you sent, something failed. Receiving already worked.
+
+Still owed from this phase: **progress** for a transfer in flight, and the
+**Downloads destination** on Android.
 
 **6. Android product UI.**
 
@@ -265,7 +287,7 @@ hardware where hardware is involved. Not when it compiles.
 
 ## 10. Testing
 
-The existing suite is 586 tests across twelve crates, and the classes that
+The existing suite is 596 tests across twelve crates, and the classes that
 matter here already exist: property-based convergence, crash injection,
 corruption repair, hostile peers, concurrent collection. New work extends those
 rather than starting a parallel tradition.

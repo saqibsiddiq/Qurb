@@ -108,6 +108,7 @@
     <button data-screen="devices">Devices</button>
     <button data-screen="activity">Activity</button>
     <button data-screen="storage">Storage</button>
+    <button data-screen="send">Send</button>
     <button data-screen="settings">Settings</button>
   </nav>
 
@@ -248,6 +249,38 @@
 
       <dl id="breakdown"></dl>
     </section>
+    <section id="send" class="screen">
+      <header>
+        <h1>Send a file</h1>
+        <p class="quiet">
+          It goes to one device and to nowhere else. Your other devices never
+          see it, and it is not added to this folder.
+        </p>
+      </header>
+
+      <div id="drop">
+        <p><strong>Drop a file here</strong></p>
+        <p class="quiet">or</p>
+        <button class="act" id="choose">Choose a file…</button>
+        <p id="chosen" class="quiet"></p>
+      </div>
+
+      <h2>To which device</h2>
+      <ul id="send-to" class="rows"></ul>
+
+      <p id="send-says" class="quiet"></p>
+
+      <p class="quiet note">
+        The file stays on this device until that one confirms it has it, so
+        sending to a phone that is switched off works — it collects the file the
+        next time it syncs. After that, this copy is the first thing dropped if
+        you run short of disk.
+      </p>
+
+      <h2 id="sending-heading" class="hidden">Waiting to be collected</h2>
+      <ul id="sending" class="rows hidden"></ul>
+    </section>
+
     <section id="settings" class="screen">
       <header>
         <h1>Settings</h1>

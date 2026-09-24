@@ -215,3 +215,71 @@ fn devices_reports_what_pairing_recorded_and_nothing_it_could_not_know() {
     // Reachability is live state and deliberately absent here.
     assert_eq!(listed[0].last_seen, None);
 }
+
+/// Naming a device is how both `qurb send` and the window's send screen decide
+/// where a file is going. Getting it wrong sends somebody's file to the wrong
+/// person, so the two failures are distinguished rather than collapsed.
+#[test]
+fn a_device_can_be_named_the_way_any_screen_prints_it() {
+    let device = Device::new();
+    let phone = DeviceId::from_bytes([0xAB; 32]);
+    device.store.db().trust_peer(&phone, &[0xCD; 32], "phone").unwrap();
+
+    let view = device.view();
+    for spelling in ["phone", "PHONE", "  phone  ", "cdcdcdcd", "CDCDCDCD", &phone.short()] {
+        match view.device_named(spelling).unwrap() {
+            qurb_cli::Recipient::One(found) => assert_eq!(found.id, phone, "for {spelling:?}"),
+            other => panic!("{spelling:?} did not resolve: {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn a_name_nobody_has_comes_back_with_the_names_that_exist() {
+    let device = Device::new();
+    device.store.db().trust_peer(&DeviceId::from_bytes([1; 32]), &[1; 32], "phone").unwrap();
+    device.store.db().trust_peer(&DeviceId::from_bytes([2; 32]), &[2; 32], "tablet").unwrap();
+
+    match device.view().device_named("laptop").unwrap() {
+        qurb_cli::Recipient::Unknown { known } => {
+            let names: Vec<&str> = known.iter().map(|d| d.name.as_str()).collect();
+            assert_eq!(names, vec!["phone", "tablet"]);
+        }
+        other => panic!("expected nothing to match, got {other:?}"),
+    }
+}
+
+/// Two devices called "phone" is an ordinary thing to have done. The answer is
+/// to ask which, not to pick one.
+#[test]
+fn two_devices_sharing_a_name_are_reported_rather_than_guessed_between() {
+    let device = Device::new();
+    device.store.db().trust_peer(&DeviceId::from_bytes([1; 32]), &[0x11; 32], "phone").unwrap();
+    device.store.db().trust_peer(&DeviceId::from_bytes([2; 32]), &[0x22; 32], "phone").unwrap();
+
+    match device.view().device_named("phone").unwrap() {
+        qurb_cli::Recipient::Several(found) => {
+            assert_eq!(found.len(), 2);
+            // And the fingerprints are what tells them apart, which is what the
+            // caller will print.
+            let prints: Vec<&str> = found.iter().map(|d| d.fingerprint.as_str()).collect();
+            assert_eq!(prints, vec!["11111111", "22222222"]);
+        }
+        other => panic!("expected an ambiguity, got {other:?}"),
+    }
+
+    // The fingerprint still resolves exactly one of them, which is the way out.
+    match device.view().device_named("22222222").unwrap() {
+        qurb_cli::Recipient::One(found) => assert_eq!(found.fingerprint, "22222222"),
+        other => panic!("a fingerprint should be unambiguous, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_device_with_nothing_paired_says_nothing_is_paired() {
+    let device = Device::new();
+    match device.view().device_named("phone").unwrap() {
+        qurb_cli::Recipient::Unknown { known } => assert!(known.is_empty()),
+        other => panic!("expected nothing, got {other:?}"),
+    }
+}

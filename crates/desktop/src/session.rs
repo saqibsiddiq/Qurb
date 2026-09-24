@@ -135,6 +135,18 @@ impl Hosted {
         f(&running.store)
     }
 
+    /// The same, for the few things that write.
+    ///
+    /// Sending is the only one: it chunks a file and records it, which the
+    /// window does directly rather than asking the daemon to, because the
+    /// daemon is busy serving peers and a large file must not stop it. WAL mode
+    /// is what makes a second writer safe.
+    pub fn with_store_mut<T>(&self, f: impl FnOnce(&mut Store) -> Result<T>) -> Result<T> {
+        let mut guard = self.running.lock().expect("session");
+        let running = guard.as_mut().context("this device is not set up yet")?;
+        f(&mut running.store)
+    }
+
     /// The daemon's latest published state, if it is running.
     pub fn status(&self) -> Option<Status> {
         let guard = self.running.lock().expect("session");

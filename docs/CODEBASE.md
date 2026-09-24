@@ -520,6 +520,7 @@ qurb/
 │   ├── desktop/           The desktop application: the daemon in a window.
 │   │   ├── src/main.rs      opens the window, and the daemon if there is one
 │   │   ├── src/session.rs   unmade or running, and the phrase in between
+│   │   ├── src/notify.rs    the three things worth interrupting somebody about
 │   │   ├── src/commands.rs  every question the window may ask
 │   │   └── ui/              the screens: HTML, one stylesheet, one script
 │   │
@@ -676,7 +677,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-586 tests pass across twelve crates on Linux; clippy is clean. The last run on
+596 tests pass across twelve crates on Linux; clippy is clean. The last run on
 a Galaxy S23 was 426 of them, before this week's work — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
@@ -906,7 +907,9 @@ network. iOS needs Xcode, which needs a Mac. See
 | Settings | name, rendezvous, relay, port, and the 24 words again |
 | Setting a device up | make a new one or join an existing, with the phrase shown and confirmed |
 | Pairing | show a code — QR, typed or spoken — or enter one, with a countdown |
-| Sending, transfer progress | **not built** — see the crate's README |
+| Sending | drop a file on the window or choose one, then pick a device |
+| Notifications | three things only: a file sent to you, one collected, one that failed |
+| Transfer progress | **not built** — see the crate's README |
 
 ### Designed but not built
 

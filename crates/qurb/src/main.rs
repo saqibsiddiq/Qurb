@@ -582,30 +582,18 @@ fn fetch(root: &Path, logical: &str) -> Result<()> {
 fn send(root: &Path, file: &Path, recipient: &str) -> Result<()> {
     let (_, _, mut store, _) = open(root)?;
 
-    let peers = store.db().trusted_peers()?;
-    let matches: Vec<_> = peers
-        .iter()
-        .filter(|p| {
-            p.name.eq_ignore_ascii_case(recipient)
-                || hex_short(&p.fingerprint).eq_ignore_ascii_case(recipient)
-                || p.device_id.short().eq_ignore_ascii_case(recipient)
-        })
-        .collect();
-
-    let peer = match matches.as_slice() {
-        [one] => *one,
-        [] => {
-            let known: Vec<String> = peers
-                .iter()
-                .map(|p| format!("{} ({})", p.name, hex_short(&p.fingerprint)))
-                .collect();
-            if known.is_empty() {
-                bail!("this device has not been paired with anything yet");
-            }
-            bail!("no paired device called {recipient} — known: {}", known.join(", "));
+    let peer = match qurb_cli::View::new(&store, 0).device_named(recipient)? {
+        qurb_cli::Recipient::One(device) => device,
+        qurb_cli::Recipient::Unknown { known } if known.is_empty() => {
+            bail!("this device has not been paired with anything yet")
         }
-        several => {
-            let ids: Vec<String> = several.iter().map(|p| hex_short(&p.fingerprint)).collect();
+        qurb_cli::Recipient::Unknown { known } => {
+            let names: Vec<String> =
+                known.iter().map(|d| format!("{} ({})", d.name, d.fingerprint)).collect();
+            bail!("no paired device called {recipient} — known: {}", names.join(", "));
+        }
+        qurb_cli::Recipient::Several(devices) => {
+            let ids: Vec<String> = devices.iter().map(|d| d.fingerprint.clone()).collect();
             bail!("more than one device is called {recipient} — use one of: {}", ids.join(", "));
         }
     };
@@ -616,8 +604,8 @@ fn send(root: &Path, file: &Path, recipient: &str) -> Result<()> {
         .to_string_lossy()
         .into_owned();
 
-    let stats = store.send_to_vault(&name, file, &peer.device_id)?;
-    println!("sending {name} to {} ({})", peer.name, hex_short(&peer.fingerprint));
+    let stats = store.send_to_vault(&name, file, &peer.id)?;
+    println!("sending {name} to {} ({})", peer.name, peer.fingerprint);
     println!("  {} stored, waiting for the device to collect it", human(stats.bytes_written));
     println!("  it stays here until then, even if this device restarts");
     Ok(())

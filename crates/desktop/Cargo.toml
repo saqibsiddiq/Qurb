@@ -21,6 +21,7 @@ qurb-cli = { path = "../qurb" }
 qurb-keys = { path = "../keys" }
 qurb-peer = { path = "../peer" }
 qurb-storage = { path = "../storage" }
+qurb-sync = { path = "../sync" }
 
 anyhow.workspace = true
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
@@ -28,6 +29,14 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 tauri = { version = "2", features = [] }
+# A native "choose a file" dialog. Drag-and-drop is the better gesture and needs
+# no plugin; this is the accessible way to do the same thing, for anybody who
+# cannot drag or is using a keyboard.
+tauri-plugin-dialog = "2"
+# Desktop notifications, for the few things worth interrupting somebody about.
+# Raised from Rust rather than from the page, because a notification is most
+# useful exactly when nobody is looking at the window.
+notify-rust = "4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

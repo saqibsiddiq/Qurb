@@ -356,6 +356,50 @@ pub struct PairingState {
     message: Option<String>,
 }
 
+/// Send a file to one device, and to nobody else.
+///
+/// The bytes are read and chunked here, on the calling thread, which is a Tauri
+/// worker rather than the daemon's. That is the right place for it: the daemon
+/// is serving peers while this runs, and a large file must not stop it.
+///
+/// The recipient is named by its short fingerprint, which is what the devices
+/// screen shows — a device id would be the right key and the wrong thing to put
+/// in front of somebody.
+#[tauri::command]
+pub fn send_file(hosted: Host<'_>, path: String, to: String) -> Answer<String> {
+    let source = std::path::PathBuf::from(&path);
+    if !source.is_file() {
+        return Err(format!("{path} is not a file"));
+    }
+
+    // The name the recipient will see. Theirs to organise afterwards; ours only
+    // to choose sensibly now.
+    let name = source
+        .file_name()
+        .ok_or_else(|| "that has no filename".to_string())?
+        .to_string_lossy()
+        .into_owned();
+
+    // The same lookup `qurb send` uses, so the two cannot disagree about which
+    // device a name refers to.
+    let device = match hosted
+        .with_store(|store| Ok(View::new(store, 0).device_named(&to)?))
+        .map_err(failed)?
+    {
+        qurb_cli::Recipient::One(device) => device,
+        qurb_cli::Recipient::Unknown { .. } => return Err(format!("no paired device {to}")),
+        qurb_cli::Recipient::Several(_) => {
+            return Err(format!("more than one device is called {to}"))
+        }
+    };
+
+    hosted
+        .with_store_mut(|store| Ok(store.send_to_vault(&name, &source, &device.id)?))
+        .map_err(failed)?;
+
+    Ok(name)
+}
+
 /// Show a code, and start answering it.
 ///
 /// Returns as soon as there is something to put on the screen; the waiting

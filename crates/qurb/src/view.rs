@@ -102,6 +102,23 @@ impl Storage {
     }
 }
 
+/// The answer to "which device did you mean".
+///
+/// Three outcomes rather than an `Option`, because the two failures need
+/// different things said about them: nobody of that name is a list to show,
+/// and several of that name is a request to be more specific. Collapsing them
+/// into `None` would leave the caller inventing the difference.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Recipient {
+    One(Device),
+    /// Nothing matched. Carries every paired device, so the caller can say what
+    /// the choices were rather than only that this was not one of them.
+    Unknown { known: Vec<Device> },
+    /// Two devices share a name. Carries them, so the caller can print the
+    /// short ids that tell them apart.
+    Several(Vec<Device>),
+}
+
 /// A file sent to another device that has not collected it yet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Outgoing {
@@ -142,6 +159,36 @@ impl<'a> View<'a> {
                 last_seen: p.last_seen,
             })
             .collect())
+    }
+
+    /// The one paired device somebody meant, or why that is not clear.
+    ///
+    /// Matched on the name they gave it, on the fingerprint `qurb status` and
+    /// the devices screen print, and on the device id — because a person
+    /// reading any of those should not have to know which one they are looking
+    /// at. Case is ignored: these get retyped.
+    ///
+    /// One definition, used by `qurb send` and by the window, so that the two
+    /// cannot disagree about which device a name refers to.
+    pub fn device_named(&self, text: &str) -> qurb_storage::Result<Recipient> {
+        let text = text.trim();
+        let devices = self.devices()?;
+
+        let matched: Vec<Device> = devices
+            .iter()
+            .filter(|d| {
+                d.name.eq_ignore_ascii_case(text)
+                    || d.fingerprint.eq_ignore_ascii_case(text)
+                    || d.id.short().eq_ignore_ascii_case(text)
+            })
+            .cloned()
+            .collect();
+
+        Ok(match matched.len() {
+            1 => Recipient::One(matched.into_iter().next().expect("one")),
+            0 => Recipient::Unknown { known: devices },
+            _ => Recipient::Several(matched),
+        })
     }
 
     /// What this device is spending.

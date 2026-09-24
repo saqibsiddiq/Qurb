@@ -385,3 +385,50 @@ button.primary:disabled { opacity: .45; cursor: default; filter: none; }
 }
 
 #pair-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+/* --------------------------------------------------------------------- send */
+
+#drop {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 32px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 34rem;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+/* While a file is over the window. Tauri reports that separately from the drop
+ * itself, and without the feedback there is no way to tell whether letting go
+ * will do anything. */
+#drop.over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+#drop p { margin: 0; }
+
+/* One row per device, each a button: choosing the recipient is the action, so
+ * it should not need a second click on a "send" button afterwards. */
+.pick {
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.rows li.pickable { cursor: pointer; }
+.rows li.pickable:hover { background: var(--panel); }
+.rows li.pickable[aria-disabled="true"] { cursor: default; opacity: .5; }
+.rows li.pickable[aria-disabled="true"]:hover { background: none; }
