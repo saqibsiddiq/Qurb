@@ -320,22 +320,58 @@ pub fn open_socket(port: u16) -> Result<UdpSocket> {
     // route uses. A failure on one interface is not a failure overall: a
     // virtual adapter that cannot carry multicast is ordinary, and the others
     // still work.
-    let mut joined = 0;
+    let mut joined = Vec::new();
     for ip in interfaces() {
         if socket.join_multicast_v4(&GROUP, &ip).is_ok() {
-            joined += 1;
+            joined.push(ip);
         }
     }
-    // The unspecified address lets the operating system choose, which is the
-    // only thing left to try and is what works inside a container with one
-    // interface it did not enumerate.
-    if joined == 0 {
+
+    // And on whichever interface the kernel would actually use for this group,
+    // if enumeration missed it.
+    //
+    // Enumeration is not reliable everywhere. Android 11 and later restrict the
+    // NETLINK access that listing interfaces needs, so `if_addrs` can return
+    // nothing at all — and a device that joined no group receives nothing,
+    // while still sending perfectly. That asymmetry is exactly how this failed
+    // on a phone: the laptop saw it every time and it saw nothing.
+    if let Some(ip) = kernels_choice() {
+        if !joined.contains(&ip) && socket.join_multicast_v4(&GROUP, &ip).is_ok() {
+            joined.push(ip);
+        }
+    }
+
+    // Last resort: let the operating system decide. Worth trying rather than
+    // failing, and worth saying out loud, because a membership on the wrong
+    // interface looks exactly like a working one until nothing arrives.
+    if joined.is_empty() {
+        tracing::debug!("no interface could be named; joining the group unspecified");
         socket
             .join_multicast_v4(&GROUP, &Ipv4Addr::UNSPECIFIED)
             .map_err(|e| Error::Io { path: "join multicast".into(), source: e })?;
+    } else {
+        tracing::debug!(interfaces = ?joined, "listening for beacons");
     }
 
     Ok(socket)
+}
+
+/// The address the kernel would send to this group from.
+///
+/// Found by connecting a throwaway socket to the group and asking what local
+/// address it chose. No packet is sent — connecting a UDP socket only fixes the
+/// destination, and the routing decision it forces is the answer.
+///
+/// This is the one way of naming the right interface that needs no permission
+/// and no enumeration, which is what makes it the fallback for platforms where
+/// listing interfaces is restricted.
+fn kernels_choice() -> Option<Ipv4Addr> {
+    let probe = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)).ok()?;
+    probe.connect(SocketAddrV4::new(GROUP, PORT)).ok()?;
+    match probe.local_addr().ok()?.ip() {
+        IpAddr::V4(ip) if !ip.is_unspecified() => Some(ip),
+        _ => None,
+    }
 }
 
 /// Every IPv4 address this machine has, loopback included.

@@ -21,6 +21,16 @@ uniffi = { version = "0.32", features = ["cli"] }
 thiserror = "2"
 tracing = "0.1"
 
+# The engine's logs, on the platform that cannot be attached to a terminal.
+#
+# Without a subscriber every `tracing::` call in the whole engine is discarded,
+# which is what it was doing on Android: a local-discovery failure had to be
+# diagnosed entirely from the laptop's side, because the phone's own account of
+# what it did went nowhere. Android only, since every other platform has stderr.
+[target.'cfg(target_os = "android")'.dependencies]
+tracing-android = "0.2"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
 [build-dependencies]
 uniffi = { version = "0.32", features = ["build"] }
 

@@ -730,10 +730,24 @@ reaches the access point, and an access point doing IGMP snooping will not
 forward the group to a client that never joined. That would produce exactly this
 asymmetry: sending needs no membership, receiving does.
 
-**A diagnosis gap worth naming.** The engine's `tracing` output does not reach
-logcat at all, so none of this could be read from the phone — every conclusion
-above is inferred from the laptop's side and from the app's own Kotlin logging.
-Wiring the Rust logs to logcat should come before the next attempt at this.
+**A diagnosis gap, now half closed.** The engine's `tracing` output reached
+nowhere on Android: `tracing-subscriber` was a dev-dependency only, so no
+subscriber was ever installed and every log line in the entire engine was
+discarded. Every conclusion above had to be inferred from the laptop's side and
+from the app's own Kotlin logging.
+
+A `tracing-android` layer is now installed on the first call into the engine,
+filtered by the same `RUST_LOG` the desktop uses. It has not yet produced a line
+on hardware, so either the layer is not reaching logcat or the sync under test
+did not run — which is itself the next thing to find out, and is a far better
+place to be stuck than having no channel at all.
+
+**A third attempt, not yet tested on hardware.** Interface enumeration is now
+backed by asking the kernel directly which address it would send to this group
+from — a throwaway socket connected to the group address, no packet sent, its
+local address read back. That needs no permission and no enumeration, which is
+exactly what a platform that restricts NETLINK requires. Whether it fixes the
+phone is unknown.
 
 Desktop-to-desktop local discovery is verified and has tests, including a full
 sync between two devices with no rendezvous service in existence.

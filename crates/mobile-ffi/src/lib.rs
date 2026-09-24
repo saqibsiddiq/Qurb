@@ -363,6 +363,46 @@ pub fn create(root: String) -> Result<Setup, QurbError> {
 /// given the same keystore afterwards. Opening without it fails saying so
 /// rather than silently falling back, because a silent fallback would mean
 /// reading a key that is not there.
+/// Send the engine's logs somewhere a person can read them.
+///
+/// Called at the top of every entry point rather than by the platform, because
+/// an initialisation step the caller has to remember is one that will be
+/// forgotten — and was. Without a subscriber, every `tracing::` call in the
+/// engine is discarded, so on Android the entire engine was silent: a local
+/// discovery failure had to be diagnosed from the *other* device's logs,
+/// because the phone had no account of what it had done.
+///
+/// Once per process. A second call is a no-op rather than an error, which is
+/// what makes it safe to put at the top of everything.
+///
+/// Nothing but Android. Every other platform this runs on has a terminal, and
+/// the desktop binaries install their own subscriber with a filter the user
+/// controls.
+#[cfg(target_os = "android")]
+fn logging() {
+    use std::sync::Once;
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        use tracing_subscriber::layer::SubscriberExt;
+        use tracing_subscriber::util::SubscriberInitExt;
+
+        let Ok(layer) = tracing_android::layer("qurb") else { return };
+        let _ = tracing_subscriber::registry()
+            // Debug from the engine, warnings from everything else. Enough to
+            // follow a sync without the noise of every library it uses, and
+            // overridable by the same variable the desktop uses.
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "qurb=debug,warn".into()),
+            )
+            .with(layer)
+            .try_init();
+    });
+}
+
+#[cfg(not(target_os = "android"))]
+fn logging() {}
+
 #[uniffi::export]
 pub fn create_protected(
     root: String,
@@ -761,6 +801,10 @@ impl Qurb {
         settings: Settings,
         keystore: Option<Arc<dyn KeyStore>>,
     ) -> Result<Self, QurbError> {
+        // Every route into the engine passes through here, which is why it is
+        // the one place that has to remember.
+        logging();
+
         let store_dir = store_dir(Path::new(&root));
         let vault = vault_at(&store_dir, keystore.as_ref());
 
