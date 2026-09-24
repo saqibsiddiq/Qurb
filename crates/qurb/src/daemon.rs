@@ -165,7 +165,12 @@ impl Daemon {
     ///
     /// Carries who, never what, and is best effort throughout: a peer that
     /// never hears it syncs on its own schedule, exactly as before.
-    fn announce_news(&self, connector: &Connector, peers: &Peers, except: Option<Fingerprint>) {
+    async fn announce_news(&self, connector: &Connector, peers: &Peers, except: Option<Fingerprint>) {
+        // On the local network first, because it needs nobody's permission and
+        // reaches every device on this Wi-Fi at once. A device that hears it
+        // syncs within a second, with no server involved.
+        connector.announce_news().await;
+
         for peer in peers.known.iter().copied() {
             if Some(peer) == except {
                 continue;
@@ -364,8 +369,7 @@ impl Daemon {
             self.master.clone(),
             &trust,
             &self.config.signal,
-            true,
-            self.config.relay,
+            qurb_peer::Finding::everything(self.config.relay),
         )
         .await
         {
@@ -471,7 +475,7 @@ impl Daemon {
                                     );
                                     // Anyone holding a request open hears now.
                                     generation.bump();
-                                    self.announce_news(&connector, &peers, None);
+                                    self.announce_news(&connector, &peers, None).await;
                                 }
                                 for failure in &stats.failures {
                                     tracing::warn!(
@@ -492,7 +496,7 @@ impl Daemon {
                             tracing::error!(error = %e, "reconciling failed");
                         }
                         generation.bump();
-                        self.announce_news(&connector, &peers, None);
+                        self.announce_news(&connector, &peers, None).await;
                         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
 
@@ -661,7 +665,7 @@ impl Daemon {
         }
 
         if news_from.is_some() {
-            self.announce_news(connector, peers, news_from);
+            self.announce_news(connector, peers, news_from).await;
         }
 
         // Counted per pass rather than accumulated, because the question an

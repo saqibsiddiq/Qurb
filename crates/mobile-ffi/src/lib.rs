@@ -889,8 +889,14 @@ impl Qurb {
                 self.master.clone(),
                 &qurb_peer::tls::TrustList::new(peers.clone()),
                 self.signal_url.clone(),
-                self.discover,
-                relay,
+                // Beacons only when this pass is allowed to look around at
+                // all. A phone syncing in a background window on a carrier
+                // network has nothing to discover locally and no time to
+                // spend finding that out.
+                match self.discover {
+                    true => qurb_peer::Finding::everything(relay),
+                    false => qurb_peer::Finding { stun: false, beacons: None, relay },
+                },
             ))
             .map_err(|e| QurbError::Network { detail: e.to_string() })?;
 

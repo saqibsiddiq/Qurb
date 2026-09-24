@@ -44,7 +44,11 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // how an app's future windows get rationed, and a sync that needs
             // longer can simply have the next one.
             engine.scan()
-            val outcome = engine.syncWithin(BUDGET_SECONDS)
+            // Holding the multicast lock, or the phone cannot hear the devices
+            // on its own Wi-Fi answering. See `Engine.hearingTheNetwork`.
+            val outcome = Engine.hearingTheNetwork(applicationContext) {
+                engine.syncWithin(BUDGET_SECONDS)
+            }
 
             // Recorded because a background worker is otherwise invisible.
             // Nobody is watching when it runs, so if it does not leave a trace

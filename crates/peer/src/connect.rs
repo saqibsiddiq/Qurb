@@ -28,6 +28,7 @@
 
 use crate::client::PeerClient;
 use crate::error::{Error, Result};
+use crate::local::{self, Beacons, Neighbours};
 use crate::identity::{Fingerprint, Identity};
 use crate::{nat, tls};
 use qurb_keys::MasterKey;
@@ -48,6 +49,42 @@ const RENDEZVOUS_TIMEOUT: Duration = Duration::from_secs(20);
 const CANDIDATE_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// A device's connection machinery: one socket, one endpoint, one rendezvous.
+/// How much of the outside world to involve in finding peers.
+///
+/// Grouped because they are one decision rather than three: a test on one
+/// machine wants none of it, a phone on a carrier network wants all of it, and
+/// the combinations in between are what a deployment chooses.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Finding {
+    /// Ask a STUN server what this device looks like from outside.
+    pub stun: bool,
+    /// Multicast beacons on the local network, on this port. `None` turns local
+    /// discovery off, which tests want and nothing else does.
+    pub beacons: Option<u16>,
+    /// Where to fall back to when no direct path can be made.
+    pub relay: Option<SocketAddr>,
+}
+
+impl Finding {
+    /// Everything: STUN, local beacons on the standard port, and a relay if
+    /// one is configured. What a real device wants.
+    pub fn everything(relay: Option<SocketAddr>) -> Self {
+        Self { stun: true, beacons: Some(local::PORT), relay }
+    }
+
+    /// Nothing that touches a network beyond the one socket. What a test on one
+    /// machine wants: no STUN lookup, and no beacons that other tests running
+    /// at the same time would hear.
+    pub fn nothing() -> Self {
+        Self::default()
+    }
+
+    /// Local beacons on a port of the test's own choosing, and nothing else.
+    pub fn beacons_on(port: u16) -> Self {
+        Self { stun: false, beacons: Some(port), relay: None }
+    }
+}
+
 pub struct Connector {
     endpoint: quinn::Endpoint,
     identity: Identity,
@@ -70,6 +107,38 @@ pub struct Connector {
     /// during one. Being told means acting inside the window rather than
     /// hoping to coincide with it.
     arrivals: broadcast::Sender<MemberId>,
+    /// Devices seen on this network lately, which is better evidence of
+    /// reachability than anything the rendezvous service can offer.
+    neighbours: Neighbours,
+    /// Saying we are here, when there is a network that will carry it.
+    beacons: Option<std::sync::Arc<Beacons>>,
+}
+
+/// Turn beacons into sightings the rest of the device can act on.
+///
+/// The same `arrivals` channel the rendezvous feeds, deliberately: to everything
+/// above this, "a peer just appeared" is one event with one meaning, and where
+/// the news came from is this layer's business rather than the daemon's.
+async fn follow_beacons(
+    mut sightings: mpsc::UnboundedReceiver<crate::local::Beacon>,
+    neighbours: Neighbours,
+    arrivals: broadcast::Sender<MemberId>,
+) {
+    while let Some(beacon) = sightings.recv().await {
+        tracing::debug!(
+            peer = %hex_short(beacon.member.as_bytes()),
+            news = beacon.news,
+            "a device is on this network"
+        );
+        neighbours.note(beacon.member, beacon.endpoints);
+        // A send with no receivers is not a failure: nothing is listening yet,
+        // or nothing cares. The sighting is recorded either way.
+        let _ = arrivals.send(beacon.member);
+    }
+}
+
+fn hex_short(bytes: &[u8; 32]) -> String {
+    bytes[..4].iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// What the signalling task is asked to do.
@@ -91,18 +160,18 @@ impl Connector {
     /// Bind, discover, and get ready to dial or be dialled.
     ///
     /// `allowed` is the guest list for incoming connections, which in practice
-    /// comes from the trust store. `discover` controls whether to ask STUN —
-    /// tests on one machine have nothing to discover and should not reach for
-    /// the network to find that out.
+    /// comes from the trust store. [`Finding`] says how much of the outside
+    /// world to involve — tests on one machine have nothing to discover and
+    /// should not reach for the network to find that out.
     pub async fn start(
         bind: SocketAddr,
         identity: Identity,
         master: MasterKey,
         allowed: &tls::TrustList,
         signal_url: impl Into<String>,
-        discover: bool,
-        relay: Option<SocketAddr>,
+        finding: Finding,
     ) -> Result<Self> {
+        let Finding { stun: discover, beacons: beacon_port, relay } = finding;
         let socket = std::net::UdpSocket::bind(bind)
             .map_err(|e| Error::Io { path: bind.to_string().into(), source: e })?;
         let local = socket
@@ -201,14 +270,30 @@ impl Connector {
         // which the server correctly reads as the device going away. A device
         // that called out would stop being reachable the moment it finished,
         // and the failure looks like the *other* device being absent.
-        let client = SignalClient::connect(
+        // Best effort, not a precondition.
+        //
+        // A rendezvous that is down, or absent entirely, used to stop a device
+        // starting at all -- which meant two devices on one Wi-Fi could not
+        // sync without something on the internet being reachable. They can see
+        // each other; nobody needs to introduce them. `stay_signalled` keeps
+        // trying in the background, and everything local works meanwhile.
+        let client = match SignalClient::connect(
             &signal_url,
             GroupId::derive(&master),
             MemberId::derive(&master, identity.fingerprint().as_bytes()),
             endpoints.clone(),
         )
         .await
-        .map_err(|e| Error::Signalling { detail: e.to_string() })?;
+        {
+            Ok(client) => Some(client),
+            Err(e) => {
+                tracing::info!(
+                    error = %e,
+                    "no rendezvous service; devices on this network can still find each other"
+                );
+                None
+            }
+        };
 
         let (signal, commands) = mpsc::unbounded_channel();
 
@@ -233,7 +318,43 @@ impl Connector {
             arrivals_tx,
         ));
 
-        Ok(Self { endpoint, identity, master, endpoints, relay, signal, arrivals })
+        // Beacons on the local network, so that two devices on one Wi-Fi need
+        // nothing else at all. Best effort for the same reason as the
+        // rendezvous: a network that blocks multicast is a network where this
+        // does not work, not one where qurb does not start.
+        let neighbours = Neighbours::new();
+        let beacons = match beacon_port {
+            None => None,
+            Some(port) => {
+                let me = MemberId::derive(&master, identity.fingerprint().as_bytes());
+                match Beacons::start(master.clone(), me, endpoints.clone(), port) {
+                    Ok((beacons, sightings)) => {
+                        tokio::spawn(follow_beacons(
+                            sightings,
+                            neighbours.clone(),
+                            arrivals.clone(),
+                        ));
+                        Some(beacons)
+                    }
+                    Err(e) => {
+                        tracing::info!(error = %e, "no local discovery on this network");
+                        None
+                    }
+                }
+            }
+        };
+
+        Ok(Self {
+            endpoint,
+            identity,
+            master,
+            endpoints,
+            relay,
+            signal,
+            arrivals,
+            neighbours,
+            beacons,
+        })
     }
 
     /// Listen for peers announcing themselves to the rendezvous service.
@@ -269,6 +390,22 @@ impl Connector {
     ///
     /// Carries who, never what. Best effort: a peer that never hears it syncs
     /// on its own schedule, which is what happens today.
+    /// Devices currently visible on this network.
+    pub fn neighbours(&self) -> &Neighbours {
+        &self.neighbours
+    }
+
+    /// Say at once that there is news, on every channel there is.
+    ///
+    /// The beacon is what makes a change on one device reach another on the
+    /// same Wi-Fi in about a second with no server involved; the rendezvous
+    /// message covers the peer that is somewhere else.
+    pub async fn announce_news(&self) {
+        if let Some(beacons) = &self.beacons {
+            beacons.announce_news().await;
+        }
+    }
+
     pub fn tell_waiting(&self, peer: Fingerprint) -> Result<()> {
         let to = MemberId::derive(&self.master, peer.as_bytes());
         self.signal
@@ -313,6 +450,9 @@ impl Connector {
     /// Called when the addresses change, which a laptop moving between networks
     /// does several times a day.
     pub fn reannounce(&self, endpoints: Endpoints) -> Result<()> {
+        if let Some(beacons) = &self.beacons {
+            beacons.now_at(endpoints.clone());
+        }
         let _ = endpoints;
         // The signalling task holds the connection; re-announcing through it is
         // the next thing to add here.
@@ -325,6 +465,27 @@ impl Connector {
     /// then races every address the peer offered.
     pub async fn reach(&self, peer: Fingerprint) -> Result<PeerClient> {
         let target = MemberId::derive(&self.master, peer.as_bytes());
+
+        // Somebody who beaconed from this network moments ago is both the
+        // likeliest to answer and the cheapest to try, and reaching them
+        // involves nobody else at all. Asked first, and on success the
+        // rendezvous is never troubled.
+        if let Some(here) = self.neighbours.where_is(&target) {
+            match self.race(peer, &here).await {
+                Ok(client) => {
+                    tracing::debug!(peer = %peer.short(), "reached on the local network");
+                    return Ok(client);
+                }
+                // The sighting was stale, or the address moved between the
+                // beacon and now. Fall through and ask properly.
+                Err(e) => tracing::debug!(
+                    peer = %peer.short(),
+                    error = %e,
+                    "the local address did not answer; asking the rendezvous"
+                ),
+            }
+        }
+
         let (reply, answer) = oneshot::channel();
 
         self.signal
@@ -472,7 +633,7 @@ const RECONNECT_CEILING: Duration = Duration::from_secs(60);
 /// a reconnected device is a device it has never heard of.
 #[allow(clippy::too_many_arguments)]
 async fn stay_signalled(
-    first: SignalClient,
+    first: Option<SignalClient>,
     reconnect: Reconnect,
     mut commands: mpsc::UnboundedReceiver<Command>,
     endpoints: Endpoints,
@@ -480,7 +641,7 @@ async fn stay_signalled(
     identity: Identity,
     arrivals_tx: broadcast::Sender<MemberId>,
 ) {
-    let mut client = Some(first);
+    let mut client = first;
     let mut wait = RECONNECT_FLOOR;
 
     loop {

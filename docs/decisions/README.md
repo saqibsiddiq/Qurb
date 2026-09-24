@@ -60,3 +60,4 @@ is worth more than a tidy directory.
 | [0031](0031-what-happened-is-written-down.md) | What happened is written down | Accepted |
 | [0032](0032-the-interface-hosts-the-daemon.md) | The interface hosts the daemon, and asks it nouns | Accepted |
 | [0033](0033-the-phrase-on-a-screen.md) | The recovery phrase on a screen | Accepted |
+| [0034](0034-finding-each-other-with-no-server.md) | Finding each other with no server | Accepted |

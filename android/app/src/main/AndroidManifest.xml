@@ -7,6 +7,16 @@
          scanned; no location, contacts, or anything else. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!--
+      To hear other devices on the same Wi-Fi.
+
+      Android drops multicast packets before they reach an application unless it
+      holds a MulticastLock, to save power on a radio that would otherwise wake
+      for every packet on the network. Without this the phone sends its beacons
+      perfectly and receives nothing, which is exactly how it failed on hardware:
+      the laptop could see the phone and the phone could not see the laptop.
+    -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <!-- To scan a pairing code. Asked for only when the user taps "Scan",
          never at launch, and the app works without it: the code can always be

@@ -132,8 +132,9 @@ async fn two_strangers_pair_find_each_other_and_sync() {
         desktop.master.clone(),
         &qurb_peer::tls::TrustList::new(desktop.trusted()),
         &url,
-        false, // no STUN: there is nothing to discover on one machine
-        None,
+        // One machine: nothing to discover, and beacons off so that tests
+        // running at the same time do not hear each other.
+        qurb_peer::Finding::nothing(),
     )
     .await
     .unwrap();
@@ -144,8 +145,7 @@ async fn two_strangers_pair_find_each_other_and_sync() {
         laptop.master.clone(),
         &qurb_peer::tls::TrustList::new(laptop.trusted()),
         &url,
-        false,
-        None,
+        qurb_peer::Finding::nothing(),
     )
     .await
     .unwrap();
@@ -219,8 +219,7 @@ async fn a_peer_that_is_not_announced_is_reported_rather_than_hung_on() {
         laptop.master.clone(),
         &qurb_peer::tls::TrustList::new(laptop.trusted()),
         &url,
-        false,
-        None,
+        qurb_peer::Finding::nothing(),
     )
     .await
     .unwrap();
@@ -274,8 +273,7 @@ async fn connected(
         device.master.clone(),
         &qurb_peer::tls::TrustList::new(device.trusted()),
         signal_url,
-        false,
-        Some(relay_addr),
+        qurb_peer::Finding { stun: false, beacons: None, relay: Some(relay_addr) },
     )
     .await
     .unwrap();
@@ -410,8 +408,7 @@ async fn falling_back_needs_a_relay_to_fall_back_to() {
         laptop.master.clone(),
         &qurb_peer::tls::TrustList::new(laptop.trusted()),
         &signal_url,
-        false,
-        None,
+        qurb_peer::Finding::nothing(),
     )
     .await
     .unwrap();
@@ -419,4 +416,171 @@ async fn falling_back_needs_a_relay_to_fall_back_to() {
     assert!(laptop_conn.relay_endpoint().is_none());
     let outcome = laptop_conn.reach_via_relay(desktop.identity.fingerprint()).await;
     assert!(matches!(outcome, Err(qurb_peer::Error::NoRelay)), "expected NoRelay");
+}
+
+/// The point of local discovery: two devices on one network, and nothing else
+/// in the world.
+///
+/// No rendezvous service running — not down, not unreachable, not configured
+/// wrong. Absent. Before this, `Connector::start` failed outright and a laptop
+/// and a phone sitting on the same Wi-Fi could not sync at all without
+/// something on the internet being up. That is a dependency this product
+/// should not have, and this is the test that says it no longer does.
+#[tokio::test(flavor = "multi_thread")]
+async fn two_devices_sync_on_one_network_with_no_server_at_all() {
+    // A rendezvous URL pointing at nothing. Nothing is listening on it and
+    // nothing ever will be.
+    let nowhere = "ws://127.0.0.1:1";
+
+    // A beacon port of this test's own, so other tests running at the same
+    // time are not part of the experiment.
+    let beacons = 43_717;
+
+    let (desktop, phrase) = Device::first();
+    let laptop = Device::enrolled(&phrase);
+
+    fs::write(desktop.root.join("notes.txt"), b"nobody introduced us").unwrap();
+    let mut desktop_engine = desktop.engine();
+    desktop_engine.reconcile().unwrap();
+
+    pair(&desktop, &laptop).await;
+
+    // Both start. Neither can reach a rendezvous, and both come up anyway.
+    let desktop_conn = Connector::start(
+        "0.0.0.0:0".parse().unwrap(),
+        desktop.identity.clone(),
+        desktop.master.clone(),
+        &qurb_peer::tls::TrustList::new(desktop.trusted()),
+        nowhere,
+        qurb_peer::Finding::beacons_on(beacons),
+    )
+    .await
+    .expect("a device must start without a rendezvous service");
+
+    let laptop_conn = Connector::start(
+        "0.0.0.0:0".parse().unwrap(),
+        laptop.identity.clone(),
+        laptop.master.clone(),
+        &qurb_peer::tls::TrustList::new(laptop.trusted()),
+        nowhere,
+        qurb_peer::Finding::beacons_on(beacons),
+    )
+    .await
+    .expect("a device must start without a rendezvous service");
+
+    let serving_store = Arc::clone(&desktop.store);
+    let desktop_endpoint = desktop_conn.endpoint().clone();
+    tokio::spawn(async move {
+        while let Some(incoming) = desktop_endpoint.accept().await {
+            let store = Arc::clone(&serving_store);
+            tokio::spawn(async move {
+                if let Ok(connection) = incoming.await {
+                    qurb_peer::server::serve_connection_for_test(connection, store).await;
+                }
+            });
+        }
+    });
+
+    // Wait to be seen rather than sleeping a fixed time: multicast is lossy,
+    // and a test that assumed one beacon would arrive in 200ms would fail
+    // occasionally for a reason that is not a bug.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while laptop_conn.neighbours().count() == 0 {
+        assert!(std::time::Instant::now() < deadline, "the desktop was never seen on the network");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    let client = tokio::time::timeout(
+        Duration::from_secs(20),
+        laptop_conn.reach(desktop.identity.fingerprint()),
+    )
+    .await
+    .expect("reaching the desktop timed out")
+    .expect("could not reach the desktop with no rendezvous");
+
+    let tree = client.tree().await.expect("tree");
+    assert_eq!(tree.len(), 1);
+    assert_eq!(tree[0].path, "notes.txt");
+
+    let mut laptop_engine = laptop.engine();
+    let plan = laptop_engine.plan_against(&tree).unwrap();
+    let reader = Store::open(
+        &laptop.root.join(".qurb"),
+        ChunkKey::from_bytes(laptop.master.derive(Purpose::ChunkEncryption).to_bytes()),
+    )
+    .unwrap()
+    .in_tree(&laptop.root);
+    let mut source = qurb_peer::NetworkSource::new(&client, &reader);
+    let stats = laptop_engine.apply_plan(&plan, &mut source).unwrap();
+    assert!(stats.is_clean(), "{:?}", stats.failures);
+
+    assert_eq!(
+        fs::read(laptop.root.join("notes.txt")).unwrap(),
+        b"nobody introduced us",
+        "the file did not arrive"
+    );
+}
+
+/// Two people in one café, each with their own qurb. Neither should see the
+/// other's devices, and neither should be able to tell the other is there.
+#[tokio::test(flavor = "multi_thread")]
+async fn one_persons_devices_do_not_see_anothers() {
+    let nowhere = "ws://127.0.0.1:1";
+    let beacons = 43_719;
+
+    let (mine, phrase) = Device::first();
+    let my_laptop = Device::enrolled(&phrase);
+    pair(&mine, &my_laptop).await;
+
+    // A different person: a different master key, so a different group.
+    let (stranger, _) = Device::first();
+
+    let my_conn = Connector::start(
+        "0.0.0.0:0".parse().unwrap(),
+        my_laptop.identity.clone(),
+        my_laptop.master.clone(),
+        &qurb_peer::tls::TrustList::new(my_laptop.trusted()),
+        nowhere,
+        qurb_peer::Finding::beacons_on(beacons),
+    )
+    .await
+    .unwrap();
+
+    let _stranger_conn = Connector::start(
+        "0.0.0.0:0".parse().unwrap(),
+        stranger.identity.clone(),
+        stranger.master.clone(),
+        &qurb_peer::tls::TrustList::new(stranger.trusted()),
+        nowhere,
+        qurb_peer::Finding::beacons_on(beacons),
+    )
+    .await
+    .unwrap();
+
+    // My own device, so that the test is not merely observing that nothing
+    // works: this proves beacons are being sent and heard on this port.
+    let _mine_conn = Connector::start(
+        "0.0.0.0:0".parse().unwrap(),
+        mine.identity.clone(),
+        mine.master.clone(),
+        &qurb_peer::tls::TrustList::new(mine.trusted()),
+        nowhere,
+        qurb_peer::Finding::beacons_on(beacons),
+    )
+    .await
+    .unwrap();
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while my_conn.neighbours().count() == 0 {
+        assert!(std::time::Instant::now() < deadline, "my own device was never seen");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // Long enough for the stranger's startup burst and then some.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(
+        my_conn.neighbours().count(),
+        1,
+        "somebody else's device turned up in my address book"
+    );
 }

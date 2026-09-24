@@ -692,6 +692,52 @@ Two things this did *not* establish, both worth saying:
   appears in neither the `.so` nor the desktop binary. Watching the two connect
   is the check.
 
+### Local discovery: the phone sends and does not receive
+
+**2026-09-24, Galaxy S23 (SM-S911B) and the laptop, same Wi-Fi, no rendezvous
+service running anywhere.**
+
+Beacons ([decision 0034](../decisions/0034-finding-each-other-with-no-server.md))
+work in one direction on this phone and not the other.
+
+The laptop hears the phone every time. Its log, with nothing listening on the
+rendezvous port:
+
+```
+no rendezvous service; devices on this network can still find each other
+a device is on this network  peer=022722a4  news=false
+a peer is reachable and has news; syncing now  peer=7a4ebf0c
+connected  peer=7a4ebf0c  candidate=192.168.1.2:57199
+reached on the local network  peer=7a4ebf0c
+```
+
+The phone hears nothing. Its sync ends in "No device answered. They have to be
+awake and running at the same time," which is what the engine reports when no
+peer could be reached.
+
+**What was tried.** Android drops multicast before it reaches an application
+unless it holds a `WifiManager.MulticastLock` — the radio would otherwise wake
+for every packet on the network. That is exactly the shape of this failure, so
+the lock is now held for the length of a sync, released in a `finally`, with the
+`CHANGE_WIFI_MULTICAST_STATE` permission it needs. It did not change the result.
+
+**What is still open.** The likeliest remaining cause is which interface the
+group is joined on. `if_addrs` is used to enumerate interfaces and join the
+group on each; Android 11 and later restrict the NETLINK access that needs, so
+the list is probably empty and the code falls back to letting the kernel choose.
+If the kernel picks something other than Wi-Fi, the IGMP membership never
+reaches the access point, and an access point doing IGMP snooping will not
+forward the group to a client that never joined. That would produce exactly this
+asymmetry: sending needs no membership, receiving does.
+
+**A diagnosis gap worth naming.** The engine's `tracing` output does not reach
+logcat at all, so none of this could be read from the phone — every conclusion
+above is inferred from the laptop's side and from the app's own Kotlin logging.
+Wiring the Rust logs to logcat should come before the next attempt at this.
+
+Desktop-to-desktop local discovery is verified and has tests, including a full
+sync between two devices with no rendezvous service in existence.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

@@ -27,6 +27,9 @@ pub enum Purpose {
     DeviceIdentity,
     /// Authenticating metadata exchanged with peers.
     MetadataAuth,
+    /// Beacons on the local network, so that devices can find each other with
+    /// no server in the picture at all.
+    LocalDiscovery,
 }
 
 impl Purpose {
@@ -37,6 +40,7 @@ impl Purpose {
             Purpose::ChunkEncryption => b"qurb/chunk-encryption/v1",
             Purpose::DeviceIdentity => b"qurb/device-identity/v1",
             Purpose::MetadataAuth => b"qurb/metadata-auth/v1",
+            Purpose::LocalDiscovery => b"qurb/local-discovery/v1",
         }
     }
 }

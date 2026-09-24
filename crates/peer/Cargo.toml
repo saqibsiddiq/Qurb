@@ -22,11 +22,17 @@ qurb-signal = { path = "../signal" }
 qurb-sync = { path = "../sync" }
 
 quinn = "0.11"
+# Local-network beacons are encrypted to the group, so a stranger on the same
+# café wifi sees packets of random bytes rather than a list of who is here.
+chacha20poly1305 = "0.10"
 rand = "0.8"
 # Every address this machine can be reached at, not just the one the default
 # route uses. A device on a VPN or overlay network has a second address that
 # peers elsewhere can reach and the default route never mentions.
 if-addrs = "0.13"
+# For the socket options multicast needs -- address reuse and group membership
+# -- which the standard library exposes only partially.
+socket2 = { version = "0.5", features = ["all"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 rcgen = "0.13"
 thiserror = "2"

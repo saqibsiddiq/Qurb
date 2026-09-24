@@ -209,7 +209,24 @@ send you a file if it is *switched on*. A **replica** is a device that always is
 holding content without a person using it, so the rest need not all be awake at
 once. See [decisions/0006](decisions/0006-availability-gap.md).
 
-### 2.4 There is no central truth, so devices must agree by themselves
+### 2.4 Devices on one network need nobody to introduce them
+
+Two devices on the same Wi-Fi have a path to each other, so they find each other
+directly: every device multicasts a small beacon saying who it is and where it
+can be reached, and listens for others. No server is involved, and a device
+starts and syncs perfectly well when no rendezvous service exists at all.
+
+The beacon is encrypted under a key derived from the master key, so a stranger
+on the same café network sees random bytes — not the device identifier, not the
+addresses, not the fact that qurb is running. That matters because the
+identifier a device announces under is a bearer secret.
+
+The rendezvous service is still there for the case it is actually needed: two
+devices on *different* networks, which nothing local can help with. See
+[decisions/0034](decisions/0034-finding-each-other-with-no-server.md), including
+why beacons are answered rather than only broadcast.
+
+### 2.5 There is no central truth, so devices must agree by themselves
 
 With a central server, "what is the current version of this file?" has an easy
 answer: whatever the server says. We have no such server. Each device has its
@@ -227,7 +244,7 @@ and its most important clause is: **never silently discard a user's edit.**
 Both versions are kept; only the question of which one keeps the original
 filename is decided automatically.
 
-### 2.5 A path lives in one of two places
+### 2.6 A path lives in one of two places
 
 Everything above describes one namespace that every paired device converges on.
 That is the **shared area**, and it is where a path lives unless something says
@@ -255,7 +272,7 @@ what a send promises — including the rule that a copy in somebody's vault is a
 copy this device may *not* count on, which is the difference between eviction
 and data loss.
 
-### 2.6 The index remembers what happened, not just what is
+### 2.7 The index remembers what happened, not just what is
 
 Everything above describes the index as a picture of the present: these paths,
 these chunks, this version. It also keeps a history — one row per thing that
@@ -268,7 +285,7 @@ belongs to a process that exited. `qurb activity` reads it. See
 [decisions/0031](decisions/0031-what-happened-is-written-down.md), including
 what the table deliberately does *not* hold.
 
-### 2.7 An interface is a display of the engine, not a second one
+### 2.8 An interface is a display of the engine, not a second one
 
 A graphical front end runs the daemon inside itself rather than talking to one
 over a socket, and asks it two different kinds of question. The daemon
@@ -283,7 +300,7 @@ Those queries are `qurb_cli::View`, and the terminal uses the same ones
 why a file's availability has three values rather than two, which is the
 difference between "free up space" and "delete my only copy".
 
-### 2.8 Encryption happens before anything leaves the device
+### 2.9 Encryption happens before anything leaves the device
 
 Chunks are compressed, then encrypted, then written to disk and sent over the
 network. The keys never leave your devices. Our servers see encrypted bytes and
@@ -454,6 +471,7 @@ qurb/
 │   │   ├── src/identity.rs  a device's certificate and its fingerprint
 │   │   ├── src/pairing.rs   deciding which device to trust in the first place
 │   │   ├── src/base32.rs    invite encoding, chosen for how QR codes work
+│   │   ├── src/local.rs     beacons: finding each other with no server at all
 │   │   ├── src/nat.rs       STUN, NAT classification, hole punching
 │   │   ├── src/connect.rs   the policy: discover, announce, race candidates
 │   │   ├── src/tls.rs       mutual authentication by pinned fingerprint
@@ -656,7 +674,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-565 tests pass across twelve crates on Linux; clippy is clean. The last run on
+580 tests pass across twelve crates on Linux; clippy is clean. The last run on
 a Galaxy S23 was 426 of them, before this week's work — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 

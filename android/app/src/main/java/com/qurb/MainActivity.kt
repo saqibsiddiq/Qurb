@@ -223,7 +223,9 @@ class MainActivity : AppCompatActivity() {
                 // docs/decisions/0020-sync-takes-a-deadline.md.
                 val outcome = withContext(Dispatchers.IO) {
                     engine.scan()
-                    engine.syncWithin(25u)
+                    // Holding the multicast lock, or the phone cannot hear the
+                    // devices on its own Wi-Fi answering.
+                    Engine.hearingTheNetwork(this@MainActivity) { engine.syncWithin(25u) }
                 }
 
                 val message = when {

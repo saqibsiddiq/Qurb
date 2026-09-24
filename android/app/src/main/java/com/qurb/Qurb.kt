@@ -172,6 +172,41 @@ object Engine {
      * emulator's route to its host; a real phone needs the machine's address on
      * the local network.
      */
+    /**
+     * Run something with the phone able to *hear* the local network.
+     *
+     * Android drops multicast before it reaches an application unless a
+     * MulticastLock is held: the radio would otherwise wake for every packet
+     * on the network, which on a phone is a battery decision rather than a
+     * networking one.
+     *
+     * The consequence is one-directional and was invisible until it ran on
+     * hardware. Sending needs no lock, so the phone announced itself perfectly
+     * and the laptop saw it every time; receiving needs one, so the phone never
+     * heard the laptop answer and concluded no device was there.
+     *
+     * Held for the length of a sync and released immediately after, in a
+     * `finally` so that a failed sync does not leave the radio awake. Acquiring
+     * it is best effort: a device with no Wi-Fi service, or a manufacturer that
+     * refuses, still syncs over the rendezvous service.
+     */
+    suspend fun <T> hearingTheNetwork(context: Context, work: suspend () -> T): T {
+        val wifi = context.applicationContext
+            .getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+        val lock = runCatching {
+            wifi?.createMulticastLock("qurb-discovery")?.apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }.getOrNull()
+
+        return try {
+            work()
+        } finally {
+            runCatching { lock?.release() }
+        }
+    }
+
     fun signalUrl(context: Context): String =
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
             .getString("signal", DEFAULT_SIGNAL) ?: DEFAULT_SIGNAL

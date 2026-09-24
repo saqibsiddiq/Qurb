@@ -43,8 +43,7 @@ async fn a_device_reconnects_after_the_service_restarts() {
         master.clone(),
         &qurb_peer::tls::TrustList::default(),
         &url,
-        false,
-        None,
+        qurb_peer::Finding::nothing(),
     )
     .await
     .expect("the first connection");
