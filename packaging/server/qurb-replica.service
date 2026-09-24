@@ -1,0 +1,62 @@
+# A device that holds content so the others need not be awake together.
+#
+# This is the one service that holds your key.
+#
+# The rendezvous service and the relay see routing metadata and ciphertext they
+# have no key for; they could be run by a stranger. A replica is a *device*: it
+# is enrolled with your recovery phrase, and anybody with root on this host can
+# read your files. Run it only on a host you control, and understand that you
+# are trading a copy of your data for the ability to sync when no two of your
+# own devices are awake at the same time.
+#
+# See docs/decisions/0006-availability-gap.md for why it exists, and
+# crates/qurb/README.md for what a replica does and does not do.
+#
+#   sudo -u qurb qurb enrol /var/lib/qurb-replica "<your 24 words>"
+#   sudo install -m644 packaging/server/qurb-replica.service /etc/systemd/system/
+#   sudo systemctl enable --now qurb-replica
+#
+# Enrolled by hand rather than by this unit, because typing a recovery phrase
+# into a systemd file would put it in the journal and in every backup of /etc.
+
+[Unit]
+Description=qurb replica
+Documentation=https://github.com/saqibsiddiq/Qurb
+After=network-online.target qurb-signal-tls.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qurb
+Group=qurb
+
+# `--only` restricts what it holds; without it, everything. A replica has no
+# folder and shows nobody any files: it stores chunks it cannot read and serves
+# them to devices that can.
+ExecStart=/usr/local/bin/qurb replica /var/lib/qurb-replica
+
+Restart=always
+RestartSec=5
+
+# Unlike the other two, this one has state that matters: it is the content
+# other devices are relying on it to hold.
+StateDirectory=qurb-replica
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/qurb-replica
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

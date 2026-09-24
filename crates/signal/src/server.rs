@@ -29,7 +29,7 @@ use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -282,6 +282,10 @@ pub struct SignalServer {
     listener: TcpListener,
     directory: Arc<Mutex<Directory>>,
     limits: Limits,
+    /// Present when this service terminates TLS itself, which is what a
+    /// deployment on a bare IP address does. A deployment behind a reverse
+    /// proxy leaves it absent and lets the proxy do it.
+    acceptor: Option<tokio_rustls::TlsAcceptor>,
     connections: Arc<std::sync::atomic::AtomicUsize>,
     /// How to reach devices that are not connected. Does nothing unless the
     /// deployment supplies one — see [`crate::wake`].
@@ -308,6 +312,16 @@ impl SignalServer {
         self
     }
 
+    /// Terminate TLS here, with this certificate.
+    ///
+    /// For a deployment with no reverse proxy in front — which is the ordinary
+    /// case on a small host, and the only case when there is no domain name to
+    /// get a certificate for. See [`crate::tls`].
+    pub fn behind(mut self, certificate: crate::tls::Certificate) -> Result<Self> {
+        self.acceptor = Some(certificate.acceptor()?);
+        Ok(self)
+    }
+
     /// Listen with limits other than the defaults.
     pub async fn bind_with(addr: SocketAddr, limits: Limits) -> Result<Self> {
         let listener = TcpListener::bind(addr).await?;
@@ -315,6 +329,7 @@ impl SignalServer {
             listener,
             directory: Arc::new(Mutex::new(Directory::default())),
             limits,
+            acceptor: None,
             connections: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             waker: crate::wake::none(),
         })
@@ -349,10 +364,23 @@ impl SignalServer {
             let limits = self.limits;
             let waker = Arc::clone(&self.waker);
             let counter = Arc::clone(&self.connections);
+            let acceptor = self.acceptor.clone();
             counter.fetch_add(1, Ordering::Relaxed);
 
             tokio::spawn(async move {
-                if let Err(e) = serve_one(stream, directory, limits, waker).await {
+                let outcome = match acceptor {
+                    None => serve_one(stream, directory, limits, waker).await,
+                    Some(acceptor) => match acceptor.accept(stream).await {
+                        Ok(encrypted) => {
+                            serve_one(encrypted, directory, limits, waker).await
+                        }
+                        // Ordinary, and not worth a warning: a port scan, a
+                        // browser, or a device that has been told the wrong
+                        // fingerprint all end here.
+                        Err(e) => Err(crate::Error::Tls(format!("handshake: {e}"))),
+                    },
+                };
+                if let Err(e) = outcome {
                     tracing::debug!(%from, error = %e, "signalling connection ended");
                 }
                 counter.fetch_sub(1, Ordering::Relaxed);
@@ -361,12 +389,19 @@ impl SignalServer {
     }
 }
 
-async fn serve_one(
-    stream: TcpStream,
+/// Generic over the stream, so that a plaintext connection and one that has
+/// just finished a TLS handshake are served by the same code. Everything above
+/// the transport is identical, and having two copies of it would be two places
+/// for the protocol to drift.
+async fn serve_one<S>(
+    stream: S,
     directory: Arc<Mutex<Directory>>,
     limits: Limits,
     waker: crate::wake::SharedWaker,
-) -> Result<()> {
+) -> Result<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
     // Bounded by the library, before a frame is ever assembled in memory.
     let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
         .max_message_size(Some(limits.max_message))

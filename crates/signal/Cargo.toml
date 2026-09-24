@@ -20,8 +20,24 @@ tokio.workspace = true
 # Webpki roots rather than the platform's: they are the same everywhere,
 # including on Android, where reaching the system trust store from Rust is its
 # own project.
-tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots", "connect"] }
 futures-util = "0.3"
+# Serving TLS, and pinning it from the client side.
+#
+# A rendezvous on a bare IP address cannot have a certificate any authority
+# would sign, and buying a domain to run one is a requirement this product
+# should not impose. Pinning is how every other identity in qurb is checked --
+# see decision 0011 -- so it is how this one is checked too.
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls-pemfile = "2"
+# For the certificate fingerprint. SHA-256 rather than BLAKE3 -- which the rest
+# of qurb uses -- because this is the one value somebody may have to compare
+# against `openssl x509 -fingerprint` or what a browser shows, and being
+# checkable with a tool that already exists is worth more here than
+# consistency.
+sha2 = "0.10"
+rcgen = "0.13"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

@@ -67,7 +67,24 @@ impl SignalClient {
         member: MemberId,
         endpoints: Endpoints,
     ) -> Result<Self> {
-        let (websocket, _) = tokio_tungstenite::connect_async(url).await?;
+        // A fingerprint after `#` means "expect exactly this certificate", which
+        // is how a rendezvous on a bare IP address is authenticated: there is
+        // no name for an authority to sign. Without one, the ordinary public
+        // roots apply, which is what a deployment with a domain wants.
+        let (address, pin) = crate::tls::split_pin(url);
+        let (websocket, _) = match pin {
+            None => tokio_tungstenite::connect_async(address).await?,
+            Some(fingerprint) => {
+                let config = crate::tls::pinned_to(fingerprint)?;
+                tokio_tungstenite::connect_async_tls_with_config(
+                    address,
+                    None,
+                    false,
+                    Some(tokio_tungstenite::Connector::Rustls(std::sync::Arc::new(config))),
+                )
+                .await?
+            }
+        };
         let (mut sink, mut source) = websocket.split();
 
         let (outgoing, mut to_send) = mpsc::unbounded_channel::<FromClient>();
@@ -182,6 +199,8 @@ impl SignalClient {
 /// local network is treated as remote, because being wrong that way costs a
 /// refused connection and being wrong the other way leaks a secret.
 fn is_local(url: &str) -> bool {
+    // The fingerprint is a fact about the server, not part of its address.
+    let (url, _) = crate::tls::split_pin(url);
     let rest = url.strip_prefix("ws://").unwrap_or(url);
     let rest = rest.strip_prefix("wss://").unwrap_or(rest);
 

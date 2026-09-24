@@ -1,0 +1,61 @@
+# The rendezvous service, presenting its own certificate.
+#
+# For a host with an address and no domain name — which is what a small VPS is
+# until you buy one. The certificate is self-signed and devices are told its
+# fingerprint, exactly as they are told a peer's: see
+# docs/decisions/0035-a-rendezvous-on-a-bare-address.md.
+#
+# Use this *or* qurb-signal.service with a reverse proxy in front, not both:
+# they want the same port.
+#
+#   sudo install -m644 packaging/server/qurb-signal-tls.service /etc/systemd/system/
+#   sudo systemctl enable --now qurb-signal-tls
+#   sudo systemctl status qurb-signal-tls     # the line to copy is in the log
+#
+# Replace the address below with this host's, so the printed URL is something
+# to paste rather than something to fill in.
+
+[Unit]
+Description=qurb rendezvous service (own certificate)
+Documentation=https://github.com/saqibsiddiq/Qurb
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qurb
+Group=qurb
+
+# `--host` only affects the URL printed at startup. `--tls` with no certificate
+# makes one in StateDirectory and keeps it: the fingerprint is what every
+# device has been told to expect, so a new certificate on each restart would
+# lock out every device.
+ExecStart=/usr/local/bin/qurb signal 0.0.0.0:9000 --tls --host 203.0.113.5
+
+Restart=always
+RestartSec=2
+
+# /var/lib/qurb-rendezvous, which systemd creates and passes as
+# $STATE_DIRECTORY. The certificate and its key live here and nothing else
+# does.
+StateDirectory=qurb-rendezvous
+StateDirectoryMode=0700
+
+# It holds no files, opens none, and needs no network but the one it listens
+# on. Everything below follows from that rather than being boilerplate.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

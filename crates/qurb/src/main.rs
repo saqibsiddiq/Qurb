@@ -37,7 +37,11 @@ qurb — private cloud storage
 
 Running the services yourself:
 
-  qurb signal [addr] [--push <json>]  the rendezvous service (default :9000)
+  qurb signal [addr] [options]        the rendezvous service (default :9000)
+                                        --tls            present its own certificate
+                                        --cert p --key p use a real one instead
+                                        --host name      what devices will type
+                                        --push <json>    wake sleeping devices
   qurb relay [addr]                   the relay (default :9001)
   qurb netcheck                       what this network will let you do
 
@@ -148,13 +152,22 @@ fn run() -> Result<()> {
         "config" => configure(&directory(&args)?, &args[2..]),
         "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
         "signal" => {
-            let credentials = args
-                .iter()
-                .skip_while(|a| a.as_str() != "--push")
-                .nth(1)
-                .cloned();
+            let after = |flag: &str| {
+                args.iter().skip_while(|a| a.as_str() != flag).nth(1).cloned()
+            };
             let addr = args.get(1).filter(|a| !a.starts_with("--")).cloned();
-            block_on(signal(addr, credentials))
+            block_on(signal(
+                addr,
+                after("--push"),
+                Tls {
+                    on: args.iter().any(|a| a == "--tls"),
+                    cert: after("--cert"),
+                    key: after("--key"),
+                    // The name devices will use, which is what makes the
+                    // printed URL something to copy rather than fill in.
+                    host: after("--host"),
+                },
+            ))
         }
         "relay" => block_on(relay(args.get(1).cloned())),
         "netcheck" => netcheck(),
@@ -1051,26 +1064,93 @@ fn netcheck() -> Result<()> {
 /// moment. It never learns a filename, and the identifiers devices announce
 /// under are derived from a key it does not hold, so it cannot tell whose
 /// devices these are.
-async fn signal(addr: Option<String>, push_credentials: Option<String>) -> Result<()> {
+/// How the rendezvous service should present itself.
+struct Tls {
+    /// Terminate TLS here. With no certificate given, one is made and kept.
+    on: bool,
+    cert: Option<String>,
+    key: Option<String>,
+    /// What devices will type. Only affects the URL printed at startup.
+    host: Option<String>,
+}
+
+async fn signal(
+    addr: Option<String>,
+    push_credentials: Option<String>,
+    tls: Tls,
+) -> Result<()> {
     let addr: std::net::SocketAddr =
         addr.unwrap_or_else(|| "0.0.0.0:9000".into()).parse().context("bad address")?;
     // Validated before the port is taken, so a mistyped credentials path says
     // so rather than surfacing as whatever the socket complains about.
     let waker = push_waker(push_credentials).await?;
+
+    let certificate = match (&tls.cert, &tls.key, tls.on) {
+        (Some(cert), Some(key), _) => Some(
+            qurb_signal::Certificate::load(Path::new(cert), Path::new(key))
+                .context("loading the certificate")?,
+        ),
+        (Some(_), None, _) | (None, Some(_), _) => {
+            bail!("--cert and --key go together")
+        }
+        // Made once and kept, because the fingerprint is what every device has
+        // been told to expect: a service that generated a new certificate on
+        // each restart would lock out every device it had.
+        (None, None, true) => {
+            let dir = qurb_signal::tls::default_state_dir();
+            let names = vec![
+                tls.host.clone().unwrap_or_else(|| "qurb-rendezvous".to_string()),
+                "qurb-rendezvous".to_string(),
+            ];
+            Some(
+                qurb_signal::Certificate::kept_in(&dir, names)
+                    .with_context(|| format!("preparing a certificate in {}", dir.display()))?,
+            )
+        }
+        (None, None, false) => None,
+    };
+
     let server = qurb_signal::SignalServer::bind(addr).await?;
     let server = match waker {
         Some(waker) => server.waking_with(waker),
         None => server,
     };
 
+    let port = server.local_addr()?.port();
     println!("rendezvous service on {}", server.local_addr()?);
     println!();
-    println!("Devices reach it as  ws://<this machine>:{}", server.local_addr()?.port());
-    println!();
-    println!("Put it behind TLS before it faces the internet. The identifiers");
-    println!("devices announce under are bearer secrets: anyone who sees one can");
-    println!("list that group's addresses. The client refuses plain ws:// to");
-    println!("anywhere but the local network for exactly that reason.");
+
+    let server = match certificate {
+        Some(certificate) => {
+            let host = tls.host.clone().unwrap_or_else(|| "<this machine>".to_string());
+            println!("Devices reach it as:");
+            println!();
+            println!("  {}", certificate.url_for(&host, port));
+            println!();
+            println!("Everything after the # is this service's certificate fingerprint.");
+            println!("A device checks it and accepts nothing else, which is why this works");
+            println!("on a bare IP address with no domain name and no certificate authority.");
+            println!();
+            println!("Copy the whole line:");
+            println!();
+            println!("  qurb config <dir> signal=<that line>");
+            println!();
+            println!("and on the phone, ⋮ → Rendezvous service.");
+            server.behind(certificate)?
+        }
+        None => {
+            println!("Devices reach it as  ws://<this machine>:{port}");
+            println!();
+            println!("Unencrypted, so devices will refuse it from anywhere but the local");
+            println!("network. The identifiers they announce under are bearer secrets:");
+            println!("anyone who sees one can list that group's addresses.");
+            println!();
+            println!("For a host facing the internet, either put a reverse proxy in front");
+            println!("of it, or add --tls and let this service present its own certificate.");
+            server
+        }
+    };
+
     server.serve().await;
     Ok(())
 }

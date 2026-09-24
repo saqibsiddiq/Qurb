@@ -19,6 +19,11 @@ pub enum Error {
     #[error("{url} is not encrypted; use wss:// or allow_insecure() for local testing")]
     InsecureUrl { url: String },
 
+    /// Anything to do with certificates: loading one, generating one, or
+    /// being offered one that is not the expected one.
+    #[error("tls: {0}")]
+    Tls(String),
+
     #[error("the signalling server closed the connection")]
     Closed,
 

@@ -30,7 +30,10 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now qurb-signal qurb-relay
 ```
 
-TLS for the rendezvous service, with a name that resolves to this machine:
+### TLS, with a domain name
+
+If a name resolves to this machine, a real certificate is the least surprising
+thing to have:
 
 ```bash
 sudo install -m644 packaging/server/Caddyfile /etc/caddy/Caddyfile
@@ -38,21 +41,66 @@ sudo $EDITOR /etc/caddy/Caddyfile          # put your own name in it
 sudo systemctl restart caddy
 ```
 
-Then point the devices at it:
-
 ```bash
 qurb config ~/Downloads/qurb signal=wss://rendezvous.example.com
 qurb config ~/Downloads/qurb relay=rendezvous.example.com:9001
 ```
 
-On the phone: **⋮ → Rendezvous service**.
+### TLS, with no domain name
+
+A host with an address and nothing else — which is what a small VPS is until
+you buy a name — can present its own certificate, and devices check its
+fingerprint instead of asking an authority. It is the same way a peer's
+identity is checked, for the same reason: see
+[decision 0035](../../docs/decisions/0035-a-rendezvous-on-a-bare-address.md).
+
+Use this **instead of** the Caddy setup above, not alongside it.
+
+```bash
+sudo systemctl disable --now qurb-signal
+sudo $EDITOR packaging/server/qurb-signal-tls.service   # put this host's address in it
+sudo install -m644 packaging/server/qurb-signal-tls.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now qurb-signal-tls
+```
+
+It prints the whole setting at startup, fingerprint included:
+
+```
+sudo systemctl status qurb-signal-tls
+```
+
+```
+Devices reach it as:
+
+  wss://203.0.113.5:9000#40478155b092acf37fd1af1e526936dddd19b2152580b15fdcc0230cd6762e41
+```
+
+Copy that line, in full, onto each device:
+
+```bash
+qurb config ~/Downloads/qurb 'signal=wss://203.0.113.5:9000#4047…2e41'
+qurb config ~/Downloads/qurb relay=203.0.113.5:9001
+```
+
+Quote it in a shell: `#` starts a comment otherwise, and a setting silently
+truncated to `wss://203.0.113.5:9000` fails later with a certificate error
+rather than at the moment it was mistyped.
+
+The certificate is kept in `/var/lib/qurb-rendezvous` and reused across
+restarts. That is deliberate: the fingerprint is what every device has been
+told to expect, so a service that made a new one each time it started would
+lock out every device it had. If you do replace it, every device needs the new
+line.
+
+On the phone, for either arrangement: **⋮ → Rendezvous service**.
 
 ## Ports
 
 | port | protocol | who reaches it |
 |---|---|---|
-| 443 | TCP | everyone — Caddy, which proxies to the rendezvous service |
-| 9000 | TCP | loopback only |
+| 443 | TCP | everyone — Caddy, if you are using a domain and a real certificate |
+| 9000 | TCP | loopback only behind Caddy; **everyone** when the service presents its own certificate |
 | 9001 | UDP | everyone — the relay |
 
 The relay is the one thing that faces the internet directly, and it has to:
@@ -99,11 +147,45 @@ having.
 
 ## What this does not give you
 
-**Availability when every device is off.** These services hold no content, so
-two devices that are never awake together still never meet. The answer to that
-is a storage-only replica — `qurb replica` — which holds content and therefore
-costs storage. Running one *per user* is what makes a product expensive, which
-is why it is a thing a person runs on their own hardware rather than something
-offered here. See [anywhere.md](../../docs/anywhere.md).
+**Availability when every device is off** — unless you also run a replica, see
+below. The rendezvous service and the relay hold no content, so two devices
+that are never awake together never meet.
 
-**A backup.** Nothing here keeps a copy of anything.
+**A backup.** Nothing here keeps a copy of anything, and a replica is not one
+either: it holds what your devices hold, including their deletions.
+
+## A replica, if you want one
+
+This is the piece that makes an always-on host worth paying for: a device that
+holds content so the others need not be awake together. Your phone can send a
+photo at midnight and your laptop can collect it on Tuesday.
+
+**It is the one service here that holds your key.** The rendezvous and the
+relay see routing metadata and ciphertext they have no key for — they could be
+run by a stranger. A replica is enrolled with your recovery phrase, which means
+anybody with root on this host can read your files. Run it only on a host you
+control, and decide that trade deliberately rather than by following
+instructions.
+
+```bash
+# Enrolled by hand, because a recovery phrase in a systemd file would be in the
+# journal and in every backup of /etc.
+sudo -u qurb qurb enrol /var/lib/qurb-replica "<your 24 words>"
+
+sudo install -m644 packaging/server/qurb-replica.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now qurb-replica
+```
+
+Then pair it with one of your devices, as you would any other:
+
+```bash
+sudo -u qurb qurb pair /var/lib/qurb-replica     # shows a code
+qurb join ~/Downloads/qurb <that code>            # on your laptop
+```
+
+A replica has no folder and shows nobody any files. It stores chunks it cannot
+read and serves them to devices that can. What it cannot yet do is free space —
+see [the product plan](../../docs/product-plan.md) for that gap.
+
+

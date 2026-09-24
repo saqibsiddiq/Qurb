@@ -663,6 +663,8 @@ for the workspace as it stands.
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
 | Every reachable address offered | LAN, overlay network and public, raced in parallel |
 | Signalling that reconnects | a rendezvous restart costs seconds, not a daemon restart |
+| Local discovery | encrypted beacons; two devices on one network need no server at all |
+| A rendezvous on a bare IP | self-signed, pinned by fingerprint in the URL — no domain, no authority |
 
 ### Built and tested (`crates/keys`, Phase 1)
 
@@ -674,7 +676,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-580 tests pass across twelve crates on Linux; clippy is clean. The last run on
+586 tests pass across twelve crates on Linux; clippy is clean. The last run on
 a Galaxy S23 was 426 of them, before this week's work — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
@@ -1053,7 +1055,13 @@ introduce them, then `run` on both:
 ```bash
 # The two services. `--push` needs a build with `--features push` and a
 # Firebase service account; without it devices sync when they next look.
-./target/release/qurb signal 127.0.0.1:9000 --push /etc/qurb/firebase.json
+#
+# `--tls` makes the rendezvous present its own certificate and print the whole
+# setting — address and fingerprint — for devices to copy. That is what lets it
+# run on a host with an address and no domain name. Without it, put a reverse
+# proxy in front: unencrypted rendezvous is refused by devices anywhere but the
+# local network.
+./target/release/qurb signal 0.0.0.0:9000 --tls --host 203.0.113.5
 ./target/release/qurb relay 0.0.0.0:9001
 ```
 
