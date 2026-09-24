@@ -654,6 +654,44 @@ on the presence of a `google-services.json`, through a separate source set, so
 a checkout without a Firebase project does not link the SDK at all and behaves
 exactly as before.
 
+### The protocol bump, on hardware
+
+**2026-09-24, Galaxy S23 (SM-S911B) against the laptop, same Wi-Fi.**
+
+Tree entries gained a private flag when vaults arrived, and the wire protocol
+went from `qurb/0` to `qurb/1` — a change that makes an older build refuse to
+connect rather than mishandle content sent to somebody's vault. That refusal is
+the correct behaviour and it means every device has to be rebuilt together, so
+it is worth recording that both halves were actually rebuilt and actually met.
+
+What was done: the engine cross-compiled and the debug APK rebuilt and
+installed; the laptop daemon restarted, because the running one had been
+started from a binary since replaced and was still speaking `qurb/0`. The two
+then synced — `after-restart.bin`, which the laptop had been holding as the
+only copy, reached the phone, and both ended on 18 files.
+
+```
+a peer is reachable and has news; syncing now  peer=7a4ebf0c
+connected  peer=7a4ebf0c  candidate=192.168.1.2:46931
+```
+
+A connection at all is the evidence: ALPN is negotiated during the TLS
+handshake, so two builds that disagreed about the protocol would never have got
+as far as being connected.
+
+Two things this did *not* establish, both worth saying:
+
+- **It was tested over the local network, not through the tailnet.** The
+  phone's Tailscale was offline, so its configured rendezvous
+  (`wss://<host>.ts.net`) would not resolve — the failure was
+  "No address associated with hostname", which is a DNS problem and not a
+  protocol one. It was pointed at the laptop's LAN address for the test and put
+  back afterwards.
+- **The ALPN string cannot be confirmed by inspecting a binary.** A six-byte
+  literal is materialised as immediates rather than stored as bytes, so it
+  appears in neither the `.so` nor the desktop binary. Watching the two connect
+  is the check.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
