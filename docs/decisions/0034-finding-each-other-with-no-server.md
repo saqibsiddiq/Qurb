@@ -64,6 +64,13 @@ immediately. A reply is never itself a probe, so an arrival costs one round of
 answers rather than a storm, and an address book is full within a moment of
 starting instead of over the following twenty seconds.
 
+That was still not enough, and the second half came from the same phone.
+Probing fills the address book in a few hundred milliseconds, and a sync pass
+asks for a peer in rather less than that — so it asked, found nothing, and gave
+up before its own answers came back. `reach` now probes and waits up to a
+second before falling through to the rendezvous. The wait is paid once per
+connector, only when the answer is not already known.
+
 ## A sighting is better evidence than a rendezvous record
 
 `reach` consults the network before the service. A beacon means "a device
@@ -87,7 +94,7 @@ by the time it is acted on.
   the service is still there.
 - **IPv4 only.** An IPv6-only network gets no local discovery. Worth adding and
   not yet added.
-- **It is not verified on Android.** See the phase document: the phone sends
-  beacons that other devices receive, and does not appear to receive any. The
-  multicast lock Android requires is now held for the length of a sync and did
-  not change the result, so the cause is still open.
+- **IPv6 is still not covered**, as above. That is the only platform gap left:
+  Android is verified in both directions with no server running at all, in
+  sixty-eight milliseconds — see the phase document, including which of three
+  suspected causes it actually was.

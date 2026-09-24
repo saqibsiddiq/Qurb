@@ -395,6 +395,34 @@ impl Connector {
         &self.neighbours
     }
 
+    /// Where a peer is on this network, waiting a moment if nobody has said
+    /// yet.
+    ///
+    /// A device that has just started has heard nothing, and the answers to its
+    /// own arrival probe take a few hundred milliseconds to come back. Failing
+    /// in that window would mean a short-lived process — a phone's sync pass —
+    /// never using local discovery at all, which is exactly what happened.
+    ///
+    /// The wait is short and only paid when the answer is not already known,
+    /// which is once per connector rather than once per peer.
+    async fn nearby(&self, target: &MemberId) -> Option<Endpoints> {
+        if let Some(here) = self.neighbours.where_is(target) {
+            return Some(here);
+        }
+
+        let beacons = self.beacons.as_ref()?;
+        beacons.probe().await;
+
+        let deadline = tokio::time::Instant::now() + LOCAL_ANSWER_WINDOW;
+        while tokio::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            if let Some(here) = self.neighbours.where_is(target) {
+                return Some(here);
+            }
+        }
+        None
+    }
+
     /// Say at once that there is news, on every channel there is.
     ///
     /// The beacon is what makes a change on one device reach another on the
@@ -470,7 +498,14 @@ impl Connector {
         // likeliest to answer and the cheapest to try, and reaching them
         // involves nobody else at all. Asked first, and on success the
         // rendezvous is never troubled.
-        if let Some(here) = self.neighbours.where_is(&target) {
+        //
+        // Asked *after* giving discovery a moment, because a device that has
+        // only just started has an empty address book and the answers to its
+        // probe are still in flight. Found on a phone, which builds a fresh
+        // connector for every sync pass and so is always in that state: it
+        // heard the laptop four hundred milliseconds after starting, and had
+        // already given up by then.
+        if let Some(here) = self.nearby(&target).await {
             match self.race(peer, &here).await {
                 Ok(client) => {
                     tracing::debug!(peer = %peer.short(), "reached on the local network");
@@ -623,6 +658,15 @@ struct Reconnect {
 /// is a restart that takes seconds, and capped because a service that is down
 /// for an hour should not be asked sixty times a minute — nor left unasked for
 /// an hour once it returns.
+/// How long to wait for an answer to a local probe before giving up on the
+/// network and asking the rendezvous service.
+///
+/// A beacon and its reply cross one network segment, so an answer that is
+/// coming arrives in single-digit milliseconds. A second is generous enough to
+/// survive a lossy first packet and short enough that a device which really is
+/// elsewhere is not kept waiting for one.
+const LOCAL_ANSWER_WINDOW: Duration = Duration::from_millis(1000);
+
 const RECONNECT_FLOOR: Duration = Duration::from_secs(1);
 const RECONNECT_CEILING: Duration = Duration::from_secs(60);
 

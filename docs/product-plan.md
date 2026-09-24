@@ -274,10 +274,9 @@ hardware where hardware is involved. Not when it compiles.
   number the relay bill depends on.
 - **Two devices that are never awake together never meet**, unless something
   always-on is in the picture.
-- **Local discovery is not working on Android.** The phone sends beacons that
-  other devices receive and appears to receive none itself; see
-  [phases/phase-5-mobile.md](phases/phase-5-mobile.md). Desktop-to-desktop is
-  verified.
+- **Local discovery does not cover IPv6.** An IPv6-only network gets none of
+  it. IPv4 is verified in both directions between a laptop and a phone with no
+  server running at all.
 - **A send cannot be withdrawn** once the recipient has collected it, and a
   replica cannot usefully carry one — see
   [decisions/0030](decisions/0030-sending-a-file-to-one-device.md).
@@ -287,7 +286,7 @@ hardware where hardware is involved. Not when it compiles.
 
 ## 10. Testing
 
-The existing suite is 596 tests across twelve crates, and the classes that
+The existing suite is 597 tests across twelve crates, and the classes that
 matter here already exist: property-based convergence, crash injection,
 corruption repair, hostile peers, concurrent collection. New work extends those
 rather than starting a parallel tradition.

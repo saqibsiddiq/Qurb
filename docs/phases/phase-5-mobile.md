@@ -692,6 +692,46 @@ Two things this did *not* establish, both worth saying:
   appears in neither the `.so` nor the desktop binary. Watching the two connect
   is the check.
 
+### Local discovery: working, after three wrong guesses
+
+**2026-09-24, Galaxy S23 (SM-S911B) and the laptop, same Wi-Fi, no rendezvous
+service running anywhere.** Both directions, sixty-eight milliseconds from the
+phone's sync starting to a connection:
+
+```
+no rendezvous service; devices on this network can still find each other
+listening for beacons  interfaces=[127.0.0.1, 192.168.1.2]
+a device is on this network  peer=7b543b5d
+connected  peer=410cac55  candidate=192.168.1.4:36589
+reached on the local network  peer=410cac55
+```
+
+Both devices ended on twenty files, and the two files that had been stranded on
+the laptop arrived. Nothing else was running: no rendezvous, no relay, no
+overlay network.
+
+**What actually fixed it was the third guess, and the first two were not
+wasted.** In order:
+
+1. **The multicast lock.** Android drops multicast before it reaches an
+   application unless one is held. Necessary — it is held for the length of a
+   sync now — and on its own it changed nothing.
+2. **The interface the group is joined on.** `if_addrs` was suspected of
+   returning nothing under Android's NETLINK restrictions. It does not: the log
+   above shows it enumerating `127.0.0.1` and `192.168.1.2` perfectly. The
+   fallback that asks the kernel which interface it would use for the group is
+   still there and still right for platforms where enumeration is restricted.
+3. **Asking, and waiting for the answer.** This was it. A phone builds a fresh
+   connector for every sync pass, so its address book is always empty at the
+   moment it wants to reach somebody, and the answers to its own arrival probe
+   were arriving a few hundred milliseconds *after* it had given up. `reach`
+   now probes and waits up to a second before falling through to the rendezvous.
+
+The diagnosis only became possible once the engine could speak on Android at
+all — `tracing-subscriber` had been a dev-dependency, so every log line in the
+whole engine was being discarded. Two of the three guesses above were made
+blind, from the laptop's side, and cost far more than the fix did.
+
 ### Local discovery: the phone sends and does not receive
 
 **2026-09-24, Galaxy S23 (SM-S911B) and the laptop, same Wi-Fi, no rendezvous
@@ -729,6 +769,9 @@ If the kernel picks something other than Wi-Fi, the IGMP membership never
 reaches the access point, and an access point doing IGMP snooping will not
 forward the group to a client that never joined. That would produce exactly this
 asymmetry: sending needs no membership, receiving does.
+
+*(Superseded by the section above; kept because the reasoning in it is what
+led there.)*
 
 **A diagnosis gap, now half closed.** The engine's `tracing` output reached
 nowhere on Android: `tracing-subscriber` was a dev-dependency only, so no

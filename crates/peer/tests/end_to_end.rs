@@ -584,3 +584,78 @@ async fn one_persons_devices_do_not_see_anothers() {
         "somebody else's device turned up in my address book"
     );
 }
+
+/// A device that has only just started has an empty address book, and the
+/// answers to its own arrival probe are still in flight.
+///
+/// This is what a phone does on every sync pass — it builds a fresh connector,
+/// reaches, and exits — so it is always in that window. Before `reach` waited
+/// for an answer, it heard the other device a few hundred milliseconds after
+/// giving up, every single time.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_that_reaches_the_instant_it_starts_still_finds_its_peer() {
+    let nowhere = "ws://127.0.0.1:1";
+    let beacons = 43_721;
+
+    let (desktop, phrase) = Device::first();
+    let laptop = Device::enrolled(&phrase);
+
+    fs::write(desktop.root.join("notes.txt"), b"found without waiting").unwrap();
+    let mut desktop_engine = desktop.engine();
+    desktop_engine.reconcile().unwrap();
+    pair(&desktop, &laptop).await;
+
+    let desktop_conn = Connector::start(
+        "0.0.0.0:0".parse().unwrap(),
+        desktop.identity.clone(),
+        desktop.master.clone(),
+        &qurb_peer::tls::TrustList::new(desktop.trusted()),
+        nowhere,
+        qurb_peer::Finding::beacons_on(beacons),
+    )
+    .await
+    .unwrap();
+
+    let serving_store = Arc::clone(&desktop.store);
+    let desktop_endpoint = desktop_conn.endpoint().clone();
+    tokio::spawn(async move {
+        while let Some(incoming) = desktop_endpoint.accept().await {
+            let store = Arc::clone(&serving_store);
+            tokio::spawn(async move {
+                if let Ok(connection) = incoming.await {
+                    qurb_peer::server::serve_connection_for_test(connection, store).await;
+                }
+            });
+        }
+    });
+
+    // Let the desktop's own startup burst finish, so the only thing that can
+    // help the laptop is an answer to its own probe.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let laptop_conn = Connector::start(
+        "0.0.0.0:0".parse().unwrap(),
+        laptop.identity.clone(),
+        laptop.master.clone(),
+        &qurb_peer::tls::TrustList::new(laptop.trusted()),
+        nowhere,
+        qurb_peer::Finding::beacons_on(beacons),
+    )
+    .await
+    .unwrap();
+
+    // No pause, no polling for a sighting. Straight to reaching, which is what
+    // a sync pass does.
+    assert_eq!(laptop_conn.neighbours().count(), 0, "the address book should start empty");
+
+    let client = tokio::time::timeout(
+        Duration::from_secs(20),
+        laptop_conn.reach(desktop.identity.fingerprint()),
+    )
+    .await
+    .expect("reaching timed out")
+    .expect("a device that reaches immediately should still find its peer");
+
+    let tree = client.tree().await.expect("tree");
+    assert_eq!(tree[0].path, "notes.txt");
+}
