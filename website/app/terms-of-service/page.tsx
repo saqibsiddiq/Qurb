@@ -1,24 +1,19 @@
-import { LegalPage } from '@/components/landing/legal-page'
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { DocPage, NotWritten } from '@/components/doc-page'
 
-export default function TermsOfServicePage() {
+export const metadata: Metadata = {
+  title: 'Terms',
+  description: 'There is nothing to sign up for, so there are no terms yet.'
+}
+
+export default function TermsPage() {
   return (
-    <LegalPage
-      title="Terms of Service"
-      intro="This placeholder agreement will, in time, describe the service relationship, supported use cases, and responsibilities of both the platform and the user."
-      sections={[
-        {
-          heading: 'Service availability',
-          body: 'The final terms will describe uptime expectations, support commitments, and what makes the product reliable in practice.'
-        },
-        {
-          heading: 'User responsibilities',
-          body: 'This section will discuss local hardware ownership, secure configuration, and appropriate use of private cloud infrastructure.'
-        },
-        {
-          heading: 'Updates and changes',
-          body: 'The platform will later communicate how product updates, roadmap changes, and policy revisions are shared with users.'
-        }
-      ]}
-    />
+    <DocPage title="Terms" intro="There’s nothing to sign up for, so there are no terms of service yet.">
+      <NotWritten>
+        Terms come with a service, and Qurb has none: it is software you build and run on your own devices. What you may
+        do with the code is its licence — see <Link href="/license-information">licences</Link>.
+      </NotWritten>
+    </DocPage>
   )
 }

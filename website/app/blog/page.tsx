@@ -1,20 +1,33 @@
-import { LegalPage } from '@/components/landing/legal-page'
+import type { Metadata } from 'next'
+import { DocPage, LinkRow } from '@/components/doc-page'
+import { repoUrl } from '../site-config'
 
-export default function BlogPage() {
+export const metadata: Metadata = {
+  title: 'Notes',
+  description: 'Nothing published here yet; what changes is written down in the repository as it happens.'
+}
+
+export default function NotesPage() {
   return (
-    <LegalPage
-      title="Blog"
-      intro="A placeholder publishing space for product updates, technical notes, and founder writing."
-      sections={[
-        {
-          heading: 'This page is reserved for future editorial content',
-          body: 'In time, it can host announcement posts, architecture notes, product progress reports, and privacy-first writing that reflects the company voice.'
-        },
-        {
-          heading: 'Planned structure',
-          body: 'The blog will likely include a newsletter-style feed, article cards, and a single-post layout that supports thoughtful, evergreen writing.'
-        }
-      ]}
-    />
+    <DocPage
+      title="Notes"
+      intro="Nothing is published here yet. What changes in Qurb, and why, is written down in the repository as it happens."
+    >
+      <div className="rows">
+        <LinkRow
+          href={`${repoUrl}/tree/main/docs/phases`}
+          icon="history"
+          title="What each phase built"
+          text="And what it measured, under what conditions, and what it left undone"
+        />
+        <LinkRow
+          href={`${repoUrl}/tree/main/docs/decisions`}
+          icon="git-compare"
+          title="Decisions"
+          text="Each one with its reasons, and the ones later reversed, marked so"
+        />
+        <LinkRow href={`${repoUrl}/commits/main`} icon="clock" title="Every change" text="The repository’s history, newest first" />
+      </div>
+    </DocPage>
   )
 }

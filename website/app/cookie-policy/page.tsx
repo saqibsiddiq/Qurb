@@ -1,24 +1,18 @@
-import { LegalPage } from '@/components/landing/legal-page'
+import type { Metadata } from 'next'
+import { DocPage } from '@/components/doc-page'
 
-export default function CookiePolicyPage() {
+export const metadata: Metadata = {
+  title: 'Cookies',
+  description: 'This site sets no cookies.'
+}
+
+export default function CookiesPage() {
   return (
-    <LegalPage
-      title="Cookie Policy"
-      intro="This placeholder page explains the later use of operational cookies, local preferences, and session persistence for a privacy-conscious product."
-      sections={[
-        {
-          heading: 'What cookies are used',
-          body: 'The final page will distinguish between necessary system cookies, optional analytics cookies, and user preference storage.'
-        },
-        {
-          heading: 'User preferences',
-          body: 'Users should be able to adjust settings and understand the impact of those choices as the product matures.'
-        },
-        {
-          heading: 'Third-party tools',
-          body: 'Any third-party integrations will be clearly disclosed and kept minimal so the website can remain a calm and privacy-respecting experience.'
-        }
-      ]}
-    />
+    <DocPage title="Cookies" intro="This site sets no cookies, so there is nothing to accept or refuse.">
+      <p>
+        No analytics, no advertising, no tracking pixels, and nothing loaded from another site that could set one of its
+        own. If that ever changes, this page will say so first.
+      </p>
+    </DocPage>
   )
 }

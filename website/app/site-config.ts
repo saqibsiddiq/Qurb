@@ -2,42 +2,35 @@ import type { Metadata, Viewport } from 'next'
 
 export const siteUrl = 'https://qurb.cloud'
 
+/** Where the code is. Public, so every page may link into it. */
+export const repoUrl = 'https://github.com/saqibsiddiq/Qurb'
+
+/** A document in the repository, as GitHub shows it. */
+export const repoDoc = (path: string) => `${repoUrl}/blob/main/${path}`
+
+const description =
+  'Qurb keeps your files on the devices you own and moves them directly between them, encrypted. No cloud drive in the middle holds a copy.'
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'Qurb Cloud',
-    template: '%s | Qurb Cloud'
+    default: 'Qurb — Your files. Your devices. Your space.',
+    template: '%s · Qurb'
   },
-  description:
-    'Qurb Cloud turns your desktop into your own private cloud server so your files stay with you, your devices stay in sync, and your storage ownership stays personal.',
-  applicationName: 'Qurb Cloud',
-  keywords: [
-    'private cloud',
-    'cloud storage',
-    'self-hosted cloud',
-    'desktop cloud server',
-    'privacy-first storage'
-  ],
+  description,
+  applicationName: 'Qurb',
+  keywords: ['private file sync', 'peer-to-peer sync', 'end-to-end encrypted', 'Linux', 'Android', 'Dropbox alternative'],
   openGraph: {
-    title: 'Qurb Cloud',
-    description: 'Your cloud. Your computer. Your data.',
+    title: 'Qurb',
+    description: 'Your files. Your devices. Your space.',
     url: siteUrl,
-    siteName: 'Qurb Cloud',
-    type: 'website',
-    images: [
-      {
-        url: '/icon.svg',
-        width: 1200,
-        height: 630,
-        alt: 'Qurb Cloud logo'
-      }
-    ]
+    siteName: 'Qurb',
+    type: 'website'
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Qurb Cloud',
-    description: 'Your cloud. Your computer. Your data.',
-    images: ['/icon.svg']
+    title: 'Qurb',
+    description: 'Your files. Your devices. Your space.'
   },
   alternates: {
     canonical: siteUrl
@@ -45,14 +38,11 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true
-  },
-  icons: {
-    icon: '/icon.svg'
   }
 }
 
 export const viewport: Viewport = {
-  themeColor: '#f4efe7',
+  themeColor: '#f7f7f4',
   width: 'device-width',
   initialScale: 1
 }
