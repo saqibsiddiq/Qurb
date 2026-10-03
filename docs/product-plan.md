@@ -24,8 +24,10 @@ both apps, then the relay on a server, then a formal release for Linux and
 Android. The design is built directly in the apps, from the owner's direction
 ([design/direction.md](design/direction.md)); its brief, with every choice the
 owner made, is [design/brief.md](design/brief.md)
-([0048](decisions/0048-the-design-direction.md)). The desktop is done and
-waiting for the owner's look; Android is next.
+([0048](decisions/0048-the-design-direction.md)). Both apps were built to it
+on 2026-09-29, in light only, and wait for the owner's look; the Android app's
+design has not yet been recorded running on a device. Dark mode follows the
+review.
 
 **Four things the brief asks for disagreed with decisions already recorded.**
 All four were decided on 2026-09-25, each the brief's way — see §3. Three are
@@ -279,6 +281,17 @@ Since 2026-09-28:
   index copied before it migrates and refused when newer — no automatic
   updater, by decision — [0047](decisions/0047-versions-and-upgrades.md).
 
+Since 2026-09-29:
+
+- **The design of both apps** (§73), from the owner's direction —
+  [0048](decisions/0048-the-design-direction.md),
+  [design/brief.md](design/brief.md). The desktop's eight tabs became a
+  sidebar and the phone's five became four, with Private Vault on both and
+  Transfers appearing only while something moves. Light only; the owner has
+  not yet reviewed either, and the phone's has not been recorded running on a
+  device. On the phone, adding a file now puts it in the area on screen —
+  [0049](decisions/0049-adding-a-file-puts-it-where-you-are-looking.md).
+
 Still as the inventory says: a replica freeing space, and everything in
 §2.4–§2.6.
 
@@ -492,7 +505,9 @@ five tabs — Home, Vault, Devices, Transfers (with the history the brief calls
 Activity) and Settings — installed on the S23, and the phone and the laptop
 verified keeping, freeing, fetching back and deleting through those screens.
 The phrase is confirmed on the phone as on the desktop, and the system picker
-asks the engine (2026-09-27). Step 6 is done.
+asks the engine (2026-09-27). Step 6 is done. On 2026-09-29 the five tabs
+became the design's four — Home, Files, Devices, Settings — with Private Vault
+inside Files (§2.9).
 
 **7. Cross-device flows**, including Android↔Android, offline and relay.
 *Done between the Galaxy S23 and the laptop*, on Wi-Fi and on mobile data, with
@@ -511,7 +526,8 @@ on a server — the relay is next after design.
 includes choosing one front end for the applications menu (§2.3, Tray) —
 chosen 2026-09-27: the window (decision 0040). Security (0041, 0046),
 packaging and versions (0047) are done; search is by name only; *polish* is
-the design and UX pass, next.
+the design and UX pass, built for both apps on 2026-09-29 and awaiting the
+owner's review.
 
 ## 7. Rules this plan holds itself to
 
@@ -582,7 +598,9 @@ Those are Phase 6 in [roadmap.md](roadmap.md) and unchanged by this.
 
 ## 12. What I need decided
 
-The owner is choosing the design and UX direction from
-[features.md](features.md). After that, the relay on a server and a formal
-release need no further decision except where to host the relay. §4.7 is still
-open, and is needed before any storage screen promises anything for replicas.
+The design direction is chosen and built ([0048](decisions/0048-the-design-direction.md));
+what it needs now is the owner's review at the checkpoints in
+[design/brief.md §5](design/brief.md#5-the-work). After that, the relay on a
+server and a formal release need no further decision except where to host the
+relay. §4.7 is still open, and is needed before any storage screen promises
+anything for replicas.

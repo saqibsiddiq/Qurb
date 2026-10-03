@@ -29,16 +29,19 @@ record](../roadmap.md).
 | **a phone syncing with a laptop, both ways** | ✅ verified on hardware |
 | syncing from mobile data | ✅ directly, through a rendezvous service on the laptop |
 | recently deleted, and settling a conflict | ✅ verified between the S23 and the laptop |
-| the Vault by folder, search, rename, move | ✅ on the emulator; ◻ not yet on the phone |
+| files by folder, search, rename, move | ✅ on the emulator; ◻ not yet on the phone |
 | showing a pairing code on the phone | ✅ on the emulator; ◻ not yet paired that way |
 | the share sheet sending to one device | ◻ built, not yet tried |
 | which devices have each folder, and keeping one only remotely | ✅ on the emulator; ◻ not yet between real devices |
 | removing a device | ◻ built; not tried on the phone, which would have removed the laptop |
+| designed to the owner's direction: four tabs, Private Vault inside Files | ◻ built and compiled; not recorded running on a device ([below](#the-designed-app)) |
+| adding a file into the area on screen | 🧪 in the FFI's tests ([0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-750 tests pass in 88 test binaries on Linux (2026-09-28); the last run on a
-Galaxy S23 was 426 of them, on 2026-09-17 — the suite has grown since and has
-not been run there again. Clippy is clean.
+755 tests pass in 88 test binaries on Linux (2026-10-03, debug build, the
+development laptop); the last run on a Galaxy S23 was 426 of them, on
+2026-09-17 — the suite has grown since and has not been run there again.
+Clippy is clean.
 
 ## What the library costs
 
@@ -1226,6 +1229,96 @@ Not checked on the phone: removing a device (it would have removed the
 laptop), the share sheet (it needs another app driven), and a pairing with the
 phone showing the code (the laptop is already paired).
 
+## The designed app
+
+**2026-09-29** (commit `fad2d9b`). The app rebuilt to the owner's design
+direction ([design/direction.md](../design/direction.md)), the second half of
+[decision 0048](../decisions/0048-the-design-direction.md) — the desktop was
+done the same day. Still the platform's own views, as
+[decision 0039](../decisions/0039-a-light-android-app.md) chose; no UI library
+was added.
+
+**Four tabs where there were five** (direction §25): Home, Files, Devices,
+Settings, under a floating glass bar. The places reached from them go on a
+small stack that Back leaves: Private Vault from Files, Activity from Home's
+*See all*, Recently deleted from Files and from Settings. Transfers stopped
+being a tab: a bar above the tabs, there only while the phone is syncing or
+has sent something not yet collected, opening a sheet with what is active,
+what is waiting to be collected (each stoppable) and the last eight that
+finished.
+
+- **Home** answers whether the phone's Qurb space is okay, built from what a
+  phone can know, since there is no daemon to ask: whether a sync is running,
+  whether files made here have reached no other device, and when it last
+  reached one. That last is new — `last_reached_at`, written by the app's own
+  sync and by the background worker whenever a device answered. Its states
+  are *Add your first device*, *Syncing…*, *N files are waiting to reach your
+  devices* (saying which of the reasons it is), *Not synced yet* and
+  *Everything is synced*. One action — *Send to device*, or *Add a device* —
+  a line of facts, *Sync now* and pull to sync; a file with two versions as
+  attention, opening a sheet with both and the three choices; five recent
+  events. A ring of light turns while syncing (§32) and the mark settles with
+  one pulse when everything becomes synced (§33).
+- **Files** is the shared area a folder at a time, from the index: folders as
+  tiles two to a row, breadcrumbs, search across every folder a quarter of a
+  second after the last key, sorting, and each file's state in the direction's
+  words — *On this phone*, *Available elsewhere*, *Only copy here*,
+  *Downloading*. Tapping a file opens a sheet with its details and what can be
+  done. A folder made on the phone that holds nothing yet is listed from the
+  disk, since the index knows only files. *Downloading* is remembered for the
+  life of the app, not stored.
+- **Private Vault** is the same browser over the phone's own vault. Each lists
+  only its own area, and *Add files* in each adds into it, whatever *Keep new
+  files private* says —
+  [decision 0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md),
+  with `browse_in`, `search_in` and `import_into` added to the FFI for it.
+- **Devices** shows this phone and each paired device as cards, with when each
+  was last here. A device's sheet holds the choice to keep a backup of the
+  Private Vault (decision 0036's holder), sending it files, and removing it
+  after saying what that does. A device that has just paired fades in (§34).
+- **Settings** is grouped lists in the direction's order (§23): this phone,
+  devices, storage, privacy, notifications, recovery, appearance, advanced.
+- **The share sheet** offers *Save to Private Vault*, *Save to Files, on all
+  your devices*, or a paired device to send to; with no device paired it saves
+  where the setting says and asks nothing.
+
+Underneath: one file of components, `Kit.kt` — rows, file states, groups,
+toggles, attention, empty states, sheets — the Android counterpart of the
+desktop's `core.js`. The colours, type and glass are resources, named by role;
+Inter is bundled in three weights with its licence in the app's assets; 53
+Lucide icons are generated as vector drawables by `scripts/android-icons.py`;
+the new mark is the launcher icon. Screens come forward a little as they
+appear, and with the phone's animations turned off nothing moves and sheets do
+not blur. The night palette was removed: light only until dark is designed.
+
+**How it was checked.** The FFI additions have a test,
+`each_area_lists_its_own_and_adds_into_itself`, and on 2026-10-03 all 754
+tests passed on the laptop. The app was built: a debug APK on the laptop is
+dated 2026-09-29, a little under two hours before the commit. **Nothing records it running**
+— not on the S23, not on the emulator — and no screen of it has been looked
+at in this record. Nor has it been measured against decision 0039's table, so
+whether it is still light and snappy is, for now, unknown.
+
+**Found while writing this up**, 2026-10-03, from the code:
+
+- Settings → Notifications said that what was sent to the phone *"is in
+  Transfers, from Home"*. Transfers is reached from its bar, which shows only
+  while the phone syncs or has a send waiting; what arrived is in Activity,
+  from Home's *See all*. Corrected the same day to say Activity.
+- Settings → Key protection said the key was *"behind this phone's own lock.
+  Nobody without the phone unlocked can use it."* The Keystore key is
+  deliberately not tied to unlocking, so background sync can use it while the
+  phone is locked; the screen lock guards the app, not the key. Corrected the
+  same day to say that. Both compiled (`compileDebugKotlin`); not seen on a
+  device.
+- `Qurb.kt` had `ownFilesPrivate`'s description stranded above the new
+  `lastSynced`; moved back to the function it describes.
+
+**Left undone:** the owner's review; dark mode; moving a file between areas
+(brief §2); notifications on the phone; comparing a conflict's two versions
+beyond who, when and how big; and everything the earlier sections list as not
+yet tried on the phone.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
@@ -1259,8 +1352,9 @@ phone showing the code (the laptop is already paired).
   Since a per-pass connector is built fresh each time, the next pass does get a
   fresh chance — so on mobile this is less severe than on the desktop daemon,
   which holds one connector for hours.
-- **Conflicts, designed for a small screen.** A conflict is now a card on Home
-  that settles it — keep this version, the other, or both
-  ([decision 0043](../decisions/0043-settling-a-conflict.md)) — verified on the
-  S23. What it lacks is a way to *compare* the two versions before choosing,
-  beyond their sizes and who made each when; that is for the design pass.
+- **Comparing a conflict's two versions.** A conflict is attention on Home
+  that opens a sheet and settles it — keep this version, the other, or both
+  ([decision 0043](../decisions/0043-settling-a-conflict.md)); settling was
+  verified on the S23, before the design. The sheet says who made each version,
+  when and how big, and whether the other is on the phone yet. The preview for
+  images and text the brief designs (§2) is not built.

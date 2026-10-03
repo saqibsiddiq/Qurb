@@ -62,7 +62,7 @@ is worth more than a tidy directory.
 | [0033](0033-the-phrase-on-a-screen.md) | The recovery phrase on a screen | Accepted, storage clause amended by 0038, applied to the phone, passphrase clause amended by 0046 |
 | [0034](0034-finding-each-other-with-no-server.md) | Finding each other with no server | Accepted |
 | [0035](0035-a-rendezvous-on-a-bare-address.md) | A rendezvous on a bare address | Accepted |
-| [0036](0036-a-phone-keeps-its-own-files.md) | A phone keeps its own files, and another device holds them for it | Accepted — built, verified between a phone and a laptop |
+| [0036](0036-a-phone-keeps-its-own-files.md) | A phone keeps its own files, and another device holds them for it | Accepted — built, verified between a phone and a laptop; amended by 0049 |
 | [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md) | A file sent to a desktop is an ordinary file in Downloads | Accepted — built |
 | [0038](0038-the-storage-question-during-setup.md) | The storage question is asked during setup | Accepted — built |
 | [0039](0039-a-light-android-app.md) | A light Android app, on the platform's own views | Accepted |
@@ -74,4 +74,5 @@ is worth more than a tidy directory.
 | [0045](0045-a-folder-kept-remotely.md) | A folder kept only remotely | Accepted — built on the desktop, the phone and the command line |
 | [0046](0046-the-window-asks-for-the-passphrase.md) | The window asks for the passphrase, and has a Security section | Accepted — amends 0033; built on the desktop |
 | [0047](0047-versions-and-upgrades.md) | Versions, installing, and upgrading | Accepted — no automatic updater, by decision |
-| [0048](0048-the-design-direction.md) | The design direction | Accepted — revised the same day for the owner's direction, and to build it in the apps rather than in Figma |
+| [0048](0048-the-design-direction.md) | The design direction | Accepted — revised the same day for the owner's direction, and to build it in the apps rather than in Figma; built on the desktop and Android, light only |
+| [0049](0049-adding-a-file-puts-it-where-you-are-looking.md) | Adding a file puts it where you are looking | Accepted — amends 0036; built on Android |

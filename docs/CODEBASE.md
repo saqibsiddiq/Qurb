@@ -8,7 +8,7 @@ goes deeper on one topic; this file is the map.
 It is a **living document**. Anything that changes how the system fits together
 should be reflected here in the same piece of work that changes it.
 
-**Last verified against the code:** 2026-09-28 — the whole file checked against
+**Last verified against the code:** 2026-10-03 — the whole file checked against
 the source, not just the sections that changed. Phases 0–2 are complete.
 Phase 3 is built and its kill criterion is unmeasured, for want of a second
 *network*. Phase 4 has a daemon, a desktop window that does everything the
@@ -16,10 +16,13 @@ command line does — setting up, pairing, sending, recently deleted, conflicts,
 sharing folders with chosen devices, the passphrase — and an Arch package; no
 automatic updater, by decision. Phase 5 has an Android app on a real phone that
 syncs with a laptop in both directions, shares into qurb from anywhere on the
-phone, and is woken by push; iOS is untouched. What comes next, in the owner's
-order: design and UX, then the relay on a server of the owner's own, then a
-formal release for Linux and Android. [features.md](features.md) lists
-everything that exists, by where a person meets it.
+phone, and is woken by push; iOS is untouched. Both apps were rebuilt to the
+owner's design direction on 2026-09-29, in light only; the Android app's
+designed screens have not yet been recorded running on a device. What comes
+next, in the owner's order: the owner's review of the design, then the relay on
+a server of the owner's own, then a formal release for Linux and Android.
+[features.md](features.md) lists everything that exists, by where a person
+meets it.
 
 ---
 
@@ -314,10 +317,13 @@ the owner's deletion, never because it is missing from a list, so a wiped
 phone cannot delete its own backup. On the wire each tree entry says which of
 four areas it belongs to — shared, sent, held, hold — which is what moved the
 protocol to `qurb/2`. Built and verified between two desktops, and used by the
-Android app, where files added on the phone are private by default and a device
-is chosen on the Devices screen to keep them — verified between a Galaxy S23 and
-a laptop: kept, freed, fetched back byte-identical, and let go on deletion. See
-[decisions/0036](decisions/0036-a-phone-keeps-its-own-files.md).
+Android app, where files that arrive on the phone are private by default and a
+device is chosen on the Devices screen to keep them — verified between a Galaxy
+S23 and a laptop: kept, freed, fetched back byte-identical, and let go on
+deletion. See [decisions/0036](decisions/0036-a-phone-keeps-its-own-files.md).
+A file the person adds from Files or from Private Vault goes into that area
+instead, whatever the default says —
+[decisions/0049](decisions/0049-adding-a-file-puts-it-where-you-are-looking.md).
 
 **A folder in the shared area can be shared with chosen devices.** By default
 a folder goes to every device. Choosing devices writes a small rule file,
@@ -627,28 +633,35 @@ qurb/
 │   └── tray/              An icon in the corner: the daemon with a face.
 │       ├── src/main.rs      the daemon, with an icon or a window to show
 │       ├── src/host.rs      whether a tray icon would be visible at all
-│       ├── src/icon.rs      the icon, drawn rather than shipped
+│       ├── src/icon.rs      the mark, drawn rather than shipped
 │       ├── src/ui.rs        the menu, and what to do when there is no tray
 │       └── src/window.rs    the window: status, and the storage slider
 │
 ├── android/               The Android app. Kotlin over the FFI, no sync logic.
 │   └── app/src/
 │       ├── main/java/com/qurb/
-│       │                  MainActivity.kt     the shell: five tabs, and what they share
-│       │                  Screen.kt           what a tab is: views, a refresh, Back
+│       │                  MainActivity.kt     the shell: four tabs, the places reached
+│       │                                      from them, the Transfers bar, and the
+│       │                                      actions more than one place offers
+│       │                  Screen.kt           what a place is: views, a tab, a
+│       │                                      refresh, Back
+│       │                  Kit.kt              the components every place is built
+│       │                                      from: rows, file states, groups,
+│       │                                      attention, empty states, sheets
 │       │                  Qurb.kt             the one handle on the engine, off
 │       │                                      the main thread
 │       │                  Errors.kt           an engine error, said for a screen
-│       │                  HomeScreen.kt       devices, what is only here, conflicts,
-│       │                                      lately
-│       │                  VaultScreen.kt      the files by folder, search, and where
-│       │                                      their bytes are
-│       │                  DevicesScreen.kt    pairing, who keeps this phone's files,
-│       │                                      removing a device
-│       │                  TransfersScreen.kt  sends waiting, and the history
-│       │                  SettingsScreen.kt   privacy default, space, syncing, who
-│       │                                      has each folder, version
-│       │                  RecentlyDeleted.kt  thirty days to change your mind
+│       │                  HomeScreen.kt       is everything okay: one state, one
+│       │                                      action, conflicts, recent
+│       │                  FilesScreen.kt      Files and Private Vault: one browser,
+│       │                                      two areas, each file's state
+│       │                  DevicesScreen.kt    the devices as cards, who keeps this
+│       │                                      phone's files, removing a device
+│       │                  SettingsScreen.kt   grouped lists: storage, who has each
+│       │                                      folder, privacy, recovery, advanced
+│       │                  ActivityScreen.kt   everything this phone did, from Home
+│       │                  DeletedScreen.kt    Recently deleted: thirty days to
+│       │                                      change your mind
 │       │                  ShowCode.kt         this phone showing a pairing code
 │       │                  Words.kt            how the app says things, in one place
 │       │                  SetupActivity.kt    the 24 words, once
@@ -661,6 +674,8 @@ qurb/
 │       │                                      the files, in the system picker,
 │       │                                      from the index; freed ones download
 │       │                                      when opened
+│       ├── main/res/      the design as resources: colours and glass by role,
+│       │                  Inter, Lucide icons (generated), the layouts
 │       ├── push/java/     being woken by Firebase — compiled only when a
 │       │                  google-services.json is present
 │       └── nopush/java/   the same surface, doing nothing, when it is not
@@ -675,11 +690,13 @@ qurb/
 │   ├── qurb-rendezvous.service
 │   │                      the rendezvous service on your own computer, at login
 │   ├── qurb.desktop       the launcher entry
+│   ├── qurb.svg           its icon: the mark, the window's and the tray's drawing
 │   └── server/            systemd units and TLS for a host of your own
 │
 ├── scripts/
 │   ├── android-app.sh     build the app: libraries, bindings, then Gradle
 │   ├── android-build.sh   cross-compile the engine for all four Android ABIs
+│   ├── android-icons.py   the Lucide icons the app uses, as vector drawables
 │   ├── android-test.sh    run the test suite on a device, over adb
 │   ├── desktop-icons.py   the Lucide icons the window uses, as a sprite
 │   ├── desktop-smoke.sh   drive the real desktop window end to end, on a
@@ -699,9 +716,10 @@ qurb/
 │   └── service-capacity/  Throwaway. Load for the rendezvous service and the
 │                          relay: what a small server carries, measured.
 │
-└── website/               The landing page. Next.js, and entirely separate —
-                           it shares a repository with the engine and nothing
-                           else. Nothing here depends on it or is built by it.
+└── website/               The website, in the apps' design: the window's
+                           tokens and components, its icons (generated from
+                           its sprite), its words. Next.js, and otherwise
+                           separate — nothing here depends on it or builds it.
 ```
 
 **The `crates/` vs `experiments/` split is load-bearing.** Anything in
@@ -717,8 +735,9 @@ code gets written fresh, informed by the spike rather than copied from it.
 Being precise about this matters, because the architecture document describes a
 complete system and a good deal of it is still unbuilt. The engine is real, and
 so, on Linux and Android, is a product around it that does what the brief asks
-of the features; what it does not have yet is a designed look, a relay on a
-server, and a release. The unbuilt parts are listed at the end of this section.
+of the features, designed to the owner's direction; what it does not have yet
+is the owner's review of that design, dark mode, a relay on a server, and a
+release. The unbuilt parts are listed at the end of this section.
 
 ### Built and tested (`crates/storage`, Phase 1)
 
@@ -819,12 +838,11 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-753 tests in 88 test binaries on Linux (2026-09-29, debug build, the
-development laptop): 746 pass, and the seven that find devices on the local
-network by multicast failed on a network that does not carry it — they passed
-on 2026-09-28 at home, and their code has not changed. Clippy is clean. The last run on
-a Galaxy S23 was 426 of them, on 2026-09-17, and has not been repeated since —
-see
+755 tests in 88 test binaries on Linux, all passing (2026-10-03, debug build,
+the development laptop, on a network that carries multicast — seven tests find
+devices on the local network that way, and fail on one that does not). Clippy
+is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
+not been repeated since — see
 [phases/phase-5-mobile.md](phases/phase-5-mobile.md).
 
 **The wire protocol is `qurb/2`.** It was `qurb/0` until tree entries gained a
@@ -994,9 +1012,9 @@ on. It can also be **woken** when another device has something, if a push
 service is configured — without one it learns at its next scheduled look, about
 fifteen minutes away. See
 [decisions/0028](decisions/0028-waking-a-sleeping-device.md), which sets out
-what that costs and why nothing else works. Home and the share sheet's confirmation both say how many
-files are still held only by the phone, which is the honest form of "it will
-get there".
+what that costs and why nothing else works. Home says how many files are still
+held only by the phone, which is the honest form of "it will get there"; the
+share sheet's confirmation says where what was just shared will go.
 
 **It runs on a phone.** `./scripts/android-test.sh` pushes the test binaries
 with `adb` and runs them: on a Samsung Galaxy S23 (Android 16, arm64-v8a) all 35
@@ -1024,14 +1042,21 @@ installed on a Galaxy S23 against 46.7 MB for the debug build, with a cold start
 of about 175 ms — see [decisions/0039](decisions/0039-a-light-android-app.md).
 
 **There is an Android app** — [`android/`](../android/) — which installs, sets up
-an identity, keeps the key in the Android Keystore, pairs and syncs, in five
-tabs: Home, Vault, Devices, Transfers and Settings. Home shows who is reachable,
-what only the phone has, and conflicts to settle. The Vault is browsed by
-folder and searched, says where each file's bytes are, and opens, frees,
-fetches, renames, moves, sends, saves out or deletes each. Devices pairs — scanning a code or
-showing one — chooses who keeps the phone's own files, and removes a device.
-Settings has who has each folder (sharing, and keeping it only remotely),
-Recently deleted, space, syncing and the version. See
+an identity, keeps the key in the Android Keystore, pairs and syncs. Since
+2026-09-29 it follows the same design as the desktop window, in four tabs —
+Home, Files, Devices, Settings — under a floating bar. Home says whether
+everything is synced and offers one action, *Send to device*, with conflicts to
+settle as attention. Files is browsed by folder and searched, says where each
+file's bytes are, and opens, frees, fetches, renames, moves, sends, saves out or
+deletes each from a sheet; Private Vault, the phone's own files, is a step
+inside it, in the same browser. Devices pairs — scanning a code or showing one
+— chooses who keeps the phone's own files, and removes a device. Settings has
+who has each folder (sharing, and keeping it only remotely), Recently deleted,
+space, syncing and the version. Activity is reached from Home, and Transfers is
+a bar that appears only while something moves. Before the design the same
+features were five tabs — Home, Vault, Devices, Transfers, Settings — and it is
+through those that the hardware checks below were made; the designed screens
+have not yet been recorded running on a device. See
 [android/README.md](../android/README.md). Building it found a bug nothing else could: UniFFI keeps only the *last*
 `#[uniffi::export] impl` block for an object and silently discards the others,
 so eight methods were missing from the generated Kotlin and Swift while every
@@ -1095,7 +1120,7 @@ network. iOS needs Xcode, which needs a Mac. See
 | Conflicts | attention on Home and Files, reviewed in a sheet: both versions, who made each and when; keep one, the other, or both |
 | Recently deleted | from Files: thirty days, restore or delete for good |
 | Who has each folder | a folder's options, from its menu in Files: share it with chosen devices; free its space here or keep it on this computer |
-| Security | this device's fingerprint, how the key is kept and changing it, pairings and removals |
+| Security | in Settings: how the key is kept and changing it, under This device; pairings and removals, under Devices; this device's identity, under Advanced |
 | One qurb per person | closing the window keeps it syncing; launching again shows the running one |
 
 ### Designed but not built
@@ -1117,7 +1142,8 @@ Closing it hides it and qurb keeps syncing; it starts at login without a
 window, and *Quit qurb* in Settings stops it. Its design follows the owner's
 direction ([design/direction.md](design/direction.md),
 [decisions/0048](decisions/0048-the-design-direction.md)) and was built on
-2026-09-29; the Android app is next, then dark mode.
+2026-09-29, and the Android app was rebuilt to it the same day. Both are light
+only; dark mode follows the owner's review.
 
 Selective sync is built in both halves: a device drops local copies when it is
 over its storage limit and fetches them back on request, and a person can say
@@ -1166,7 +1192,10 @@ Six things are known-missing rather than merely unbuilt:
    desktop window; recently deleted and settling a conflict are verified
    between the Galaxy S23 and the laptop. On the phone, removing a device, the
    share sheet's *send to a device* and the phone showing a pairing code have
-   not been tried. See [features.md](features.md) for which is which.
+   not been tried — and the designed app, rebuilt on 2026-09-29, has not been
+   recorded running on any device, nor measured against
+   [decisions/0039](decisions/0039-a-light-android-app.md). See
+   [features.md](features.md) for which is which.
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:
@@ -1445,9 +1474,11 @@ Then the layers, bottom to top:
     what each is deliberately unable to learn.
 16. [crates/mobile-ffi/README.md](../crates/mobile-ffi/README.md) — the surface
     a phone calls, and the four platform constraints that shaped it.
-17. [android/README.md](../android/README.md) — the app, and the three things
-    about Android that dictated its shape: the keystore, the 16 KB page size,
-    and a background scheduler that decides when you run.
+17. [android/README.md](../android/README.md) — the app, and the things about
+    Android that dictated its shape: the keystore, edge-to-edge drawing, and a
+    background scheduler that decides when you run. The fourth, the 16 KB page
+    size, is in [phases/phase-5-mobile.md](phases/phase-5-mobile.md#16-kb-page-alignment)
+    and `scripts/android-build.sh`.
 
 And when you want to run it for real, rather than on one machine:
 

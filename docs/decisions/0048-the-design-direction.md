@@ -63,3 +63,36 @@ the smoke test — and reviewed there at the checkpoints.
 - Inter is a font the phone must carry; subset, it costs a few hundred
   kilobytes against a 10.7 MB install
   ([0039](0039-a-light-android-app.md)).
+
+## Progress
+
+- **2026-09-29 — the desktop window** (commit `faed984`), in
+  `crates/desktop/ui`: the sidebar, the glass, Inter and Lucide bundled, every
+  place in the brief. Rendered against the fixture data and driven end to end
+  by the smoke test; see [phase 4](../phases/phase-4-product.md#the-design-in-the-window).
+- **2026-09-29 — the Android app** (commit `fad2d9b`), on the platform's own
+  views as [0039](0039-a-light-android-app.md) chose: four tabs — Home, Files,
+  Devices, Settings — under a floating bar; Private Vault inside Files,
+  Activity from Home, Recently deleted from Files and Settings; Transfers as a
+  bar that appears while something moves; actions in sheets. Lucide icons
+  generated as vector drawables by `scripts/android-icons.py`, and the new mark
+  as the launcher icon. Adding a file now goes into the area on screen,
+  [0049](0049-adding-a-file-puts-it-where-you-are-looking.md). See
+  [phase 5](../phases/phase-5-mobile.md#the-designed-app).
+- **The font's cost**, predicted above as a few hundred kilobytes: three Inter
+  weights as TrueType, 246,724 bytes together before the APK compresses them.
+  What the designed app adds to the 10.7 MB install has not been measured.
+- **Light only, on both.** The Android app's earlier night palette was removed
+  rather than left under the new design; dark mode is designed after the light
+  one is approved.
+- **2026-10-03 — the mark on Linux.** The applications menu's icon
+  (`packaging/qurb.svg`, and `crates/desktop/icons/icon.png` rendered from it)
+  and the tray icon (`crates/tray/src/icon.rs`, drawn from the same
+  coordinates) are the mark; until then they drew the old blue ring.
+- **2026-10-03 — the website**, rebuilt with the apps as its reference: the
+  window's tokens, materials and components, its icons, Inter served from the
+  site, and the product drawn from the apps' own parts. It calls the product
+  *Qurb*, as the apps do, where it used to say *Qurb Cloud*. See
+  [website/README.md](../../website/README.md).
+- **Not yet done:** the owner's review at the three checkpoints; dark mode;
+  moving a file into or out of Private Vault.

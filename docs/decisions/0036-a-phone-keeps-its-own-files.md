@@ -1,6 +1,9 @@
 # 0036 — A phone keeps its own files, and another device holds them for it
 
-**Status:** Accepted — built in the engine, on the desktop and in the phone app, and verified between a Galaxy S23 and the laptop
+**Status:** Accepted — built in the engine, on the desktop and in the phone app, and verified between a Galaxy S23 and the laptop.
+Amended by [0049](0049-adding-a-file-puts-it-where-you-are-looking.md): a file
+added with a choice of area — *Add files* in Files or Private Vault, or the
+share sheet's choice — goes into that area; the default below governs the rest
 **Date:** 2026-09-25
 
 ## Decision
@@ -248,9 +251,12 @@ for one works as for the shared area, from the holder's *held* entries.
   never came back for the file: each sync pass on the phone left its discovery
   running and ended before the desktop could dial it. Both fixed; see
   [decision 0020](0020-sync-takes-a-deadline.md#a-pass-that-waits-to-be-collected-from).
-- **Not yet:** the app using any of it. The setting stays off until the
+- ~~**Not yet:** the app using any of it. The setting stays off until the
   rebuilt screens can name a holder, so a phone's files still go to the shared
-  area.
+  area.~~ Written before the 2026-09-27 entries above, and overtaken by them.
+- **2026-09-29 — the designed app.** Private Vault became a place inside
+  Files, each with its own *Add files*, and an add goes into the area it was
+  made from — [0049](0049-adding-a-file-puts-it-where-you-are-looking.md).
 
 ## Reversing it
 

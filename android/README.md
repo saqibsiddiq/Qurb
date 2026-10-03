@@ -17,8 +17,9 @@ keeps in memory down from 26.4 MB to 8.1 MB, and a cold start of about 175 ms.
 The measurements and what they do and do not show are in
 [decision 0039](../docs/decisions/0039-a-light-android-app.md), which also
 measures the five-tab app against the one-list app it replaced: the same
-startup, and a few megabytes more memory. A release build takes longer, because
-link-time optimisation does; the debug build stays quick.
+startup, and a few megabytes more memory. The designed app that replaced the
+five tabs on 2026-09-29 has not been measured yet. A release build takes
+longer, because link-time optimisation does; the debug build stays quick.
 
 ## What it does
 
@@ -31,7 +32,7 @@ them, and the sheets that rise over them:
 
 | place | what it is for |
 |---|---|
-| Home | is my Qurb space okay? One state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Add your first device* — with a ring that turns while syncing; one action, *Send to device*; a line of facts and *Sync now*; attention when a file has two versions ([0043](../docs/decisions/0043-settling-a-conflict.md)); Recent, and *See all* for Activity. Pulling down syncs |
+| Home | is my Qurb space okay? One state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Not synced yet*, *Add your first device* — with a ring that turns while syncing; one action, *Send to device*; a line of facts and *Sync now*; attention when a file has two versions ([0043](../docs/decisions/0043-settling-a-conflict.md)); Recent, and *See all* for Activity. Pulling down syncs |
 | Files | the shared space, folder by folder: search across all of them, breadcrumbs, folders as tiles apart from files, and each file's state in words — *On this phone*, *Available elsewhere*, *Only copy here*, *Downloading*. Tapping a file opens a sheet: its details, then open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move, delete (into Recently deleted). ⋯ sorts, makes a folder, saves everything here to the phone. *Add files* adds into the shared space. Back goes up a folder |
 | Private Vault | a step inside Files: this phone's own files, in the same browser. *Add files* here adds privately, whatever *Keep new files private* says |
 | Devices | this phone and each paired device as cards, with when each was last here; a device's sheet chooses whether it keeps a backup of the Private Vault, sends it files, and removes it after saying what that does ([0041](../docs/decisions/0041-removing-a-device.md)). *Add* scans a code, shows one on this phone, or takes one typed |
@@ -50,24 +51,34 @@ fill over the still environment, which looks the same and costs nothing.
 Motion follows the phone's animation setting: with animations off, nothing
 moves.
 
-**Files added on the phone are private by default** — decision
+**Files that arrive on the phone are private by default** — decision
 [0036](../docs/decisions/0036-a-phone-keeps-its-own-files.md). They go to no
 other device until the person chooses one on the Devices screen to keep them,
 and that device keeps them where nobody using it sees them. *Keep new files
 private* in Settings turns that off, from the next file on; files already here
 stay where they are.
 
-**Freeing space is refused for the only copy.** *Free phone space* is offered
+**A file added with a choice of area goes there**, whatever that setting says
+— decision [0049](../docs/decisions/0049-adding-a-file-puts-it-where-you-are-looking.md).
+*Add files* in Files puts it in the shared area, which every device sees; in
+Private Vault, in this phone's own. So do the share sheet's *Save to Files* and
+*Save to Private Vault*. The setting decides the rest: what other apps save
+into qurb through the system picker, and a share when no device is paired.
+
+**Freeing space is refused for the only copy.** *Free local space* is offered
 only for a file another device is known to hold, and the engine refuses it
 anyway when that is not so, so no screen can get it wrong. A freed file stays in
-the list, marked as not on this phone, and tapping it asks for it back at the
-next sync.
+the list, marked *Available elsewhere*, and *Keep on this phone* in its sheet
+asks for it back at the next sync — *Downloading* until it is here.
 
 The screens are plain classes holding their views, not Fragments: built the
 first time each is shown, kept for the life of the activity, and changing tab
-swaps one child view for another. No screen reads anything on the main thread.
-Each draws what the index already knows, and the scan for changes made while the
-app was closed runs after that and redraws only if it found something.
+swaps one child view for another; the places reached from a tab go on a small
+stack that Back leaves. No screen reads anything on the main thread. Each draws
+what the index already knows, and the scan for changes made while the app was
+closed runs after that and redraws only if it found something. What they are
+built from — rows, file states, groups, toggles, attention, empty states,
+sheets — is one file, `Kit.kt`, the counterpart of the desktop's `core.js`.
 
 **It is a share target.** `ACTION_SEND` and `ACTION_SEND_MULTIPLE`, for any
 type, and it needs no network to work: the file is written into the folder and
@@ -85,9 +96,10 @@ See [decision 0028](../docs/decisions/0028-waking-a-sleeping-device.md).
 **Opening a file, and saving a copy to the phone, matter more than they
 sound.** The synced directory is this app's private storage, so a file that
 arrives from another device and stays there is invisible to everything else on
-the phone. Without a way out, a sync product syncs into a hole. Both actions go
-through the app's own `DocumentsProvider`, so there is one path out of the store
-rather than two implementations of reading it.
+the phone. Without a way out, a sync product syncs into a hole. Opening goes
+through the app's own `DocumentsProvider`, the same path the system file picker
+uses; saving a copy exports through the engine into a cache file and copies
+that where the person chose (below).
 
 **In the system file picker and the Files app, qurb lists what the engine
 knows**, not what is on disk: a file freed from this phone is still there, says
@@ -166,14 +178,15 @@ and, worse, taps in that strip go to the status bar instead. The bug is
 invisible in a screenshot until you try to press something, and it was found
 exactly that way, on the first version of the app.
 
-The shell pads the screen area for the status bar and any display cutout, once;
-the tab bar pads itself for the gesture bar.
+The shell pads the screen area for the status bar and any display cutout, once,
+and lifts the floating tab bar, with the Transfers bar above it, clear of the
+gesture bar.
 
 ## Permissions
 
 `INTERNET` and `ACCESS_NETWORK_STATE`, to sync; `CHANGE_WIFI_MULTICAST_STATE`,
 to hear devices on the same Wi-Fi answer; `CAMERA`, asked for only when
-scanning a code to connect a device, and refusable — the code can be typed
+scanning a code to add a device, and refusable — the code can be typed
 instead. Nothing else: no storage permission, because the synced directory is
 the app's own private storage, and no location, contacts or anything like them.
 
@@ -194,9 +207,9 @@ In the app: Settings → **Rendezvous service** → `ws://<that machine's LAN
 IP>:9000`. From an emulator use `ws://10.0.2.2:9000`, which is how it reaches
 its host.
 
-Then, on the computer, Devices → **Show a code** in the desktop app, or
-`qurb pair <dir>`; on the phone, **Connect a device**, and point the camera at
-the code.
+Then, on the computer, Devices → **Add a device** → *Show a code* in the
+desktop app, or `qurb pair <dir>`; on the phone, Devices → **Add** → *Scan the
+other device's code*, and point the camera at it.
 
 ## Background sync
 
@@ -276,8 +289,15 @@ replaced by uninstalling — which deletes the phone's key and index. See
   the device that sent them still has them. Builds before then did not record
   where a received file came from, and a phone cannot learn it afterwards
   without asking; it errs the safe way, never offering to free such a file.
-- **A designed look.** Every screen works on the platform's own components
-  and none has been designed; that is the next piece of work.
+- **Seen on a device, in its designed form.** The design was built and
+  compiled on 2026-09-29; nothing records it running on the S23 or the
+  emulator, the owner has not reviewed it, and decision 0039's measurements
+  have not been repeated for it. See
+  [phases/phase-5-mobile.md](../docs/phases/phase-5-mobile.md#the-designed-app).
+- **A dark theme.** Light only until the light design is approved; the night
+  palette of the earlier screens was removed rather than left under the new
+  one.
+- **Notifications.** The phone raises none; Settings says so.
 - **Not yet tried on the phone**, though built and run on the emulator:
   removing a device, the share sheet sending to a device, showing a pairing
   code to another device, and sharing a folder with chosen devices between

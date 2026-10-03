@@ -206,9 +206,10 @@ debug build to a release one only by uninstalling, which deletes its key.
 On first launch it offers to create an identity or restore from 24 words. The
 key goes into the Android Keystore, where the app itself cannot read it.
 
-Five tabs: Home, Vault, Devices, Transfers, Settings. The synced files also
-appear in the Files app, under **qurb**. Settings → **Background sync** says
-what the scheduler does, and runs one now.
+Four tabs: Home, Files, Devices, Settings; Private Vault is inside Files.
+The synced files also appear in the system's Files app, under **qurb**.
+Settings → **Background sync** says what the scheduler does, and runs one
+now.
 
 On the same Wi-Fi, a phone finds a computer with no server at all. From
 anywhere else it needs a rendezvous service to find it through. There is no
@@ -219,9 +220,9 @@ qurb signal 0.0.0.0:9000
 ```
 
 In the app: Settings → **Rendezvous service** → `ws://<your computer's LAN IP>:9000`.
-Then Devices → **Connect a device**: scan the code the computer shows (Devices
-→ *Show a code* in the window, or `qurb pair`), type it, or show a code on the
-phone for the computer to enter. Then **Sync now** on Home.
+Then Devices → **Add**: scan the code the computer shows (Devices → *Add a
+device* → *Show a code* in the window, or `qurb pair`), type it, or show a
+code on the phone for the computer to enter. Then **Sync now** on Home.
 
 Both devices have to be awake and running at the same moment — a QUIC
 handshake's opening packets are the hole punch, so a device that is only

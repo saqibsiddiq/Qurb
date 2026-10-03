@@ -4,7 +4,8 @@ Every feature that exists, grouped by where a person meets it: the desktop
 window, the phone, the command line, the services. The last sections cover
 what the engine guarantees underneath all of them, and what is not built.
 Written 2026-09-28 as the starting point for the design and UX pass, and
-brought up to date on 2026-09-29, when the desktop's design was built.
+brought up to date on 2026-09-29, when the desktop's design was built, and on
+2026-10-03 for the Android app's.
 
 Each line says how far it has been checked, because "built" and "works between
 two real devices" are different claims:
@@ -76,18 +77,29 @@ not yet looked at by the owner.
 `qurb-tray`: the same daemon with an icon — recently synced files, *Open
 folder*, *Quit*, and a small window with the status and the storage slider.
 Where there is no tray (GNOME), it opens that window instead. Superseded as the
-main way in by the desktop window, and not redesigned; kept for desktops that
-want only an icon. 🧪
+main way in by the desktop window; its icon is the mark, and its small window is
+not redesigned. Kept for desktops that want only an icon. 🧪
 
 ---
 
 ## 2. The Android app
 
-Kotlin over the engine, five tabs. The key is kept in the Android Keystore
-([0021](decisions/0021-the-platform-supplies-the-keystore.md)). Files added on
-the phone are **private by default** — they stay on the phone and on devices
-chosen to keep them — and that can be switched off
-([0036](decisions/0036-a-phone-keeps-its-own-files.md)).
+Kotlin over the engine. The key is kept in the Android Keystore
+([0021](decisions/0021-the-platform-supplies-the-keystore.md)). Files that
+arrive on the phone are **private by default** — they stay on the phone and on
+devices chosen to keep them — and that can be switched off
+([0036](decisions/0036-a-phone-keeps-its-own-files.md)); a file added from
+Files or from Private Vault goes into that area
+([0049](decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)).
+
+Designed on 2026-09-29 from the owner's direction, in the desktop's language:
+four tabs under a floating bar — Home, Files, Devices, Settings — with Private
+Vault inside Files, Activity from Home, and Transfers as a bar that appears
+while something moves. Light only. **Built and compiled; nothing records the
+designed app running on a device yet.** The marks below are for the
+*features*: a ✅ or 🧪 was earned through the screens the design replaced,
+which called the same engine functions, so it says the feature works — not
+that its new screen has been seen.
 
 ### Setting up
 
@@ -99,26 +111,30 @@ chosen to keep them — and that can be switched off
 The S23 was set up before the three-word check existed; the flow as it is now
 was walked through on the emulator.
 
-### The five tabs
+### The places
 
-| tab | what it shows and does | |
+| place | what it shows and does | |
 |---|---|---|
-| **Home** | connected to which devices; *Sync now*; files only on this phone; a card when two devices changed the same file — keep this version, the other, or both | ✅ |
-| **Vault** | a folder at a time, with Back going up; search across every folder; sort by name, newest or largest | 🧪 |
-| | per file: open, save a copy to the phone, send to a device, download, free phone space, rename, move to a folder, delete | 🧪 |
-| | *Add files*; new folder; save everything in a folder to the phone at once; Recently deleted | 🧪 |
-| **Devices** | paired devices and when each was last reached; *Connect a device* — scan a code, **show a code on this phone**, or type one | ✅ scan · ◻ show |
-| | *Keep my files here*: a device that keeps a copy of the phone's own files, so the phone can free space | ✅ |
-| | send files to a device; remove a device | 🧪 |
-| **Transfers** | files waiting to be collected, with *Stop sending*; what happened, newest first | ✅ history · 🧪 stop sending |
-| **Settings** | name; keep new files private or not; the recovery phrase; space used and *free unused space*; Recently deleted; who has each folder — choose devices, keep on this phone, free space; background sync; rendezvous and relay; version | 🧪 |
+| **Home** | one state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Not synced yet*, *Add your first device*; one action, *Send to device*; when it last synced; *Sync now*, or pull down; Recent, and *See all* for Activity | ✅ sync · ◻ the states |
+| | a file with two versions: attention, then a sheet with both — keep this version, the other, or both ([0043](decisions/0043-settling-a-conflict.md)) | ✅ |
+| **Files** | the shared area a folder at a time: search across every folder, breadcrumbs, folders as tiles, sort by name, newest or largest; each file's state — *On this phone*, *Available elsewhere*, *Only copy here*, *Downloading* | 🧪 |
+| | per file, in a sheet: open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move to a folder, delete (into Recently deleted) | 🧪 · freeing and getting back ✅ |
+| | *Add files* into the folder on screen; new folder; save everything here to the phone at once | 🧪 |
+| **Private Vault** | from Files: the phone's own files, in the same browser; *Add files* here adds privately, whatever the setting says | 🧪 in the FFI's tests |
+| **Devices** | this phone and each paired device as cards, with when each was last seen; *Add* — scan a code, **show a code on this phone**, or type one | ✅ scan · ◻ show |
+| | a device's sheet: *Keep a backup of my Private Vault* — a device that keeps a copy of the phone's own files, so the phone can free space | ✅ |
+| | send files to it; remove it, saying first what that does ([0041](decisions/0041-removing-a-device.md)) | 🧪 |
+| **Settings** | grouped lists: this phone (name, key protection); devices; storage — space used, who has each folder (choose devices, keep on this phone or download when opened), Recently deleted, *free unused space*; privacy — *Keep new files private*; notifications (none on the phone yet); the recovery phrase; appearance; advanced — background sync, rendezvous, relay, version | 🧪 |
+| **Activity** | from Home: what happened, newest first, sixty at a time | ✅ |
+| **Recently deleted** | from Files and Settings: thirty days, when each expires; restore — on every device — or delete for good ([0042](decisions/0042-recently-deleted.md)) | ✅ |
+| **Transfers** | a bar above the tabs while the phone syncs or has a send not yet collected; its sheet shows what is waiting, with *Stop*, and what finished | 🧪 stop sending |
 
 ### Outside the app
 
 | | | |
 |---|---|---|
 | **Share sheet** | anything on the phone can be shared into qurb, with no network and no other device switched on | ✅ |
-| | it asks where: *Save to My Vault*, or *Send to* a paired device | 🧪 |
+| | it asks where: *Save to Private Vault*, *Save to Files, on all your devices*, or *Send to* a paired device; with none paired it saves without asking | ◻ |
 | **The system file picker and Files app** | qurb's files appear there, listed from the index; a freed file downloads when opened; other apps can save into qurb | 🧪 |
 | **Background sync** | WorkManager, every 15 minutes — every hour once a push has arrived in the last week | ✅ |
 | **Push** | a change on the laptop wakes the sleeping phone, through Firebase; about five seconds from a change on the laptop to the phone syncing it, on mobile data with the screen off | ✅ |
@@ -149,7 +165,7 @@ set up, so most commands need no path.
 | `keep <folder> here\|remote` | keep a folder here, or only list it |
 | `deleted` / `restore <#n or path>` | Recently deleted / put one back, everywhere |
 | `remove-device <device> [--delete-kept] [--yes]` | stop trusting a device; says what that does first |
-| `config [key=value …]` | name, rendezvous, relay, port, limit, own-files, downloads |
+| `config [key=value …]` | `name`, `signal` (the rendezvous service), `relay`, `port`, `limit`, `own-files`, `downloads`, `notifications` |
 | `protect file\|keystore\|passphrase` | change how the key is kept |
 | `verify [--deep]` / `reclaim` | check the store against itself / free duplicates an older store holds |
 | `version` | the build, its protocol, its index schema |
@@ -216,8 +232,11 @@ Stated plainly so that a design does not assume it:
 
 - **The relay on a server.** Next, after design and UX. Until then a phone on a
   network that blocks a direct path cannot sync.
-- **The Android app's new design.** The desktop is designed; the phone is next.
-- **Dark mode** — after the light design is approved.
+- **The owner's review of the design**, on both. The Android app's design is
+  built and compiled and not yet recorded running on a device.
+- **Dark mode** — after the light design is approved. The phone's earlier dark
+  theme was removed with the redesign rather than left under it.
+- **Notifications on the phone.** Settings says so.
 - **Moving a file into or out of Private Vault** — designed, and needs an
   engine addition.
 - **A formal release** — after the relay.

@@ -102,16 +102,24 @@ qurb.cancelSend("photo.jpg", peer.fingerprint)
 qurb.history(50, null)                // newest first; pass the last id to page back
 ```
 
-Browsing by folder, as the Vault and the system file picker both do — one
-index query each, so the two cannot disagree:
+Browsing by folder, as Files, Private Vault and the system file picker all do
+— one index query each, so they cannot disagree:
 
 ```kotlin
 qurb.browse("album")                  // Directory: its folders, and its files
+qurb.browseIn("album", false)         //   ...in one area: false shared, true private
 qurb.entry("album/photo.jpg")         // one file, or null
 qurb.search("beach", 100)             // anywhere in a path
+qurb.searchIn("beach", 100, true)     //   ...in one area
+qurb.importInto(tmp, "a.jpg", true)   // added into that area, whatever the setting
 qurb.rename("a.jpg", "album/a.jpg")   // keeps the file's area: shared stays shared
 qurb.makeFolder("album/2026")
 ```
+
+The system file picker has no notion of an area and uses the unrestricted
+calls. Files and Private Vault each use the `In` forms, and *Add files* in each
+adds into it — decision
+[0049](../../docs/decisions/0049-adding-a-file-puts-it-where-you-are-looking.md).
 
 Deleting, conflicts, and who has what (decisions 0041–0045):
 

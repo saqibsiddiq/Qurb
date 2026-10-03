@@ -141,13 +141,27 @@ owner asked for:
 | **2. Components** | 6 core components · 7 navigation | every component in §48 with its states, the sidebar and the bottom bar |
 | **3. Screens** | 8 Home · 9 Files · 10 File details · 11 Devices · 12 Send and transfers · 13 Conflicts · 14 Storage · 15 Recently deleted · 16 Private Vault · 17 Settings · 18 Onboarding · 19 edge states · 20 responsive refinement | each screen on both platforms, reviewed against §54 |
 
-**Done so far (2026-09-29): the desktop, all three checkpoints' worth**, in
-`crates/desktop/ui`, awaiting the owner's look. Rendered against the fixture
-data in WebKitGTK and driven end to end by `scripts/desktop-smoke.sh`.
+**Done so far (2026-09-29): both apps, all three checkpoints' worth, in light
+only**, awaiting the owner's look.
 
-**Next: Android.** The same tokens as resources in `android/app/src/main/res`,
-the same places (Home, Files, Devices, Settings; Private Vault from Files), on
-the platform's own views — no new UI framework on either side.
+- **The desktop**, in `crates/desktop/ui`. Rendered against the fixture data
+  in WebKitGTK and driven end to end by `scripts/desktop-smoke.sh`.
+- **Android**, in `android/app/src/main`: the same tokens as resources, the
+  same places (Home, Files, Devices, Settings; Private Vault from Files), on
+  the platform's own views — no new UI framework on either side. Built and
+  compiled; nothing records it running on a device yet
+  ([phase 5](../phases/phase-5-mobile.md#the-designed-app)). One rule came out
+  of it: adding a file puts it in the area on screen
+  ([0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)).
+
+Since then (2026-10-03): the mark on Linux — the applications menu and the
+tray — and the website, built with the apps as its reference
+([website/README.md](../../website/README.md)).
+
+**Next:** the owner's review at the checkpoints; then dark mode; then *Move to
+Private Vault* and *Move to shared*, which need the engine addition in §2. One
+smaller thing the table in §3 places and nothing draws yet: notifications on
+the phone.
 
 The desktop's frames for review: the window at its default 1200 × 800; the
 phone at 360 × 780, the Galaxy S23's size in dp.

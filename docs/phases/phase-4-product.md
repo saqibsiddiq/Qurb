@@ -1012,6 +1012,11 @@ since they passed the day before at home. The other 746 passed.
   rather than acting on it. Dropping chunk payloads is a different operation
   and is not written.
 - **The owner's look at the window**, then dark mode and moving files into
-  and out of Private Vault. After the Android app gets the same design: the
-  relay on a server of the owner's own, then a formal release. See
+  and out of Private Vault. The Android app got the same design on 2026-09-29
+  ([phase 5](phase-5-mobile.md#the-designed-app)); after the review, the relay
+  on a server of the owner's own, then a formal release. See
   [product-plan.md](../product-plan.md).
+- ~~**The mark in the applications menu.**~~ Done 2026-10-03:
+  `packaging/qurb.svg`, `crates/desktop/icons/icon.png` and the tray icon are
+  the mark, the tray's drawn from the same coordinates
+  ([0048](../decisions/0048-the-design-direction.md#progress)).

@@ -283,12 +283,6 @@ object Engine {
     }
 
     /**
-     * Whether a file added on this phone stays private to it rather than going
-     * to every device (decision 0036). On unless the person turns it off: a
-     * phone's photographs are its owner's until they send them somewhere.
-     * Files already here stay where they are either way.
-     */
-    /**
      * When this phone last reached another device, in Unix seconds, or null
      * if it never has: what lets Home say "synced" honestly, since a phone
      * has no running daemon to ask. Set by a sync from the app and by the
@@ -303,6 +297,14 @@ object Engine {
             .putLong("last_reached_at", System.currentTimeMillis() / 1000).apply()
     }
 
+    /**
+     * Whether a file added on this phone stays private to it rather than going
+     * to every device (decision 0036). On unless the person turns it off: a
+     * phone's photographs are its owner's until they send them somewhere.
+     * Files already here stay where they are either way, and a file added
+     * with a choice of area -- Files or Private Vault -- goes where it was
+     * added (decision 0049).
+     */
     fun ownFilesPrivate(context: Context): Boolean =
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE).getBoolean("own_private", true)
 

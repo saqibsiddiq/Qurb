@@ -4,8 +4,9 @@ Private cloud storage. Dropbox-like sync where your files stay on your own
 devices — they move directly between them, encrypted end to end, and are never
 stored on our servers.
 
-**Status (2026-09-28): working on Linux and Android; design, the relay on a
-server, and a release are next, in that order.**
+**Status (2026-10-03): working on Linux and Android, and both apps designed;
+the owner's review of the design, the relay on a server, and a release are
+next, in that order.**
 
 - The engine is complete and hardened: two devices sync end to end over QUIC,
   with encryption, conflict handling that never discards an edit, and key
@@ -14,14 +15,17 @@ server, and a release are next, in that order.**
 - The **desktop window** does everything the command line does: setting up,
   pairing by QR code, browsing and freeing files, sending to one device,
   recently deleted, settling conflicts, sharing a folder with chosen devices,
-  keeping a folder only remotely, and a passphrase on the key. There is an Arch
-  package.
+  keeping a folder only remotely, and a passphrase on the key — designed to the
+  owner's direction, in light only. There is an Arch package.
 - The **Android app** syncs with a laptop both ways, from home Wi-Fi or mobile
   data, is woken by push within seconds, takes shares from any app, and shows
-  its files in the system file picker — verified on a Galaxy S23.
-- Not built yet: a designed look, the relay running on a server, a formal
-  release, iOS, macOS and Windows. Unmeasured: battery over a day on a phone,
-  and how often a direct connection works across other networks.
+  its files in the system file picker — verified on a Galaxy S23. Its screens
+  were rebuilt to the same design on 2026-09-29, which has not yet been
+  recorded running on the phone.
+- Not built yet: dark mode, the relay running on a server, a formal release,
+  iOS, macOS and Windows. Unmeasured: battery over a day on a phone, how often
+  a direct connection works across other networks, and what the design costs
+  the Android app in size and startup.
 
 **[docs/features.md](docs/features.md)** lists everything that exists, and how
 far each piece has been checked.
@@ -53,9 +57,9 @@ docs/           documentation — start with CODEBASE.md
 crates/         the engine, the program, the desktop window, the services
 android/        the Android app, a thin Kotlin layer over the FFI
 packaging/      installing: an Arch package, an install script, server units
-scripts/        building for Android, generating bindings, the desktop smoke test
+scripts/        building for Android, generating bindings and icons, the desktop smoke test
 experiments/    throwaway spikes, clearly marked as such
-website/        the landing page (Next.js), independent of the engine
+website/        the website (Next.js), in the apps' design, independent of the engine
 ```
 
 The split between `crates/` and `experiments/` is deliberate. Experimental code
@@ -104,7 +108,7 @@ cargo run --release -p qurb-peer --example demo -- /tmp/device-a /tmp/device-b
 
 ```bash
 cargo build --release
-cargo test --workspace         # 753 tests in 88 binaries (2026-09-29)
+cargo test --workspace         # 755 tests in 88 binaries (2026-10-03)
 ./scripts/desktop-smoke.sh     # the real window, driven end to end
 ```
 

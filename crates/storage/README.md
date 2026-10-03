@@ -90,6 +90,14 @@ lives here rather than in the caller so that no caller can skip it.
 The record it consults is written when a peer says it holds something. See
 [decision 0025](../../docs/decisions/0025-a-storage-cap-that-cannot-lose-data.md).
 
+Two questions an interface asks of the same record. `Db::freeable` is what
+could be freed right now without losing anything — the files, their total and
+the largest of them — and applies the test `Store::free_local` applies before
+freeing, so a file it offers is one that will be freed. `Db::holders_of_content`
+names the devices that would hand a file's bytes back, which is what a file's
+details list under the devices that have it. The desktop's Storage place and
+details panel are built on them; `tests/storage_cap.rs` covers both.
+
 ## Concurrency
 
 SQLite permits one writer at a time, and this system has several: the engine

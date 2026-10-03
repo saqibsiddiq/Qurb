@@ -15,8 +15,8 @@ A number without its conditions is not evidence.
 | [1](phase-1-engine.md) | The engine | ✅ complete — kill criterion passed |
 | [2](phase-2-correctness.md) | Adversarial correctness | ✅ complete — 5 defects found |
 | [3](phase-3-networking.md) | Networking at scale | 🔨 built — kill criterion unmeasured |
-| [4](phase-4-product.md) | Desktop product | 🔨 in progress — every feature built, an Arch package; design is next |
-| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — Android syncs, shares, wakes and settles conflicts; design is next; no iOS |
+| [4](phase-4-product.md) | Desktop product | 🔨 in progress — every feature built, an Arch package, the window designed (light); the owner's review is next |
+| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — Android syncs, shares, wakes and settles conflicts; designed (light), not yet recorded running on a device; no iOS |
 | 6 | Commercial | not started |
 
 Phase definitions and kill criteria: [../roadmap.md](../roadmap.md).

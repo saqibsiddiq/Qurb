@@ -3,13 +3,15 @@
 Six phases. Each has an explicit **kill criterion**: the result that means stop
 and reconsider rather than push on.
 
-**Where it stands, 2026-09-28:** Phases 0–2 complete; Phase 3 built with its
+**Where it stands, 2026-10-03:** Phases 0–2 complete; Phase 3 built with its
 kill criterion unmeasured; Phases 4 and 5 working on Linux and Android. What
-comes next was set by the project owner, in this order:
+comes next was set by the project owner on 2026-09-28, in this order:
 
 1. **Design and UX** of the desktop window and the Android app. Every feature
-   the product brief asks for is built — [features.md](features.md) lists them
-   — and none has been designed.
+   the product brief asks for is built — [features.md](features.md) lists them.
+   Both apps were rebuilt to the owner's design direction on 2026-09-29, in
+   light only ([0048](decisions/0048-the-design-direction.md)); what remains
+   is the owner's review, then dark mode.
 2. **The relay on a server of the owner's own**, so the phone and the laptop
    reach each other from any network, not only where a direct path exists.
 3. **A formal release for Linux and Android.**
@@ -166,8 +168,8 @@ Installing is a pacman package on Arch and an install script elsewhere. Signed
 updates with rollback are deliberately not built
 ([0047](decisions/0047-versions-and-upgrades.md)): the index is copied before
 it migrates, which is the rollback that matters most. Still missing: packages
-for other distributions, observability beyond a log and the activity history,
-and the design pass.
+for other distributions, and observability beyond a log and the activity
+history. The window was designed on 2026-09-29 and awaits the owner's review.
 
 Onboarding for a zero-knowledge product is uniquely hard: a non-technical person
 must be persuaded to write down a recovery phrase *before* they have any
@@ -210,7 +212,9 @@ S23 from a quarter of an hour to seven hundred milliseconds, and to about five
 seconds on mobile data through a rendezvous service on the laptop. The app now
 also browses by folder, settles conflicts, restores deleted files, shows a
 pairing code as well as scanning one, and chooses which devices have each
-folder.
+folder. On 2026-09-29 it was rebuilt to the same design as the desktop — four
+tabs, Private Vault inside Files — which has not yet been recorded running on
+the phone.
 
 What does not exist is iOS, in any form. The prediction about `BGTaskScheduler`
 is answered on the Rust side by a sync that takes a deadline, and is untested on

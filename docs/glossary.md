@@ -234,7 +234,8 @@ self-describing: without a tombstone, a peer cannot distinguish "deleted" from
 
 **Vault** — A device's private area. Others may put files into it — a *send*,
 or a *holder* returning a file — but nobody but the owner may list it or read
-it back, and the server side checks that on every request. See *Area*.
+it back, and the server side checks that on every request. The apps call it
+**Private Vault**. See *Area*.
 
 **Vector clock** — A per-device counter map, like `{laptop: 42, phone: 12}`,
 used to determine whether one change happened before another or whether they

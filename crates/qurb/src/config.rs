@@ -1,6 +1,6 @@
 //! Where a device keeps its settings.
 //!
-//! A flat `key = value` file rather than TOML or JSON. There are six settings,
+//! A flat `key = value` file rather than TOML or JSON. There are eight settings,
 //! a person may have to edit it by hand over SSH on a machine with no editor
 //! they like, and a parser for this format is twenty lines that can be read in
 //! one sitting. A dependency would buy nesting that nothing here needs.

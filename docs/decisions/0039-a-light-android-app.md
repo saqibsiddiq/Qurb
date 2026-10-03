@@ -82,6 +82,20 @@ divided by 1024.
   3.5 MB more in total. The code figure is the noisiest, and its two highest
   readings are both the new build's, so some of that is real.
 
+## The designed app, not yet measured
+
+On 2026-09-29 the five tabs were rebuilt to the design direction
+([0048](0048-the-design-direction.md)) — still on the platform's views, with
+no new UI library. What it added that a phone carries: three weights of Inter
+(246,724 bytes of TrueType), 53 Lucide icons as vector drawables, and a few
+dozen layer and shape drawables for the glass. Sheets blur what is behind them
+only where the window manager does it (Android 12 and later); every other
+surface is a translucent fill, which costs nothing to draw.
+
+None of the table above has been repeated for it: not the APK size, not cold
+start, not memory. Until it is, the figures here describe the five-tab app, and
+"light and snappy" for the designed one is a claim with no number behind it.
+
 ## Measured and rejected
 
 **Checking whether the phone is set up without the engine.** The first call

@@ -192,7 +192,13 @@ name   = Study desktop
 port   = 0
 limit  = 10G
 downloads =
+own-files = shared
+notifications = on
 ```
+
+`qurb config <dir> key=value` changes one and checks it first; the window's
+Settings write the same file, and a running daemon picks up `limit`,
+`downloads` and `own-files` without restarting.
 
 An unknown key is an error rather than being ignored, because a misspelled
 setting that silently does nothing is a bad afternoon.
@@ -249,6 +255,12 @@ the synced folder is itself `Downloads/qurb`, where new folders used to go, the
 default becomes `Downloads/qurb-received` instead.
 
 See [decision 0037](../../docs/decisions/0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md).
+
+### `notifications`
+
+`on`, the default, or `off`: whether the desktop window raises its three
+notifications — a file sent here, one you sent collected, one that failed. The
+command line and the tray raise none either way.
 
 ## What is waiting to be delivered
 
