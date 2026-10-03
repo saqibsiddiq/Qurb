@@ -101,9 +101,12 @@ crash.
 
 Drawn at startup rather than shipped — a handful of RGBA pixels, because the
 alternative is carrying PNGs and a decoder for an image sixteen pixels across.
-Four looks: a closed ring when settled, a ring with a gap when working, grey
-when nothing is reachable, and a warning colour for a problem. No animation; a
-tray icon that animates is a tray icon people turn off.
+It is the mark ([decision 0048](../../docs/decisions/0048-the-design-direction.md)),
+drawn from the same coordinates as `packaging/qurb.svg` and the window's, so
+the panel and the applications menu agree. Four looks: the mark as it is when
+settled; a gap in its ring when working; grey when nothing is reachable; and a
+gap on a warning colour for a problem. No animation; a tray icon that animates
+is a tray icon people turn off.
 
 ## What it will not say
 

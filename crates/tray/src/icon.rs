@@ -1,23 +1,40 @@
 //! The icon, drawn rather than shipped.
 //!
 //! A handful of RGBA pixels generated at startup, because the alternative is
-//! carrying PNG files and a decoder for an image sixteen pixels across. The
-//! shapes are deliberately crude — at this size a tray icon is read as a
-//! silhouette and a colour, not as a picture.
+//! carrying PNG files and a decoder for an image sixteen pixels across.
+//!
+//! It is the mark (decision 0048): a rounded tile, a ring for your space, a
+//! stem that makes it a q, and a point of Qurb light inside — the same drawing
+//! as the window's and `packaging/qurb.svg`, in the same 32-unit coordinates,
+//! so the panel and the applications menu agree. What changes with the state
+//! is the tile's colour and whether the ring is whole. At this size an icon is
+//! read as a silhouette and a colour, not as a picture.
 
 /// Icons are square; this is the side length.
 const SIZE: u32 = 32;
 
+/// Samples per pixel along each axis. Sixteen samples a pixel is what makes
+/// the ring and the tile's corners look drawn rather than stepped.
+const GRID: u32 = 4;
+
+/// The drawing, in the mark's own coordinates: a 32 × 32 box.
+const TILE: (f32, f32, f32) = (1.0, 31.0, 9.0); // from, to, corner radius
+const RING: (f32, f32, f32) = (14.4, 6.2, 1.3); // centre (x = y), radius, half the stroke
+const STEM: (f32, f32, f32) = (20.6, 11.0, 24.5); // x, top, bottom
+const LIGHT: f32 = 1.9;
+const WHITE: [f32; 3] = [255.0, 255.0, 255.0];
+const QURB_LIGHT: [f32; 3] = [0xBD as f32, 0xE7 as f32, 0xD6 as f32];
+
 /// What the icon is saying.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Look {
-    /// A closed ring: everything is where it should be.
+    /// The mark as it is: everything is where it should be.
     Settled,
-    /// A ring with a gap: something is moving.
+    /// A gap in the ring: something is moving.
     Working,
-    /// Dimmed: running, but nothing else is reachable.
+    /// Grey: running, but nothing else is reachable.
     Alone,
-    /// A ring with a bite out of it, in a warning colour.
+    /// A gap in the ring, on a warning colour.
     Problem,
 }
 
@@ -34,47 +51,54 @@ impl From<qurb_cli::status::State> for Look {
 }
 
 impl Look {
-    /// Foreground colour, as RGB.
+    /// The tile's gradient, top left to bottom right, as RGB.
     ///
-    /// Chosen to be legible on both a light and a dark panel, which rules out
-    /// anything very pale or very dark: a tray icon does not get told which it
-    /// is sitting on.
-    fn colour(&self) -> [u8; 3] {
+    /// Each is dark enough for the white glyph to read on it and light enough
+    /// to stand off a dark panel: a tray icon is not told which it sits on.
+    /// Qurb green for the mark itself, the direction's neutral and error
+    /// colours for the other two.
+    fn tile(&self) -> ([u8; 3], [u8; 3]) {
         match self {
-            Look::Settled => [0x2B, 0x5C, 0xE6],
-            Look::Working => [0x2B, 0x5C, 0xE6],
-            Look::Alone => [0x8A, 0x8A, 0x92],
-            Look::Problem => [0xD9, 0x4B, 0x2B],
+            Look::Settled | Look::Working => ([0x3C, 0x80, 0x6A], [0x22, 0x50, 0x3F]),
+            Look::Alone => ([0x8A, 0x8D, 0x86], [0x5F, 0x62, 0x5C]),
+            Look::Problem => ([0xBA, 0x55, 0x4B], [0x86, 0x33, 0x2D]),
         }
+    }
+
+    fn ring_is_open(&self) -> bool {
+        matches!(self, Look::Working | Look::Problem)
     }
 }
 
 /// Render an icon: RGBA, `SIZE` × `SIZE`, ready for `tray-icon`.
 pub fn render(look: Look) -> (Vec<u8>, u32, u32) {
-    let [r, g, b] = look.colour();
     let mut pixels = vec![0u8; (SIZE * SIZE * 4) as usize];
-
-    let centre = (SIZE as f32 - 1.0) / 2.0;
-    let outer = SIZE as f32 * 0.46;
-    let inner = SIZE as f32 * 0.28;
+    let scale = 32.0 / SIZE as f32;
+    let samples = (GRID * GRID) as f32;
 
     for y in 0..SIZE {
         for x in 0..SIZE {
-            let dx = x as f32 - centre;
-            let dy = y as f32 - centre;
-            let distance = (dx * dx + dy * dy).sqrt();
-
-            // Antialiased by coverage over one pixel, which is the difference
-            // between a ring that looks drawn and one that looks pixelated.
-            let coverage = ring_coverage(distance, inner, outer)
-                * gap_coverage(look, dx, dy);
-
-            if coverage > 0.0 {
+            // Premultiplied sums over the pixel's samples, so an edge blends
+            // into transparency rather than into black.
+            let mut sum = [0.0f32; 4];
+            for sy in 0..GRID {
+                for sx in 0..GRID {
+                    let px = (x as f32 + (sx as f32 + 0.5) / GRID as f32) * scale;
+                    let py = (y as f32 + (sy as f32 + 0.5) / GRID as f32) * scale;
+                    if let Some(rgb) = colour_at(look, px, py) {
+                        for c in 0..3 {
+                            sum[c] += rgb[c];
+                        }
+                        sum[3] += 1.0;
+                    }
+                }
+            }
+            if sum[3] > 0.0 {
                 let i = ((y * SIZE + x) * 4) as usize;
-                pixels[i] = r;
-                pixels[i + 1] = g;
-                pixels[i + 2] = b;
-                pixels[i + 3] = (coverage.clamp(0.0, 1.0) * 255.0) as u8;
+                for c in 0..3 {
+                    pixels[i + c] = (sum[c] / sum[3]).round() as u8;
+                }
+                pixels[i + 3] = (sum[3] / samples * 255.0).round() as u8;
             }
         }
     }
@@ -82,37 +106,67 @@ pub fn render(look: Look) -> (Vec<u8>, u32, u32) {
     (pixels, SIZE, SIZE)
 }
 
-/// How much of a pixel at `distance` falls inside the ring.
-fn ring_coverage(distance: f32, inner: f32, outer: f32) -> f32 {
-    let outside = (outer - distance).clamp(0.0, 1.0);
-    let inside = (distance - inner).clamp(0.0, 1.0);
-    outside * inside
+/// The colour at one point of the mark, or `None` outside the tile.
+fn colour_at(look: Look, x: f32, y: f32) -> Option<[f32; 3]> {
+    if !inside_tile(x, y) {
+        return None;
+    }
+    let (cx, radius, half) = RING;
+    let from_centre = ((x - cx).powi(2) + (y - cx).powi(2)).sqrt();
+
+    let on_ring = (from_centre - radius).abs() <= half && !(look.ring_is_open() && in_gap(x - cx, y - cx));
+    let (stem_x, top, bottom) = STEM;
+    let on_stem = (x - stem_x).abs() <= half && (top..=bottom).contains(&y)
+        || distance(x, y, stem_x, top) <= half
+        || distance(x, y, stem_x, bottom) <= half;
+
+    if on_ring || on_stem {
+        return Some(WHITE);
+    }
+    if from_centre <= LIGHT {
+        return Some(QURB_LIGHT);
+    }
+
+    // Along the diagonal, as the SVG's gradient runs.
+    let (from, to, _) = TILE;
+    let t = (((x - from) + (y - from)) / (2.0 * (to - from))).clamp(0.0, 1.0);
+    let (start, end) = look.tile();
+    Some(std::array::from_fn(|c| start[c] as f32 + (end[c] as f32 - start[c] as f32) * t))
 }
 
-/// The gap, for the looks that have one.
-///
-/// A wedge removed from the upper right, which reads as "in motion" at a glance
-/// without needing animation — a tray icon that animates is a tray icon people
-/// turn off.
-fn gap_coverage(look: Look, dx: f32, dy: f32) -> f32 {
-    match look {
-        Look::Settled | Look::Alone => 1.0,
-        Look::Working | Look::Problem => {
-            let angle = dy.atan2(dx);
-            // Roughly the 1-to-2-o'clock sector.
-            let in_gap = (-1.2..-0.35).contains(&angle);
-            if in_gap {
-                0.0
-            } else {
-                1.0
-            }
-        }
+/// Within the rounded square, corners included.
+fn inside_tile(x: f32, y: f32) -> bool {
+    let (from, to, r) = TILE;
+    if !(from..=to).contains(&x) || !(from..=to).contains(&y) {
+        return false;
     }
+    // Only the four corner squares need the circle test.
+    let cx = x.clamp(from + r, to - r);
+    let cy = y.clamp(from + r, to - r);
+    distance(x, y, cx, cy) <= r
+}
+
+/// The gap in the ring, for the looks that have one: the lower left, from
+/// about seven o'clock to nine, where the stem does not cover it. Reads as
+/// "in motion" without animating — a tray icon that animates is a tray icon
+/// people turn off.
+fn in_gap(dx: f32, dy: f32) -> bool {
+    // y grows downwards, so a positive angle is below the centre.
+    (1.95..3.0).contains(&dy.atan2(dx))
+}
+
+fn distance(x: f32, y: f32, to_x: f32, to_y: f32) -> f32 {
+    ((x - to_x).powi(2) + (y - to_y).powi(2)).sqrt()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pixel(pixels: &[u8], x: u32, y: u32) -> [u8; 4] {
+        let i = ((y * SIZE + x) * 4) as usize;
+        [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
+    }
 
     #[test]
     fn an_icon_is_the_size_it_claims() {
@@ -141,5 +195,22 @@ mod tests {
         for look in [Look::Working, Look::Alone, Look::Problem] {
             assert_ne!(render(look).0, settled, "{look:?} looks identical to Settled");
         }
+    }
+
+    /// It is the mark: a tile with rounded corners, white where the ring and
+    /// the stem are, the light at the centre — and a gap only while working.
+    #[test]
+    fn it_draws_the_mark() {
+        let (settled, _, _) = render(Look::Settled);
+        assert_eq!(pixel(&settled, 0, 0)[3], 0, "a corner outside the rounded tile");
+        assert_eq!(pixel(&settled, 16, 2)[3], 255, "the tile's top edge, inside");
+        assert_eq!(pixel(&settled, 14, 14)[..3], [0xBD, 0xE7, 0xD6], "the light at the centre");
+        assert_eq!(pixel(&settled, 20, 20)[..3], [255, 255, 255], "the stem");
+        assert_eq!(pixel(&settled, 8, 14)[..3], [255, 255, 255], "the ring, on its left");
+
+        // The lower left of the ring is where the gap is.
+        let (working, _, _) = render(Look::Working);
+        assert_eq!(pixel(&settled, 9, 17)[..3], [255, 255, 255], "the ring at eight o'clock");
+        assert_ne!(pixel(&working, 9, 17)[..3], [255, 255, 255], "no gap while working");
     }
 }

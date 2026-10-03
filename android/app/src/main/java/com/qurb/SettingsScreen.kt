@@ -63,8 +63,12 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.groupTitle(page, "This phone")
         var group = kit.group(page)
         kit.item(group, "Name", "${android.os.Build.MODEL ?: "Phone"} — what your other devices call it")
+        // Said as it is: the Keystore key is not tied to unlocking the phone
+        // (AndroidKeyStore.kt says why), so the screen lock guards the app,
+        // not the key.
         kit.item(group, "Key protection",
-            "In the Android Keystore, behind this phone's own lock. Nobody without the phone unlocked can use it.")
+            "In the Android Keystore: only Qurb on this phone can use it. It works while the phone " +
+                "is locked, so syncing in the background can too — your screen lock keeps others out of the app.")
 
         kit.groupTitle(page, "Devices")
         group = kit.group(page)
@@ -97,7 +101,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.groupTitle(page, "Notifications")
         group = kit.group(page)
         kit.item(group, "On this phone",
-            "Qurb doesn't raise notifications here yet. What was sent to you is in Transfers, from Home.")
+            "Qurb doesn't raise notifications here yet. What was sent to you is in Activity, from Home.")
 
         kit.groupTitle(page, "Recovery")
         group = kit.group(page)
