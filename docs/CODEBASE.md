@@ -718,8 +718,9 @@ qurb/
 │
 └── website/               The website, in the apps' design: the window's
                            tokens and components, its icons (generated from
-                           its sprite), its words. Next.js, and otherwise
-                           separate — nothing here depends on it or builds it.
+                           its sprite), its words. Next.js on Vercel, deployed
+                           by every push to main; otherwise separate — nothing
+                           here depends on it or builds it.
 ```
 
 **The `crates/` vs `experiments/` split is load-bearing.** Anything in

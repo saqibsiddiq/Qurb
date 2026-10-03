@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 
-export const siteUrl = 'https://qurb.cloud'
+/** Where the site is served. Vercel redirects qurb.cloud here, so this is the
+ *  canonical address, not the bare domain. */
+export const siteUrl = 'https://www.qurb.cloud'
 
 /** Where the code is. Public, so every page may link into it. */
 export const repoUrl = 'https://github.com/saqibsiddiq/Qurb'

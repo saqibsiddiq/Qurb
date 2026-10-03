@@ -38,7 +38,10 @@ export default function PrivacyPage() {
           It sets no cookies and runs no analytics — see <Link href="/cookie-policy">cookies</Link>.
         </li>
         <li>It loads nothing from other sites: even its font is served from here.</li>
-        <li>Whoever hosts it may keep the ordinary logs any web server keeps, such as addresses and pages asked for.</li>
+        <li>
+          It is hosted by Vercel, which keeps the ordinary logs any web host keeps, such as addresses and pages asked
+          for.
+        </li>
       </ul>
     </DocPage>
   )

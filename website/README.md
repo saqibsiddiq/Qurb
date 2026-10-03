@@ -1,8 +1,8 @@
 # website/
 
-The website for Qurb, at qurb.cloud. It shares a repository with the engine
-and nothing else: nothing in `crates/` or `android/` depends on it, and the
-Rust workspace builds none of it.
+The website for Qurb, at [www.qurb.cloud](https://www.qurb.cloud). It shares a
+repository with the engine and nothing else: nothing in `crates/` or
+`android/` depends on it, and the Rust workspace builds none of it.
 
 Next.js 16 with the App Router, React 19 and TypeScript; Tailwind CSS 4 for its
 reset and a few layout utilities; linted with oxlint. Every page is static.
@@ -13,6 +13,25 @@ npm run dev      # http://localhost:3000, listening on every interface
 npm run build
 npm run lint
 ```
+
+## Deploying
+
+**Every push to `main` deploys it.** The site is the Vercel project `qurb`
+(team `saqubs-projects`), connected to this repository, with its Root
+Directory set to `website` and Node 24. There is nothing to run by hand:
+push, and Vercel builds `next build` here and serves it. Its state is on the
+commit in GitHub, and `npx vercel inspect <deployment> --logs` shows a build.
+
+`qurb.cloud` redirects to `www.qurb.cloud`, so `siteUrl` in
+`app/site-config.ts`, `robots.txt` and `sitemap.xml` all name the `www`
+address; `qurb-theta.vercel.app` serves the same deployment.
+
+**From 20 July to 3 October 2026 nothing deployed.** The site moved from the
+repository's root into `website/` and the project went on building from the
+root, which no longer held a Next.js app: every build since failed, and
+qurb.cloud served the July landing page all that time. Setting the Root
+Directory fixed it. A failed build fails quietly — a red mark on a commit —
+so a change to the site is not finished until the live page shows it.
 
 ## It looks like the apps, on purpose
 
@@ -87,9 +106,6 @@ warned.
 ## Not done
 
 - **Light only**, like the apps, until their dark mode is designed.
-- **Not deployed from here.** Nothing in the repository says where qurb.cloud
-  is hosted; the privacy page says only that a host may keep ordinary request
-  logs.
 - **Checked in Chromium only**, at 1440 and 390 pixels wide, from screenshots
   of the production build on 2026-10-03. Not looked at in Firefox or Safari,
   or by the owner.
