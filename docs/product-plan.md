@@ -26,8 +26,8 @@ Android. The design is built directly in the apps, from the owner's direction
 owner made, is [design/brief.md](design/brief.md)
 ([0048](decisions/0048-the-design-direction.md)). Both apps were built to it
 on 2026-09-29, in light only, and wait for the owner's look; the Android app's
-design has not yet been recorded running on a device. Dark mode follows the
-review.
+was walked on the S23 on 2026-10-03. Dark mode follows the review. On 2026-10-03 the owner asked to focus on completing the project; §13
+is the list, checked off as it goes.
 
 **Four things the brief asks for disagreed with decisions already recorded.**
 All four were decided on 2026-09-25, each the brief's way — see §3. Three are
@@ -288,8 +288,8 @@ Since 2026-09-29:
   [design/brief.md](design/brief.md). The desktop's eight tabs became a
   sidebar and the phone's five became four, with Private Vault on both and
   Transfers appearing only while something moves. Light only; the owner has
-  not yet reviewed either, and the phone's has not been recorded running on a
-  device. On the phone, adding a file now puts it in the area on screen —
+  not yet reviewed either. The phone's was walked on the S23 on 2026-10-03
+  ([phase 5](phases/phase-5-mobile.md#the-designed-app-on-the-s23)). On the phone, adding a file now puts it in the area on screen —
   [0049](decisions/0049-adding-a-file-puts-it-where-you-are-looking.md).
 
 Still as the inventory says: a replica freeing space, and everything in
@@ -604,3 +604,50 @@ what it needs now is the owner's review at the checkpoints in
 server and a formal release need no further decision except where to host the
 relay. §4.7 is still open, and is needed before any storage screen promises
 anything for replicas.
+
+## 13. Completing it
+
+Set on 2026-10-03, when the owner asked to focus on completing the project.
+"Complete" is §5A and §8 together: every feature built, and seen working
+between a laptop and a phone, for all four device pairs. Four milestones, in
+the owner's order; each item is checked off here when it is done, not when
+it is started.
+
+**1. Design, finished and seen on the phone.**
+- [x] The designed Android app installed on the S23 and every screen walked —
+  2026-10-03; it had been on the phone since 2026-09-29 ([phase 5](phases/phase-5-mobile.md#the-designed-app-on-the-s23)).
+  Walking it found the laptop four days out of sync, from a folder typed
+  without a slash ([phase 4](phases/phase-4-product.md#a-folder-typed-without-a-slash)).
+- [ ] The owner's review of both apps at the checkpoints; then dark mode.
+- [ ] Moving a file into and out of Private Vault, on both
+  ([brief §2](design/brief.md)) — an engine addition.
+- [ ] The three notifications on the phone.
+- [ ] A preview when comparing a conflict's two versions.
+- [ ] The designed app measured against [0039](decisions/0039-a-light-android-app.md).
+
+**2. Syncing from anywhere, through the owner's own server.** *Later, by the
+owner's choice on 2026-10-03: the laptop and Tailscale Funnel stay until
+then.*
+- [ ] The rendezvous service, relay and push on the owner's VPS
+  (`packaging/server/deploy.sh`, never yet run against a real server); both
+  devices pointed at it; Funnel retired.
+- [ ] A phone on mobile data falling back to the relay, seen; the
+  direct-connection rate measured ([measuring-connectivity.md](measuring-connectivity.md)).
+
+**3. Every pair verified on hardware.**
+- [ ] On the S23: removing a device, the share sheet sending to a device,
+  pairing by the phone's own code, a folder shared with chosen devices, a
+  folder kept remotely. Removing the laptop, pairing again and sending to it
+  are in the phone's history for 2026-09-29; the rest still to watch.
+- [ ] Android↔Android — on the emulator until the owner can borrow a second
+  phone, then on two real ones.
+- [ ] A phone left alone for a day: battery and survival (Phase 5's kill
+  criterion).
+
+**4. Release.**
+- [ ] Decided and recorded: how a replica frees space (§4.7), and whether
+  there is any recovery beyond the 24 words.
+- [ ] Licence files for the licence `Cargo.toml` declares.
+- [ ] A signed release APK on the S23 (leaving the debug build means
+  uninstalling and enrolling again from the 24 words), the Arch package
+  installed, a GitHub Release, and the website's Download page pointing at it.

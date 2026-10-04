@@ -84,7 +84,14 @@ class HomeScreen(app: MainActivity) : Screen(app) {
 
     private fun show(state: State) {
         val waiting = state.outstanding.files
-        val synced = Engine.lastSynced(app)
+        // The later of the app's own note and the engine's record of when each
+        // device was last reached. The note began with this screen, so on a
+        // phone upgraded to it, it is empty until the next sync that reaches a
+        // device -- and Home said "Not synced yet" of a phone that had synced
+        // for weeks. The engine has recorded every device it reached since
+        // 2026-09-27.
+        val synced = listOfNotNull(Engine.lastSynced(app), state.peers.mapNotNull { it.lastSeen }.maxOrNull())
+            .maxOrNull()
         when {
             state.peers.isEmpty() -> hero(
                 "away", R.drawable.ic_monitor_smartphone, "Add your first device",

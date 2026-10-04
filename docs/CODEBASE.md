@@ -18,7 +18,7 @@ automatic updater, by decision. Phase 5 has an Android app on a real phone that
 syncs with a laptop in both directions, shares into qurb from anywhere on the
 phone, and is woken by push; iOS is untouched. Both apps were rebuilt to the
 owner's design direction on 2026-09-29, in light only; the Android app's
-designed screens have not yet been recorded running on a device. What comes
+were walked on a Galaxy S23 on 2026-10-03. What comes
 next, in the owner's order: the owner's review of the design, then the relay on
 a server of the owner's own, then a formal release for Linux and Android.
 [features.md](features.md) lists everything that exists, by where a person
@@ -839,7 +839,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-755 tests in 88 test binaries on Linux, all passing (2026-10-03, debug build,
+758 tests in 89 test binaries on Linux, all passing (2026-10-03, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
@@ -1056,8 +1056,10 @@ who has each folder (sharing, and keeping it only remotely), Recently deleted,
 space, syncing and the version. Activity is reached from Home, and Transfers is
 a bar that appears only while something moves. Before the design the same
 features were five tabs — Home, Vault, Devices, Transfers, Settings — and it is
-through those that the hardware checks below were made; the designed screens
-have not yet been recorded running on a device. See
+through those that most of the hardware checks below were made. The designed
+screens were walked on the S23 on 2026-10-03 — see
+[phases/phase-5-mobile.md](phases/phase-5-mobile.md#the-designed-app-on-the-s23),
+and
 [android/README.md](../android/README.md). Building it found a bug nothing else could: UniFFI keeps only the *last*
 `#[uniffi::export] impl` block for an object and silently discards the others,
 so eight methods were missing from the generated Kotlin and Swift while every
@@ -1191,10 +1193,10 @@ Six things are known-missing rather than merely unbuilt:
    folder with chosen devices, keeping a folder only remotely and removing a
    device are tested with several devices in one test process and in the
    desktop window; recently deleted and settling a conflict are verified
-   between the Galaxy S23 and the laptop. On the phone, removing a device, the
-   share sheet's *send to a device* and the phone showing a pairing code have
-   not been tried — and the designed app, rebuilt on 2026-09-29, has not been
-   recorded running on any device, nor measured against
+   between the Galaxy S23 and the laptop. On the phone, the share sheet's *send
+   to a device* and the phone showing a pairing code have not been watched
+   (removing a device and sending are in its history), and the designed app,
+   walked on the S23 on 2026-10-03, has not been measured against
    [decisions/0039](decisions/0039-a-light-android-app.md). See
    [features.md](features.md) for which is which.
 

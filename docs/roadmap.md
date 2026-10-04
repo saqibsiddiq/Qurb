@@ -213,8 +213,7 @@ seconds on mobile data through a rendezvous service on the laptop. The app now
 also browses by folder, settles conflicts, restores deleted files, shows a
 pairing code as well as scanning one, and chooses which devices have each
 folder. On 2026-09-29 it was rebuilt to the same design as the desktop — four
-tabs, Private Vault inside Files — which has not yet been recorded running on
-the phone.
+tabs, Private Vault inside Files — and walked on the phone on 2026-10-03.
 
 What does not exist is iOS, in any form. The prediction about `BGTaskScheduler`
 is answered on the Rust side by a sync that takes a deadline, and is untested on

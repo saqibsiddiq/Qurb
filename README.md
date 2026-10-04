@@ -20,8 +20,8 @@ next, in that order.**
 - The **Android app** syncs with a laptop both ways, from home Wi-Fi or mobile
   data, is woken by push within seconds, takes shares from any app, and shows
   its files in the system file picker — verified on a Galaxy S23. Its screens
-  were rebuilt to the same design on 2026-09-29, which has not yet been
-  recorded running on the phone.
+  were rebuilt to the same design on 2026-09-29 and walked on the phone on
+  2026-10-03.
 - Not built yet: dark mode, the relay running on a server, a formal release,
   iOS, macOS and Windows. Unmeasured: battery over a day on a phone, how often
   a direct connection works across other networks, and what the design costs
@@ -108,7 +108,7 @@ cargo run --release -p qurb-peer --example demo -- /tmp/device-a /tmp/device-b
 
 ```bash
 cargo build --release
-cargo test --workspace         # 755 tests in 88 binaries (2026-10-03)
+cargo test --workspace         # 758 tests in 89 binaries (2026-10-03)
 ./scripts/desktop-smoke.sh     # the real window, driven end to end
 ```
 

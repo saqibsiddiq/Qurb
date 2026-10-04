@@ -80,6 +80,15 @@ closed runs after that and redraws only if it found something. What they are
 built from — rows, file states, groups, toggles, attention, empty states,
 sheets — is one file, `Kit.kt`, the counterpart of the desktop's `core.js`.
 
+**A change made in the app goes at once.** Sending a file, adding, renaming,
+moving or deleting one, choosing a device to keep the Private Vault, and adding
+a device each start a sync straight away (`MainActivity.madeChange`); a change
+made while one is running gets another pass after it. A phone has no daemon to
+pass a change on the way the desktop does, so before this a change waited for
+the next background pass — an hour away once push works — or for *Sync now*.
+A send says how it went: *Sending to Laptop…*, then *Sent to Laptop* if the
+laptop collected it during the pass, or *Waiting for Laptop* if it is off.
+
 **It is a share target.** `ACTION_SEND` and `ACTION_SEND_MULTIPLE`, for any
 type, and it needs no network to work: the file is written into the folder and
 indexed there and then, with every other device switched off. There is no
@@ -289,11 +298,10 @@ replaced by uninstalling — which deletes the phone's key and index. See
   the device that sent them still has them. Builds before then did not record
   where a received file came from, and a phone cannot learn it afterwards
   without asking; it errs the safe way, never offering to free such a file.
-- **Seen on a device, in its designed form.** The design was built and
-  compiled on 2026-09-29; nothing records it running on the S23 or the
-  emulator, the owner has not reviewed it, and decision 0039's measurements
-  have not been repeated for it. See
-  [phases/phase-5-mobile.md](../docs/phases/phase-5-mobile.md#the-designed-app).
+- **Measured, and reviewed, in its designed form.** Every place was walked on
+  the S23 on 2026-10-03; decision 0039's measurements have not been repeated
+  for it, and the owner has not reviewed it. See
+  [phases/phase-5-mobile.md](../docs/phases/phase-5-mobile.md#the-designed-app-on-the-s23).
 - **A dark theme.** Light only until the light design is approved; the night
   palette of the earlier screens was removed rather than left under the new
   one.

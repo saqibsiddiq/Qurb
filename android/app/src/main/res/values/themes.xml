@@ -69,6 +69,10 @@
         <item name="fontFamily">@font/inter</item>
         <item name="materialButtonStyle">@style/Widget.Qurb.Button</item>
         <item name="textAppearanceLabelLarge">@style/Text.Button</item>
+        <!-- Its question (Private Vault, Files, or a device) is an alert
+             dialog. Without this it took Material's own colours, a lilac
+             surface, as the one screen left outside the design. -->
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Qurb.Dialog</item>
         <!-- The activity's label is what the share sheet puts on its button;
              as a window title it only repeats the screen's own heading in
              smaller type. Both spellings: this is an AppCompat theme, which

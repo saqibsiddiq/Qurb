@@ -148,9 +148,9 @@ only**, awaiting the owner's look.
   in WebKitGTK and driven end to end by `scripts/desktop-smoke.sh`.
 - **Android**, in `android/app/src/main`: the same tokens as resources, the
   same places (Home, Files, Devices, Settings; Private Vault from Files), on
-  the platform's own views — no new UI framework on either side. Built and
-  compiled; nothing records it running on a device yet
-  ([phase 5](../phases/phase-5-mobile.md#the-designed-app)). One rule came out
+  the platform's own views — no new UI framework on either side. Walked on
+  the S23 on 2026-10-03
+  ([phase 5](../phases/phase-5-mobile.md#the-designed-app-on-the-s23)). One rule came out
   of it: adding a file puts it in the area on screen
   ([0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)).
 

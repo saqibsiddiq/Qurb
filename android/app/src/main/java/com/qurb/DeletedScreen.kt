@@ -40,10 +40,13 @@ class DeletedScreen(app: MainActivity) : Screen(app) {
                 for (d in deleted) {
                     val days = (RETENTION_DAYS - (System.currentTimeMillis() / 1000 - d.deletedAt) / 86400).coerceAtLeast(0)
                     val by = d.deletedBy?.let { " on $it" } ?: ""
+                    // Short enough for two lines beside Restore. "Deleted" is
+                    // what the screen is called, and the days left is the fact
+                    // a person came for -- it was the part cut off.
                     kit.row(
                         page, States.icon(d.path), d.path.substringAfterLast('/'),
-                        "Deleted ${Words.ago(d.deletedAt)}$by  ·  " +
-                            if (days == 0L) "Expires today" else "Expires in $days day${if (days == 1L) "" else "s"}",
+                        "${Words.ago(d.deletedAt)}$by  ·  " +
+                            if (days == 0L) "last day" else "$days day${if (days == 1L) "" else "s"} left",
                         trail = kit.button("Restore", Kit.Style.SECONDARY, R.drawable.ic_rotate_ccw, small = true) {
                             restore(d)
                         },

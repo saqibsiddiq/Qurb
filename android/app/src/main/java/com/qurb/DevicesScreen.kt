@@ -235,9 +235,11 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
                     if (keep) engine().addHolder(peer.fingerprint) else engine().removeHolder(peer.fingerprint)
                 }
                 app.say(if (keep) "${peer.name} keeps your Private Vault from the next sync" else "Stopped")
+                // The next sync is now: choosing a device to keep the vault is
+                // a change it should act on while the person is looking.
+                if (keep) app.madeChange() else app.changed()
             } catch (e: Exception) {
                 app.fail("Could not change that", e)
-            } finally {
                 app.changed()
             }
         }

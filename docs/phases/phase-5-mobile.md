@@ -33,12 +33,12 @@ record](../roadmap.md).
 | showing a pairing code on the phone | ✅ on the emulator; ◻ not yet paired that way |
 | the share sheet sending to one device | ◻ built, not yet tried |
 | which devices have each folder, and keeping one only remotely | ✅ on the emulator; ◻ not yet between real devices |
-| removing a device | ◻ built; not tried on the phone, which would have removed the laptop |
-| designed to the owner's direction: four tabs, Private Vault inside Files | ◻ built and compiled; not recorded running on a device ([below](#the-designed-app)) |
+| removing a device | ✅ on the S23 on 2026-09-29, from its history: the laptop removed, then paired again |
+| designed to the owner's direction: four tabs, Private Vault inside Files | ✅ on the S23, every place walked, 2026-10-03 ([below](#the-designed-app-on-the-s23)) |
 | adding a file into the area on screen | 🧪 in the FFI's tests ([0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-755 tests pass in 88 test binaries on Linux (2026-10-03, debug build, the
+758 tests pass in 89 test binaries on Linux (2026-10-03, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -1296,7 +1296,8 @@ not blur. The night palette was removed: light only until dark is designed.
 tests passed on the laptop. The app was built: a debug APK on the laptop is
 dated 2026-09-29, a little under two hours before the commit. **Nothing records it running**
 — not on the S23, not on the emulator — and no screen of it has been looked
-at in this record. Nor has it been measured against decision 0039's table, so
+at in this record. (It had run: the phone's own history, read on 2026-10-03,
+says so — [below](#the-designed-app-on-the-s23).) Nor has it been measured against decision 0039's table, so
 whether it is still light and snappy is, for now, unknown.
 
 **Found while writing this up**, 2026-10-03, from the code:
@@ -1318,6 +1319,76 @@ whether it is still light and snappy is, for now, unknown.
 (brief §2); notifications on the phone; comparing a conflict's two versions
 beyond who, when and how big; and everything the earlier sections list as not
 yet tried on the phone.
+
+## The designed app on the S23
+
+**2026-10-03, Galaxy S23 (Android 16), over wireless debugging.** The build
+from that day installed over the one on the phone, keeping its data and key;
+then every place walked by driving the phone from the laptop: Home, its
+syncing state and the Transfers bar, Files, a file's sheet, the ⋯ sheet,
+Private Vault, Recently deleted, Devices, a device's sheet, *Add a device*,
+Settings and its sheets, Activity, and the share sheet's question — opened
+and cancelled, nothing saved. Read from the accessibility tree and from
+screenshots; no file was deleted, freed or moved and no device removed.
+
+**It had been on the phone since 2026-09-29.** The phone's package record
+puts the previous install at 03:17 that night, a minute after a debug build of
+the redesign, and the phone's history shows what followed: the laptop removed
+from the phone at 03:18, paired again at 03:46, and fourteen sends to it
+between 03:46 and 04:54, each collected. So removing a device, pairing and
+sending from the phone ran on hardware, through the new screens, before the
+section above was written. Which way the pairing went, and which screen sent,
+the history does not say.
+
+**Then nothing synced for four days.** From 2026-09-30 the laptop's desktop
+had been running a different, empty folder — the cause and the fix are in
+[phase 4](phase-4-product.md#a-folder-typed-without-a-slash). With it back on
+`~/qurb`, *Sync now* reached the laptop directly over the home Wi-Fi and Home
+said *Everything is synced … synced just now*.
+
+Found, and fixed the same day:
+
+- **Home said *Not synced yet*.** True of this pairing: re-pairing at 03:46
+  reset the engine's record of when the laptop was last reached, and nothing
+  had reached it since. But a phone that merely upgraded would have said the
+  same, because the note Home read is new with the design while the engine's
+  own record is older. Home now takes the later of the two.
+- **Recently deleted cut off the days left** — "Expires in 2…", the part a
+  person opens the screen for. Now "5 days ago on saqib · 25 days left", which
+  fits two lines beside *Restore*. Seen on the phone.
+- **The share sheet's question was Material's own lilac dialog**, the one
+  screen outside the design: its theme never named the app's dialog style. It
+  does now. Seen on the phone.
+- **A send from the app waited for *Sync now*.** Reported by the owner the same
+  evening. Sending (from Home, a file or a device), adding, renaming, moving
+  and deleting files, choosing a device to keep the vault, and pairing by
+  scanning only redrew the screen; a phone has no daemon to pass a change on,
+  so it waited for the next background pass, up to an hour away with push.
+  Each now starts a sync at once (`MainActivity.madeChange`), another runs
+  after one already under way, and a send says *Sending to …*, then *Sent to
+  …* or *Waiting for …*. Installed on the S23 and seen working there by the
+  owner: a send reached the laptop with no *Sync now*.
+
+Seen, and as designed: Home's states and the ring that turns while syncing,
+the Transfers bar, each file's state in words, a file's actions, sorting and
+*Save 21 files to this phone*, Private Vault apart from Files, devices as
+cards with when each was last seen, the two Settings lines corrected that
+morning, Background sync's record of its last run, and Activity.
+
+Two things true of the owner's files, recorded rather than changed:
+
+- **18 of the 21 files are on the phone only.** The laptop freed its copies on
+  2026-09-29 — its history says "local copy freed; another device keeps it"
+  for each — and the phone rightly marks them *Only copy here*. *Keep on this
+  device* on the laptop brings any back.
+- **Nothing keeps a backup of the phone's Private Vault.** Removing the laptop
+  ended that, as [decision 0041](../decisions/0041-removing-a-device.md) says
+  it should, and pairing again does not restore it.
+
+Not done here: measuring the designed app against
+[decision 0039](../decisions/0039-a-light-android-app.md); the share sheet
+actually saving or sending; pairing by the phone's own code, watched; and the
+owner's review.
 
 ## Deliberately left undone
 

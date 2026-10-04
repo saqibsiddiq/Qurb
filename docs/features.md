@@ -95,11 +95,11 @@ Files or from Private Vault goes into that area
 Designed on 2026-09-29 from the owner's direction, in the desktop's language:
 four tabs under a floating bar — Home, Files, Devices, Settings — with Private
 Vault inside Files, Activity from Home, and Transfers as a bar that appears
-while something moves. Light only. **Built and compiled; nothing records the
-designed app running on a device yet.** The marks below are for the
-*features*: a ✅ or 🧪 was earned through the screens the design replaced,
-which called the same engine functions, so it says the feature works — not
-that its new screen has been seen.
+while something moves. Light only. **Every place walked on the Galaxy S23 on
+2026-10-03**; it had been on the phone since 2026-09-29. The marks are for the
+*features*: most were earned through the screens the design replaced, which
+called the same engine functions; where a mark comes from the designed screens
+themselves, the row says so.
 
 ### Setting up
 
@@ -115,7 +115,7 @@ was walked through on the emulator.
 
 | place | what it shows and does | |
 |---|---|---|
-| **Home** | one state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Not synced yet*, *Add your first device*; one action, *Send to device*; when it last synced; *Sync now*, or pull down; Recent, and *See all* for Activity | ✅ sync · ◻ the states |
+| **Home** | one state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Not synced yet*, *Add your first device*; one action, *Send to device*; when it last synced; *Sync now*, or pull down; Recent, and *See all* for Activity | ✅ on the S23 |
 | | a file with two versions: attention, then a sheet with both — keep this version, the other, or both ([0043](decisions/0043-settling-a-conflict.md)) | ✅ |
 | **Files** | the shared area a folder at a time: search across every folder, breadcrumbs, folders as tiles, sort by name, newest or largest; each file's state — *On this phone*, *Available elsewhere*, *Only copy here*, *Downloading* | 🧪 |
 | | per file, in a sheet: open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move to a folder, delete (into Recently deleted) | 🧪 · freeing and getting back ✅ |
@@ -123,7 +123,7 @@ was walked through on the emulator.
 | **Private Vault** | from Files: the phone's own files, in the same browser; *Add files* here adds privately, whatever the setting says | 🧪 in the FFI's tests |
 | **Devices** | this phone and each paired device as cards, with when each was last seen; *Add* — scan a code, **show a code on this phone**, or type one | ✅ scan · ◻ show |
 | | a device's sheet: *Keep a backup of my Private Vault* — a device that keeps a copy of the phone's own files, so the phone can free space | ✅ |
-| | send files to it; remove it, saying first what that does ([0041](decisions/0041-removing-a-device.md)) | 🧪 |
+| | send files to it; remove it, saying first what that does ([0041](decisions/0041-removing-a-device.md)) | ✅ both in the S23's history, 2026-09-29 |
 | **Settings** | grouped lists: this phone (name, key protection); devices; storage — space used, who has each folder (choose devices, keep on this phone or download when opened), Recently deleted, *free unused space*; privacy — *Keep new files private*; notifications (none on the phone yet); the recovery phrase; appearance; advanced — background sync, rendezvous, relay, version | 🧪 |
 | **Activity** | from Home: what happened, newest first, sixty at a time | ✅ |
 | **Recently deleted** | from Files and Settings: thirty days, when each expires; restore — on every device — or delete for good ([0042](decisions/0042-recently-deleted.md)) | ✅ |
@@ -134,7 +134,7 @@ was walked through on the emulator.
 | | | |
 |---|---|---|
 | **Share sheet** | anything on the phone can be shared into qurb, with no network and no other device switched on | ✅ |
-| | it asks where: *Save to Private Vault*, *Save to Files, on all your devices*, or *Send to* a paired device; with none paired it saves without asking | ◻ |
+| | it asks where: *Save to Private Vault*, *Save to Files, on all your devices*, or *Send to* a paired device; with none paired it saves without asking | ✅ the question, seen · ◻ saving or sending from it |
 | **The system file picker and Files app** | qurb's files appear there, listed from the index; a freed file downloads when opened; other apps can save into qurb | 🧪 |
 | **Background sync** | WorkManager, every 15 minutes — every hour once a push has arrived in the last week | ✅ |
 | **Push** | a change on the laptop wakes the sleeping phone, through Firebase; about five seconds from a change on the laptop to the phone syncing it, on mobile data with the screen off | ✅ |
@@ -232,8 +232,7 @@ Stated plainly so that a design does not assume it:
 
 - **The relay on a server.** Next, after design and UX. Until then a phone on a
   network that blocks a direct path cannot sync.
-- **The owner's review of the design**, on both. The Android app's design is
-  built and compiled and not yet recorded running on a device.
+- **The owner's review of the design**, on both.
 - **Dark mode** — after the light design is approved. The phone's earlier dark
   theme was removed with the redesign rather than left under it.
 - **Notifications on the phone.** Settings says so.

@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.FileEntry
 import uniffi.qurb_mobile.PeerInfo
+import uniffi.qurb_mobile.SyncOutcome
 import uniffi.qurb_mobile.Waiting
 import java.io.File
 
@@ -53,6 +54,16 @@ class MainActivity : AppCompatActivity() {
     /** Whether a sync this screen started is still running. Home shows it. */
     var syncing = false
         private set
+
+    /** Asked for while a sync was running: another runs when it ends, so a
+     *  change made part-way through is not left for the hour after. Quiet
+     *  unless any of the asks was somebody pressing Sync now. */
+    private var again = false
+    private var againQuiet = true
+
+    /** What to do when the running sync ends, and when the one after it does. */
+    private val afterThisSync = mutableListOf<suspend (SyncOutcome?) -> Unit>()
+    private val afterNextSync = mutableListOf<suspend (SyncOutcome?) -> Unit>()
 
     /** Whether this launch has freed what nothing needs yet. Once is enough. */
     private var housekept = false
@@ -284,6 +295,22 @@ class MainActivity : AppCompatActivity() {
         updateDock()
     }
 
+    /**
+     * After a change made here that the other devices should have: files
+     * added, renamed, moved or deleted, a device chosen to keep a backup, a
+     * device added. Redraws, and starts a sync now.
+     *
+     * A phone has no daemon to notice a change and tell the others, the way
+     * the desktop does. Without this, a change made in the app waited for the
+     * next background pass -- an hour away once push is working -- or for
+     * somebody to press Sync now, which is what people found themselves doing
+     * after every send.
+     */
+    fun madeChange() {
+        changed()
+        sync(quiet = true)
+    }
+
     // ----------------------------------------------------------- transfers
 
     private var turning: ObjectAnimator? = null
@@ -417,12 +444,27 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- sync
 
-    fun sync() {
-        if (syncing) return
+    /**
+     * Sync with every paired device that answers. `quiet` when it was started
+     * by a change rather than by somebody asking: the Transfers bar shows it
+     * moving, and its outcome is not announced. `then` runs when the pass that
+     * includes this request has ended -- with its outcome, or null if it
+     * failed.
+     */
+    fun sync(quiet: Boolean = false, then: (suspend (SyncOutcome?) -> Unit)? = null) {
+        if (syncing) {
+            // The running pass may have started before this change existed.
+            again = true
+            againQuiet = againQuiet && quiet
+            then?.let { afterNextSync += it }
+            return
+        }
+        then?.let { afterThisSync += it }
         syncing = true
         changed()
 
         lifecycleScope.launch {
+            var result: SyncOutcome? = null
             try {
                 val engine = Engine.open(this@MainActivity)
                 // 25 seconds: generous for someone watching, and still inside
@@ -434,8 +476,9 @@ class MainActivity : AppCompatActivity() {
                     // devices on its own Wi-Fi answering.
                     Engine.hearingTheNetwork(this@MainActivity) { engine.syncWithin(25u) }
                 }
+                result = outcome
                 if (outcome.reached > 0u) Engine.noteSynced(this@MainActivity)
-                say(
+                if (!quiet) say(
                     when {
                         outcome.reached == 0u && outcome.unreachable == 0u && outcome.timedOut ->
                             "Ran out of time before reaching a device. Try again."
@@ -455,11 +498,45 @@ class MainActivity : AppCompatActivity() {
                     }
                 )
             } catch (e: Exception) {
-                fail("Sync failed", e)
+                if (quiet) android.util.Log.w("qurb", "a sync after a change failed", e)
+                else fail("Sync failed", e)
             } finally {
                 syncing = false
                 changed()
+                val done = afterThisSync.toList()
+                afterThisSync.clear()
+                for (callback in done) callback(result)
+                if (again) {
+                    val quietly = againQuiet
+                    again = false
+                    againQuiet = true
+                    afterThisSync += afterNextSync
+                    afterNextSync.clear()
+                    sync(quiet = quietly)
+                }
             }
+        }
+    }
+
+    /**
+     * Files just sent to one device: start a sync, and say how it went (brief
+     * §2) -- *Sent to Laptop* if the device collected them during the pass,
+     * which waits up to ten seconds for that, or *Waiting for Laptop* if it is
+     * switched off or out of reach.
+     */
+    private fun sendGoes(to: PeerInfo, names: List<String>) {
+        say(if (names.size == 1) "Sending ${names[0]} to ${to.name}…" else "Sending ${names.size} files to ${to.name}…")
+        sync(quiet = true) {
+            val left = runCatching {
+                withContext(Dispatchers.IO) { Engine.open(this@MainActivity).waiting() }
+            }.getOrDefault(emptyList()).count { it.toFingerprint == to.fingerprint && it.path in names }
+            say(
+                when {
+                    left == 0 -> "Sent to ${to.name}"
+                    names.size == 1 -> "Waiting for ${to.name}. It collects it the next time it’s online."
+                    else -> "Waiting for ${to.name}: $left of ${names.size} not collected yet. It gets them the next time it’s online."
+                }
+            )
         }
     }
 
@@ -510,7 +587,7 @@ class MainActivity : AppCompatActivity() {
                     Engine.open(this@MainActivity).joinPairing(code)
                 }
                 say("Connected to ${peer.name}")
-                changed()
+                madeChange()
             } catch (e: Exception) {
                 fail("Could not connect", e)
             }
@@ -544,7 +621,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 fail(if (added == 0) "Could not add that file" else "Added $added, then stopped", e)
             } finally {
-                changed()
+                if (added > 0) madeChange() else changed()
             }
         }
     }
@@ -577,17 +654,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendPicked(uris: List<Uri>, to: PeerInfo) {
         lifecycleScope.launch {
-            var sent = 0
+            val sent = mutableListOf<String>()
             try {
                 for (uri in uris) {
-                    Engine.sendUri(this@MainActivity, uri, to.fingerprint)
-                    sent++
+                    sent += Engine.sendUri(this@MainActivity, uri, to.fingerprint)
                 }
-                say("${Words.files(sent)} ready for ${to.name}. It collects them the next time it's online.")
             } catch (e: Exception) {
-                fail(if (sent == 0) "Could not send that" else "Sent $sent, then stopped", e)
+                fail(if (sent.isEmpty()) "Could not send that" else "Sent ${sent.size}, then stopped", e)
             } finally {
                 changed()
+                if (sent.isNotEmpty()) sendGoes(to, sent)
             }
         }
     }
@@ -599,16 +675,16 @@ class MainActivity : AppCompatActivity() {
      */
     fun send(entry: FileEntry, to: PeerInfo) {
         lifecycleScope.launch {
+            val name = entry.path.substringAfterLast('/')
             try {
                 withContext(Dispatchers.IO) {
                     val source = File(Engine.root(this@MainActivity), entry.path)
-                    Engine.open(this@MainActivity)
-                        .sendFile(source.absolutePath, entry.path.substringAfterLast('/'), to.fingerprint)
+                    Engine.open(this@MainActivity).sendFile(source.absolutePath, name, to.fingerprint)
                 }
-                say("Ready for ${to.name}. It collects it the next time it's online.")
+                changed()
+                sendGoes(to, listOf(name))
             } catch (e: Exception) {
                 fail("Could not send that", e)
-            } finally {
                 changed()
             }
         }

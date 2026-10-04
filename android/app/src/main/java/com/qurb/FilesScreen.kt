@@ -308,9 +308,9 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             try {
                 withContext(Dispatchers.IO) { engine().rename(entry.path, to) }
                 app.say("Now ${to.substringAfterLast('/')}")
+                app.madeChange()
             } catch (e: Exception) {
                 app.fail("Could not do that", e)
-            } finally {
                 app.changed()
             }
         }
@@ -378,9 +378,9 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                     try {
                         withContext(Dispatchers.IO) { engine().remove(entry.path) }
                         app.say("Deleted. It's in Recently deleted for 30 days.")
+                        app.madeChange()
                     } catch (e: Exception) {
                         app.fail("Could not delete that", e)
-                    } finally {
                         app.changed()
                     }
                 }

@@ -85,8 +85,9 @@ unrestricted `browse` still seeing both.
   on either device. Designed ([brief §2](../design/brief.md)) and not built;
   it needs an engine addition, since a move between areas is a deletion in one
   and a new file in the other.
-- **Not verified on the phone.** Built and tested in the FFI; nothing records
-  the designed app being run on the Galaxy S23 or the emulator.
+- **Not verified on the phone.** Files and Private Vault were seen on the
+  Galaxy S23 on 2026-10-03, each listing only its own area; adding a file into
+  either was not done there.
 
 ## Reversing it
 
