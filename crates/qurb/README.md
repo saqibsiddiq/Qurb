@@ -3,17 +3,17 @@
 The program a person runs. Everything else in this repository is a library.
 
 ```
-qurb init <dir>                  set up a device and create a key
+qurb init [dir]                  set up a device and create a key (~/qurb if none)
 qurb enrol <dir> "<24 words>"    set up a device with an existing key
-qurb pair <dir>                  show a code and wait for a device to join
+qurb pair [dir]                  show a code and wait for a device to join
                                  (the code lasts five minutes, then it stops)
-qurb join <dir> <code>           join a device that is showing a code
-qurb run <dir>                   watch, sync, and keep running
-qurb replica <dir> [--only p]    hold content for devices that are asleep
-qurb status <dir>                what this device holds and trusts
-qurb verify <dir> [--deep]       check the store against itself
-qurb reclaim <dir>               free space the folder itself already holds
-qurb fetch <dir> <path>          ask for a dropped file's contents back
+qurb join [dir] <code>           join a device that is showing a code
+qurb run [dir]                   watch, sync, and keep running
+qurb replica [dir] [--only p]    hold content for devices that are asleep
+qurb status [dir]                what this device holds and trusts
+qurb verify [dir] [--deep]       check the store against itself
+qurb reclaim [dir]               free space the folder itself already holds
+qurb fetch [dir] <path>          ask for a dropped file's contents back
 qurb send [dir] <file|folder>... to <dev>
                                  send files and folders to one device, privately
 qurb cancel [dir] <name> to <dev>
@@ -31,10 +31,10 @@ qurb deleted [dir]               recently deleted, restorable for 30 days
 qurb restore [dir] <#n or path>  put one back, on every device
 qurb remove-device [dir] <dev> [--delete-kept] [--yes]
                                  stop trusting a device; says what that does
-qurb activity <dir> [path]       what happened, newest first
-qurb ls <dir> [path]             what this folder holds, and where
-qurb find <dir> <text>           files whose name contains something
-qurb config <dir> [key=value]    show or change settings
+qurb activity [dir] [path]       what happened, newest first
+qurb ls [dir] [path]             what this folder holds, and where
+qurb find [dir] <text>           files whose name contains something
+qurb config [dir] [key=value]    show or change settings
 qurb protect [dir] <how>         keep the key in a file, the keystore, or
                                  behind a passphrase
 qurb version                     the build, its protocol, its index schema
@@ -43,6 +43,12 @@ qurb signal [addr] [--push <j>]  the rendezvous service
 qurb relay [addr]                the relay
 qurb netcheck                    what kind of router this machine is behind
 ```
+
+`[dir]` is the qurb folder. Left out, it is the one set up most recently —
+and a word that is not a folder with qurb in it is never taken for one, so
+`qurb protect keystore` and `qurb protect ~/qurb keystore` both mean what
+they say. Folders are listed by their full path, in
+`~/.config/qurb/folders`.
 
 ## Two devices, start to finish
 

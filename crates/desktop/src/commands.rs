@@ -586,15 +586,37 @@ fn reveal(dir: &std::path::Path) -> Answer<()> {
     Ok(())
 }
 
-/// Expand a leading `~`, which people type and no filesystem understands.
+/// Where a folder somebody typed is.
 fn expand(path: &str) -> std::path::PathBuf {
+    expand_from(path, std::env::var_os("HOME").map(std::path::PathBuf::from).as_deref())
+}
+
+/// The same, from a given home folder.
+///
+/// A leading `~` is the home folder, which people type and no filesystem
+/// understands. A path that does not start at `/` is taken from the home folder
+/// too, as a file chooser would. Left relative it was taken from whichever
+/// directory the window happened to start in, and `home/project/qurb`, typed
+/// once, made a second device at `~/home/project/qurb` that the window then
+/// opened at every login instead of the folder paired with the phone. The
+/// window shows the path this returns before anything is made there.
+///
+/// Nothing typed is nowhere, not the home folder: setting up qurb in the home
+/// folder itself is never what an empty box meant.
+fn expand_from(path: &str, home: Option<&std::path::Path>) -> std::path::PathBuf {
     let trimmed = path.trim();
-    if let Some(rest) = trimmed.strip_prefix("~/") {
-        if let Some(home) = std::env::var_os("HOME") {
-            return std::path::PathBuf::from(home).join(rest);
-        }
+    let Some(home) = home else { return std::path::PathBuf::from(trimmed) };
+    if trimmed.is_empty() {
+        std::path::PathBuf::new()
+    } else if trimmed == "~" {
+        home.to_path_buf()
+    } else if let Some(rest) = trimmed.strip_prefix("~/") {
+        home.join(rest)
+    } else if std::path::Path::new(trimmed).is_relative() {
+        home.join(trimmed)
+    } else {
+        std::path::PathBuf::from(trimmed)
     }
-    std::path::PathBuf::from(trimmed)
 }
 
 #[derive(Serialize)]
@@ -1517,6 +1539,20 @@ mod tests {
 
     fn detail(path: &std::path::Path) -> String {
         format!("sent to this device; saved to {}", path.display())
+    }
+
+    /// A typed folder is always absolute, and always under the home folder
+    /// unless it says otherwise.
+    #[test]
+    fn a_typed_folder_is_found_from_the_home_folder() {
+        let home = std::path::Path::new("/home/someone");
+        let at = |typed: &str| expand_from(typed, Some(home));
+        assert_eq!(at("~/qurb"), home.join("qurb"));
+        assert_eq!(at("~"), home);
+        assert_eq!(at("home/project/qurb"), home.join("home/project/qurb"));
+        assert_eq!(at("Documents/qurb "), home.join("Documents/qurb"));
+        assert_eq!(at("/srv/qurb"), std::path::PathBuf::from("/srv/qurb"));
+        assert_eq!(at("   "), std::path::PathBuf::new(), "nothing typed is not the home folder");
     }
 
     #[test]

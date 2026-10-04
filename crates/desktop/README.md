@@ -193,8 +193,11 @@ Settings turns off. See [decision 0040](../../docs/decisions/0040-the-menu-opens
   One the other device is collecting may still finish, and a file arriving
   cannot be stopped from this end. A failed file is retried at the next sync
   on its own; there is no button for it.
-- **No folder picker.** A text field with `~` expansion and a live description
-  of what is already there.
+- **No folder picker.** A text field, read from the home folder: `~/qurb`,
+  `qurb` and `Documents/qurb` all mean folders in it. Beneath it, what is
+  already there — and the full path whenever it differs from what was typed,
+  since a relative path once made a second, empty device the window then ran
+  at every login (see [phase 4](../../docs/phases/phase-4-product.md#a-folder-typed-without-a-slash)).
 - **Linux only, in practice.** The Rust is portable and Tauri is
   cross-platform; this has never been built or run on Windows or macOS.
 - **A dark theme.** Designed after the light one is approved; the tokens in

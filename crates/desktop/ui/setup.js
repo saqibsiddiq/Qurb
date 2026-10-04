@@ -90,15 +90,19 @@ async function lookAtFolder() {
   if (!folder.writable) return refuse("This folder can't be written to.");
 
   const disk = folder.disk === "0" ? "" : ` · ${size(folder.free)} free on this disk`;
+  // Where it is, in full, whenever that is not exactly what was typed: a
+  // folder typed as "home/project/qurb" is in the home folder, and that is
+  // worth seeing before Qurb is set up there rather than after.
+  const at = folder.path === path ? "" : ` at ${folder.path}`;
   if (!folder.exists) {
-    says.textContent = `A new folder${disk}`;
+    says.textContent = `A new folder${at}${disk}`;
   } else if (folder.existing_files === 0) {
-    says.textContent = `Empty${disk}`;
+    says.textContent = `Empty${at}${disk}`;
   } else {
     // Said plainly: everything already in there is about to appear on every
     // other device, which is a surprise worth not having.
     const n = folder.counted_all ? `${folder.existing_files}` : `Over ${folder.existing_files}`;
-    says.textContent = `${n} things already here — all of them will sync${disk}`;
+    says.textContent = `${n} things already here${at} — all of them will sync${disk}`;
   }
   next.disabled = false;
 }

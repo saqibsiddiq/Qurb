@@ -37,15 +37,34 @@ fn registry_path() -> Result<PathBuf> {
 /// Paths that no longer exist are dropped on read rather than pruned on write:
 /// a folder on a removable disk is absent while it is unplugged and should
 /// come back, not be forgotten the first time someone opens the list.
+///
+/// Every path comes back absolute. A relative one can only be an entry written
+/// before [`remember`] made them absolute, and it is read from the home
+/// folder, which is where the desktop -- started at login, in the home folder
+/// -- has been opening it. Read from wherever a terminal happened to be, the
+/// same line named a different folder in the window and on the command line,
+/// and a folder typed as `home/project/qurb` became a second device the window
+/// ran while `qurb status` showed the first.
 pub fn known() -> Vec<PathBuf> {
     let Ok(path) = registry_path() else { return Vec::new() };
     let Ok(text) = std::fs::read_to_string(&path) else { return Vec::new() };
+    let home = std::env::var_os("HOME").map(PathBuf::from);
 
     text.lines()
         .map(str::trim)
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .map(PathBuf::from)
+        .map(|folder| match &home {
+            Some(home) if folder.is_relative() => home.join(folder),
+            _ => folder,
+        })
         .collect()
+}
+
+/// A folder as the list records it: absolute, so it names the same folder
+/// whichever directory the next reader starts in.
+fn absolute(root: &Path) -> PathBuf {
+    std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf())
 }
 
 /// Remember a folder, moving it to the front.
@@ -55,8 +74,9 @@ pub fn remember(root: &Path) -> Result<()> {
         std::fs::create_dir_all(parent)?;
     }
 
-    let mut folders: Vec<PathBuf> = known().into_iter().filter(|f| f != root).collect();
-    folders.insert(0, root.to_path_buf());
+    let root = absolute(root);
+    let mut folders: Vec<PathBuf> = known().into_iter().filter(|f| *f != root).collect();
+    folders.insert(0, root);
     folders.truncate(16);
 
     let body = folders
@@ -71,7 +91,8 @@ pub fn remember(root: &Path) -> Result<()> {
 /// Stop listing a folder. Does not touch its contents.
 pub fn forget(root: &Path) -> Result<()> {
     let path = registry_path()?;
-    let folders: Vec<PathBuf> = known().into_iter().filter(|f| f != root).collect();
+    let root = absolute(root);
+    let folders: Vec<PathBuf> = known().into_iter().filter(|f| *f != root).collect();
     let body = folders.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join("\n");
     std::fs::write(&path, format!("# folders qurb knows about, most recent first\n{body}\n"))?;
     Ok(())

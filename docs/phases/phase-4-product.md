@@ -995,6 +995,53 @@ seven tests that find devices on the local network failed there — four in
 `crates/peer/tests/beacons.rs`, three in `end_to_end.rs` — code unchanged
 since they passed the day before at home. The other 746 passed.
 
+## A folder typed without a slash
+
+**Found 2026-10-03**, on the designed Android app's first run on the S23: the
+phone could not reach the laptop, and the laptop had last reached the phone
+four days before.
+
+On 2026-09-29 a folder was set up through the window as `home/project/qurb`,
+with no leading `/` or `~`. The window expanded only a leading `~/`, so the
+relative path went to setup unchanged: a new device, with a new key, was made
+at `~/home/project/qurb` — relative to the window's working directory, the
+home folder — and the folder list recorded `home/project/qurb` as typed, at
+the top. From the next login the desktop opened that empty, unpaired device
+instead of `~/qurb`, the folder paired with the phone, and nothing synced from
+2026-09-30 to 2026-10-03. `qurb status` read the same relative line from a
+terminal in the repository, found nothing there, and fell back to `~/qurb`, so
+the command line and the window named different folders and the command line
+looked healthy. The window said nothing a person would read as wrong: the new
+device's Home said *Add your first device*, and the window was hidden.
+
+Fixed in three places:
+
+- **The window reads a typed folder from the home folder** — `qurb`,
+  `Documents/qurb`, `~/qurb` — and never leaves it relative; empty text is no
+  folder rather than the home folder. Under the field it now shows the full
+  path whenever that differs from what was typed. Test:
+  `a_typed_folder_is_found_from_the_home_folder`.
+- **The folder list stores only absolute paths**, and reads an older relative
+  entry from the home folder, where the desktop has been opening it, so the
+  window and the command line name the same folder.
+- **On the laptop**, with the owner's agreement: the empty device at
+  `~/home/project/qurb` deleted (no files, a key that had never been paired),
+  the list reduced to `~/qurb`, and the desktop restarted on it.
+
+Found with it: `qurb config` with no arguments panicked, and `config`,
+`protect` and `join` took their first word as the folder, so each worked only
+with a path although `qurb` says the folder may be left out. All six commands
+that take an optional folder now read it one way — the first word is the
+folder only if it has qurb in it. `crates/qurb/tests/arguments.rs` runs the
+real binary in a home of its own; both tests failed before the change, one at
+the panic.
+
+What this does not fix: a second device made by mistake is still a second
+device, and nothing tells a person their paired folder has stopped running.
+A desktop whose Home says *Add your first device* while another folder on the
+same computer is paired with a phone is a state worth noticing, and nothing
+notices it yet.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

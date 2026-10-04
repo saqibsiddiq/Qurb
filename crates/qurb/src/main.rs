@@ -107,8 +107,9 @@ fn run() -> Result<()> {
         }
         "pair" => block_on(pair(directory(&args)?)),
         "join" => {
-            let code = args.get(2).context("give the code the other device is showing")?.clone();
-            block_on(join(directory(&args)?, code))
+            let (root, rest) = folder_first(&args)?;
+            let code = rest.first().context("give the code the other device is showing")?.clone();
+            block_on(join(root, code))
         }
         "run" => block_on(start(directory(&args)?)),
         "replica" => {
@@ -174,23 +175,11 @@ fn run() -> Result<()> {
             send(&root, &picked, recipient)
         }
         "conflicts" => {
-            let rest = &args[1..];
-            let (root, rest) = match rest.first() {
-                Some(first) if PathBuf::from(first).join(".qurb").is_dir() => {
-                    (PathBuf::from(first), &rest[1..])
-                }
-                _ => (qurb_cli::profiles::current().context("no folder is set up yet")?, rest),
-            };
+            let (root, rest) = folder_first(&args)?;
             conflicts(&root, rest)
         }
         "share" => {
-            let rest = &args[1..];
-            let (root, rest) = match rest.first() {
-                Some(first) if PathBuf::from(first).join(".qurb").is_dir() => {
-                    (PathBuf::from(first), &rest[1..])
-                }
-                _ => (qurb_cli::profiles::current().context("no folder is set up yet")?, rest),
-            };
+            let (root, rest) = folder_first(&args)?;
             share(&root, rest)
         }
         "keep" => {
@@ -233,13 +222,7 @@ fn run() -> Result<()> {
         }
         "holders" => {
             // `qurb holders`, `qurb holders add phone`, or with the folder first.
-            let rest = &args[1..];
-            let (root, rest) = match rest.first() {
-                Some(first) if PathBuf::from(first).join(".qurb").is_dir() => {
-                    (PathBuf::from(first), &rest[1..])
-                }
-                _ => (qurb_cli::profiles::current().context("no folder is set up yet")?, rest),
-            };
+            let (root, rest) = folder_first(&args)?;
             holders(&root, rest)
         }
         "version" | "--version" | "-V" => {
@@ -292,8 +275,16 @@ fn run() -> Result<()> {
             let text = text.context("give something to look for")?;
             find(&root, &text)
         }
-        "config" => configure(&directory(&args)?, &args[2..]),
-        "protect" => protect(&directory(&args)?, args.get(2).map(String::as_str)),
+        // `qurb config`, `qurb config limit=10G`, or with the folder first --
+        // which used to be required, and `qurb config` alone panicked.
+        "config" => {
+            let (root, settings) = folder_first(&args)?;
+            configure(&root, settings)
+        }
+        "protect" => {
+            let (root, rest) = folder_first(&args)?;
+            protect(&root, rest.first().map(String::as_str))
+        }
         "signal" => {
             let after = |flag: &str| {
                 args.iter().skip_while(|a| a.as_str() != flag).nth(1).cloned()
@@ -339,6 +330,29 @@ fn directory(args: &[String]) -> Result<PathBuf> {
         "no folder given, and none is set up yet.\n\
          Run `qurb init` to make one, or pass a path.",
     )
+}
+
+/// The folder a command acts on, and the arguments after it.
+///
+/// The first argument is the folder only when it has qurb in it; otherwise it
+/// is the command's own first word, and the folder is the one set up most
+/// recently. Counting arguments cannot tell `qurb protect keystore` from
+/// `qurb protect ~/qurb`, and `config`, `protect` and `join` once tried: each
+/// took its first word as the folder, so they worked only with a path.
+fn folder_first(args: &[String]) -> Result<(PathBuf, &[String])> {
+    let rest = &args[1..];
+    match rest.first() {
+        Some(first) if PathBuf::from(first).join(".qurb").is_dir() => {
+            Ok((PathBuf::from(first), &rest[1..]))
+        }
+        _ => Ok((
+            qurb_cli::profiles::current().context(
+                "no folder given, and none is set up yet.\n\
+                 Run `qurb init` to make one, or pass a path.",
+            )?,
+            rest,
+        )),
+    }
 }
 
 /// Where `qurb init` should put a folder when told no path.
