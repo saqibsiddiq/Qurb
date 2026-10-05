@@ -87,7 +87,7 @@ words that are your key, and pairs another device by QR code. From a terminal
 instead:
 
 ```bash
-qurb init ~/qurb                    # prints the 24 words
+qurb init ~/qurb                    # a new key; nothing to write down
 qurb enrol ~/qurb "wheel push ..."  # on the second device, with those words
 qurb pair                           # on one, then `qurb join ~/qurb <code>` on the other
 qurb run                            # on both
@@ -108,7 +108,7 @@ cargo run --release -p qurb-peer --example demo -- /tmp/device-a /tmp/device-b
 
 ```bash
 cargo build --release
-cargo test --workspace         # 769 tests in 90 binaries (2026-10-05)
+cargo test --workspace         # 768 tests in 90 binaries (2026-10-05)
 ./scripts/desktop-smoke.sh     # the real window, driven end to end
 ```
 

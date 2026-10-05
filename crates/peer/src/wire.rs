@@ -78,6 +78,12 @@ pub enum Request {
         device_id: [u8; 32],
         name: String,
     },
+
+    /// Ask for the key, as a device with none, presenting the invite's token
+    /// (decision 0052). Answered with [`Response::Key`], once per invite; the
+    /// device then sets itself up with it and pairs with [`Request::Pair`] on
+    /// the same connection.
+    Join { token: [u8; 16] },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +96,11 @@ pub enum Response {
     NotFound,
     /// Pairing accepted, with the accepting device's own identity.
     Paired { device_id: [u8; 32], name: String },
+
+    /// The master key, for a device that asked with [`Request::Join`] and the
+    /// invite's token. Only ever sent over a pairing connection, to a device
+    /// that proved it saw the code.
+    Key { key: [u8; 32] },
 
     /// Acknowledgement of [`Request::Got`]. Carries nothing.
     Noted,
@@ -107,6 +118,7 @@ const TAG_CHUNK: u8 = 3;
 const TAG_PAIR: u8 = 4;
 const TAG_CHANGES: u8 = 5;
 const TAG_GOT: u8 = 6;
+const TAG_JOIN: u8 = 7;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
@@ -115,6 +127,7 @@ const STATUS_NOT_FOUND: u8 = 4;
 const STATUS_PAIRED: u8 = 5;
 const STATUS_CHANGED: u8 = 6;
 const STATUS_NOTED: u8 = 7;
+const STATUS_KEY: u8 = 8;
 
 impl Request {
     pub fn encode(&self) -> Vec<u8> {
@@ -143,6 +156,10 @@ impl Request {
                 out.extend_from_slice(device_id);
                 put_name(&mut out, name);
             }
+            Request::Join { token } => {
+                out.push(TAG_JOIN);
+                out.extend_from_slice(token);
+            }
         }
         out
     }
@@ -159,6 +176,11 @@ impl Request {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
                 Request::Pair { token, device_id: r.hash()?, name: r.name()? }
+            }
+            TAG_JOIN => {
+                let mut token = [0u8; 16];
+                token.copy_from_slice(r.take(16)?);
+                Request::Join { token }
             }
             tag => return Err(Error::Protocol { detail: format!("unknown request tag {tag}") }),
         };
@@ -181,6 +203,10 @@ impl Response {
                 out.push(STATUS_PAIRED);
                 out.extend_from_slice(device_id);
                 put_name(&mut out, name);
+            }
+            Response::Key { key } => {
+                out.push(STATUS_KEY);
+                out.extend_from_slice(key);
             }
             Response::Tree(versions) => {
                 out.push(STATUS_TREE);
@@ -214,6 +240,7 @@ impl Response {
             STATUS_PAIRED => {
                 Response::Paired { device_id: r.hash()?, name: r.name()? }
             }
+            STATUS_KEY => Response::Key { key: r.hash()? },
             STATUS_TREE => {
                 let count = r.count()?;
                 let mut versions = Vec::with_capacity(count.min(4096));
@@ -420,6 +447,7 @@ mod tests {
             Request::Tree,
             Request::Manifest { content: [1; 32] },
             Request::Chunk { hash: [2; 32] },
+            Request::Join { token: [3; 16] },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -434,6 +462,7 @@ mod tests {
             Response::Manifest(vec![[1; 32], [2; 32]]),
             Response::Chunk(vec![0xAB; 5000]),
             Response::Chunk(vec![]),
+            Response::Key { key: [4; 32] },
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);

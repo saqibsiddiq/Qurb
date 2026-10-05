@@ -381,9 +381,13 @@ This is called **zero-knowledge**, and it has a hard consequence that shapes the
 product: if you lose your key, we cannot recover your data. Not "we won't" — we
 genuinely cannot.
 
-That is why there is a recovery phrase — 24 words that *are* the key, in a form
-a person can write on paper — and why the onboarding flow that makes people
-write it down is the highest-stakes screen in the application. See
+The key has a spelling, 24 words that *are* the key, but since 2026-10-05
+nobody is asked to write them down
+([decisions/0052](decisions/0052-the-key-travels-with-the-code.md)). A new
+device gets the key from one the person already has, through the pairing code,
+which it scans or types. A phone also keeps its key in Block Store,
+end-to-end-encrypted in its Google backup. The key is what has to survive;
+the files survive only where a device or a replica still holds them. See also
 [decisions/0012](decisions/0012-key-hierarchy-and-recovery.md). Protecting that
 key *at rest* was the largest security gap for a long time and is now a choice
 between a file, the operating system's keystore and a passphrase — see
@@ -666,7 +670,8 @@ qurb/
 │       │                                      change your mind
 │       │                  ShowCode.kt         this phone showing a pairing code
 │       │                  Words.kt            how the app says things, in one place
-│       │                  SetupActivity.kt    the 24 words, once
+│       │                  SetupActivity.kt    set up, or join by scanning a code
+│       │                  Backup.kt           the key, kept in Block Store
 │       │                  ScanActivity.kt     reading a pairing QR code
 │       │                  ShareActivity.kt    the share sheet's way in: save it, or
 │       │                                      send it to one device
@@ -848,7 +853,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-769 tests in 90 test binaries on Linux, all passing (2026-10-05, debug build,
+768 tests in 90 test binaries on Linux, all passing (2026-10-05, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
@@ -1155,8 +1160,10 @@ last deliberately, until it can be built safely
 ([decisions/0047](decisions/0047-versions-and-upgrades.md)).
 
 The desktop interface does what the command line does. The window sets a
-device up — the folder, how much disk it may use, the 24 words shown and three
-typed back, or joining with the words from another device — unlocks a
+device up — the folder, how much disk it may use, and either a new key with
+nothing to write down or the code another device shows, which brings its key
+([0052](decisions/0052-the-key-travels-with-the-code.md)); the 24 words remain a
+fallback — unlocks a
 passphrase-protected key, pairs devices by code, browses what is synced and
 where each file's bytes are, sends to one device, settles conflicts, restores
 deleted files, chooses which devices each folder goes to and which folders stay

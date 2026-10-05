@@ -1,6 +1,6 @@
 # 0012 — One root secret, derived keys, and a 24-word phrase
 
-**Status:** Accepted — with key storage explicitly weak
+**Status:** Accepted — with key storage explicitly weak; "the only way to recover it" superseded by [0052](0052-the-key-travels-with-the-code.md), where the key travels with the pairing code and a phone keeps it in Block Store
 **Date:** 2026-09-16
 
 ## Decision

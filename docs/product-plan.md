@@ -126,7 +126,7 @@ own.
 
 | brief | what exists | where |
 |---|---|---|
-| Identity and 24 words (§34) | created, shown, three words confirmed, never written down | desktop setting-up flow; `crates/desktop/src/session.rs` |
+| Identity (§34) | created with nothing to write down; another device joins with a code that carries the key ([0052](decisions/0052-the-key-travels-with-the-code.md)) | desktop setting-up flow; Android setup; `qurb join` |
 | Pairing (§8, §9) | QR, typed code and spoken form, with a countdown; enter a code from another device | desktop Devices screen; Android scans or types |
 | Sending one file (§11) | drop on the window or choose, then pick a device | desktop Send screen, `send_file` |
 | Where a file's contents are (§19, §30) | here / not here / only here | desktop Files screen, `view::Availability` |
@@ -668,12 +668,19 @@ then.*
   was cleared from Android's Settings, and 18 files the laptop had freed
   because the phone kept them went with it
   ([phase 5](phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared)).
-  Also: setup has no way back to the existing 24 words once a new key is made.
+  (Setup's lack of a way back from a new key is answered by 0052: an
+  unfinished setup can join instead.)
+- [ ] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):
+  ~~the S23 joining the laptop with a code~~ (typed, 2026-10-05); scanning it;
+  the laptop joining with the phone's code; Block Store returning the key.
 
 **4. Release.**
-- [ ] Decided and recorded: how a replica frees space (§4.7), and whether
-  there is any recovery beyond the 24 words.
+- [ ] Decided and recorded: how a replica frees space (§4.7). Recovery
+  beyond the 24 words was decided on 2026-10-05
+  ([0052](decisions/0052-the-key-travels-with-the-code.md)): the key travels
+  with the pairing code and a phone keeps it in Block Store; a computer has
+  nothing that leaves the machine yet.
 - [ ] Licence files for the licence `Cargo.toml` declares.
 - [ ] A signed release APK on the S23 (leaving the debug build means
-  uninstalling and enrolling again from the 24 words), the Arch package
+  uninstalling and joining again with a code from the laptop), the Arch package
   installed, a GitHub Release, and the website's Download page pointing at it.

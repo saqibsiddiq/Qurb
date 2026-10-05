@@ -79,6 +79,14 @@ impl MasterKey {
         &self.0
     }
 
+    /// The key itself, for handing to another of the same person's devices
+    /// over a pairing connection pinned to it (decision 0052). Nothing else
+    /// should need the raw bytes; anything that does is a second way for the
+    /// key to leave the device, and wants a decision of its own.
+    pub fn for_another_device(&self) -> [u8; 32] {
+        self.0
+    }
+
     /// Derive the key for one purpose.
     ///
     /// HKDF-SHA256. One-way by construction, so a derived key that leaks

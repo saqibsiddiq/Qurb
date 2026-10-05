@@ -7,6 +7,7 @@ import uniffi.qurb_mobile.Qurb
 import uniffi.qurb_mobile.Settings
 import uniffi.qurb_mobile.createProtected
 import uniffi.qurb_mobile.isSetUp
+import uniffi.qurb_mobile.joinNew
 import uniffi.qurb_mobile.restoreProtected
 import java.io.File
 
@@ -36,16 +37,66 @@ object Engine {
     fun isSetUp(context: Context): Boolean = isSetUp(root(context).absolutePath)
 
     /**
-     * Set up a new identity. Returns the 24 words, for the setup screen to show
-     * and then drop; after that they are asked of the engine, which derives
-     * them from the key.
+     * Set up a new identity, with nothing to write down (decision 0052): its key
+     * is kept in Block Store, and another device is added with a code.
      */
-    suspend fun create(context: Context): String = withContext(Dispatchers.IO) {
+    suspend fun create(context: Context) = withContext(Dispatchers.IO) {
         root(context).mkdirs()
         val phrase = createProtected(root(context).absolutePath, AndroidKeyStore(context)).recoveryPhrase
-        setPhraseConfirmed(context, false)
-        phrase
+        setPhraseConfirmed(context, true)
+        Backup.save(context, phrase)
     }
+
+    /**
+     * Set up as another of the person's devices, from the code one of them is
+     * showing: the key comes with the code (decision 0052). Returns the other
+     * device's name.
+     */
+    suspend fun join(context: Context, code: String): String = withContext(Dispatchers.IO) {
+        root(context).mkdirs()
+        val joined = joinNew(
+            root(context).absolutePath,
+            code,
+            android.os.Build.MODEL ?: "phone",
+            AndroidKeyStore(context),
+        )
+        setPhraseConfirmed(context, true)
+        Backup.save(context, open(context).recoveryPhrase())
+        joined.name
+    }
+
+    /**
+     * Undo a setup that was never finished, so this phone can join the
+     * person's other devices instead.
+     *
+     * Before decision 0052 a new key had to have its words typed back before
+     * the app opened, and a phone set up as new by mistake -- after its data
+     * was cleared, say -- sat at that check with a key nobody wanted. Only
+     * ever that: refused once the folder holds anything, since a key with
+     * files under it is one somebody is using.
+     */
+    suspend fun discardUnfinished(context: Context) = withContext(Dispatchers.IO) {
+        val root = root(context)
+        val held = root.listFiles()?.filter { it.name != ".qurb" }.orEmpty()
+        check(held.isEmpty()) { "This phone already holds files, so its key stays." }
+        handle = null
+        File(root, ".qurb").deleteRecursively()
+        setPhraseConfirmed(context, true)
+    }
+
+    /**
+     * Keep the key in Block Store, once, for a phone set up before it was
+     * kept there at setup (decision 0052).
+     */
+    suspend fun keepKeyOnce(context: Context) {
+        val prefs = context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("key_kept", false)) return
+        Backup.save(context, open(context).recoveryPhrase())
+        prefs.edit().putBoolean("key_kept", true).apply()
+    }
+
+    /** Whether a setup was begun and its words never confirmed. */
+    fun unfinished(context: Context): Boolean = isSetUp(context) && !phraseConfirmed(context)
 
     /**
      * Whether the 24 words have been typed back since this phone was set up.
@@ -64,10 +115,11 @@ object Engine {
             .edit().putBoolean("phrase_confirmed", confirmed).commit()
     }
 
-    /** Set up from another device's words. */
+    /** Set up from another device's words, or the copy kept in Block Store. */
     suspend fun restore(context: Context, phrase: String) = withContext(Dispatchers.IO) {
         root(context).mkdirs()
         restoreProtected(root(context).absolutePath, phrase, AndroidKeyStore(context))
+        Backup.save(context, phrase)
     }
 
     /**

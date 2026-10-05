@@ -324,6 +324,7 @@ class MainActivity : AppCompatActivity() {
                 val engine = Engine.open(this@MainActivity)
                 val found = withContext(Dispatchers.IO) { engine.scan() }
                 if (found.stored > 0u || found.deleted > 0u) current?.refresh()
+                Engine.keepKeyOnce(this@MainActivity)
 
                 if (!housekept) {
                     housekept = true

@@ -39,7 +39,7 @@ record](../roadmap.md).
 | a large file collected from the phone | ◻ fetched eight chunks at a time, resumed, served in the foreground — built and tested, not yet measured on the phone ([below](#an-800-mb-video-and-what-stopped-it)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-769 tests pass in 90 test binaries on Linux (2026-10-05, debug build, the
+768 tests pass in 90 test binaries on Linux (2026-10-05, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -1658,6 +1658,42 @@ What this shows about the design, and is not yet answered:
 
 Not done because of it: the *Tap to finish sending* notification watched;
 adding a file into Private Vault on the phone.
+
+## No words to write down
+
+**Asked for by the owner on 2026-10-05**: "i dont like the idea the writing
+down 24words, its just too inconvient for the user." Decided the same day
+([decision 0052](../decisions/0052-the-key-travels-with-the-code.md)): the key
+travels with the pairing code, the first setup asks nothing, and a phone keeps
+its key in Block Store.
+
+On the phone, *Set up Qurb here* makes a key and opens the app. *I already use
+Qurb* scans the code the computer shows (*Add a device* in its Devices), or
+takes it typed, and `join_new` sets the phone up with the key that comes back
+and pairs the two. *Use my 24 words instead* is the fallback. The key goes to
+Block Store at setup, and once for a phone set up before. When Block Store
+holds one, setup offers it as *Use the key from your Google backup*. A phone
+left mid-setup by the old rules, its key made and its words never typed back,
+can keep that key, or join instead, which puts the unused key aside if the
+folder is still empty. That is the S23's state since its data was cleared.
+
+Tested: `a_new_phone_joins_with_the_code_and_needs_no_words` (the FFI), and the
+protocol's own tests in `crates/peer`. **Watched on the S23 the same evening**:
+still mid-setup with the key made after its data was cleared, it took *I
+already use Qurb*, typed the code `qurb pair` showed on the laptop, and joined:
+*Paired with SM-S911B (b632a5b9)* on the laptop, the app open on the phone with
+the laptop's key, and the two syncing a minute later. Its first sync was
+refused, because the laptop's daemon had not yet reloaded the trust list that
+`qurb pair` wrote; the window's own pairing nudges it. Block Store took the
+key without error. Not watched: scanning instead of typing, and Block Store
+giving the key back.
+
+What the clearing cost, now that the phone is back: of the 18 files the
+laptop had freed, 7 test files from earlier sessions existed only on the old
+phone, and are gone. One file from its Private Vault, 244 KiB, is still kept
+on the laptop. The old phone's identity, `7a4ebf0c`, is still trusted on the
+laptop. Its private key went with the cleared data, so nothing can use it,
+and removing it is the owner's call.
 
 ## Deliberately left undone
 

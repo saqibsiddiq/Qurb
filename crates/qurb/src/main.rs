@@ -20,7 +20,8 @@ qurb — private cloud storage
                                     (defaults to ~/qurb)
   qurb enrol <dir> \"<24 words>\"       set up a device with an existing key
   qurb pair [dir]                     show a code and wait for a device to join
-  qurb join <dir> <code>              join a device that is showing a code
+  qurb join [dir] <code>              join a device showing a code; a folder not
+                                        set up yet takes that device's key
   qurb run [dir]                      watch, sync, and keep running
   qurb replica <dir> [--only <path>]  hold content for devices that are asleep
   qurb status [dir]                   what this device holds and trusts
@@ -108,8 +109,18 @@ fn run() -> Result<()> {
         }
         "pair" => block_on(pair(directory(&args)?)),
         "join" => {
-            let (root, rest) = folder_first(&args)?;
-            let code = rest.first().context("give the code the other device is showing")?.clone();
+            // Two words are a folder and a code, whether or not the folder is
+            // set up yet: joining is how a new one gets its key (decision
+            // 0052). One word is the code, for the folder already in use or,
+            // on a machine with none, the usual place for one.
+            let (root, code) = match &args[1..] {
+                [code] => (
+                    qurb_cli::profiles::current().map_or_else(qurb_cli::profiles::default_root, Ok)?,
+                    code.clone(),
+                ),
+                [dir, code, ..] => (PathBuf::from(dir), code.clone()),
+                [] => bail!("give the code the other device is showing"),
+            };
             block_on(join(root, code))
         }
         "run" => block_on(start(directory(&args)?)),
@@ -438,22 +449,18 @@ fn init(root: &Path) -> Result<()> {
         bail!("{} already has a key. Use `qurb status` to see it.", root.display());
     }
 
-    let phrase = qurb_cli::setup::create(root)?;
+    // The phrase is made, and not shown: nobody is asked to write 24 words
+    // down any more (decision 0052). A device is added with a code, which
+    // carries the key; the words remain the key's spelling, for `enrol`.
+    let _phrase = qurb_cli::setup::create(root)?;
 
     println!("Set up {}\n", root.display());
-    println!("{}", "=".repeat(68));
-    println!("{}", phrase.numbered());
-    println!("{}", "=".repeat(68));
+    println!("To add another device, run `qurb pair` here and, on the other one:");
+    println!("  qurb join <the code it shows>");
     println!();
-    println!("Write these 24 words down on paper, in order, now.");
-    println!();
-    println!("They are not a backup of your key. They ARE your key, in a form you");
-    println!("can hold. Nobody else has a copy — not us, not a server. If you lose");
-    println!("them and lose this device, your files cannot be recovered by anyone,");
-    println!("including us. That is not a policy we could choose to relax.");
-    println!();
-    println!("To add another device:");
-    println!("  qurb enrol <dir> \"{} ...\"", phrase.words()[..3].join(" "));
+    println!("The code carries this device's key, so there is nothing to write down.");
+    println!("Your files live on your devices: lose every one that holds them and");
+    println!("they are gone, unless a replica keeps a copy (`qurb replica`).");
     Ok(())
 }
 
@@ -469,7 +476,7 @@ fn enrol(root: &Path, phrase: &str) -> Result<()> {
 }
 
 async fn pair(root: PathBuf) -> Result<()> {
-    let (_, identity, store, config) = open(&root)?;
+    let (master, identity, store, config) = open(&root)?;
     let store = Arc::new(Mutex::new(store));
 
     let host = PairingHost::open(
@@ -504,7 +511,9 @@ async fn pair(root: PathBuf) -> Result<()> {
     println!("screen has already won.\n");
     println!("It expires in 5 minutes and works once. Waiting...");
 
-    match host.wait(Arc::clone(&store), &config.name, now()).await {
+    // A device with no key that joins with this code gets this one's
+    // (decision 0052), so setting up another computer is `qurb join <code>`.
+    match host.wait_giving_key(Arc::clone(&store), &config.name, now(), &master).await {
         Ok(peer) => {
             println!("\nPaired with {} ({})", peer.name, peer.fingerprint.short());
             Ok(())
@@ -521,6 +530,13 @@ async fn pair(root: PathBuf) -> Result<()> {
 }
 
 async fn join(root: PathBuf, code: String) -> Result<()> {
+    if !qurb_cli::is_set_up(&root) {
+        println!("Joining your other device, and taking its key...");
+        let peer = qurb_cli::setup::join(&root, &code).await?;
+        println!("Set up {} as another of your devices.", root.display());
+        println!("Paired with {} ({}). Run `qurb run` to start syncing.", peer.name, peer.fingerprint.short());
+        return Ok(());
+    }
     let (_, identity, store, config) = open(&root)?;
     let store = Arc::new(Mutex::new(store));
 

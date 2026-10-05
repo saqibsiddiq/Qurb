@@ -1,38 +1,34 @@
 package com.qurb
 
-import android.content.DialogInterface
 import android.content.Intent
 import android.os.Bundle
-import android.text.InputType
 import android.view.View
-import android.view.WindowManager
-import android.view.inputmethod.EditorInfo
-import android.widget.LinearLayout
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import com.qurb.databinding.ActivitySetupBinding
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import uniffi.qurb_mobile.PhraseAnswer
 import uniffi.qurb_mobile.QurbException
 
 /**
- * First launch: make a key, or bring one over from another device.
+ * First launch: make a key, or join the devices the person already has.
  *
- * The whole screen exists to get one thing right — that the user writes the 24
- * words down. Nothing else here can be undone by a support ticket, because
- * there is no support ticket: the words are the only copy of the key.
+ * Nothing to write down (decision 0052). A new key is kept in Block Store; a
+ * second device gets the key from the first through the code it shows, which
+ * this phone scans. The 24 words remain a way in for somebody who has them,
+ * and are no longer asked of anybody.
  */
 class SetupActivity : AppCompatActivity() {
 
     private lateinit var views: ActivitySetupBinding
+
+    private val scanner = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result -> result.data?.getStringExtra(ScanActivity.EXTRA_CODE)?.let { join(it) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,166 +46,90 @@ class SetupActivity : AppCompatActivity() {
         }
 
         views.create.setOnClickListener { create() }
-        views.restore.setOnClickListener { showRestore() }
-        views.restoreConfirm.setOnClickListener { restore() }
-
-        // Set up, and closed before the words were typed back: straight to
-        // them again, rather than to an app whose key was never checked.
-        if (Engine.isSetUp(this) && !Engine.phraseConfirmed(this)) {
-            views.chooser.visibility = View.GONE
-            showAgain()
+        views.restore.setOnClickListener { show(views.joinPanel) }
+        views.scan.setOnClickListener { scanner.launch(Intent(this, ScanActivity::class.java)) }
+        views.joinConfirm.setOnClickListener {
+            views.code.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { join(it) }
         }
+        views.useWords.setOnClickListener { show(views.restorePanel) }
+        views.restoreConfirm.setOnClickListener { restore() }
+        views.fromBackup.setOnClickListener { fromBackup() }
+
+        // Begun under the old rules and never finished: a key was made and its
+        // words never typed back. Either keep that key, or put it aside and
+        // join the person's other devices -- which a phone set up as new by
+        // mistake needs to do.
+        if (Engine.unfinished(this)) {
+            views.createSays.text = "Keep the key this phone made when you started, and use it as your first device."
+        }
+
+        lifecycleScope.launch {
+            if (Backup.find(this@SetupActivity) != null) views.fromBackup.visibility = View.VISIBLE
+        }
+    }
+
+    private fun show(panel: View) {
+        views.chooser.visibility = View.GONE
+        views.joinPanel.visibility = View.GONE
+        views.restorePanel.visibility = View.GONE
+        panel.visibility = View.VISIBLE
     }
 
     private fun create() {
-        busy(true)
-        lifecycleScope.launch {
-            try {
-                showPhrase(Engine.create(this@SetupActivity))
-            } catch (e: Exception) {
-                busy(false)
-                fail("Could not set up", e)
+        settle("Could not set up") {
+            if (Engine.unfinished(this)) {
+                Engine.setPhraseConfirmed(this, true)
+                Backup.save(this, Engine.open(this).recoveryPhrase())
+            } else {
+                Engine.create(this)
             }
         }
     }
 
-    /**
-     * The words, and the one dialog in this app that cannot be dismissed by
-     * tapping outside it.
-     *
-     * Friction on purpose: every other consumer product can recover an
-     * account, and this one genuinely cannot. The window is marked secure
-     * while the words are on it, so they reach neither a screenshot nor the
-     * recent-apps thumbnail.
-     */
-    private fun showPhrase(phrase: String) {
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Write these down")
-            .setMessage(
-                "These 24 words are your key, not a backup of it. Nobody else " +
-                    "has a copy — not a server, not us. Lose them and lose this " +
-                    "phone, and your files cannot be recovered by anyone.\n\n" +
-                    "Write them on paper, in order, now."
-            )
-            .setView(Words.phraseView(this, phrase))
-            .setCancelable(false)
-            .setPositiveButton("I have written them down") { _, _ -> confirm() }
-            .create()
-            .apply { window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE) }
-            .show()
-    }
-
-    /**
-     * Three of the words, typed back from the paper.
-     *
-     * Somebody who has not written them down cannot answer, and finding that
-     * out now, while the words can still be shown, is the point
-     * (decision 0033). Three positions at random, chosen again each time, so
-     * that looking at the words again is not a way to learn the answer to the
-     * same question. Checked by the engine against the key, so the app keeps
-     * no copy of the words to compare with.
-     */
-    private fun confirm() {
-        val positions = (1..24).shuffled().take(3).sorted()
-        val scale = resources.displayMetrics.density
-        val fields = positions.map { position ->
-            TextInputLayout(this).apply {
-                hint = "Word $position"
-                addView(
-                    TextInputEditText(context).apply {
-                        // Not learned by the keyboard: these are the key.
-                        inputType = InputType.TYPE_CLASS_TEXT or
-                            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or
-                            InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-                        imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
-                        importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
-                        isSingleLine = true
-                    }
-                )
-            }
-        }
-        val form = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            val side = (24 * scale).toInt()
-            setPadding(side, (8 * scale).toInt(), side, 0)
-            fields.forEach { field ->
-                addView(field)
-                (field.layoutParams as LinearLayout.LayoutParams).topMargin = (8 * scale).toInt()
-            }
-        }
-
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Check your words")
-            .setMessage("Type these three words from your paper.")
-            .setView(form)
-            .setCancelable(false)
-            .setPositiveButton("Check", null)
-            .setNeutralButton("Show the words again") { _, _ -> showAgain() }
-            .create()
-            .apply { window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE) }
-        dialog.show()
-
-        // Set after showing, so a wrong answer keeps the dialog open.
-        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-            val answers = positions.zip(fields).map { (position, field) ->
-                PhraseAnswer(position.toUInt(), field.editText?.text?.toString().orEmpty())
-            }
-            lifecycleScope.launch {
-                val right = runCatching {
-                    withContext(Dispatchers.IO) { Engine.open(this@SetupActivity).phraseMatches(answers) }
-                }.getOrDefault(false)
-                if (right) {
-                    Engine.setPhraseConfirmed(this@SetupActivity, true)
-                    dialog.dismiss()
-                    done()
-                } else {
-                    dialog.setMessage(
-                        "Those are not the words at those places. Check your paper, " +
-                            "or look at the words again."
-                    )
-                }
-            }
+    /** Join with a code another device shows; its key comes with it. */
+    private fun join(code: String) {
+        settle("Could not join") {
+            if (Engine.unfinished(this)) Engine.discardUnfinished(this)
+            Engine.join(this, code)
         }
     }
 
-    /**
-     * The words again, from the engine, which derives them from the key; this
-     * screen kept no copy. Then a fresh check.
-     */
-    private fun showAgain() {
-        lifecycleScope.launch {
-            try {
-                val phrase = withContext(Dispatchers.IO) {
-                    Engine.open(this@SetupActivity).recoveryPhrase()
-                }
-                showPhrase(phrase)
-            } catch (e: Exception) {
-                fail("Could not show the words", e)
-            }
-        }
-    }
-
-    private fun showRestore() {
-        views.chooser.visibility = View.GONE
-        views.restorePanel.visibility = View.VISIBLE
-    }
-
+    /** The fallback: the 24 words, for somebody who has them. */
     private fun restore() {
         val phrase = views.phrase.text.toString().trim()
         if (phrase.isEmpty()) return
+        settle("That phrase was not accepted") {
+            if (Engine.unfinished(this)) Engine.discardUnfinished(this)
+            Engine.restore(this, phrase)
+            // All 24 typed just now: nothing further to check.
+            Engine.setPhraseConfirmed(this, true)
+        }
+    }
 
+    /**
+     * The key Block Store kept, on this phone or restored to it with the rest
+     * of a backup. It brings back the key, not the files: those come from the
+     * person's devices once this one is paired with them.
+     */
+    private fun fromBackup() {
+        settle("Could not use the backed-up key") {
+            val phrase = Backup.find(this) ?: error("There is no key in your Google backup any more.")
+            if (Engine.unfinished(this)) Engine.discardUnfinished(this)
+            Engine.restore(this, phrase)
+            Engine.setPhraseConfirmed(this, true)
+        }
+    }
+
+    /** Run one way of setting up, and go on to the app when it has worked. */
+    private fun settle(failure: String, work: suspend () -> Unit) {
         busy(true)
         lifecycleScope.launch {
             try {
-                Engine.restore(this@SetupActivity, phrase)
-                // All 24 typed just now: nothing further to check.
-                Engine.setPhraseConfirmed(this@SetupActivity, true)
+                work()
                 done()
             } catch (e: Exception) {
                 busy(false)
-                // The commonest failure by far, and the message says which word
-                // count was seen because a missing word is the usual cause.
-                fail("That phrase was not accepted", e)
+                fail(failure, e)
             }
         }
     }
@@ -221,9 +141,10 @@ class SetupActivity : AppCompatActivity() {
 
     private fun busy(working: Boolean) {
         views.progress.visibility = if (working) View.VISIBLE else View.GONE
-        views.create.isEnabled = !working
-        views.restore.isEnabled = !working
-        views.restoreConfirm.isEnabled = !working
+        listOf(
+            views.create, views.restore, views.scan, views.joinConfirm,
+            views.useWords, views.restoreConfirm, views.fromBackup,
+        ).forEach { it.isEnabled = !working }
     }
 
     private fun fail(title: String, e: Exception) {

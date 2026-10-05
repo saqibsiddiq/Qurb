@@ -329,12 +329,11 @@ pub fn inspect_folder(path: String) -> Answer<Folder> {
     })
 }
 
-/// Make a new device, and hold its recovery phrase until it is confirmed.
+/// Make a new device and start it.
 ///
-/// The phrase is not returned here. It is held in the session and fetched by
-/// [`shown_phrase`], so that the two are separate actions: creating a device is
-/// not the same event as putting somebody's key on a screen, and keeping them
-/// apart means the second can be repeated without the first.
+/// Nothing to write down first (decision 0052): another device is added with
+/// a code, which carries the key. The 24 words can still be shown, in
+/// Settings, by [`reveal_phrase`].
 ///
 /// `allowance` is the disk this device may use, in bytes, from the question
 /// asked before the key is made (decision 0038). Written with the rest of the
@@ -344,9 +343,10 @@ pub fn create_device(hosted: Host<'_>, path: String, allowance: String) -> Answe
     let bytes = bytes_of(&allowance)?;
     let root = expand(&path);
     hosted.aim_at(root.clone()).map_err(failed)?;
-    let phrase = qurb_cli::setup::create(&root).map_err(failed)?;
+    qurb_cli::setup::create(&root).map_err(failed)?;
     qurb_cli::setup::allow(&root, bytes).map_err(failed)?;
-    hosted.hold_phrase(phrase);
+    // A key created here is protected by a file, so nothing has to be typed.
+    hosted.start(|| Ok(String::new())).map_err(failed)?;
     start_at_login_from_now();
     Ok(())
 }
@@ -376,33 +376,6 @@ fn bytes_of(allowance: &str) -> Answer<u64> {
     }
 }
 
-/// The words, to put on the screen.
-///
-/// The window is expected to drop its copy as soon as it has drawn them. It
-/// does not need to keep them: confirmation is checked here, against the copy
-/// held in the session, which is itself dropped the moment it has served.
-#[tauri::command]
-pub fn shown_phrase(hosted: Host<'_>) -> Answer<Vec<String>> {
-    hosted.pending_words().ok_or_else(|| "there is no phrase to show".to_string())
-}
-
-/// Check some of the words, and on success forget the phrase and start syncing.
-///
-/// `answers` are `[position, word]` pairs with one-based positions, as they
-/// were shown. Getting them right is what the step is for: somebody who has not
-/// actually written the words down cannot answer, and finding that out now is
-/// the entire point of asking.
-#[tauri::command]
-pub fn confirm_phrase(hosted: Host<'_>, answers: Vec<(usize, String)>) -> Answer<bool> {
-    if !hosted.phrase_matches(&answers) {
-        return Ok(false);
-    }
-    hosted.forget_phrase();
-    // A key created here is protected by a file, so nothing has to be typed.
-    hosted.start(|| Ok(String::new())).map_err(failed)?;
-    Ok(true)
-}
-
 /// Set this folder up with a key that already exists on another device.
 ///
 /// `allowance` is as for [`create_device`].
@@ -424,6 +397,39 @@ pub fn enrol_device(
     hosted.start(|| Ok(String::new())).map_err(failed)?;
     start_at_login_from_now();
     Ok(())
+}
+
+/// Set this folder up as another of the same person's devices, from the code
+/// one of them is showing, and pair the two (decision 0052): the key comes
+/// with the code, so nothing is typed but the code. Returns the other
+/// device's name.
+///
+/// `allowance` is as for [`create_device`].
+#[tauri::command]
+pub async fn join_new_device(
+    hosted: Host<'_>,
+    path: String,
+    code: String,
+    allowance: String,
+) -> Answer<String> {
+    let bytes = bytes_of(&allowance)?;
+    let root = expand(&path);
+    hosted.aim_at(root.clone()).map_err(failed)?;
+    let paired = qurb_cli::setup::join(&root, &code).await.map_err(|e| match e
+        .downcast_ref::<qurb_peer::Error>()
+    {
+        Some(qurb_peer::Error::InviteExpired) => {
+            "that code has expired — ask the other device for a new one".to_string()
+        }
+        Some(qurb_peer::Error::NoKeyGiven) => {
+            "the other device did not give its key — the code may already have been used, or that device needs updating".to_string()
+        }
+        _ => format!("{e:#}"),
+    })?;
+    qurb_cli::setup::allow(&root, bytes).map_err(failed)?;
+    hosted.start(|| Ok(String::new())).map_err(failed)?;
+    start_at_login_from_now();
+    Ok(paired.name)
 }
 
 /// Show the recovery phrase for a device that is already set up.
@@ -738,6 +744,7 @@ pub fn send_files(hosted: Host<'_>, paths: Vec<String>, to: String) -> Answer<Se
 #[tauri::command]
 pub async fn start_pairing(hosted: Host<'_>) -> Answer<Invitation> {
     let (store, identity, name) = hosted.for_pairing().map_err(failed)?;
+    let master = hosted.master().map_err(failed)?;
     let now = now();
 
     // Port zero, not the configured one. The daemon in this process is already
@@ -760,7 +767,9 @@ pub async fn start_pairing(hosted: Host<'_>) -> Answer<Invitation> {
     let waiting = Arc::clone(&attempt);
     let nudge = hosted.nudger();
     attempt.watch(tauri::async_runtime::spawn(async move {
-        let outcome = match host.wait(store, &name, now).await {
+        // A device with no key joining with this code is given this one's
+        // (decision 0052): adding a phone is scanning, not typing 24 words.
+        let outcome = match host.wait_giving_key(store, &name, now, &master).await {
             Ok(peer) => {
                 // The daemon syncs with it now, not at its next check.
                 nudge.notify_one();

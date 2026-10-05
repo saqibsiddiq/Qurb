@@ -88,10 +88,9 @@ const ANSWERS = {
     if (!(gb > 0)) throw new Error(`\`${text.trim()}\` is not an amount of space — try 75 or 1.5 TB`);
     return String(Math.round(gb * 1024 ** 3));
   },
-  shown_phrase: () => WORDS,
-  // Any answer is accepted here; the real one checks against the phrase the
-  // session is holding, which a fixture has no way to be.
-  confirm_phrase: () => true,
+  // Any code is taken here; the real one fetches the key from the device
+  // showing it (decision 0052).
+  join_new_device: () => "Galaxy S23",
   enrol_device: () => null,
   reveal_phrase: () => WORDS,
   unlock: ({ passphrase }) => {

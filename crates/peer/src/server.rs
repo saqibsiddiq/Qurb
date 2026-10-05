@@ -346,6 +346,7 @@ async fn serve_request(
         Response::NotFound
         | Response::Noted
         | Response::Paired { .. }
+        | Response::Key { .. }
         | Response::Changed { .. } => 0,
     };
 
@@ -406,7 +407,8 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // Pairing is served by its own listener, which accepts unknown
         // certificates. This one only ever talks to devices already trusted, so
         // a pairing request here is either a mistake or a probe.
-        Request::Pair { .. } => Response::NotFound,
+        // And the key, above all, is never handed out here.
+        Request::Pair { .. } | Request::Join { .. } => Response::NotFound,
 
         // Handled before the store is locked, since it waits.
         Request::Changes { .. } => unreachable!("answered without locking the store"),

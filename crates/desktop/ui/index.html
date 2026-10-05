@@ -34,7 +34,7 @@
           </button>
           <button class="choice" id="choose-join">
             <span class="tile"><svg class="i"><use href="#i-key-round"/></svg></span>
-            <span><strong>I already use Qurb</strong><span>Add this computer with your 24-word recovery phrase.</span></span>
+            <span><strong>I already use Qurb</strong><span>Add this computer with the code your other device shows.</span></span>
             <svg class="i"><use href="#i-chevron-right"/></svg>
           </button>
         </div>
@@ -73,35 +73,20 @@
         </div>
       </section>
 
-      <section class="step" data-step="phrase">
-        <h1>Your recovery phrase</h1>
-        <p class="lead">These 24 words are your key. Write them on paper, in order.</p>
-        <ol id="words" class="words"></ol>
-        <div class="caution">
-          <svg class="i"><use href="#i-triangle-alert"/></svg>
-          <span>Nobody else has a copy. If you lose these words and every device, your files
-            cannot be recovered by anyone — including us.</span>
-        </div>
-        <div class="actions end">
-          <button class="btn primary" id="phrase-next">I've written them down</button>
-        </div>
-      </section>
-
-      <section class="step" data-step="verify">
-        <h1>Check your words</h1>
-        <p class="lead">Type these three from your paper. Capitals don't matter.</p>
-        <div id="asks" class="asks"></div>
-        <p id="verify-says" class="says warn hidden"></p>
-        <div class="actions">
-          <button class="btn" id="verify-back">Show the words again</button>
-          <button class="btn primary" id="verify-next">Confirm</button>
-        </div>
-      </section>
-
+      <!-- No phrase to write down or check (decision 0052): a device joins
+           with a code from one it already has, which carries the key. The
+           24 words stay as a way in for somebody who has them. -->
       <section class="step" data-step="join">
-        <h1>Enter your recovery phrase</h1>
-        <p class="lead">The 24 words from your first device. Order matters; spacing and capitals don't.</p>
-        <label class="field">
+        <h1 id="join-title">Enter the code from your other device</h1>
+        <p class="lead" id="join-lead">On your phone, open Qurb, go to Devices, choose <strong>Add a device</strong>
+          and then <strong>Show a code on this phone</strong>. Type that code here. It brings your key with it, so
+          there's nothing else to type.</p>
+        <label class="field" id="code-field">
+          <span>Code</span>
+          <input class="input" id="given-code" spellcheck="false" autocomplete="off"
+                 placeholder="QURB1-…">
+        </label>
+        <label class="field hidden" id="phrase-field">
           <span>Recovery phrase</span>
           <textarea class="input" id="given-phrase" rows="4" spellcheck="false" autocomplete="off"
                     placeholder="wheel push industry …"></textarea>
@@ -109,6 +94,7 @@
         <p id="join-says" class="says warn hidden"></p>
         <div class="actions">
           <button class="btn" data-back="storage">Back</button>
+          <button class="btn ghost" id="join-words">Use my 24 words instead</button>
           <button class="btn primary" id="join-next">Add this computer</button>
         </div>
       </section>
@@ -127,8 +113,9 @@
         <div class="actions end">
           <button class="btn primary" id="unlock-go">Unlock</button>
         </div>
-        <p class="note">Forgotten it? Your 24 words can set this computer up again: move this
-          folder's <code>.qurb</code> aside and choose “I already use Qurb”.</p>
+        <p class="note">Forgotten it? Another of your devices can set this computer up again:
+          move this folder's <code>.qurb</code> aside, choose “I already use Qurb”, and type the
+          code that device shows.</p>
       </section>
 
       <section class="step" data-step="ready">
@@ -322,7 +309,7 @@
                 <label class="field" id="protect-new-wrap">
                   <span>New passphrase</span>
                   <input class="input" type="password" id="protect-new" autocomplete="new-password">
-                  <span class="hint">At least 8 characters. Nobody can recover it for you; your 24 words can set this computer up again.</span>
+                  <span class="hint">At least 8 characters. Nobody can recover it for you; another of your devices can set this computer up again, with a code.</span>
                 </label>
                 <label class="field" id="protect-again-wrap">
                   <span>The same again</span>

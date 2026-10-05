@@ -41,8 +41,9 @@ not yet looked at by the owner.
 | | what a person can do | |
 |---|---|---|
 | Welcome | *Your files. Your devices. Your space.* — then new, or *I already use Qurb* | 🧪 |
-| Set up a new device | choose the folder, answer how much disk Qurb may use, see the 24 words, type three of them back | 🧪 |
-| Join with the 24 words | set this computer up as another of the same person's devices | 🧪 |
+| Set up a new device | choose the folder, answer how much disk Qurb may use, and it starts; nothing to write down ([0052](decisions/0052-the-key-travels-with-the-code.md)) | 🧪 |
+| Join with a code | type the code a phone shows; this computer gets the key and is paired | 🧪 |
+| Join with the 24 words | the fallback, for somebody who has them | 🧪 |
 | Unlock | type the passphrase, when the key is protected by one; at login the window shows itself to ask ([0046](decisions/0046-the-window-asks-for-the-passphrase.md)) | 🧪 |
 
 ### The places
@@ -105,8 +106,9 @@ themselves, the row says so.
 
 | | | |
 |---|---|---|
-| A new key | the 24 words shown once; three typed back | 🧪 |
-| An existing key | the 24 words from another device | 🧪 |
+| A new key | made and kept in Block Store, backed up end-to-end encrypted when the phone has a screen lock; nothing to write down ([0052](decisions/0052-the-key-travels-with-the-code.md)) | ◻ |
+| Joining | scan (or type) the code another device shows; the key comes with it | 🧪 in the FFI's tests |
+| The key from a backup, or the 24 words | the fallbacks | 🧪 |
 
 The S23 was set up before the three-word check existed; the flow as it is now
 was walked through on the emulator.
@@ -150,7 +152,8 @@ set up, so most commands need no path.
 
 | command | what it does |
 |---|---|
-| `init [dir]` | set up a device with a new key and show the 24 words |
+| `init [dir]` | set up a device with a new key; nothing to write down |
+| `join [dir] <code>` | a folder not set up takes the key of the device showing the code, and pairs with it |
 | `enrol <dir> "<24 words>"` | set up a device with an existing key |
 | `pair` / `join <code>` | show a pairing code (QR in the terminal) / join one |
 | `run` | the daemon, without a window |
@@ -245,8 +248,11 @@ Stated plainly so that a design does not assume it:
 - **Placeholders on Linux.** A freed file is absent from the folder, not shown
   greyed out ([0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md)).
 - **An automatic updater**, deliberately ([0047](decisions/0047-versions-and-upgrades.md)).
-- **Key recovery beyond the 24 words.** Lose them and every device, and the
-  files are gone — that is the promise, and no escape hatch is decided.
+- **Recovery on a computer.** A phone keeps its key in Block Store; a
+  computer has nothing that leaves the machine, so a person with only
+  computers who loses them all loses the key. And with every device lost the
+  files are gone anyway, unless a replica keeps a copy
+  ([0052](decisions/0052-the-key-travels-with-the-code.md)).
 - **A passphrase on the phone** (the Android Keystore and the phone's own lock
   stand in), stopping a send mid-transfer, a replica freeing space, push
   without Firebase, and accounts or billing of any kind.

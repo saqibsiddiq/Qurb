@@ -1,7 +1,8 @@
 // Setting a device up, and unlocking one (direction §47).
 //
-// Sparse on purpose: the recovery phrase is the highest-trust moment in the
-// product, so these screens carry the visual system and nothing decorative.
+// Sparse on purpose: setting a device up hands it the key, the highest-trust
+// moment in the product, so these screens carry the visual system and nothing
+// decorative. There is no phrase to write down (decision 0052).
 
 /** Which onboarding step is showing. */
 function step(name) {
@@ -225,9 +226,12 @@ $("storage-next").addEventListener("click", async () => {
   const next = $("storage-next");
   next.disabled = true;
   try {
+    // Made and started in one go: there is no phrase to write down first
+    // (decision 0052). Another device is added with a code, which carries
+    // the key.
     await invoke("create_device", { path: $("folder-path").value.trim(), allowance });
-    await showPhrase();
-    step("phrase");
+    $("ready-says").textContent = "This computer is your first device, and Qurb is watching your folder. Add your phone from Devices, with a code.";
+    step("ready");
   } catch (e) {
     $("storage-says").textContent = String(e);
     $("storage-says").classList.add("warn");
@@ -236,75 +240,19 @@ $("storage-next").addEventListener("click", async () => {
   }
 });
 
-async function showPhrase() {
-  const words = await invoke("shown_phrase");
-  const list = $("words");
-  list.replaceChildren();
-  for (const word of words) list.append(el("li", null, word));
-  // Nothing keeps a copy: the list in the document is the only one here, and
-  // confirmation is checked against the copy the session holds.
-}
+/** Whether the join step takes a code (the usual) or the 24 words. */
+let byWords = false;
 
-$("phrase-next").addEventListener("click", () => {
-  askForWords();
-  step("verify");
-});
-
-/** Which three positions are being asked about this time. */
-let asked = [];
-
-function askForWords() {
-  // Three, chosen at random each time, so that pressing "show the words
-  // again" and coming back is not a way to learn the answer to the same
-  // question.
-  const positions = new Set();
-  while (positions.size < 3) positions.add(1 + Math.floor(Math.random() * 24));
-  asked = [...positions].sort((a, b) => a - b);
-
-  const box = $("asks");
-  box.replaceChildren();
-  for (const position of asked) {
-    const field = el("label");
-    field.append(el("span", null, `Word ${position}`));
-    const input = el("input", "input");
-    input.type = "text";
-    input.autocomplete = "off";
-    input.spellcheck = false;
-    input.dataset.position = String(position);
-    field.append(input);
-    box.append(field);
-  }
-  $("verify-says").classList.add("hidden");
-  box.querySelector("input")?.focus();
-}
-
-$("verify-back").addEventListener("click", () => step("phrase"));
-
-$("verify-next").addEventListener("click", async () => {
-  const answers = [...$("asks").querySelectorAll("input")]
-    .map((i) => [Number(i.dataset.position), i.value]);
-
-  let ok;
-  try {
-    ok = await invoke("confirm_phrase", { answers });
-  } catch (e) {
-    $("verify-says").textContent = String(e);
-    $("verify-says").classList.remove("hidden");
-    return;
-  }
-
-  if (!ok) {
-    $("verify-says").textContent = "Those aren't the words at those places. Check your paper, and the numbers.";
-    $("verify-says").classList.remove("hidden");
-    return;
-  }
-
-  // Confirmed, so the words come off the screen. The session has already
-  // dropped its copy; this drops the only other one.
-  $("words").replaceChildren();
-  $("asks").replaceChildren();
-  $("ready-says").textContent = "This computer is your first device, and Qurb is watching your folder.";
-  step("ready");
+$("join-words").addEventListener("click", () => {
+  byWords = !byWords;
+  $("code-field").classList.toggle("hidden", byWords);
+  $("phrase-field").classList.toggle("hidden", !byWords);
+  $("join-title").textContent = byWords ? "Enter your recovery phrase" : "Enter the code from your other device";
+  $("join-lead").textContent = byWords
+    ? "The 24 words of your key. Order matters; spacing and capitals don't."
+    : "On your phone, open Qurb, go to Devices, choose Add a device and then Show a code on this phone. Type that code here. It brings your key with it, so there's nothing else to type.";
+  $("join-words").textContent = byWords ? "Use a code instead" : "Use my 24 words instead";
+  $("join-says").classList.add("hidden");
 });
 
 $("join-next").addEventListener("click", async () => {
@@ -312,15 +260,18 @@ $("join-next").addEventListener("click", async () => {
   const b = $("join-next");
   b.disabled = true;
   try {
-    await invoke("enrol_device", {
-      path: $("folder-path").value.trim(),
-      phrase: $("given-phrase").value,
-      allowance,
-    });
-    // Off the screen as soon as it has been used.
-    $("given-phrase").value = "";
+    const path = $("folder-path").value.trim();
+    if (byWords) {
+      await invoke("enrol_device", { path, phrase: $("given-phrase").value, allowance });
+      // Off the screen as soon as it has been used.
+      $("given-phrase").value = "";
+      $("ready-says").textContent = "This computer now shares your key, and Qurb is watching your folder. Pair it with your other devices from Devices.";
+    } else {
+      const joined = await invoke("join_new_device", { path, code: $("given-code").value, allowance });
+      $("given-code").value = "";
+      $("ready-says").textContent = `This computer is now one of your devices, paired with ${joined}, and Qurb is watching your folder.`;
+    }
     says.classList.add("hidden");
-    $("ready-says").textContent = "This computer now shares your key, and Qurb is watching your folder.";
     step("ready");
   } catch (e) {
     says.textContent = String(e);

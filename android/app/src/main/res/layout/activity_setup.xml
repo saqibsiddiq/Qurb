@@ -37,12 +37,13 @@
                 android:id="@+id/create"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Set up a new identity" />
+                android:text="Set up Qurb here" />
 
             <TextView
+                android:id="@+id/createSays"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Creates a key and shows you 24 words. Write them down."
+                android:text="This phone becomes your first device. There is nothing to write down."
                 android:textAppearance="@style/Text.Quiet"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="28dp" />
@@ -52,14 +53,77 @@
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="I already have 24 words" />
+                android:text="I already use Qurb" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Use this if another device is already set up."
+                android:text="Join the devices you already have, with the code one of them shows."
                 android:textAppearance="@style/Text.Quiet"
                 android:layout_marginTop="8dp" />
+
+            <!-- Shown only when Block Store holds a key from before. -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/fromBackup"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="Use the key from your Google backup"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Joining with a code from another device (decision 0052). -->
+        <LinearLayout
+            android:id="@+id/joinPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="On your computer, open Qurb, go to Devices and choose Add a device. Scan the code it shows. It brings your key with it, so there is nothing else to type."
+                android:textAppearance="@style/Text.Body"
+                android:textColor="@color/ink_soft"
+                android:layout_marginBottom="20dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/scan"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Scan the code" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:hint="Or type the code">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/code"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:importantForAutofill="no"
+                    android:inputType="textNoSuggestions|textVisiblePassword" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/joinConfirm"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Join" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/useWords"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="Use my 24 words instead" />
         </LinearLayout>
 
         <LinearLayout

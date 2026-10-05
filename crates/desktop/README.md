@@ -118,18 +118,19 @@ five days, from 2026-09-23, *Show a code* failed in the application every time
 outside the Tokio runtime) while the fixture showed a working screen. The
 project owner found it by using the window; this finds it in a minute.
 
-## The 24 words
+## No words to write down
 
-The phrase is held in the session rather than in the page: created, fetched
-once to be drawn, checked against when three of the words are confirmed, and
-dropped the moment that succeeds. The page can therefore drop its copy as soon
-as it has drawn the list, and what crosses back is a yes or no rather than a
-key. It is never logged, never persisted, and never put in debugging output.
+A new device is made and started with nothing shown and nothing checked
+([decision 0052](../../docs/decisions/0052-the-key-travels-with-the-code.md)).
+*I already use Qurb* takes the code a phone shows (*Show a code on this
+phone*) and `join_new_device` fetches the key with it; *Use my 24 words
+instead* is the fallback. Pairing from Devices gives this computer's key to a
+device with none, once per code.
 
-It can be shown again from Settings, derived from the key that is already in
-the folder — anybody who can read that folder can read the files, so this
-reveals nothing new. See
-[decision 0033](../../docs/decisions/0033-the-phrase-on-a-screen.md).
+The words can still be shown from Settings, derived from the key that is
+already in the folder: anybody who can read that folder can read the files, so
+this reveals nothing new. They are never logged, never persisted, and never put
+in debugging output.
 
 ## Pairing
 

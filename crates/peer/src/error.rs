@@ -22,6 +22,12 @@ pub enum Error {
     #[error("pairing ended before a device joined")]
     PairingAbandoned,
 
+    #[error("the other device did not give its key: the code may already have been used, or that device may need updating")]
+    NoKeyGiven,
+
+    #[error("setting this device up from the key failed: {detail}")]
+    SetUpFailed { detail: String },
+
     #[error("no STUN server answered; UDP may be blocked outbound")]
     NoStunResponse,
 

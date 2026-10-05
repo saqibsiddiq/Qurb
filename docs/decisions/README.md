@@ -38,9 +38,9 @@ is worth more than a tidy directory.
 | [0009](0009-conflict-edge-cases.md) | Conflict cases 0005 did not cover | Accepted |
 | [0010](0010-content-by-hash.md) | Content is requested by hash, never by path | Accepted |
 | [0011](0011-peer-identity-pinning.md) | Peer identity is a pinned certificate fingerprint | Accepted, completed by 0014 |
-| [0012](0012-key-hierarchy-and-recovery.md) | One root secret, derived keys, 24-word phrase | Accepted — recovery open |
+| [0012](0012-key-hierarchy-and-recovery.md) | One root secret, derived keys, 24-word phrase | Accepted — "the phrase is the only way to recover" superseded by 0052 |
 | [0013](0013-case-collisions.md) | Case collisions are refused, not resolved | Accepted |
-| [0014](0014-pairing.md) | Pairing transfers a full fingerprint out of band | Accepted |
+| [0014](0014-pairing.md) | Pairing transfers a full fingerprint out of band | Accepted — the token also guards the key since 0052 |
 | [0015](0015-control-plane-in-rust.md) | Signalling and the relay are written in Rust | Accepted — billing open |
 | [0016](0016-what-signalling-learns.md) | What the signalling server is allowed to learn | Accepted |
 | [0017](0017-relay.md) | The relay carries datagrams, not messages | Accepted |
@@ -59,7 +59,7 @@ is worth more than a tidy directory.
 | [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted, amended by 0037, extended by 0036 |
 | [0031](0031-what-happened-is-written-down.md) | What happened is written down | Accepted |
 | [0032](0032-the-interface-hosts-the-daemon.md) | The interface hosts the daemon, and asks it nouns | Accepted |
-| [0033](0033-the-phrase-on-a-screen.md) | The recovery phrase on a screen | Accepted, storage clause amended by 0038, applied to the phone, passphrase clause amended by 0046 |
+| [0033](0033-the-phrase-on-a-screen.md) | The recovery phrase on a screen | Superseded by 0052 for setup: no phrase shown or checked; showing it in Settings stands |
 | [0034](0034-finding-each-other-with-no-server.md) | Finding each other with no server | Accepted |
 | [0035](0035-a-rendezvous-on-a-bare-address.md) | A rendezvous on a bare address | Accepted |
 | [0036](0036-a-phone-keeps-its-own-files.md) | A phone keeps its own files, and another device holds them for it | Accepted — built, verified between a phone and a laptop; amended by 0049 |
@@ -78,3 +78,4 @@ is worth more than a tidy directory.
 | [0049](0049-adding-a-file-puts-it-where-you-are-looking.md) | Adding a file puts it where you are looking | Accepted — amends 0036; built on Android |
 | [0050](0050-large-files-from-a-phone.md) | Large files from a phone: fetched in parallel, resumed, and served in the foreground | Accepted — amends 0020; built, and measured on the S23, where fetching in parallel gained little |
 | [0051](0051-bbr-not-cubic.md) | QUIC paces by measured bandwidth (BBR), not by loss (Cubic) | Accepted — built; 2.5× from the phone over Wi-Fi, measured with the spike |
+| [0052](0052-the-key-travels-with-the-code.md) | The key travels with the pairing code; nobody writes 24 words down | Accepted — built on the command line, the desktop and Android; the S23 rejoined the laptop with a code |

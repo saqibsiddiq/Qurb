@@ -194,12 +194,40 @@ impl PairingHost {
     /// Returns once a device presents the right token. A device presenting the
     /// wrong one is refused and the host keeps waiting, so a wrong guess does
     /// not burn the invite — but it also does not get a second chance at the
-    /// same connection.
+    /// same connection. A device with no key asking for one is refused: see
+    /// [`wait_giving_key`](Self::wait_giving_key).
     pub async fn wait(
         &self,
         store: Arc<Mutex<Store>>,
         our_name: &str,
         now: i64,
+    ) -> Result<Paired> {
+        self.wait_inner(store, our_name, now, None).await
+    }
+
+    /// The same, and a device with no key that presents the token is given
+    /// this one's, so that it becomes another of the same person's devices
+    /// without anybody typing 24 words (decision 0052).
+    ///
+    /// Given once per invite. The token, which in plain pairing only showed
+    /// that a device had seen the code, now guards the key; a second device
+    /// presenting it, on another connection, gets nothing.
+    pub async fn wait_giving_key(
+        &self,
+        store: Arc<Mutex<Store>>,
+        our_name: &str,
+        now: i64,
+        key: &qurb_keys::MasterKey,
+    ) -> Result<Paired> {
+        self.wait_inner(store, our_name, now, Some(key.for_another_device())).await
+    }
+
+    async fn wait_inner(
+        &self,
+        store: Arc<Mutex<Store>>,
+        our_name: &str,
+        now: i64,
+        key: Option<[u8; 32]>,
     ) -> Result<Paired> {
         let our_device = { store.lock().expect("store mutex").device_id()? };
 
@@ -216,7 +244,7 @@ impl PairingHost {
         }
         let deadline = Duration::from_secs(remaining as u64);
 
-        tokio::time::timeout(deadline, self.accept_one(store, our_name, our_device))
+        tokio::time::timeout(deadline, self.accept_one(store, our_name, our_device, key))
             .await
             .unwrap_or(Err(Error::InviteExpired))
     }
@@ -227,7 +255,12 @@ impl PairingHost {
         store: Arc<Mutex<Store>>,
         our_name: &str,
         our_device: DeviceId,
+        key: Option<[u8; 32]>,
     ) -> Result<Paired> {
+        // Once the key has gone to one device, no other gets it from this
+        // invite, whatever it presents.
+        let mut key_given = false;
+
         while let Some(incoming) = self.endpoint.accept().await {
             let Ok(connection) = incoming.await else { continue };
 
@@ -239,9 +272,32 @@ impl PairingHost {
             let Ok((mut send, mut recv)) = connection.accept_bi().await else { continue };
             let Ok(raw) = recv.read_to_end(MAX_MESSAGE).await else { continue };
 
+            // A device with no key asks for one first, sets itself up with it,
+            // and then pairs on the next stream of the same connection -- so
+            // the certificate the key went to is the one that gets trusted.
+            let (mut send, raw) = match Request::decode(&raw) {
+                Ok(Request::Join { token }) => {
+                    let allowed = constant_time_eq(&token, &self.invite.token);
+                    let (Some(key), true, false) = (key, allowed, key_given) else {
+                        if !allowed {
+                            tracing::warn!(peer = %peer_fingerprint.short(), "wrong pairing token");
+                        }
+                        refuse(&mut send, &connection).await;
+                        continue;
+                    };
+                    key_given = true;
+                    send.write_all(&Response::Key { key }.encode()).await?;
+                    send.finish()?;
+
+                    let Ok((send, mut recv)) = connection.accept_bi().await else { continue };
+                    let Ok(raw) = recv.read_to_end(MAX_MESSAGE).await else { continue };
+                    (send, raw)
+                }
+                _ => (send, raw),
+            };
+
             let Ok(Request::Pair { token, device_id, name }) = Request::decode(&raw) else {
-                let _ = send.write_all(&Response::NotFound.encode()).await;
-                let _ = send.finish();
+                refuse(&mut send, &connection).await;
                 continue;
             };
 
@@ -253,8 +309,7 @@ impl PairingHost {
             // guessed one byte at a time by anyone who can measure the reply.
             if !constant_time_eq(&token, &self.invite.token) {
                 tracing::warn!(peer = %peer_fingerprint.short(), "wrong pairing token");
-                let _ = send.write_all(&Response::NotFound.encode()).await;
-                let _ = send.finish();
+                refuse(&mut send, &connection).await;
                 continue;
             }
 
@@ -305,8 +360,6 @@ pub async fn accept(
         return Err(Error::InviteExpired);
     }
 
-    let our_device = { store.lock().expect("store mutex").device_id()? };
-
     let bind: SocketAddr =
         if invite.address.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }.parse().expect("literal");
     let mut endpoint = quinn::Endpoint::client(bind)
@@ -317,8 +370,91 @@ pub async fn accept(
     endpoint.set_default_client_config(tls::client_config(identity, invite.fingerprint)?);
 
     let connection = endpoint.connect(invite.address, "qurb-device")?.await?;
-    let (mut send, mut recv) = connection.open_bi().await?;
+    let host = pair_on(&connection, invite, store, our_name).await;
+    hang_up(&connection, &endpoint).await;
+    host
+}
 
+/// Close, and let the close reach the other device.
+///
+/// `close` only queues it. A joining program that exited straight afterwards
+/// -- `qurb join` does -- took the close with it, and the device showing the
+/// code, waiting to see its reply arrive, sat out the thirty-second idle
+/// timeout before saying it had paired.
+async fn hang_up(connection: &quinn::Connection, endpoint: &quinn::Endpoint) {
+    connection.close(0u32.into(), b"paired");
+    endpoint.close(0u32.into(), b"paired");
+    let _ = tokio::time::timeout(Duration::from_secs(2), endpoint.wait_idle()).await;
+}
+
+/// Say no, and let the answer leave before the connection is dropped.
+///
+/// Dropped straight after writing, the connection closed under the reply, and
+/// the device asking saw "connection lost" rather than a refusal. Waited for
+/// only briefly: a device that will not hang up must not hold the pairing
+/// listener open for the next one.
+async fn refuse(send: &mut quinn::SendStream, connection: &quinn::Connection) {
+    let _ = send.write_all(&Response::NotFound.encode()).await;
+    let _ = send.finish();
+    let _ = tokio::time::timeout(Duration::from_secs(2), connection.closed()).await;
+}
+
+/// Join as a device with no key: connect to the device showing the code, get
+/// its key, set this device up with it through `set_up`, and pair.
+///
+/// `identity` must already exist, since the connection presents it, and it is
+/// the certificate the other device then trusts. `set_up` installs the key and
+/// returns the store it opened; it is the caller's because how a key is kept
+/// differs by platform. Nothing is set up unless the key arrives from the
+/// device whose fingerprint the code carries.
+pub async fn join<F>(
+    invite: &Invite,
+    identity: &Identity,
+    our_name: &str,
+    now: i64,
+    set_up: F,
+) -> Result<Paired>
+where
+    F: FnOnce(qurb_keys::MasterKey) -> std::result::Result<Arc<Mutex<Store>>, String>,
+{
+    if invite.is_expired(now) {
+        return Err(Error::InviteExpired);
+    }
+
+    let bind: SocketAddr =
+        if invite.address.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }.parse().expect("literal");
+    let mut endpoint = quinn::Endpoint::client(bind)
+        .map_err(|e| Error::Io { path: bind.to_string().into(), source: e })?;
+    endpoint.set_default_client_config(tls::client_config(identity, invite.fingerprint)?);
+    let connection = endpoint.connect(invite.address, "qurb-device")?.await?;
+
+    let (mut send, mut recv) = connection.open_bi().await?;
+    send.write_all(&Request::Join { token: invite.token }.encode()).await?;
+    send.finish()?;
+    let key = match Response::decode(&recv.read_to_end(MAX_MESSAGE).await?)? {
+        Response::Key { key } => qurb_keys::MasterKey::from_bytes(key),
+        Response::NotFound => return Err(Error::NoKeyGiven),
+        other => {
+            return Err(Error::Protocol { detail: format!("expected a key, got {other:?}") })
+        }
+    };
+
+    let store = set_up(key).map_err(|detail| Error::SetUpFailed { detail })?;
+    let host = pair_on(&connection, invite, store, our_name).await;
+    hang_up(&connection, &endpoint).await;
+    host
+}
+
+/// The pairing exchange itself, on a connection already pinned to the
+/// inviting device.
+async fn pair_on(
+    connection: &quinn::Connection,
+    invite: &Invite,
+    store: Arc<Mutex<Store>>,
+    our_name: &str,
+) -> Result<Paired> {
+    let our_device = { store.lock().expect("store mutex").device_id()? };
+    let (mut send, mut recv) = connection.open_bi().await?;
     let request = Request::Pair {
         token: invite.token,
         device_id: *our_device.as_bytes(),
@@ -342,13 +478,8 @@ pub async fn accept(
         }
     };
 
-    {
-        let store = store.lock().expect("store mutex");
-        store.db().trust_peer(&host.device_id, host.fingerprint.as_bytes(), &host.name)?;
-    }
-
-    connection.close(0u32.into(), b"paired");
-    endpoint.close(0u32.into(), b"paired");
+    let store = store.lock().expect("store mutex");
+    store.db().trust_peer(&host.device_id, host.fingerprint.as_bytes(), &host.name)?;
     Ok(host)
 }
 

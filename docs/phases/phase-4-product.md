@@ -1141,6 +1141,25 @@ Two fixes, either enough:
 Not checked: whether a notification now appears on the owner's desktop when a
 transfer fails. Run since the fix, the desktop has not had one to raise.
 
+## Setting a computer up without the 24 words
+
+**2026-10-05**, by [decision 0052](../decisions/0052-the-key-travels-with-the-code.md).
+The window's setup no longer shows the words or asks for three back: *Set up
+Qurb here* makes the key and starts. *I already use Qurb* takes the code a
+phone shows (*Show a code on this phone*), and `join_new_device` fetches the
+key with it and pairs; the 24 words are the fallback. Pairing from Devices
+gives this computer's key to a device with none, once per code. On the command
+line, `qurb init` no longer prints the words, and `qurb join [dir] <code>` sets
+up a folder that is not set up yet. Test:
+`a_new_folder_joins_with_a_code_and_takes_the_key`, the real binary on both
+sides.
+
+That test found that `qurb join` exiting straight after pairing left `qurb
+pair` waiting 30 seconds for a close that had not been sent. The joining side
+now waits up to two seconds for its close to leave. A refusal had the same
+fault in reverse: the device showing the code dropped the connection under its
+"no", and the asking device saw *connection lost*.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

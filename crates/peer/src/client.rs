@@ -433,6 +433,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::NotFound => "not-found",
         Response::Noted => "acknowledgement",
         Response::Paired { .. } => "pairing reply",
+        Response::Key { .. } => "key",
         Response::Changed { .. } => "change notification",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }

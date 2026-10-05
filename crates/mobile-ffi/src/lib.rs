@@ -632,6 +632,72 @@ pub fn restore_protected(
     Ok(())
 }
 
+/// Set up a device by joining one the person already has, from the code it
+/// shows: its key comes over the pairing connection, so nothing is typed but
+/// the code -- usually scanned (decision 0052). The two are paired as well.
+///
+/// The key is kept as [`restore_protected`] keeps it. Nothing is installed
+/// unless it arrives from the device whose fingerprint the code carries; a
+/// code that is wrong, expired or already used leaves only this device's new
+/// certificate, which the next attempt reuses.
+#[uniffi::export]
+pub fn join_new(
+    root: String,
+    code: String,
+    device_name: String,
+    keystore: Option<Arc<dyn KeyStore>>,
+) -> Result<PeerInfo, QurbError> {
+    logging();
+    let invite = qurb_peer::Invite::parse(code.trim())
+        .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
+    let store_dir = store_dir(Path::new(&root));
+    let vault = vault_at(&store_dir, keystore.as_ref());
+    if vault.exists() {
+        return Err(QurbError::Other { detail: format!("{root} is already set up") });
+    }
+    std::fs::create_dir_all(&store_dir).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+    let identity = qurb_peer::Identity::load_or_create(&store_dir)
+        .map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+    let protection = match keystore {
+        Some(_) => qurb_keys::Protection::Platform,
+        None => qurb_keys::Protection::File,
+    };
+
+    // A runtime of its own: nothing else is running yet, and this one lasts
+    // only as long as the pairing does.
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()
+        .map_err(|e| QurbError::Other { detail: format!("no runtime: {e}") })?;
+    let paired = runtime
+        .block_on(qurb_peer::join(&invite, &identity, &device_name, now(), |key| {
+            let master = vault
+                .restore_with(&key.to_phrase(), protection, None)
+                .map_err(|e| e.to_string())?;
+            let chunk_key = ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
+            let store = Store::open(&store_dir, chunk_key).map_err(|e| e.to_string())?;
+            Ok(Arc::new(std::sync::Mutex::new(store)))
+        }))
+        .map_err(|e| match e {
+            qurb_peer::Error::InviteExpired => QurbError::Network {
+                detail: "that code has expired; ask the other device for a new one".into(),
+            },
+            qurb_peer::Error::NoKeyGiven => QurbError::Network {
+                detail: "the other device did not give its key: the code may already have been used, or that device needs updating".into(),
+            },
+            other => QurbError::Network { detail: other.to_string() },
+        })?;
+
+    Ok(PeerInfo {
+        fingerprint: hex(paired.fingerprint.as_bytes()),
+        short: paired.fingerprint.short(),
+        name: paired.name,
+        paired_at: now(),
+        last_seen: None,
+    })
+}
+
 /// How a vault's key is kept, for a device already set up.
 #[uniffi::export]
 pub fn protection_of(root: String) -> Result<String, QurbError> {
@@ -935,6 +1001,7 @@ impl Qurb {
             runtime,
             inner: Mutex::new(Some(host)),
             cancelled: Arc::new(tokio::sync::Notify::new()),
+            master: self.master.clone(),
         }))
     }
 
@@ -2208,6 +2275,9 @@ pub struct Pairing {
     /// Told when somebody gives up, so a `wait` already blocking returns
     /// rather than listening until the code expires.
     cancelled: Arc<tokio::sync::Notify>,
+    /// Given to a device with no key that joins with this code, once
+    /// (decision 0052).
+    master: MasterKey,
 }
 
 #[uniffi::export]
@@ -2248,7 +2318,7 @@ impl Pairing {
         let cancelled = Arc::clone(&self.cancelled);
         let outcome = self.runtime.block_on(async {
             tokio::select! {
-                joined = host.wait(Arc::clone(&self.store), &self.name, now()) => Some(joined),
+                joined = host.wait_giving_key(Arc::clone(&self.store), &self.name, now(), &self.master) => Some(joined),
                 () = cancelled.notified() => None,
             }
         });

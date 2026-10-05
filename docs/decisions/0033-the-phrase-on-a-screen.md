@@ -1,6 +1,6 @@
 # 0033 — The recovery phrase on a screen
 
-**Status:** Accepted — the storage clause amended by [0038](0038-the-storage-question-during-setup.md); applied to the phone 2026-09-27; "no passphrase prompt in the window" amended by [0046](0046-the-window-asks-for-the-passphrase.md)
+**Status:** Superseded for setup by [0052](0052-the-key-travels-with-the-code.md) (2026-10-05): no phrase is shown or checked when a device is set up. Rule 4, showing it again from the stored key, stands. Before that: the storage clause amended by [0038](0038-the-storage-question-during-setup.md); applied to the phone 2026-09-27; "no passphrase prompt in the window" amended by [0046](0046-the-window-asks-for-the-passphrase.md)
 **Date:** 2026-09-23
 
 ## Decision

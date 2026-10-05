@@ -40,7 +40,7 @@ them, and the sheets that rise over them:
 | Activity | from Home: everything this phone did, newest first |
 | Recently deleted | from Files and Settings: 30 days, restore everywhere or delete for good ([0042](../docs/decisions/0042-recently-deleted.md)) |
 | Transfers | a bar above the tabs while this phone syncs or has sent something not yet collected; it opens a sheet with what is waiting (stoppable) and what finished |
-| setup | create an identity, show the 24 words and have three of them typed back; or restore from them |
+| setup | create an identity with nothing to write down; or join by scanning (or typing) the code another device shows, which brings its key; or the key from the Google backup; or the 24 words |
 | scan | the camera, reading the code another device shows when connecting |
 | share | anything on the phone, from the system share sheet: saved to Private Vault, saved to Files, or sent to one paired device |
 
@@ -118,15 +118,17 @@ qurb through the picker; a name already taken gets `(2)`, and closing the file
 starts a scan and a sync. Deleting and renaming from a file manager are still
 refused: a deletion becomes a tombstone on every device, and there is no undo.
 
-**The 24 words are checked, as on the desktop** (decision
-[0033](../docs/decisions/0033-the-phrase-on-a-screen.md)). After "I have written
-them down" the phone asks for three at random positions, drawn again each time
-the words are looked at again, and the engine checks them against the key: the
-app draws the words once and keeps no copy to compare with. Closed before the
-check, the app comes back to it. Settings shows the words again, after saying
-what they are. The windows that show them are kept out of screenshots and the
-recent-apps view, and the fields that take them tell the keyboard not to learn
-what is typed.
+**Nothing to write down** (decision
+[0052](../docs/decisions/0052-the-key-travels-with-the-code.md), which
+replaced 0033's check on 2026-10-05). *Set up Qurb here* makes a key and opens
+the app. *I already use Qurb* scans the code a computer or phone shows, or
+takes it typed, and the key arrives with it (`joinNew`). *Use my 24 words
+instead* is the fallback. The key is kept in Block Store (`Backup.kt`); when
+the phone has a screen lock it is backed up end-to-end encrypted, and setup
+offers it back as *Use the key from your Google backup*. A phone that began
+setup under the old rules and never typed its words back can keep that key or
+join instead; joining puts the unused key aside, provided the folder is still
+empty. Settings can still show the words.
 
 Saving streams through a cache file rather than a byte array, because `export`
 writes a chunk at a time precisely so a large file never has to fit in the heap
@@ -208,7 +210,8 @@ location, contacts or anything like them.
 `allowBackup` is `false` on purpose. Android's backup would copy the vault to
 Google's servers, and the Keystore key wrapping it does **not** travel — so a
 restored copy would be an unreadable store that looks like a working one. The
-recovery phrase is the supported way to move to a new device.
+supported way to move to a new device is to join with a code from one of the
+person's devices, or the key Block Store kept (decision 0052).
 
 ## Trying it with a computer
 

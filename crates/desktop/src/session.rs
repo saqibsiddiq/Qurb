@@ -12,18 +12,15 @@
 //! - **Running.** A key, a store to query, and a daemon publishing what it is
 //!   doing.
 //!
-//! # The recovery phrase lives here, briefly
+//! # No recovery phrase passes through here
 //!
-//! Between being created and being confirmed, the phrase is held in
-//! [`Hosted::pending`] rather than in the window, so that the page can drop its
-//! copy the moment it has drawn it and confirmation can be checked without the
-//! words being sent back and forth. It is dropped as soon as the person says
-//! they have written it down, and it is never written to disk or to a log.
+//! A new device is not asked to write its 24 words down any more (decision
+//! 0052), so nothing holds them between screens. Settings can still show them,
+//! derived from the key on demand and never kept.
 
 use anyhow::{Context, Result};
 use qurb_cli::status::{Status, Watcher};
 use qurb_cli::{store_dir, Daemon};
-use qurb_keys::RecoveryPhrase;
 use qurb_peer::Identity;
 use qurb_storage::{ChunkKey, Store};
 use std::path::PathBuf;
@@ -41,6 +38,10 @@ pub struct Running {
     /// it records a peer -- and handing it the window's read handle would mean
     /// passing a `&Store` where an owned one is needed.
     pub key: ChunkKey,
+    /// What a device joining with this one's code is given, so that it
+    /// becomes another of the same person's devices with nothing typed
+    /// (decision 0052). Held only while running, as the daemon holds it.
+    pub master: qurb_keys::MasterKey,
 }
 
 /// How a pairing attempt is going.
@@ -92,8 +93,6 @@ impl Attempt {
 pub struct Hosted {
     root: Mutex<PathBuf>,
     running: Mutex<Option<Running>>,
-    /// A phrase that has been shown and not yet confirmed. See the module note.
-    pending: Mutex<Option<RecoveryPhrase>>,
     /// The one pairing attempt at a time. A second code would mean two live
     /// invites to the same device, and only one of them could be the one on
     /// the screen.
@@ -108,7 +107,6 @@ impl Hosted {
         Self {
             root: Mutex::new(root),
             running: Mutex::new(None),
-            pending: Mutex::new(None),
             pairing: Mutex::new(None),
             nudge: Arc::new(tokio::sync::Notify::new()),
         }
@@ -177,35 +175,6 @@ impl Hosted {
         qurb_cli::Config::load(&store_dir(&self.root())).map(|c| c.limit).unwrap_or(0)
     }
 
-    pub fn hold_phrase(&self, phrase: RecoveryPhrase) {
-        *self.pending.lock().expect("pending") = Some(phrase);
-    }
-
-    /// Check some of the words against the phrase being held, without the
-    /// window having to keep a copy to compare against.
-    ///
-    /// `answers` are one-based positions, as they are shown. Everything is
-    /// compared lower-cased and trimmed: people retype from paper, and refusing
-    /// a capital letter would be refusing a correct answer.
-    pub fn phrase_matches(&self, answers: &[(usize, String)]) -> bool {
-        let guard = self.pending.lock().expect("pending");
-        let Some(phrase) = guard.as_ref() else { return false };
-        let answers: Vec<(usize, &str)> = answers.iter().map(|(p, w)| (*p, w.as_str())).collect();
-        phrase.matches(&answers)
-    }
-
-    /// Show the phrase being held. Only while one is.
-    pub fn pending_words(&self) -> Option<Vec<String>> {
-        let guard = self.pending.lock().expect("pending");
-        guard.as_ref().map(|p| p.words().to_vec())
-    }
-
-    /// Forget it. Called as soon as it has served its purpose, which is the
-    /// only reason it was ever held.
-    pub fn forget_phrase(&self) {
-        *self.pending.lock().expect("pending") = None;
-    }
-
     /// Open the key, start the daemon, and begin answering the rest of the
     /// commands.
     ///
@@ -221,6 +190,7 @@ impl Hosted {
         let (master, identity, store, config) = qurb_cli::open_with(&root, passphrase)
             .with_context(|| format!("opening {}", root.display()))?;
         let key = store.chunk_key();
+        let held = master.clone();
         drop(store);
 
         let (publisher, watcher) = qurb_cli::status::channel(Status::starting(
@@ -262,8 +232,14 @@ impl Hosted {
             .in_tree(&root);
 
         *self.running.lock().expect("session") =
-            Some(Running { store: reader, status: watcher, key });
+            Some(Running { store: reader, status: watcher, key, master: held });
         Ok(())
+    }
+
+    /// The key a device joining with this one's code is given.
+    pub fn master(&self) -> Result<qurb_keys::MasterKey> {
+        let guard = self.running.lock().expect("session");
+        Ok(guard.as_ref().context("this device is not set up yet")?.master.clone())
     }
 
     /// Everything pairing needs: a store of its own, an identity, and a name.
@@ -325,73 +301,6 @@ impl Hosted {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use qurb_keys::MasterKey;
-
-    fn holding() -> (Hosted, Vec<String>) {
-        let hosted = Hosted::new(PathBuf::from("/nowhere"));
-        let phrase = MasterKey::from_bytes([7; 32]).to_phrase();
-        let words = phrase.words().to_vec();
-        hosted.hold_phrase(phrase);
-        (hosted, words)
-    }
-
-    #[test]
-    fn the_right_words_at_the_right_positions_are_accepted() {
-        let (hosted, words) = holding();
-        let answers =
-            vec![(1, words[0].clone()), (12, words[11].clone()), (24, words[23].clone())];
-        assert!(hosted.phrase_matches(&answers));
-    }
-
-    /// Retyped from paper, where nobody records the capitalisation or how much
-    /// space they left. Refusing these would be refusing a correct answer.
-    #[test]
-    fn capitals_and_surrounding_space_do_not_matter() {
-        let (hosted, words) = holding();
-        let answers = vec![(1, format!("  {}  ", words[0].to_uppercase()))];
-        assert!(hosted.phrase_matches(&answers));
-    }
-
-    #[test]
-    fn a_right_word_at_the_wrong_position_is_refused() {
-        let (hosted, words) = holding();
-        // The order is part of the key, so this has to fail even though every
-        // word given is one of the twenty-four.
-        assert!(!hosted.phrase_matches(&[(2, words[0].clone())]));
-    }
-
-    #[test]
-    fn one_wrong_answer_fails_the_whole_check() {
-        let (hosted, words) = holding();
-        let answers = vec![(1, words[0].clone()), (2, "rhubarb".to_string())];
-        assert!(!hosted.phrase_matches(&answers));
-    }
-
-    /// Otherwise "all of nothing matched" would be a way past the step.
-    #[test]
-    fn answering_nothing_is_not_answering_correctly() {
-        let (hosted, _) = holding();
-        assert!(!hosted.phrase_matches(&[]));
-    }
-
-    #[test]
-    fn a_position_outside_the_phrase_is_refused_rather_than_panicking() {
-        let (hosted, words) = holding();
-        assert!(!hosted.phrase_matches(&[(0, words[0].clone())]));
-        assert!(!hosted.phrase_matches(&[(25, words[0].clone())]));
-    }
-
-    /// Once forgotten, nothing matches: there is no phrase to match against,
-    /// and treating "no phrase" as "everything is correct" would be the worst
-    /// possible reading of an empty option.
-    #[test]
-    fn nothing_matches_once_the_phrase_is_forgotten() {
-        let (hosted, words) = holding();
-        hosted.forget_phrase();
-        assert!(!hosted.phrase_matches(&[(1, words[0].clone())]));
-        assert!(hosted.pending_words().is_none());
-    }
-
     fn attempt(hosted: &Hosted) -> Arc<Attempt> {
         hosted.begin_pairing("qurb1-code".into(), "kilo seven".into(), 0)
     }

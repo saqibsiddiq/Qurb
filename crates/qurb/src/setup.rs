@@ -129,6 +129,39 @@ pub fn enrol(root: &Path, phrase: &RecoveryPhrase) -> Result<()> {
     Ok(())
 }
 
+/// Set `root` up as another of the same person's devices, from the code a
+/// device of theirs is showing, and pair the two.
+///
+/// The key arrives over the pairing connection, pinned to the device whose
+/// fingerprint the code carries, so nobody types 24 words (decision 0052).
+/// Nothing is installed unless it arrives: a code that is wrong, expired or
+/// already used leaves only this device's new certificate behind, which the
+/// next attempt reuses.
+pub async fn join(root: &Path, code: &str) -> Result<qurb_peer::Paired> {
+    let invite = qurb_peer::Invite::parse(code.trim()).context("that is not a valid pairing code")?;
+    let dir = store_dir(root);
+    if Vault::at(&dir).exists() {
+        bail!("{} is already set up", root.display());
+    }
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    let identity = Identity::load_or_create(&dir)?;
+    let name = Config::default().name;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+
+    let root = root.to_path_buf();
+    let paired = qurb_peer::join(&invite, &identity, &name, now, |key| {
+        enrol(&root, &key.to_phrase()).map_err(|e| format!("{e:#}"))?;
+        let chunk_key = ChunkKey::from_bytes(key.derive(Purpose::ChunkEncryption).to_bytes());
+        let store = Store::open(&dir, chunk_key).map_err(|e| e.to_string())?.in_tree(&root);
+        Ok(std::sync::Arc::new(std::sync::Mutex::new(store)))
+    })
+    .await?;
+    Ok(paired)
+}
+
 /// How much disk a device may use, as somebody typed it while setting it up.
 ///
 /// The question is asked in gigabytes, so a bare number is gigabytes; a unit

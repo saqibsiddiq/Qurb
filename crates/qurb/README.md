@@ -56,7 +56,7 @@ they say. Folders are listed by their full path, in
 On the first:
 
 ```bash
-qurb init ~/Sync          # writes down 24 words — this is the only copy
+qurb init ~/Sync          # a new key; another device joins with `qurb pair`
 qurb pair ~/Sync          # shows a code
 ```
 

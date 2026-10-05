@@ -60,7 +60,7 @@ Setup, then a handle:
 
 ```kotlin
 if (!isSetUp(root)) {
-    val setup = create(root)          // 24 words — show them once, then never again
+    val setup = create(root)          // a new key; or joinNew(root, code, ...) to take another device's
 }
 val qurb = Qurb(root, null)
 qurb.scan()                           // catch up with what changed while we were not running

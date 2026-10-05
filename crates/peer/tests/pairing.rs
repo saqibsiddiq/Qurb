@@ -12,7 +12,7 @@
 //! anyone, it just stops a device that found the port from pairing with one
 //! that never saw the code.
 
-use qurb_peer::{accept, Error, Identity, Invite, PairingHost};
+use qurb_peer::{accept, join, Error, Identity, Invite, PairingHost};
 use qurb_storage::{ChunkKey, Store};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -485,4 +485,126 @@ async fn a_live_invite_stops_when_it_expires() {
         "it waited {:?} past the invite's lifetime",
         started.elapsed()
     );
+}
+
+// -- a device with no key joins (decision 0052) ------------------------------
+
+/// A device that is not set up yet: a certificate, and somewhere to set up.
+struct Fresh {
+    dir: tempfile::TempDir,
+    identity: Identity,
+}
+
+impl Fresh {
+    fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let identity = Identity::load_or_create(dir.path()).unwrap();
+        Self { dir, identity }
+    }
+
+    /// Set up from the key received, as the apps do: a store under the key.
+    fn set_up(
+        &self,
+        got: Arc<Mutex<Option<[u8; 32]>>>,
+    ) -> impl FnOnce(qurb_keys::MasterKey) -> Result<Arc<Mutex<Store>>, String> + '_ {
+        move |key: qurb_keys::MasterKey| {
+            *got.lock().unwrap() = Some(key.for_another_device());
+            let chunk = key.derive(qurb_keys::Purpose::ChunkEncryption).to_bytes();
+            let store = Store::open(&self.dir.path().join("store"), ChunkKey::from_bytes(chunk))
+                .map_err(|e| e.to_string())?;
+            Ok(Arc::new(Mutex::new(store)))
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_with_no_key_joins_with_the_code_and_gets_the_key() {
+    let host = Device::new();
+    let key = qurb_keys::MasterKey::generate();
+    let fresh = Fresh::new();
+    let got = Arc::new(Mutex::new(None));
+
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let host_store = Arc::clone(&host.store);
+    let waiting = async { listener.wait_giving_key(host_store, "Desktop", NOW, &key).await };
+    let joining = join(&invite, &fresh.identity, "Phone", NOW, fresh.set_up(Arc::clone(&got)));
+    let (host_saw, joiner_saw) = tokio::join!(waiting, joining);
+
+    assert_eq!(*got.lock().unwrap(), Some(key.for_another_device()), "the same key arrived");
+    let host_saw = host_saw.expect("host side");
+    let joiner_saw = joiner_saw.expect("joiner side");
+    // The certificate the key went to is the one now trusted.
+    assert_eq!(host_saw.fingerprint, fresh.identity.fingerprint());
+    assert_eq!(host_saw.name, "Phone");
+    assert_eq!(joiner_saw.device_id, host.device_id());
+    assert_eq!(host.trusted().len(), 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn without_the_code_a_device_gets_no_key_and_sets_nothing_up() {
+    let host = Device::new();
+    let key = qurb_keys::MasterKey::generate();
+    let fresh = Fresh::new();
+    let got = Arc::new(Mutex::new(None));
+
+    // Expiring in two seconds, so the host stops waiting by itself.
+    let now = NOW + 300 - 2;
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let mut guessed = listener.invite().clone();
+    guessed.token[0] ^= 1;
+    let host_store = Arc::clone(&host.store);
+    let waiting = async { listener.wait_giving_key(host_store, "Desktop", now, &key).await };
+    let joining = join(&guessed, &fresh.identity, "Phone", now, fresh.set_up(Arc::clone(&got)));
+    let (host_saw, joiner_saw) = tokio::join!(waiting, joining);
+
+    assert!(matches!(joiner_saw, Err(Error::NoKeyGiven)), "{joiner_saw:?}");
+    assert!(got.lock().unwrap().is_none(), "nothing was set up");
+    assert!(host_saw.is_err());
+    assert!(host.trusted().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_key_goes_to_one_device_only() {
+    let host = Device::new();
+    let key = qurb_keys::MasterKey::generate();
+    let first = Fresh::new();
+    let second = Fresh::new();
+    let got = Arc::new(Mutex::new(None));
+
+    let now = NOW + 300 - 3;
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let host_store = Arc::clone(&host.store);
+    let waiting = async { listener.wait_giving_key(host_store, "Desktop", now, &key).await };
+    let joining = async {
+        // The first device gets the key and then fails to set up, so it never
+        // pairs; the invite is still open, and a second device presenting
+        // the same code gets nothing.
+        let failed = join(&invite, &first.identity, "Phone", now, |_| Err("no room".to_string())).await;
+        assert!(matches!(failed, Err(Error::SetUpFailed { .. })), "{failed:?}");
+        join(&invite, &second.identity, "Other", now, second.set_up(Arc::clone(&got))).await
+    };
+    let (_, second_saw) = tokio::join!(waiting, joining);
+
+    assert!(matches!(second_saw, Err(Error::NoKeyGiven)), "{second_saw:?}");
+    assert!(got.lock().unwrap().is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn plain_pairing_never_hands_out_the_key() {
+    let host = Device::new();
+    let fresh = Fresh::new();
+    let got = Arc::new(Mutex::new(None));
+
+    let now = NOW + 300 - 2;
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let host_store = Arc::clone(&host.store);
+    let waiting = async { listener.wait(host_store, "Desktop", now).await };
+    let joining = join(&invite, &fresh.identity, "Phone", now, fresh.set_up(Arc::clone(&got)));
+    let (_, joiner_saw) = tokio::join!(waiting, joining);
+
+    assert!(matches!(joiner_saw, Err(Error::NoKeyGiven)), "{joiner_saw:?}");
+    assert!(got.lock().unwrap().is_none());
 }

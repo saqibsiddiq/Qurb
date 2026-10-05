@@ -8,7 +8,7 @@
 //! real is everything between them: pairing out of band, a rendezvous service,
 //! a QUIC connection with pinned certificates, and the engine's own planning.
 
-use qurb_mobile::{create, restore, Qurb, Settings};
+use qurb_mobile::{create, join_new, restore, Qurb, Settings};
 use qurb_signal::SignalServer;
 use std::sync::Arc;
 
@@ -163,6 +163,36 @@ fn a_phone_pairs_with_a_desktop_and_takes_its_files() {
     let out = phone_dir.path().join("exported.txt");
     phone.export("notes.txt".into(), out.display().to_string()).unwrap();
     assert_eq!(std::fs::read(&out).unwrap(), b"written on the desktop");
+}
+
+/// A new phone joins with the code the desktop shows and comes out with the
+/// desktop's key, paired, with no 24 words anywhere (decision 0052).
+#[test]
+fn a_new_phone_joins_with_the_code_and_needs_no_words() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
+    logging();
+    let (_runtime, signal) = signalling();
+
+    let desktop_dir = tempfile::tempdir().unwrap();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let desktop_root = desktop_dir.path().display().to_string();
+    let phone_root = phone_dir.path().display().to_string();
+
+    create(desktop_root.clone()).unwrap();
+    let desktop = Qurb::open_with(desktop_root, None, settings("desktop", &signal)).unwrap();
+
+    let offer = desktop.offer_pairing().unwrap();
+    let code = offer.code();
+    let waiting = std::thread::spawn(move || offer.wait());
+    let joined = join_new(phone_root.clone(), code, "phone".into(), None).unwrap();
+    let hosted = waiting.join().unwrap().unwrap();
+    assert_eq!(joined.name, "desktop");
+    assert_eq!(hosted.name, "phone");
+
+    let phone = Qurb::open_with(phone_root, None, settings("phone", &signal)).unwrap();
+    assert_eq!(phone.recovery_phrase(), desktop.recovery_phrase(), "one key, on both");
+    assert_eq!(phone.peers().unwrap().len(), 1);
+    assert_eq!(desktop.peers().unwrap().len(), 1);
 }
 
 /// Receiving a large file over the network must not hold it in memory.

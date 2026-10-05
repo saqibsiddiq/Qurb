@@ -135,6 +135,10 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.5.3")
     implementation("androidx.camera:camera-view:1.5.3")
     implementation("com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1")
+    // Keeping the key without anyone writing 24 words down: a few bytes kept
+    // by Play services, carried across a reinstall and backed up end to end
+    // encrypted with the screen lock (decision 0052).
+    implementation("com.google.android.gms:play-services-auth-blockstore:16.4.0")
 
     // Background sync. WorkManager rather than a bare AlarmManager or a
     // foreground service: it is the only scheduler that survives reboots,

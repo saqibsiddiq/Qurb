@@ -1,7 +1,10 @@
 # qurb-keys
 
-The root secret, the keys derived from it, and the 24 words that are the only
-way back to it.
+The root secret, the keys derived from it, and the 24 words that spell it.
+Since [decision 0052](../../docs/decisions/0052-the-key-travels-with-the-code.md)
+nobody is asked to write the words down: a new device is given the key over a
+pairing connection (`MasterKey::for_another_device`), and a phone keeps it in
+Block Store. The words remain a way back for somebody who has them.
 
 ```
 MasterKey ──HKDF──► chunk encryption

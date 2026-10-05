@@ -151,3 +151,65 @@ fn the_folder_list_names_the_same_folder_from_anywhere() {
     let status = ok(&qurb(home, &elsewhere, &["status"]));
     assert!(status.starts_with(&old.display().to_string()), "status opened another folder:\n{status}");
 }
+
+/// A folder not set up yet joins with the code another device shows, and
+/// comes out holding the same key -- no 24 words typed (decision 0052).
+#[test]
+fn a_new_folder_joins_with_a_code_and_takes_the_key() {
+    use std::io::{BufRead, BufReader};
+
+    let home_a = tempfile::tempdir().unwrap();
+    let home_a = home_a.path();
+    let root_a = home_a.join("qurb");
+    ok(&qurb(home_a, home_a, &["init", root_a.to_str().unwrap()]));
+
+    let mut showing = Command::new(env!("CARGO_BIN_EXE_qurb"))
+        .args(["pair", root_a.to_str().unwrap()])
+        .env("HOME", home_a)
+        .env("XDG_CONFIG_HOME", home_a.join(".config"))
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("running qurb pair");
+    // Read on a thread to the end, so the pipe stays open for what `pair`
+    // prints once paired; the code is sent back as soon as it appears.
+    let output = showing.stdout.take().unwrap();
+    let (found, code) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(output).lines().map_while(Result::ok) {
+            if let Some(code) = line.split_whitespace().find(|w| w.starts_with("qurb1-")) {
+                let _ = found.send(code.to_string());
+            }
+        }
+    });
+    let code = code.recv_timeout(std::time::Duration::from_secs(20)).expect("qurb pair printed a code");
+
+    let home_b = tempfile::tempdir().unwrap();
+    let home_b = home_b.path();
+    let root_b = home_b.join("qurb");
+    let said = ok(&qurb(home_b, home_b, &["join", root_b.to_str().unwrap(), &code]));
+    assert!(said.contains("another of your devices"), "{said}");
+
+    // The showing side finishes once paired.
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = showing.try_wait().unwrap() {
+            break status;
+        }
+        if started.elapsed() > std::time::Duration::from_secs(20) {
+            showing.kill().ok();
+            panic!("qurb pair did not finish after the other device joined");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    assert!(status.success());
+
+    let key = |root: &Path| {
+        qurb_keys::Vault::at(&root.join(".qurb"))
+            .unlock(None)
+            .unwrap()
+            .derive(qurb_keys::Purpose::ChunkEncryption)
+            .to_bytes()
+    };
+    assert_eq!(key(&root_a), key(&root_b), "the new folder holds the same key");
+}

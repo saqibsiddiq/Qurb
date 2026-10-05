@@ -1,6 +1,6 @@
 # 0014 — Pairing transfers a full fingerprint out of band
 
-**Status:** Accepted
+**Status:** Accepted — since [0052](0052-the-key-travels-with-the-code.md) a device with no key that presents the token is also given the key, once per code, so the token now guards the key as well
 **Date:** 2026-09-16
 **Completes:** [0011](0011-peer-identity-pinning.md), which established pinned
 identity and recorded pairing as the missing half.
