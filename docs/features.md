@@ -119,7 +119,7 @@ was walked through on the emulator.
 | | a file with two versions: attention, then a sheet with both — keep this version, the other, or both ([0043](decisions/0043-settling-a-conflict.md)) | ✅ |
 | **Files** | the shared area a folder at a time: search across every folder, breadcrumbs, folders as tiles, sort by name, newest or largest; each file's state — *On this phone*, *Available elsewhere*, *Only copy here*, *Downloading* | 🧪 |
 | | per file, in a sheet: open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move to a folder, delete (into Recently deleted) | 🧪 · freeing and getting back ✅ |
-| | *Add files* into the folder on screen; new folder; save everything here to the phone at once | 🧪 |
+| | *Add files* into the folder on screen; new folder; save everything here to the phone at once | ✅ *Add files* on the S23, 2026-10-05; the rest 🧪 |
 | **Private Vault** | from Files: the phone's own files, in the same browser; *Add files* here adds privately, whatever the setting says | 🧪 in the FFI's tests |
 | **Devices** | this phone and each paired device as cards, with when each was last seen; *Add* — scan a code, **show a code on this phone**, or type one | ✅ scan · ◻ show |
 | | a device's sheet: *Keep a backup of my Private Vault* — a device that keeps a copy of the phone's own files, so the phone can free space | ✅ |
@@ -139,7 +139,7 @@ was walked through on the emulator.
 | **Background sync** | WorkManager, every 15 minutes — every hour once a push has arrived in the last week | ✅ |
 | **Push** | a change on the laptop wakes the sleeping phone, through Firebase; about five seconds from a change on the laptop to the phone syncing it, on mobile data with the screen off | ✅ |
 | **Syncing from mobile data** | through the rendezvous service, directly to the laptop | ✅ |
-| **A large file collected from the phone** | 32 MiB or more waiting: the sync runs in the foreground under *Sending to your devices*, with the bytes sent so far, for as long as a device collects — up to half an hour ([0050](decisions/0050-large-files-from-a-phone.md)) | ◻ built; not yet seen on the phone |
+| **A large file collected from the phone** | 32 MiB or more waiting: the sync runs in the foreground under *Sending to your devices*, with the bytes sent so far, for as long as a device collects — up to half an hour ([0050](decisions/0050-large-files-from-a-phone.md)) | ✅ on the S23, 2026-10-05: it went on serving after the app was left. About 5 MB/s, and a collector that pauses ten seconds ends it ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)) |
 
 ---
 
@@ -201,7 +201,7 @@ The parts nobody sees, and the reason the features above can be trusted.
 | **Files go directly between devices, encrypted.** The servers never hold them. | ✅ |
 | **A file costs its size once.** The file in the folder is its own storage; no second copy ([0024](decisions/0024-the-file-is-the-payload-store.md)). | ✅ |
 | **An edit sends only what changed.** A 16-byte insert into a 200 MB file moved 248 KiB, between two devices on one machine. | 🧪 |
-| **A large file cut off part-way carries on where it stopped**, rather than starting again, and is fetched several chunks at a time ([0050](decisions/0050-large-files-from-a-phone.md)). | 🧪 |
+| **A large file cut off part-way carries on where it stopped**, rather than starting again, and is fetched several chunks at a time ([0050](decisions/0050-large-files-from-a-phone.md)). | ✅ resumed twice from the S23, 2026-10-05; several at a time barely raised the speed |
 | **Nothing is waiting on the other device being awake.** Added while every other device is off, a file goes when one is next reachable. | ✅ |
 | **An edit is never silently lost.** Two devices changing one file keep both versions ([0005](decisions/0005-conflict-resolution.md)). | ✅ |
 | **A deletion can be undone for thirty days**, on every device. | ✅ |

@@ -19,7 +19,16 @@ use std::path::Path;
 /// holding that many chunks in memory -- 4 MiB at the average chunk size, 16
 /// MiB at the largest, and the phone's ceiling (decision 0018) is far above
 /// either.
+///
+/// Measured afterwards, it bought little: from the same phone, about 5.3 MB/s
+/// with eight against 3.8 to 4.8 one at a time (2026-10-05, decision 0050).
+/// The waits were not what held it back; `PeerClient::report_fetch` logs
+/// what might be.
 pub const IN_FLIGHT: usize = 8;
+
+/// The smallest fetch worth a line in the log with its rate: below this a
+/// transfer is over before its rate means anything.
+const REPORT_FROM: u64 = 8 * 1024 * 1024;
 
 /// Where a fetch picks up: what a partly-written file already holds of the
 /// content, checked, and the chunks still to come.
@@ -299,9 +308,53 @@ impl PeerClient {
         resume: Resume,
         out: &mut impl std::io::Write,
     ) -> Result<u64> {
-        let hash = blake3::Hash::from(content);
-        let Resume { chunks, next, mut whole, kept } = resume;
+        let started = std::time::Instant::now();
+        let kept = resume.kept;
         let mut written = kept;
+        let outcome = self.fetch_rest(local, content, resume, out, &mut written).await;
+        self.report_fetch(written - kept, started.elapsed(), outcome.is_ok());
+        outcome
+    }
+
+    /// What a large fetch says about the path it crossed: its rate, and QUIC's
+    /// own view of the connection when it ended.
+    ///
+    /// Recorded because the rate alone did not say enough. A phone serving
+    /// over home Wi-Fi gave about 5 MB/s whether chunks were asked for one at
+    /// a time or eight at once (2026-10-05), on links of several hundred
+    /// megabits. The round trip is the telling figure: a long one points at
+    /// the path, or a phone's radio dozing between packets; a short one at the
+    /// sender. The congestion window and losses are this side's own, of its
+    /// requests, and say whether those were held back.
+    fn report_fetch(&self, bytes: u64, took: std::time::Duration, finished: bool) {
+        if bytes < REPORT_FROM {
+            return;
+        }
+        let path = self.connection.stats().path;
+        tracing::info!(
+            bytes,
+            seconds = format!("{:.1}", took.as_secs_f64()),
+            mb_per_s = format!("{:.2}", bytes as f64 / took.as_secs_f64().max(0.001) / 1e6),
+            finished,
+            rtt_ms = path.rtt.as_millis() as u64,
+            cwnd = path.cwnd,
+            lost_packets = path.lost_packets,
+            congestion_events = path.congestion_events,
+            mtu = path.current_mtu,
+            "fetched"
+        );
+    }
+
+    async fn fetch_rest(
+        &self,
+        local: &Store,
+        content: [u8; 32],
+        resume: Resume,
+        out: &mut impl std::io::Write,
+        written: &mut u64,
+    ) -> Result<u64> {
+        let hash = blake3::Hash::from(content);
+        let Resume { chunks, next, mut whole, .. } = resume;
 
         let mut wanted = chunks.into_iter().skip(next);
         let mut in_flight = FuturesOrdered::new();
@@ -318,13 +371,13 @@ impl PeerClient {
                 path: "the destination".into(),
                 source: e,
             })?;
-            written += bytes.len() as u64;
+            *written += bytes.len() as u64;
         }
 
         if whole.finalize() != hash {
             return Err(Error::ContentMismatch { hash: hash.to_hex().to_string() });
         }
-        Ok(written)
+        Ok(*written)
     }
 
     /// One chunk's bytes: from this device when it already has them -- with

@@ -86,12 +86,12 @@ pub fn watch(hosted: Arc<Hosted>) {
                 devices.iter().find(|d| &d.id == id).map(|d| d.name.clone())
             };
 
-            for row in fresh
+            for notice in fresh
                 .iter()
                 .filter_map(|row| worth_saying(row, row.device.as_ref().and_then(named)))
                 .take(AT_ONCE)
             {
-                show(&row);
+                off_the_runtime(move || show(&notice));
             }
         }
     });
@@ -178,6 +178,18 @@ fn tidy(folder: &std::path::Path) -> String {
         },
         None => folder.display().to_string(),
     }
+}
+
+/// Run a blocking desktop call on a thread of its own, not on the watcher's.
+///
+/// Raising a notification is a blocking D-Bus round trip, and the watcher is a
+/// Tokio task. Blocking one is merely rude; but when zbus is built with its
+/// `tokio` feature -- which any other crate in the build can turn on -- each
+/// blocking call starts a runtime of its own, and that panics on a Tokio
+/// thread. It did, 2026-10-05: the first failure worth announcing killed the
+/// watcher, and nothing was announced again until the program restarted.
+fn off_the_runtime(call: impl FnOnce() + Send + 'static) {
+    tokio::task::spawn_blocking(call);
 }
 
 /// Hand it to the desktop, and carry on if the desktop will not take it.
@@ -302,5 +314,22 @@ mod tests {
                 "{kind:?} should not interrupt anybody"
             );
         }
+    }
+
+    /// What zbus does with its `tokio` feature on, for every blocking call:
+    /// start a runtime and block on it. Run inline from the watcher -- a Tokio
+    /// task -- that panics with "Cannot start a runtime from within a
+    /// runtime", as it did on 2026-10-05.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_notification_is_raised_where_blocking_is_allowed() {
+        let (done, raised) = std::sync::mpsc::channel();
+        let watcher = tokio::spawn(async move {
+            off_the_runtime(move || {
+                let own = tokio::runtime::Builder::new_multi_thread().build().unwrap();
+                done.send(own.block_on(async { "raised" })).unwrap();
+            });
+        });
+        watcher.await.expect("the watcher survives raising a notification");
+        assert_eq!(raised.recv_timeout(Duration::from_secs(10)), Ok("raised"));
     }
 }

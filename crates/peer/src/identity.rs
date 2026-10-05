@@ -92,6 +92,22 @@ impl Identity {
         Ok(Self::from_parts(cert_der, key_der))
     }
 
+    /// Load this device's identity, refusing rather than creating one.
+    ///
+    /// For everything that is not setting a device up. A folder moved to the
+    /// Trash while the desktop ran had its identity made again, by a window
+    /// showing a pairing code into a folder that was no longer there -- and
+    /// the phone paired with that second device. Making an identity is
+    /// setup's job alone.
+    pub fn load(dir: &Path) -> Result<Self> {
+        let cert_path = dir.join("identity.crt");
+        let key_path = dir.join("identity.key");
+        if !(cert_path.exists() && key_path.exists()) {
+            return Err(Error::Tls(format!("{} has no identity: it is not set up", dir.display())));
+        }
+        Ok(Self::from_parts(read(&cert_path)?, read(&key_path)?))
+    }
+
     fn from_parts(cert_der: Vec<u8>, key_der: Vec<u8>) -> Self {
         let fingerprint = Fingerprint(*blake3::hash(&cert_der).as_bytes());
         Self { cert_der, key_der, fingerprint }

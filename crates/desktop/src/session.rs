@@ -279,8 +279,16 @@ impl Hosted {
             guard.as_ref().context("this device is not set up yet")?.key.clone()
         };
 
+        // Checked, not assumed: a folder moved away while the window was open
+        // is not set up any more, and opening it by path made a new store and
+        // a new identity in its place, which a phone then paired with.
+        anyhow::ensure!(
+            qurb_cli::is_set_up(&root),
+            "{} is not set up any more -- it may have been moved or deleted",
+            root.display()
+        );
         let store = Store::open(&dir, key)?.in_tree(&root);
-        let identity = Identity::load_or_create(&dir)?;
+        let identity = Identity::load(&dir)?;
         let name = qurb_cli::Config::load(&dir).map(|c| c.name).unwrap_or_default();
         Ok((Arc::new(std::sync::Mutex::new(store)), identity, name))
     }

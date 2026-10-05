@@ -254,7 +254,9 @@ pub struct Security {
 #[tauri::command]
 pub fn security(hosted: Host<'_>) -> Answer<Security> {
     let root = hosted.root();
-    let identity = qurb_peer::Identity::load_or_create(&qurb_cli::store_dir(&root))
+    // Read, never made: looking at Settings must not create an identity in a
+    // folder that has gone.
+    let identity = qurb_peer::Identity::load(&qurb_cli::store_dir(&root))
         .map(|id| id.fingerprint().to_string())
         .map_err(failed)?;
     let protection = key_protection(&root).map(|p| p.as_str().to_string()).unwrap_or_default();

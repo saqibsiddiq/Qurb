@@ -14,7 +14,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.qurb.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,9 +54,21 @@ class MainActivity : AppCompatActivity() {
      *  does not also go there. */
     private var quietly = false
 
-    /** Whether a sync this screen started is still running. Home shows it. */
-    var syncing = false
-        private set
+    /** Whether a sync is running: one this screen started, or a pass in the
+     *  background worker. Home shows it. */
+    val syncing get() = syncingHere || syncingInWorker
+
+    /** A sync this screen started. */
+    private var syncingHere = false
+
+    /**
+     * A pass in the background worker: the schedule's, or a long one handed
+     * to it (decision 0050). Watched while the app is on screen, so it shows
+     * here as syncing and the screen redraws when it ends. Until 2026-10-05
+     * it was not, and Home said "Everything is synced" for the three minutes
+     * a 765 MB file was leaving.
+     */
+    private var syncingInWorker = false
 
     /** Asked for while a sync was running: another runs when it ends, so a
      *  change made part-way through is not left for the hour after. Quiet
@@ -179,6 +193,19 @@ class MainActivity : AppCompatActivity() {
         })
         // Not refreshed here: onResume follows, and refreshes whatever is showing.
         show(screenFor(tab))
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                SyncWorker.running(this@MainActivity).collect { workerRunning(it) }
+            }
+        }
+    }
+
+    private fun workerRunning(running: Boolean) {
+        if (running == syncingInWorker) return
+        syncingInWorker = running
+        changed()
+        if (!running) askedMeanwhile()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -484,7 +511,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         then?.let { afterThisSync += it }
-        syncing = true
+        syncingHere = true
         changed()
 
         lifecycleScope.launch {
@@ -542,21 +569,28 @@ class MainActivity : AppCompatActivity() {
                 if (quiet) android.util.Log.w("qurb", "a sync after a change failed", e)
                 else fail("Sync failed", e)
             } finally {
-                syncing = false
+                syncingHere = false
                 changed()
                 val done = afterThisSync.toList()
                 afterThisSync.clear()
                 for (callback in done) callback(Synced(result, inBackground))
-                if (again) {
-                    val quietly = againQuiet
-                    again = false
-                    againQuiet = true
-                    afterThisSync += afterNextSync
-                    afterNextSync.clear()
-                    sync(quiet = quietly)
-                }
+                askedMeanwhile()
             }
         }
+    }
+
+    /**
+     * A pass has ended, here or in the worker: run the one asked for while it
+     * ran. Not while the other is still running -- its end calls this again.
+     */
+    private fun askedMeanwhile() {
+        if (!again || syncing) return
+        val quietly = againQuiet
+        again = false
+        againQuiet = true
+        afterThisSync += afterNextSync
+        afterNextSync.clear()
+        sync(quiet = quietly)
     }
 
     /**

@@ -73,6 +73,35 @@ const FIRST_RETRY: Duration = Duration::from_secs(5);
 /// retrying every few seconds achieves nothing but noise in the log.
 const MAX_RETRY: Duration = Duration::from_secs(120);
 
+/// Which folder a daemon is running on, as the filesystem knows it: the
+/// device and inode of its store, which a name does not carry.
+///
+/// A folder moved to the Trash keeps its inode and loses its name, and the
+/// daemon's open files go with it. On 2026-10-03 one went on syncing a folder
+/// in the Trash for a day and a half, unseen, while the window -- opening the
+/// folder by name -- made a second device where it had been. Checked on the
+/// daemon's timers and before every change it applies; a folder that is not
+/// at its name any more stops the daemon, saying why.
+struct Here {
+    dev: u64,
+    ino: u64,
+}
+
+impl Here {
+    fn of(dir: &Path) -> Result<Self> {
+        use std::os::unix::fs::MetadataExt;
+        let meta = std::fs::metadata(dir).with_context(|| format!("reading {}", dir.display()))?;
+        Ok(Self { dev: meta.dev(), ino: meta.ino() })
+    }
+
+    /// Whether `dir` still names this folder: not gone, and not replaced by
+    /// another made at the same path.
+    fn still(&self, dir: &Path) -> bool {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(dir).map(|m| m.dev() == self.dev && m.ino() == self.ino).unwrap_or(false)
+    }
+}
+
 pub struct Daemon {
     root: PathBuf,
     store_dir: PathBuf,
@@ -153,6 +182,22 @@ impl Daemon {
     /// Takes a closure rather than a value so a caller that is not publishing
     /// pays nothing: the closure is not run when there is no publisher, and
     /// gathering a summary means counting files and querying the store.
+    /// Say that the folder has gone, where an interface will show it, and
+    /// hand back the error to stop with.
+    fn folder_gone(&self) -> anyhow::Error {
+        let detail = format!(
+            "{} was moved or deleted while qurb was syncing it, so qurb has stopped. \
+             Put the folder back, or set qurb up again.",
+            self.root.display()
+        );
+        tracing::error!("{detail}");
+        self.report(|status| {
+            status.problem = Some(detail.clone());
+            status.settle();
+        });
+        anyhow::anyhow!(detail)
+    }
+
     fn report(&self, change: impl FnOnce(&mut crate::status::Status)) {
         if let Some(publisher) = &self.status {
             publisher.send_modify(change);
@@ -322,6 +367,9 @@ impl Daemon {
                 self.root.display()
             ),
         };
+
+        // Which folder this is, by more than its name: see [`Here`].
+        let here = Here::of(&self.store_dir)?;
 
         let mut engine = self.engine()?;
 
@@ -521,6 +569,10 @@ impl Daemon {
                         None => std::future::pending().await,
                     }
                 } => match event {
+                    // Before anything is applied: a folder moved away reads to
+                    // a watcher like its files going, and they must not be
+                    // taken for deletions.
+                    _ if !here.still(&self.store_dir) => return Err(self.folder_gone()),
                     Some(Event::Changes(changes)) => {
                         // Storage work is synchronous and can take seconds on a
                         // large file, so it must not run on the async scheduler.
@@ -567,6 +619,9 @@ impl Daemon {
                 },
 
                 _ = timer.tick() => {
+                    if !here.still(&self.store_dir) {
+                        return Err(self.folder_gone());
+                    }
                     self.refresh_trust(&trust, &mut peers);
                     self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                 }
@@ -605,6 +660,9 @@ impl Daemon {
 
                 // A device paired, or a file sent, from another process.
                 _ = trust_timer.tick() => {
+                    if !here.still(&self.store_dir) {
+                        return Err(self.folder_gone());
+                    }
                     if self.refresh_trust(&trust, &mut peers) {
                         // Newly paired, so try it immediately: the person who
                         // just scanned the code is waiting to see their files.
@@ -1299,6 +1357,28 @@ struct Counted {
 
 #[cfg(test)]
 mod tests {
+    /// A folder is followed by what it is, not what it is called: moved
+    /// away, or replaced by a new one at the same path, it is not the folder
+    /// the daemon started on.
+    #[test]
+    fn a_folder_moved_away_or_replaced_is_not_the_same_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("qurb/.qurb");
+        std::fs::create_dir_all(&store).unwrap();
+        let here = super::Here::of(&store).unwrap();
+        assert!(here.still(&store));
+
+        // To the Trash.
+        let trash = dir.path().join("Trash");
+        std::fs::create_dir_all(&trash).unwrap();
+        std::fs::rename(dir.path().join("qurb"), trash.join("qurb")).unwrap();
+        assert!(!here.still(&store), "a folder moved away still counted as here");
+
+        // And something new made where it was.
+        std::fs::create_dir_all(&store).unwrap();
+        assert!(!here.still(&store), "a new folder at the same path counted as the old one");
+    }
+
     use super::*;
     use qurb_engine::Progress;
 

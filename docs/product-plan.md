@@ -638,17 +638,29 @@ then.*
 - [ ] On the S23: removing a device, the share sheet sending to a device,
   pairing by the phone's own code, a folder shared with chosen devices, a
   folder kept remotely. Removing the laptop, pairing again and sending to it
-  are in the phone's history for 2026-09-29; the rest still to watch.
+  are in the phone's history for 2026-09-29. Removing a device was watched on
+  2026-10-05 (the duplicate identity, [phase 4](phases/phase-4-product.md#a-folder-deleted-while-qurb-ran)).
+  The rest is still to watch.
 - [ ] Android↔Android — on the emulator until the owner can borrow a second
   phone, then on two real ones.
 - [ ] A phone left alone for a day: battery and survival (Phase 5's kill
   criterion).
-- [ ] A folder deleted while qurb runs: the daemon notices and stops, and no
-  command but setup creates a store or an identity
+- [x] A folder deleted while qurb runs: the daemon notices and stops, and no
+  command but setup creates a store or an identity — 2026-10-05
   ([phase 4](phases/phase-4-product.md#a-folder-deleted-while-qurb-ran)).
-- [ ] A large file collected from the phone, measured on the S23 before and
+- [x] A large file collected from the phone, measured on the S23 before and
   after [0050](decisions/0050-large-files-from-a-phone.md), and seen to
-  survive leaving the app.
+  survive leaving the app — 2026-10-05
+  ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)).
+  It survived, but fetching in parallel barely changed the speed: 5.33 MB/s
+  against 3.81–4.77 one at a time.
+- [ ] Large files from the phone at the speed of the link. They run at about
+  5 MB/s on a link of several hundred Mbit/s. A 13 ms round trip with nothing
+  lost puts the limit in the phone's sending: its serving of each chunk, or
+  its sender's congestion window. Next: have the phone report both.
+- [ ] A collector that pauses for more than ten seconds (a laptop restarting,
+  sleeping, a Wi-Fi drop) ends the phone's pass, and the transfer waits for
+  the next one.
 
 **4. Release.**
 - [ ] Decided and recorded: how a replica frees space (§4.7), and whether

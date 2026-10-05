@@ -270,7 +270,11 @@ and keeps answering for as long as a device is collecting — up to thirty
 minutes — instead of ending at its window. Android freezes an app nobody is
 looking at; an 800 MB video the laptop was collecting stopped there, every
 time. *Sync now*, and every sync the app starts, hands such a pass to the
-worker. Ordinary passes stay silent. See
+worker. Ordinary passes stay silent. While the app is on screen it watches the
+worker's passes (`SyncWorker.running`), shows them as syncing and holds its
+own syncs until they end. `runNow` appends behind a running pass, because
+replacing it cancelled a transfer part-way. Watched on the S23 on 2026-10-05:
+Home read *Syncing…* through a worker's pass and redrew itself when it ended. See
 [decision 0050](../docs/decisions/0050-large-files-from-a-phone.md).
 
 A pass that reached a device and has something waiting for it stays open up
@@ -307,9 +311,15 @@ replaced by uninstalling — which deletes the phone's key and index. See
 - **Progress in the app.** A long transfer from the phone shows how far it
   has got in its notification; inside the app, the Transfers bar still shows
   what is waiting and what happened, not bytes in flight.
-- **Large files, measured.** Collecting a large file from the phone was slow
-  and failed part-way (decision 0050); what fixed it is built and tested, and
-  the speed before and after has not been measured on the phone yet.
+- **Large files are still slow.** Collecting a large file from the phone was
+  slow and failed part-way (decision 0050). Measured on the S23 on 2026-10-05,
+  the long pass kept serving after the app was left and resuming worked, but
+  the speed stayed near 5 MB/s, with eight chunks in flight or one. With a
+  13 ms round trip and nothing lost, the limit is in the phone's sending,
+  which it does not yet report. Started from the background, the long pass is
+  refused by Android and runs as an ordinary one. It also ends if the
+  collector pauses for ten seconds
+  ([phase 5](../docs/phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)).
 - **No storage question during setup, by design.** Phones have no allowance;
   the question is the desktop's, and is built there
   ([decision 0038](../docs/decisions/0038-the-storage-question-during-setup.md)).

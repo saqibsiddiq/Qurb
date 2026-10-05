@@ -1,9 +1,11 @@
 # 0050 — Large files from a phone: fetched in parallel, resumed, and served in the foreground
 
-**Status:** Accepted — built; amends [0020](0020-sync-takes-a-deadline.md) (a pass
-may go on answering past its window, when its caller can) and the background
-worker's rule of no foreground service (a long pass, and only a long pass, runs
-in the foreground)
+**Status:** Accepted — built, and measured on the phone on 2026-10-05, where
+fetching in parallel gained little (see *Checked, and not*); amends
+[0020](0020-sync-takes-a-deadline.md) (a pass may go on answering past its
+window, when its caller can) and the background worker's rule of no
+foreground service (a long pass, and only a long pass, runs in the
+foreground)
 **Date:** 2026-10-04
 
 ## What happened
@@ -63,6 +65,11 @@ asked for the first time a long transfer starts, not at install; refused, the
 transfer runs anyway and the notification shows only in the system's list of
 running apps.
 
+**A pass asked for while one runs waits for it** (added 2026-10-05). *Sync
+now* enqueues behind a running pass instead of replacing it, which cancelled a
+long one part-way. The app watches the worker's passes while it is on screen,
+shows them as syncing, and runs its own syncs after them.
+
 ## Why this, and not something else
 
 **Push rather than pull** for large files would not help: whoever sends, the
@@ -101,10 +108,40 @@ there.
   `a_partial_file_that_is_not_the_content_is_not_kept`, and the existing
   network tests, which now fetch with eight in flight. The decision to keep
   answering is a function tested on its own (`keep_answering`).
-- **Not measured on hardware yet**: the speed of a large file from the phone
-  to the laptop over Wi-Fi before and after, and a long transfer surviving the
-  owner leaving the app. Until then the 5.3 MB/s above is a ceiling inferred
-  from one failure, and the gain is a claim.
+- **Measured on hardware, 2026-10-05** (Galaxy S23 serving, the laptop
+  collecting, home Wi-Fi at 5 GHz, links of 468 and 351 Mbit/s; details in
+  [phase 5](../phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)):
+  - **Eight in flight bought little**: 5.33 MB/s, against 4.77 and 3.81 MB/s
+    one at a time. That contradicts the first cause above as written. The
+    waits added something, but they were not what held a transfer to 5 MB/s
+    on a link carrying several times that, and what does is not yet known.
+    The laptop now logs each large fetch's rate with the connection's round
+    trip, congestion window and losses. On the run that finished both files
+    (765 MB at 4.95 MB/s) the round trip was 13 ms with nothing lost, which
+    leaves the requests room for hundreds of megabytes a second. So the limit
+    is in the phone's sending, its serving of each chunk or its sender's
+    congestion window, and only the phone can say which.
+  - **The foreground pass held**: the phone was swiped to its home screen
+    two minutes into a transfer, Samsung's freezer gave up on the process,
+    and serving went on.
+  - **Starting it from the background was refused**, once, after an install;
+    that pass ran as an ordinary one, as *What it costs* expects.
+  - **Resuming worked twice** on a 1.7 GB file, keeping 114,864,514 and then
+    942,721,024 bytes.
+  - **A ten-second pause ends the pass.** The laptop was restarted
+    mid-transfer, which with re-reading its partial file kept it from asking
+    for twelve seconds. The phone, having served nothing for `COLLECTING`,
+    closed the pass at 202 seconds of its thirty minutes and was frozen ten
+    seconds later. A collector that pauses longer than `COLLECTING` loses the
+    phone, and the transfer waits for the next pass. Not changed yet.
+  - **Both files arrived** at the next *Sync now*, carried on from where they
+    stopped and checked whole.
+  - **The app did not know about the pass.** Having handed it to the worker,
+    it said *Everything is synced* throughout, and a second *Sync now* would
+    have replaced, and so cancelled, the pass. Fixed by the rule above, and
+    watched on the S23: Home read *Syncing…* through a worker's pass and
+    redrew itself when it ended. A second sync asked for during one was not
+    tried.
 
 ## Reversing it
 

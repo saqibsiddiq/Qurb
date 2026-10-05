@@ -85,9 +85,12 @@ unrestricted `browse` still seeing both.
   on either device. Designed ([brief §2](../design/brief.md)) and not built;
   it needs an engine addition, since a move between areas is a deletion in one
   and a new file in the other.
-- **Not verified on the phone.** Files and Private Vault were seen on the
-  Galaxy S23 on 2026-10-03, each listing only its own area; adding a file into
-  either was not done there.
+- **Half verified on the phone.** Files and Private Vault were seen on the
+  Galaxy S23 on 2026-10-03, each listing only its own area. *Add files* in
+  Files was done there on 2026-10-05: three files picked from the system
+  picker went into the shared area and reached the laptop within seconds
+  ([phase 5](../phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)).
+  *Add files* in Private Vault has not been done on the phone.
 
 ## Reversing it
 

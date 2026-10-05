@@ -29,7 +29,14 @@ gtk = "0.18"
 # To ask whether anything would actually display a tray icon. GNOME ships no
 # StatusNotifier host, so the icon is created successfully and never appears --
 # a failure mode no return value reports.
-zbus = { version = "5", default-features = false, features = ["tokio"] }
+#
+# zbus's own default runtime, not its `tokio` feature. Features are merged
+# across everything built in one command, and with `tokio` on, every blocking
+# zbus call starts a Tokio runtime -- which panics when called from a Tokio
+# task. Built alongside the tray, the desktop's notifications did exactly that
+# (2026-10-05, a "Cannot start a runtime from within a runtime" panic each
+# session, after which no notification was raised again).
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }
 # For the size of the disk the folder is on, which the allowance slider needs
 # as its maximum. There is no standard-library way to ask.
 libc = "0.2"

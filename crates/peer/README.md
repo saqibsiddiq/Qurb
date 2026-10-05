@@ -47,6 +47,13 @@ size — and it is the reason this was once left for later: a phone's ceiling
 ([decision 0018](../../docs/decisions/0018-file-contents-never-cross-the-ffi.md))
 is far above it.
 
+Measured on 2026-10-05 it bought little. A Galaxy S23 served the laptop over
+home Wi-Fi at 5.33 MB/s with eight in flight, against 3.81–4.77 MB/s one at a
+time, on links of several hundred megabits. So the waits were not the limit.
+Each fetch of 8 MiB or more is now logged with its rate and the connection's
+round trip, congestion window and losses (`report_fetch`), to find what is.
+See [phase 5](../../docs/phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05).
+
 ## A fetch that was cut off carries on
 
 Until 2026-10-04 an interrupted fetch started again from nothing, and an

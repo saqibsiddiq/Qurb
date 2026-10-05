@@ -287,6 +287,17 @@ learns it is no longer the only holder because the device that received the
 content says so, which is the only message in the protocol that asks for
 nothing.
 
+## If the folder moves
+
+The daemon follows its folder by what it is, not by its name: the device and
+inode of `.qurb`, noted when it starts. Moved — to the Trash, say — or deleted
+and made again at the same path, it is not the same folder, and the daemon
+stops with a message saying so rather than syncing on, unseen, from wherever
+the folder went. Put it back and start qurb again, or set it up again. It is
+checked before every change is applied and on the daemon's timers, so a move
+is never read as the files in it being deleted. See
+[phase 4](../../docs/phases/phase-4-product.md#a-folder-deleted-while-qurb-ran).
+
 ## What it does not do yet
 
 

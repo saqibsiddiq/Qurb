@@ -39,7 +39,7 @@ record](../roadmap.md).
 | a large file collected from the phone | ◻ fetched eight chunks at a time, resumed, served in the foreground — built and tested, not yet measured on the phone ([below](#an-800-mb-video-and-what-stopped-it)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-763 tests pass in 89 test binaries on Linux (2026-10-04, debug build, the
+765 tests pass in 89 test binaries on Linux (2026-10-05, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -1425,9 +1425,135 @@ resuming switched off, all 12,582,912 bytes cross and the test fails; a partial
 file that is not the content is not kept; and the rule for when a pass goes on
 answering, on its own.
 
-**Not yet measured on the phone**: the speed of a large file before and
-after, and a long transfer surviving the owner leaving the app. The 5.3 MB/s
-is a ceiling from one failure, not a measurement.
+### Measured on the S23, 2026-10-05
+
+The Galaxy S23 (SM-S911B) served and the development laptop collected. Both
+were on the home Wi-Fi, 5 GHz channel 36, 80 MHz: the phone's link at 468/526
+Mbit/s (RSSI −54), the laptop's at 351/243. Two files the phone had sent to the
+laptop were collected, an 872,548,335-byte video and a 1,729,528,613-byte
+video, both held on the phone as encrypted chunks. Release builds were used.
+Rates come from the partial file's size, sampled every five seconds or taken
+from the laptop's log and the file's modification time. Times below are the
+phone's, IST (UTC+5:30).
+
+| laptop fetching | phone | bytes | seconds | rate |
+|---|---|---:|---:|---:|
+| eight at once | app open, build before 0050 | 822,544,151 | 154.3 | 5.33 MB/s |
+| one at a time (`IN_FLIGHT = 1`) | foreground pass, app open | 262,870,136 | 55.1 | 4.77 MB/s |
+| one at a time | foreground pass, app left | 248,372,214 | 65.2 | 3.81 MB/s |
+
+**Eight at once barely helped.** It ran 12 to 40 per cent faster than one at a
+time, and every rate was a small fraction of what either link carries. So the
+waits between requests were not what held the transfer back, and that
+contradicts what decision 0050 expected of them. The conditions were not
+clean, but they don't account for it. Google Photos was reading 85–107 MB
+every four seconds on the phone through the first one-at-a-time run (its
+`io_stats` lines), but only in the first two seconds of the second. For the
+rest of the second run, qurb was the phone's busiest reader, at 12–18 MB every
+four seconds, and that run was the slowest. The eight-at-once run had the older
+phone build, whose serving is the same code. Where the limit is, the phone's
+serving or QUIC on this path, is not known. A plain TCP baseline could not be
+taken: this network lets neither device accept a TCP connection from the
+other, and ADB over Wi-Fi manages only 3.1 MB/s of its own. The laptop now logs each fetch of 8 MiB or
+more with its rate and the connection's round trip, congestion window and
+losses (`report_fetch` in `crates/peer/src/client.rs`), so the next large
+transfer will say more.
+
+**A transfer survives leaving the app.** *Sync now* at 12:56:07 IST started
+the foreground service (the system log's `am_foreground_service_start`) and the
+notification. At 12:57:38 the phone was swiped to its home screen by hand,
+not by the test, and at 12:57:44 Samsung's freezer logged *stop trying to
+freeze com.qurb*. The phone went on
+serving: the last row of the table is that stretch.
+
+**Started from the background, it is refused, as decision 0050 expected.** At
+12:51:25, after an install, a background wake had more than 32 MiB to send and
+asked for the foreground service. Android refused it
+(`am_foreground_service_denied`), and that pass ran as an ordinary one.
+
+**A pause of more than ten seconds ends the pass.** The pass started at
+12:56:07 ended at 12:59:29, 202 seconds into the thirty minutes it was allowed.
+The cause was this test. The laptop's app was stopped mid-transfer at 12:59:17
+and a new one started. It connected at 12:59:27 and spent two more seconds
+re-reading 942 MB of partial file before it asked for a chunk. By then the
+phone had seen no chunk go out for ten seconds (`COLLECTING`). It closed the
+pass, dropped its notification, and was frozen ten seconds after that. The new
+connection fetched until the freeze and was lost at 13:00:14. Anything that pauses a collector
+for ten seconds will do the same: a laptop restarting or waking from sleep, or
+a Wi-Fi drop.
+
+**Resuming worked on hardware twice**: *carrying on from an earlier attempt
+kept=114864514*, then *kept=942721024*, each followed by the file growing from
+there.
+
+**The laptop's notifications had died.** Each failed fetch was followed by a
+panic in the desktop's notification watcher, which is not the transfer path:
+[phase 4](phase-4-product.md#notifications-stopped-at-the-first-failure). Fixed
+the same day.
+
+**Both arrived the same afternoon**, with the fixed laptop build and its new
+log line. *Sync now* at 13:38:33, the app open throughout. The laptop carried
+on from the partial files and each file was checked whole on arrival:
+
+| file | fetched this pass | seconds | rate | round trip | packets lost |
+|---|---:|---:|---:|---:|---:|
+| the 1.7 GB video, from 964,393,025 | 765,135,588 | 154.6 | 4.95 MB/s | 13 ms | 0 |
+| the 873 MB video, from 822,544,151 | 50,004,184 | 10.1 | 4.97 MB/s | 15 ms | 0 |
+
+The phone's foreground service ran from 13:38:33 to 13:41:33 and stopped ten
+seconds after the last chunk went, as it should.
+
+**That narrows where the limit is.** A 13 ms round trip with eight chunks
+(about 4 MiB) asked for at a time leaves room for hundreds of megabytes a
+second. The laptop lost nothing and saw MTU 1452. So the path is short and
+clean, and the requests are not what holds the rate. The limit is in the
+phone's sending. Either it serves each chunk slowly, or its QUIC sender's
+congestion window holds it back. Serving a chunk, under the store's one lock,
+means an index query on whether the asker may have it, then reading the
+sealed chunk, decrypting it and checking its hash. Only the phone can report
+either, and it doesn't yet.
+
+**Home lied during the pass.** *Sync now* handed the pass to the background
+worker and returned at once, and nothing redrew the screen when the worker
+finished. For the three minutes 815 MB was leaving, Home said *Everything is
+synced … synced 38 minutes ago*, and it still said so afterwards. The same
+hand-off had a worse edge. `SyncWorker.runNow` enqueued with `REPLACE`, so a
+second *Sync now*, or the sync after any change made in the app, would have
+cancelled a long pass part-way. Fixed the same day: the app watches the
+worker's passes, the schedule's and *Sync now*'s, while it is on screen. It
+shows them as syncing, redraws when they end, and holds its own syncs until
+then, running any asked for meanwhile afterwards. `runNow` appends behind a
+running pass instead of replacing it.
+
+Watched on the S23 at 16:38 the same day, with Home left on screen
+throughout. A 64 MiB file added through *Add files* started a pass in the
+worker (foreground service 16:38:43–16:39:03). Screenshots show Home reading
+*Syncing… Bringing your devices up to date* while it ran, and redrawing itself
+to *Everything is synced · synced just now* when it ended. Not exercised:
+a second sync asked for during a worker's pass. *Sync now* is disabled
+while one runs, so only a change made in the app can ask, and that was not
+tried.
+
+**Adding into Files, on the phone** ([decision 0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)),
+was done there for the first time: three 64 MiB test files, picked with *Add
+files* in Files from the system picker. Each went into the shared area and
+reached the laptop's `~/qurb` within seconds:
+
+| file | seconds | rate | round trip | laptop's packets lost |
+|---|---:|---:|---:|---:|
+| first | 11.5 | 5.86 MB/s | 12 ms | 0 |
+| second | 10.6 | 6.33 MB/s | 15 ms | 14 |
+| third | 9.1 | 7.36 MB/s | 10 ms | 27 |
+
+The rates are the same few megabytes a second. Deleting each in the app
+removed it from the laptop within seconds. *Delete for good* in the phone's
+Recently deleted removed them there only. The laptop keeps its copies for 30
+days, as [decision 0042](../decisions/0042-recently-deleted.md) intends, each
+device's list being its own.
+
+**The laptop then synced thirteen times in half a second.** Arrival events
+had queued while it spent 2½ minutes on one sync, and each found nothing to
+do. Harmless, but each is a tree fetched from the phone; not changed.
 
 ## Deliberately left undone
 

@@ -174,7 +174,11 @@ arrives because it was in a shared folder. A sync application that announced
 every file it moved would be switched off within a day.
 
 Raised from Rust rather than from the page, because a notification is most
-useful exactly when nobody is looking at the window.
+useful exactly when nobody is looking at the window. Raised on a blocking
+thread, not the watcher's own. Until 2026-10-05 the first failure worth
+announcing panicked the watcher, and the app raised nothing more until
+restarted. See
+[phase 4](../../docs/phases/phase-4-product.md#notifications-stopped-at-the-first-failure).
 
 ## Closing it does not stop it
 

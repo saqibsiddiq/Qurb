@@ -1065,17 +1065,72 @@ What the running app did in the meantime:
 Restored on 2026-10-05 with the owner's agreement: the half-made folder moved
 aside to `~/qurb-made-after-deletion`, kept; the original moved back from the
 Trash. Identity `410cac55`, the phone paired, the files and history intact;
-the desktop restarted on it. The phone may list a second "saqib" — the
-half-made identity — to remove from its Devices.
+the desktop restarted on it. The phone listed a second "saqib", the
+half-made identity `043ebd1d`. It was removed from the phone's Devices with
+*Remove this device* at 07:23 UTC on 2026-10-05. The phone's history records
+the removal, and its trust list now holds only `410cac55`.
 
-Two faults, **not fixed yet**:
+Two faults, fixed the same day:
 
-- **The daemon does not notice its folder has gone.** It should stop syncing
-  and say why, not go on serving a store in the Trash.
-- **Opening a store creates one.** `Store::open` and `Identity::load_or_create`
-  make a store and an identity wherever they are pointed, so a command run
-  against a folder that is not set up makes half a device in it. Only setting
-  a device up should create; every other command should refuse.
+- **The daemon did not notice its folder had gone.** It now notes its store's
+  device and inode when it starts — a moved folder keeps its inode and loses
+  its name — and checks them before applying any change the watcher reports
+  and on its half-minute and two-minute timers. A folder that is not at its
+  name any more, moved or replaced, stops the daemon with *"… was moved or
+  deleted while qurb was syncing it, so qurb has stopped. Put the folder back,
+  or set qurb up again."*, which the window shows on Home. Checked before
+  changes are applied so that a folder moving can never be taken for its files
+  being deleted. Test: `a_folder_moved_away_or_replaced_is_not_the_same_folder`;
+  and run for real — a throwaway device's folder moved while `qurb run` synced
+  it: the daemon stopped within a second, saying so, and nothing was made
+  where the folder had been.
+- **Opening a store created one.** The window's pairing and its Security
+  section opened the folder by path and called `Identity::load_or_create`.
+  Pairing now refuses a folder that is not set up, and both read the identity
+  with `Identity::load`, which never makes one. Making an identity is setup's
+  job alone.
+
+## Notifications stopped at the first failure
+
+**Found 2026-10-05**, while measuring large transfers from the phone
+([phase 5](phase-5-mobile.md#an-800-mb-video-and-what-stopped-it)). Each time
+a fetch failed, the desktop's log showed, within a second:
+
+> thread 'tokio-rt-worker' panicked at … tokio-1.53.1/src/runtime/scheduler/multi_thread/mod.rs:91:9:
+> Cannot start a runtime from within a runtime.
+
+Five times since the log began on 2026-09-28: once in each run of the app
+that had something to announce, on 2026-09-28, on 2026-10-03, and three times
+on 2026-10-05. So the owner has probably never seen a desktop notification
+from qurb. The panic was in the
+notification watcher (`crates/desktop/src/notify.rs`), not the transfer. A
+failure is one of the three things worth a notification. Raising one is a
+blocking D-Bus call, made from the watcher, which is a Tokio task. `qurb-tray`
+depends on zbus with its `tokio` feature, and Cargo merges features across
+everything built in one command. So the desktop, built alongside the tray as
+the README and the Arch package both do, got a zbus whose every blocking call
+starts a Tokio runtime and blocks on it, which panics on a Tokio thread. The
+panic killed the watcher, and the desktop raised no notification of any kind
+until it was restarted. Syncing was unaffected. The tray has had that
+dependency since 2026-09-18 and the desktop its notifications since
+2026-09-24, so any desktop built alongside the tray since then could have done
+this. Nobody noticed, because a notification that does not appear looks the
+same as one that was never due.
+
+Two fixes, either enough:
+
+- **The watcher raises each notification on a blocking thread**
+  (`spawn_blocking`), where starting a runtime is allowed. This holds whatever
+  features zbus is built with. Test:
+  `a_notification_is_raised_where_blocking_is_allowed`, which does what zbus
+  does from inside a Tokio task. With the call made inline, as before, it fails
+  with the same message at the same line of Tokio.
+- **The tray uses zbus's own runtime** (`async-io`), so no crate in the
+  workspace turns zbus's `tokio` feature on (`cargo tree --workspace -e
+  features -i zbus`).
+
+Not checked: whether a notification now appears on the owner's desktop when a
+transfer fails. Run since the fix, the desktop has not had one to raise.
 
 ## Still to do
 

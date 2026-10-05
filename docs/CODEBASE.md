@@ -607,7 +607,8 @@ qurb/
 │   │   │                    keep, deleted, restore, activity, ls, find,
 │   │   │                    config, protect, version, signal, relay,
 │   │   │                    netcheck
-│   │   ├── src/daemon.rs    watch, apply, sync, collect, stay under the limit
+│   │   ├── src/daemon.rs    watch, apply, sync, collect, stay under the limit;
+│   │   │                    stop if the folder is moved or deleted
 │   │   ├── src/lock.rs      one daemon per folder, enforced not assumed
 │   │   ├── src/profiles.rs  which folders exist, so commands need no path
 │   │   ├── src/qr.rs        a pairing code a camera can read
@@ -824,7 +825,7 @@ for the workspace as it stands.
 | QUIC transport | one bidirectional stream per request |
 | Mutual authentication | pinned fingerprints, handshake signature verified |
 | Wire format | length-bounded; decoder has no panicking path |
-| Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md) |
+| Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s, barely faster than one at a time, and where the limit is remains unknown ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
@@ -843,7 +844,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-763 tests in 89 test binaries on Linux, all passing (2026-10-04, debug build,
+765 tests in 89 test binaries on Linux, all passing (2026-10-05, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
@@ -1088,6 +1089,14 @@ that device to collect it, because every device pulls and the
 phone's own syncing can finish before the other side dials back; and dropping
 the pass's connector stops everything it started
 ([same record](decisions/0020-sync-takes-a-deadline.md#a-pass-that-waits-to-be-collected-from)).
+A pass with 32 MiB or more waiting to be collected runs in the worker as a
+foreground service, under a notification. It answers for as long as chunks
+keep going, up to thirty minutes
+([decision 0050](decisions/0050-large-files-from-a-phone.md)). On the S23 it
+survived the owner leaving the app. It ends if the collector pauses for ten
+seconds. The app watches the worker's passes, shows them as syncing and runs
+its own after them, and *Sync now* queues behind a running pass rather than
+replacing it.
 
 **A real phone and a real laptop sync both ways**, verified on hardware: a
 4.7 MB photo crossed from a Galaxy S23 to a laptop, byte-identical by SHA-256.
@@ -1160,7 +1169,7 @@ lacks is a placeholder — see the first gap below.
 
 ### The gaps that matter most
 
-Six things are known-missing rather than merely unbuilt:
+Seven things are known-missing rather than merely unbuilt:
 
 1. **An evicted file simply vanishes from the folder on Linux.** Windows and
    macOS both have an API for a placeholder that keeps its name and size and
@@ -1203,6 +1212,14 @@ Six things are known-missing rather than merely unbuilt:
    walked on the S23 on 2026-10-03, has not been measured against
    [decisions/0039](decisions/0039-a-light-android-app.md). See
    [features.md](features.md) for which is which.
+
+7. **A large file leaves a phone at about 5 MB/s**, on a home Wi-Fi link of
+   several hundred megabits, and fetching eight chunks at once instead of one
+   barely changed that. The round trip is 13 ms with nothing lost, so the
+   path and the requests are not the limit. The phone's sending is, either
+   its serving of each chunk or its QUIC sender's congestion window, and the
+   phone does not yet report which. See
+   [phases/phase-5-mobile.md](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05).
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:
@@ -1523,6 +1540,13 @@ And when you want to close the measurements still outstanding:
   what it measured, written as part of the phase rather than after it.
 - Claims about performance carry the measurement or they are not made. "Fast"
   is not a specification.
+- **Nothing blocking runs on an async task's thread.** Storage goes through
+  `block_in_place`, and any other blocking call, a D-Bus call for instance,
+  through `spawn_blocking`. Cargo merges a dependency's features across
+  everything built in one command, so a library that is harmless in one crate
+  can be built, for all of them, to start a Tokio runtime of its own, which
+  panics on a Tokio thread. It did, with zbus: see
+  [phases/phase-4-product.md](phases/phase-4-product.md#notifications-stopped-at-the-first-failure).
 
 ---
 

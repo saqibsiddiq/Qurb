@@ -11,11 +11,16 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.WorkQuery
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
@@ -208,6 +213,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
          */
         private const val NAME = "qurb-sync-v2"
 
+        /** A pass asked for now, rather than on the schedule. */
+        private const val NOW = "$NAME-now"
+
         /** Schedules from earlier versions, cancelled on sight. */
         private val RETIRED = listOf("qurb-sync")
         private const val BUDGET_SECONDS = 20u
@@ -381,9 +389,14 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                 .build()
 
+            // Appended, not replacing. A pass already running may be a long
+            // one, a device collecting a large file (decision 0050), and
+            // replacing it cancelled it part-way -- which a second Sync now,
+            // or the sync after any change made in the app, would do. Queued
+            // behind it instead, this one runs when it ends.
             val operation = WorkManager.getInstance(context).enqueueUniqueWork(
-                "$NAME-now",
-                androidx.work.ExistingWorkPolicy.REPLACE,
+                NOW,
+                androidx.work.ExistingWorkPolicy.APPEND_OR_REPLACE,
                 request,
             )
 
@@ -396,6 +409,21 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             runCatching { operation.result.get(5, TimeUnit.SECONDS) }
                 .onFailure { Log.w(TAG, "could not schedule a sync", it) }
         }
+
+        /**
+         * Whether a pass is running in the worker: the schedule's, or one
+         * asked for now.
+         *
+         * The app shows it as syncing and holds its own syncs until it ends.
+         * A long pass runs here for up to half an hour (decision 0050), and
+         * the app, not having started it, would otherwise say "Everything is
+         * synced" all the while and never notice it end.
+         */
+        fun running(context: Context): Flow<Boolean> =
+            WorkManager.getInstance(context)
+                .getWorkInfosFlow(WorkQuery.fromUniqueWorkNames(listOf(NAME, NOW)))
+                .map { passes -> passes.any { it.state == WorkInfo.State.RUNNING } }
+                .distinctUntilChanged()
 
         /** Stop asking. Used when the store is torn down. */
         fun cancel(context: Context) {
