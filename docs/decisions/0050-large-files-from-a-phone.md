@@ -139,7 +139,16 @@ there.
     seconds later. A collector that pauses longer than `COLLECTING` lost the
     phone, and the transfer waited for the next pass. Changed the same day:
     while what was being collected is still waiting, the pass waits up to a
-    minute (`PAUSED`). Tested as a function; not yet watched on the phone.
+    minute (`PAUSED`). Watched twice: the laptop stopped for 20 seconds, and
+    each time it reconnected to the same pass and carried on.
+  - **A pass that reached nobody stopped serving** a device that had dialled
+    in and was collecting, at its window. Fixed: a device collecting is served
+    whoever dialled.
+  - **Leaving during a long import loses the foreground.** The worker asks for
+    it only after the import, and Android refuses it from the background.
+    After such a pass, with a device there and a large collection still
+    waiting, the worker now posts *Tap to finish sending*, which opens the
+    app and syncs. Built; not watched.
   - **Both files arrived** at the next *Sync now*, carried on from where they
     stopped and checked whole.
   - **The app did not know about the pass.** Having handed it to the worker,

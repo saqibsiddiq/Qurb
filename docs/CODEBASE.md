@@ -848,7 +848,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-766 tests in 90 test binaries on Linux, all passing (2026-10-05, debug build,
+769 tests in 90 test binaries on Linux, all passing (2026-10-05, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
@@ -1099,7 +1099,10 @@ keep going, up to thirty minutes
 ([decision 0050](decisions/0050-large-files-from-a-phone.md)). On the S23 it
 survived the owner leaving the app. It ends ten seconds after the last chunk
 went, or a minute after if what was being collected is still waiting, so a
-collector that restarts mid-file is waited for. The app watches the worker's passes, shows them as syncing and runs
+collector that restarts mid-file is waited for, and it serves a device
+collecting whether this pass dialled it or it dialled in. Android refuses the
+foreground to an app that has already left the screen; a large transfer cut
+short that way leaves a *Tap to finish sending* notification. The app watches the worker's passes, shows them as syncing and runs
 its own after them, and *Sync now* queues behind a running pass rather than
 replacing it.
 
@@ -1174,7 +1177,7 @@ lacks is a placeholder — see the first gap below.
 
 ### The gaps that matter most
 
-Seven things are known-missing rather than merely unbuilt:
+Eight things are known-missing rather than merely unbuilt:
 
 1. **An evicted file simply vanishes from the folder on Linux.** Windows and
    macOS both have an API for a placeholder that keeps its name and size and
@@ -1218,14 +1221,20 @@ Seven things are known-missing rather than merely unbuilt:
    [decisions/0039](decisions/0039-a-light-android-app.md). See
    [features.md](features.md) for which is which.
 
-7. **Transfer speed is measured only outside the app.** A large file left
+7. **Transfer speed is measured on one home Wi-Fi only.** A large file left
    the phone at 5 MB/s because quinn's default congestion controller read
-   Wi-Fi's stray losses as congestion. BBR, now built in, sent 12.5–14.0 MB/s
-   from the S23 in a spike ([decisions/0051](decisions/0051-bbr-not-cubic.md)),
-   but not yet through the app. It is also unmeasured on mobile data, through
-   the relay, and alongside other traffic, where BBR is known to take more
-   than its share. See
-   [phases/phase-5-mobile.md](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05).
+   Wi-Fi's stray losses as congestion. With BBR
+   ([decisions/0051](decisions/0051-bbr-not-cubic.md)) it goes at 10.6–12.1
+   MB/s through the app. Unmeasured on mobile data, through the relay, and
+   alongside other traffic, where BBR is known to take more than its share.
+   See [phases/phase-5-mobile.md](phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared).
+
+8. **A phone's copy can be erased in one tap.** A phone's folder lives in
+   the app's private storage, which Android's *Clear data* wipes, and qurb
+   counts that copy as one that lets another device free its own. On
+   2026-10-05 the S23's data was cleared from Settings, and 18 files that the
+   laptop had freed went with it. What should count as a safe last copy is
+   undecided.
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:

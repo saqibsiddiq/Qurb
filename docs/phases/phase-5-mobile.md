@@ -39,7 +39,7 @@ record](../roadmap.md).
 | a large file collected from the phone | ◻ fetched eight chunks at a time, resumed, served in the foreground — built and tested, not yet measured on the phone ([below](#an-800-mb-video-and-what-stopped-it)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-766 tests pass in 90 test binaries on Linux (2026-10-05, debug build, the
+769 tests pass in 90 test binaries on Linux (2026-10-05, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -1583,11 +1583,81 @@ threads and 256 MiB of random bytes:
 Cubic reads Wi-Fi's stray losses as congestion and never fills the path. Every
 connection that carries files now uses BBR:
 [decision 0051](../decisions/0051-bbr-not-cubic.md). The app and the desktop
-were built with it the same afternoon. The phone left the network before a
-file could be sent through them, so the app's rate with BBR is not measured
-yet. Nor is adding a file into Private Vault on the phone, the one half of
-[decision 0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)
-still unwatched.
+were built with it the same afternoon, and measured through them when the
+phone came back (next section).
+
+### Through the app, with BBR — and a phone cleared
+
+The S23 back on the home Wi-Fi at 17:49, its link at 468 Mbit/s, RSSI −48.
+Random test files of 512 MiB and 1 GiB were added with *Add files* in Files,
+and the laptop collected each into `~/qurb`:
+
+| run | the phone | bytes this fetch | rate | round trip |
+|---|---|---:|---:|---:|
+| 512 MiB | app open | 536,870,912 | 11.88 MB/s | 31 ms |
+| 512 MiB, resumed after the laptop restarted (8 s away) | app left | 181,217,814 | 10.59 MB/s | 30 ms |
+| 512 MiB, resumed after the laptop restarted (20 s away) | app left | 185,103,070 | 1.33 MB/s | 124 ms |
+| 1 GiB | app left throughout | 1,073,741,824 | 10.81 MB/s | 23 ms |
+| 512 MiB, resumed after the laptop restarted (20 s away) | app left | 454,916,070 | 12.05 MB/s | 19 ms |
+
+About 11–12 MB/s through the app, against 5 before, and close to what the
+spike measured. The 1 GiB run was sampled every three seconds: 9–15 MB/s
+throughout, the process's scheduling group unchanged, so Android was not
+throttling a foreground service the app had left. The 1.33 MB/s run is not
+explained. Its round trip quadrupled, the same test repeated ran at 12.05,
+and the screen stayed on throughout.
+
+**A collector that pauses is waited for, watched.** Twice the laptop's app
+was stopped for 20 seconds mid-transfer with the phone's app left. Each time
+the phone's pass stayed open on the same port, and the restarted laptop
+connected to it and carried on from where it stopped (*kept=351767842*,
+*kept=81954842*). Both files arrived whole.
+
+**A pass that reached nobody stopped serving.** The first run's worker logged
+`reached=0 unreachable=1`: the phone could not dial the laptop, whose firewall
+(ufw) refuses inbound connections, while the laptop had dialled the phone and
+was collecting. A pass stayed to answer only if it had reached a device itself,
+so this one ended at its 20-second window 18 seconds into the collection. The
+file finished only because the app was on screen. Fixed the same day: a device
+collecting is served whoever dialled (`stays_to_answer`; test
+`a_device_collecting_is_served_whoever_dialled`).
+
+**Leaving during the import loses the foreground.** In one run the app was left
+two seconds after the file was picked, while it was still importing 512 MiB,
+which took about 12 seconds. The worker asked to go foreground only once the
+import was done, and Android refused it from the background
+(`am_foreground_service_denied`). An ordinary pass ran for its 20 seconds;
+then Android cut the app off the network (`sendmsg … Operation not permitted`)
+and froze it. Nothing said so. Now, after such a pass, if a device was there
+collecting and 32 MiB or more is still waiting, the worker posts *Tap to finish
+sending*, and tapping it opens the app and syncs, which Android lets go
+foreground. Built; not watched, for the reason below.
+
+**The phone's qurb data was cleared, and with it the only copies of 18
+files.** At 18:13:16 the phone's Settings app cleared qurb's data (*Clear data*
+under the app's storage; the system log reads `AppStorageSettings: Clearing
+user data for package : com.qurb`). Nothing in the tests does that. It took
+everything qurb held on the phone: its folder, its store, its identity and
+key, and its Private Vault. Three minutes later the app was opened, set up as
+a new device, and showed a new 24-word phrase. On the laptop, 18 files are
+now *not here*. The laptop freed its copies on 2026-09-29 because the phone
+kept them, and the phone's copies are gone. The Private Vault had no device
+keeping it. Whether those files exist outside qurb, in the phone's gallery or
+Downloads where they were added from, is the owner's to check.
+
+What this shows about the design, and is not yet answered:
+
+- **A phone's copy is one tap from gone.** Its folder lives in the app's
+  private storage, which *Clear data* erases with no undo, and qurb counts it
+  as a holder that lets the laptop free its own copy. A device's copy that the
+  platform can erase this easily should perhaps not count as the last one.
+  On the product plan.
+- **Setup has no way back.** Once a new key is made, setup shows its phrase
+  and nothing else; joining with the existing 24 words means clearing the
+  app's data again first.
+
+Not done because of it: the *Tap to finish sending* notification watched;
+adding a file into Private Vault on the phone.
 
 ## Deliberately left undone
 

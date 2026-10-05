@@ -1774,8 +1774,11 @@ impl Qurb {
         // That is no longer than the window unless the caller asked through
         // `sync_serving`, which it does only where the platform will let it
         // run on.
-        let collecting = self.serving.recently(COLLECTING);
-        if outcome.reached > 0 && !outcome.timed_out && (collecting || self.waiting_for_others().unwrap_or(false)) {
+        if stays_to_answer(
+            outcome.reached > 0 && !outcome.timed_out,
+            self.serving.recently(COLLECTING),
+            || self.waiting_for_others().unwrap_or(false),
+        ) {
             let come_by = std::cmp::min(started + budget, std::time::Instant::now() + LINGER);
             let at_most = started + serving;
             runtime.block_on(connector.announce_news());
@@ -1927,6 +1930,19 @@ impl Qurb {
 /// that hears the phone to dial back and pull a few photos; short enough that
 /// a device which never comes costs a background window little.
 const LINGER: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Whether a pass that has finished its own syncing stays to answer at all.
+///
+/// A device collecting from this one is served whether or not this pass
+/// reached it. The pass dials out; the device collecting may have dialled in,
+/// and a laptop whose firewall refuses inbound connections can always be the
+/// one dialling. On 2026-10-05 that laptop was 18 seconds into collecting a
+/// 512 MiB file when the phone's pass, having reached nobody itself, ended at
+/// its window; it finished only because the app was on screen. Otherwise a
+/// pass stays only when it reached a device and has something waiting for it.
+fn stays_to_answer(reached: bool, collecting: bool, waiting: impl FnOnce() -> bool) -> bool {
+    collecting || (reached && waiting())
+}
 
 /// Whether a pass that has finished its own syncing goes on answering.
 ///
@@ -2320,6 +2336,17 @@ mod tests {
         let start = Instant::now();
         let window = start + Duration::from_secs(20);
         assert!(!keep_answering(start + Duration::from_secs(20), window, window, true, true, || true));
+    }
+
+    /// Collected from, a pass stays whether or not it reached anybody itself;
+    /// not collected from, it stays only for a device it reached that has
+    /// something waiting.
+    #[test]
+    fn a_device_collecting_is_served_whoever_dialled() {
+        assert!(stays_to_answer(false, true, || false), "dialled in, collecting");
+        assert!(stays_to_answer(true, false, || true), "reached, something waiting");
+        assert!(!stays_to_answer(true, false, || false), "reached, nothing waiting");
+        assert!(!stays_to_answer(false, false, || true), "reached nobody, nobody collecting");
     }
 
     #[test]

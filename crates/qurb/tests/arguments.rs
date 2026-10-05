@@ -66,6 +66,63 @@ fn the_folder_can_be_left_out() {
     assert!(!said.contains("give the code") && !said.contains("not set up"), "{said}");
 }
 
+/// What is in Recently deleted can be deleted for good from the command line,
+/// by number or by path, and is then gone from the list.
+#[test]
+fn a_recently_deleted_file_can_be_deleted_for_good() {
+    let home = tempfile::tempdir().unwrap();
+    let home = home.path();
+    let root = home.join("qurb");
+    ok(&qurb(home, home, &["init", root.to_str().unwrap()]));
+
+    // Two files deleted into the trash, as the daemon does, through the store.
+    {
+        let store_dir = root.join(".qurb");
+        let master = qurb_keys::Vault::at(&store_dir).unlock(None).unwrap();
+        let key = qurb_storage::ChunkKey::from_bytes(
+            master.derive(qurb_keys::Purpose::ChunkEncryption).to_bytes(),
+        );
+        let mut store = qurb_storage::Store::open(&store_dir, key).unwrap().in_tree(&root);
+        for name in ["one.txt", "two.txt"] {
+            std::fs::write(root.join(name), name).unwrap();
+            store.put_file(name, &root.join(name)).unwrap();
+            store.delete_to_trash(name, None).unwrap();
+        }
+    }
+    let listed = ok(&qurb(home, home, &["deleted"]));
+    assert!(listed.contains("one.txt") && listed.contains("two.txt"), "{listed}");
+
+    let number = listed
+        .lines()
+        .find(|l| l.contains("one.txt"))
+        .and_then(|l| l.split_whitespace().next())
+        .unwrap()
+        .to_string();
+    ok(&qurb(home, home, &["forget", &number]));
+    ok(&qurb(home, home, &["forget", "two.txt"]));
+    assert!(ok(&qurb(home, home, &["deleted"])).contains("nothing recently deleted"));
+
+    let again = qurb(home, home, &["forget", "two.txt"]);
+    assert!(!again.status.success(), "a file no longer there cannot be forgotten twice");
+}
+
+/// A command's one word is that word, not the folder: these took it as the
+/// folder and said it was "not set up yet".
+#[test]
+fn a_lone_word_is_not_taken_for_the_folder() {
+    let home = tempfile::tempdir().unwrap();
+    let home = home.path();
+    let root = home.join("qurb");
+    ok(&qurb(home, home, &["init", root.to_str().unwrap()]));
+
+    for args in [&["find", "holiday"][..], &["ls", "docs"], &["activity", "notes.txt"]] {
+        let said = ok(&qurb(home, home, args));
+        assert!(!said.contains("not set up"), "{args:?}: {said}");
+    }
+    // And with the folder in front, as before.
+    ok(&qurb(home, home, &["find", root.to_str().unwrap(), "holiday"]));
+}
+
 /// A folder set up by a relative path is listed by where it is, and an entry
 /// already listed relative is read from the home folder, so the window and the
 /// command line agree on which folder it is.

@@ -315,13 +315,17 @@ replaced by uninstalling — which deletes the phone's key and index. See
   phone was slow and failed part-way (decision 0050). Measured on the S23 on
   2026-10-05, the long pass kept serving after the app was left and resuming
   worked, but the speed stayed near 5 MB/s: quinn's default congestion
-  controller, Cubic, read Wi-Fi's stray losses as congestion. BBR sent
-  12.5–14.0 MB/s in a spike on the phone and is built in (decision 0051); the
-  app's own rate with it is not measured yet. Started from the background,
-  the long pass is refused by Android and runs as an ordinary one. A
-  collector that pauses mid-file is now waited for up to a minute, which is
-  tested but not yet watched on the phone
-  ([phase 5](../docs/phases/phase-5-mobile.md#where-the-5-mbs-went)).
+  controller, Cubic, read Wi-Fi's stray losses as congestion. With BBR
+  (decision 0051) it goes at 10.6–12.1 MB/s through the app. A collector that
+  pauses mid-file is waited for up to a minute, which was watched. Started
+  after the app has left the screen, as when it is left during a long
+  import, the long pass is refused by Android. It then runs as an ordinary
+  one and leaves *Tap to finish sending*, which is built and not yet watched
+  ([phase 5](../docs/phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared)).
+- **Clear data loses what only the phone held.** The app's folder is in its
+  private storage. Android's *Clear data* took the S23's on 2026-10-05, with
+  18 files the laptop had freed because the phone kept them, and its Private
+  Vault.
 - **No storage question during setup, by design.** Phones have no allowance;
   the question is the desktop's, and is built there
   ([decision 0038](../docs/decisions/0038-the-storage-question-during-setup.md)).

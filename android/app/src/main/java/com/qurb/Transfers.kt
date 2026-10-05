@@ -1,13 +1,16 @@
 package com.qurb
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.work.ForegroundInfo
 
@@ -25,6 +28,10 @@ import androidx.work.ForegroundInfo
 object Transfers {
     private const val CHANNEL = "transfers"
     const val NOTIFICATION = 7
+    private const val PAUSED = 8
+
+    /** Set on the intent that opens the app from [paused]'s notification. */
+    const val CONTINUE = "com.qurb.CONTINUE_SENDING"
 
     /** The worker's foreground notice: sent so far, of how much. */
     fun foreground(context: Context, sent: ULong, total: ULong): ForegroundInfo {
@@ -55,6 +62,49 @@ object Transfers {
         } else {
             ForegroundInfo(NOTIFICATION, notification)
         }
+    }
+
+    /**
+     * A large transfer that Android would not let run in the background.
+     *
+     * Starting a foreground service is refused once the app has left the
+     * screen: somebody who adds a large file and leaves while it is still being
+     * imported gets an ordinary pass, and then Android cuts the app off the
+     * network. Measured on the S23 on 2026-10-05, it was refused 12 seconds
+     * after the app was left. Only the app being on screen lets the transfer
+     * start again, so this says so, and tapping it does. Posted only when a
+     * device was there to collect: a send waiting for a device that is off is
+     * not something opening the app would help.
+     */
+    fun paused(context: Context, waiting: ULong) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        channel(context)
+        val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_arrow_up_down)
+            .setColor(ContextCompat.getColor(context, R.color.green))
+            .setContentTitle("Tap to finish sending")
+            .setContentText("${Words.size(waiting)} is waiting. A large file keeps sending in the background once it starts with Qurb open.")
+            .setStyle(NotificationCompat.BigTextStyle())
+            .setSilent(true)
+            .setAutoCancel(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context, PAUSED,
+                    Intent(context, MainActivity::class.java)
+                        .putExtra(CONTINUE, true)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            )
+            .build()
+        NotificationManagerCompat.from(context).notify(PAUSED, notification)
+    }
+
+    fun clearPaused(context: Context) {
+        NotificationManagerCompat.from(context).cancel(PAUSED)
     }
 
     /** Quiet: a progress bar, never a sound or a heads-up. */

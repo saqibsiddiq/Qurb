@@ -654,15 +654,21 @@ then.*
   ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)).
   It survived, but fetching in parallel barely changed the speed: 5.33 MB/s
   against 3.81–4.77 one at a time.
-- [ ] Large files from the phone at the speed of the link. Found on
-  2026-10-05: quinn's default congestion controller, Cubic, held the phone to
-  5 MB/s on a Wi-Fi path that carries 15. BBR sent 12.5–14.0 MB/s in a spike on
-  the S23 ([0051](decisions/0051-bbr-not-cubic.md)), and is built into both
-  apps. Left: the rate measured through the app.
-- [ ] A collector that pauses for more than ten seconds (a laptop restarting,
-  sleeping, a Wi-Fi drop) ends the phone's pass, and the transfer waits for
-  the next one. Fixed in code on 2026-10-05: a minute's wait while what it was
-  collecting is still waiting. Left: watching it on the S23.
+- [x] Large files from the phone at the speed of the link — 2026-10-05.
+  Quinn's default congestion controller, Cubic, held the phone to 5 MB/s on a
+  Wi-Fi path that carries 15. With BBR ([0051](decisions/0051-bbr-not-cubic.md)),
+  10.6–12.1 MB/s through the app.
+- [x] A collector that pauses for more than ten seconds no longer ends the
+  phone's pass — 2026-10-05: a minute's wait while what it was collecting is
+  still waiting, watched twice with the laptop gone for 20 seconds.
+- [ ] *Tap to finish sending*, watched: the notification a large transfer
+  leaves when Android refuses it the foreground because the app was left
+  during the import.
+- [ ] Decide what counts as a safe last copy. On 2026-10-05 the phone's data
+  was cleared from Android's Settings, and 18 files the laptop had freed
+  because the phone kept them went with it
+  ([phase 5](phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared)).
+  Also: setup has no way back to the existing 24 words once a new key is made.
 
 **4. Release.**
 - [ ] Decided and recorded: how a replica frees space (§4.7), and whether

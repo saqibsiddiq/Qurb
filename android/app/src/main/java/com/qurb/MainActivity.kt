@@ -199,6 +199,24 @@ class MainActivity : AppCompatActivity() {
                 SyncWorker.running(this@MainActivity).collect { workerRunning(it) }
             }
         }
+        continueSending(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        continueSending(intent)
+    }
+
+    /**
+     * Opened from the notification a refused large transfer leaves
+     * ([Transfers.paused]): sync now, while the app is on screen and Android
+     * lets the transfer carry on in the foreground.
+     */
+    private fun continueSending(intent: Intent?) {
+        if (intent?.getBooleanExtra(Transfers.CONTINUE, false) != true) return
+        intent.removeExtra(Transfers.CONTINUE)
+        Transfers.clearPaused(this)
+        sync()
     }
 
     private fun workerRunning(running: Boolean) {

@@ -1036,6 +1036,15 @@ folder only if it has qurb in it. `crates/qurb/tests/arguments.rs` runs the
 real binary in a home of its own; both tests failed before the change, one at
 the panic.
 
+**Not all of them, it turned out (2026-10-05).** Seven more commands read the
+folder through a second function, `split_path`: `deleted`, `restore`, `free`,
+`activity`, `ls`, `find`, and the new `forget`. It also took a lone word for
+the folder, so `qurb find holiday`, `qurb ls docs` and `qurb restore #1` each
+said the word was "not set up yet", and worked only with a path in front. It
+was found by writing a test for `qurb forget`, and seen with the installed
+binary. `split_path` now uses the same rule. Test:
+`a_lone_word_is_not_taken_for_the_folder`.
+
 What this does not fix: a second device made by mistake is still a second
 device, and nothing tells a person their paired folder has stopped running.
 A desktop whose Home says *Add your first device* while another folder on the

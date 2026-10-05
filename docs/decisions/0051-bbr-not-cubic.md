@@ -1,8 +1,8 @@
 # 0051 — QUIC paces by measured bandwidth (BBR), not by loss (Cubic)
 
-**Status:** Accepted — built; measured with the spike, not yet in the app (see
-*Checked, and not*); explains what [0050](0050-large-files-from-a-phone.md)'s
-eight-in-flight did not
+**Status:** Accepted — built; measured with the spike and through the app,
+10.6–12.1 MB/s against 5 (see *Checked, and not*); explains what
+[0050](0050-large-files-from-a-phone.md)'s eight-in-flight did not
 **Date:** 2026-10-05
 
 ## What happened
@@ -71,9 +71,11 @@ do.
 
 - The network tests in `crates/peer`, and every other test, run with BBR on
   loopback.
-- **Measured with the spike, not with the app.** The app and the desktop were
-  built with it on 2026-10-05, but the phone left the network before a large
-  file could be sent through them. The figures above are the spike's.
+- **Through the app**, later on 2026-10-05: 11.88 MB/s with the app open,
+  10.81 for 1 GiB with the app left, and 10.59 and 12.05 resuming after the
+  laptop restarted. One resumed run went at 1.33 MB/s with a 124 ms round
+  trip and is not explained; repeated, the same test ran at 12.05. See
+  [phase 5](../phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared).
 - **Not measured**: on mobile data, through the relay, with other traffic
   sharing the link, or between two desktops on a wired network.
 

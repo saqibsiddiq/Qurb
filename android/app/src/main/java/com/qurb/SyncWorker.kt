@@ -73,8 +73,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
 
             // Holding the multicast lock, or the phone cannot hear the devices
             // on its own Wi-Fi answering. See `Engine.hearingTheNetwork`.
+            val servedBefore = engine.serving().bytes
             val outcome = coroutineScope {
-                val from = engine.serving().bytes
+                val from = servedBefore
                 val showing = if (long) launch {
                     while (true) {
                         delay(2_000)
@@ -116,6 +117,17 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 started,
             )
             if (outcome.reached > 0u) Engine.noteSynced(applicationContext)
+
+            // Refused the foreground with a large collection waiting, while a
+            // device was there for it -- reached, or collecting on its own
+            // connection: say so, with the way to carry on.
+            if (long || forOthers < LONG_PASS_BYTES) {
+                Transfers.clearPaused(applicationContext)
+            } else {
+                val left = runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
+                val wasThere = outcome.reached > 0u || engine.serving().bytes > servedBefore
+                if (left >= LONG_PASS_BYTES && wasThere) Transfers.paused(applicationContext, left)
+            }
             Log.i(TAG, "sync: reached=${outcome.reached} unreachable=${outcome.unreachable} " +
                 "adopted=${outcome.adopted} timedOut=${outcome.timedOut}")
 

@@ -44,6 +44,7 @@ qurb — private cloud storage
                                         and fetch each file when asked for
   qurb deleted [dir]                  recently deleted files, restorable for 30 days
   qurb restore [dir] <#n or path>     put a recently deleted file back, everywhere
+  qurb forget [dir] <#n or path>      delete a recently deleted file for good, here
   qurb holders [dir] [add|remove <device>]
                                       the devices that keep this one's own files
   qurb remove-device [dir] <device> [--delete-kept] [--yes]
@@ -215,6 +216,10 @@ fn run() -> Result<()> {
         "restore" => {
             let (root, which) = split_path(&args)?;
             restore(&root, &which.context("say which: qurb restore <#n or path> — see `qurb deleted`")?)
+        }
+        "forget" => {
+            let (root, which) = split_path(&args)?;
+            forget(&root, &which.context("say which: qurb forget <#n or path> — see `qurb deleted`")?)
         }
         "free" => {
             let (root, path) = split_path(&args)?;
@@ -963,21 +968,41 @@ fn deleted(root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// The Recently deleted entry `which` names: `#n`, or a path, meaning its most
+/// recent deletion.
+fn trashed<'a>(entries: &'a [qurb_storage::db::Trashed], which: &str) -> Result<&'a qurb_storage::db::Trashed> {
+    match which.strip_prefix('#').and_then(|n| n.parse::<i64>().ok()) {
+        Some(id) => entries.iter().find(|e| e.id == id),
+        None => entries.iter().find(|e| e.path == which.trim_start_matches("./")),
+    }
+    .with_context(|| format!("{which} is not in Recently deleted here — see `qurb deleted`"))
+}
+
 fn restore(root: &Path, which: &str) -> Result<()> {
     let (_, _, mut store, _) = open(root)?;
     let entries = store.recently_deleted()?;
-    let entry = match which.strip_prefix('#').and_then(|n| n.parse::<i64>().ok()) {
-        Some(id) => entries.iter().find(|e| e.id == id),
-        // The most recent deletion of that path.
-        None => entries.iter().find(|e| e.path == which.trim_start_matches("./")),
-    }
-    .with_context(|| format!("{which} is not in Recently deleted here — see `qurb deleted`"))?;
+    let entry = trashed(&entries, which)?;
     let at = store.restore_from_trash(entry.id)?;
     match at == entry.path {
         true => println!("restored {at}"),
         false => println!("restored {} as {at}: something is at its old path now", entry.path),
     }
     println!("  it returns on your other devices at their next sync");
+    Ok(())
+}
+
+/// Delete one Recently deleted file for good, on this device only: each
+/// device's list is its own (decision 0042), as *Delete for good* is in the
+/// window and on the phone. The command line had restore and not this, so
+/// what a test put there could be cleared only from a window.
+fn forget(root: &Path, which: &str) -> Result<()> {
+    let (_, _, mut store, _) = open(root)?;
+    let entries = store.recently_deleted()?;
+    let entry = trashed(&entries, which)?;
+    let (id, path, size) = (entry.id, entry.path.clone(), entry.size);
+    store.forget_deleted(id)?;
+    println!("deleted {path} for good ({}), here", human(size));
+    println!("  other devices keep their own Recently deleted");
     Ok(())
 }
 
@@ -1114,15 +1139,14 @@ fn cancel(root: &Path, name: &str, recipient: &str) -> Result<()> {
 /// open or a folder inside one — and asking people to remember an order they
 /// never think about is worse than looking. A directory is a directory on disk
 /// that has a store in it; anything else is the argument.
+///
+/// The folder by the same rule as [`folder_first`]. This once read a lone
+/// argument that was not a folder as the folder anyway, so `qurb find
+/// holiday`, `qurb ls docs` and `qurb restore #1` each said the word was "not
+/// set up yet" and worked only with a path in front (found 2026-10-05).
 fn split_path(args: &[String]) -> Result<(PathBuf, Option<String>)> {
-    match &args[1..] {
-        [] => Ok((directory(args)?, None)),
-        [one] => match PathBuf::from(one).join(".qurb").is_dir() {
-            true => Ok((PathBuf::from(one), None)),
-            false => Ok((directory(args)?, Some(one.clone()))),
-        },
-        [dir, rest, ..] => Ok((PathBuf::from(dir), Some(rest.clone()))),
-    }
+    let (root, rest) = folder_first(args)?;
+    Ok((root, rest.first().cloned()))
 }
 
 /// What this folder holds, and whether the bytes are actually here.
