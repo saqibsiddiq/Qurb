@@ -36,6 +36,30 @@ concatenates chunks, hands the result to the engine, and the engine re-chunks it
 to store. Network cost scales with the edit; local CPU still scales with the
 file.
 
+## Several chunks at once
+
+A file's chunks are asked for eight at a time (`IN_FLIGHT`), and written and
+checked in order as they arrive. QUIC carries each request on its own stream
+and the server answers them concurrently; asking for one and waiting for it
+before asking for the next made a file move at the pace of the round trip
+rather than the link. The cost is memory — eight chunks, 4 MiB at the average
+size — and it is the reason this was once left for later: a phone's ceiling
+([decision 0018](../../docs/decisions/0018-file-contents-never-cross-the-ffi.md))
+is far above it.
+
+## A fetch that was cut off carries on
+
+Until 2026-10-04 an interrupted fetch started again from nothing, and an
+800 MB video pulled from a phone whose pass kept ending never arrived. Now
+the partial file is kept, and the next attempt
+([`PeerClient::resume_point`](src/client.rs)) chunks it: boundaries are chosen
+by content, so the start of a file chunks the same whether or not the rest is
+there. The chunks that match the sender's manifest, in order, are kept; the
+file is cut back to the end of the last of them and only the rest is fetched.
+Nothing is kept unchecked — a partial file left by another version of the same
+path keeps only what the two share. See
+[decision 0050](../../docs/decisions/0050-large-files-from-a-phone.md).
+
 ## Identity
 
 Both ends present a self-signed certificate and check the other against a
@@ -226,9 +250,6 @@ a set that only grew would keep letting it in.
   tells the others.
 - **Tree paging.** The whole tree is sent in one message, capped at 64 MiB. A
   large library needs incremental exchange rather than a full dump per sync.
-- **Chunk-level resume.** An interrupted fetch restarts that chunk. Chunks are
-  at most 2 MiB, so the waste is bounded, but a transfer interrupted repeatedly
-  makes no progress.
-- **Concurrent fetches.** Chunks are requested one at a time. QUIC allows many
-  streams at once and the server already serves them concurrently; the client
-  does not yet use it, which leaves throughput on the table over a real link.
+- **A measured gain from the two sections above** over a real link. They
+  were built after an 800 MB video failed to cross from a phone; the speed
+  before and after, on that phone and Wi-Fi, has not been measured yet.

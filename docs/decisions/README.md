@@ -46,7 +46,7 @@ is worth more than a tidy directory.
 | [0017](0017-relay.md) | The relay carries datagrams, not messages | Accepted |
 | [0018](0018-file-contents-never-cross-the-ffi.md) | File contents never cross the FFI | Accepted |
 | [0019](0019-filenames-are-nfc.md) | Filenames are normalised to NFC | Accepted |
-| [0020](0020-sync-takes-a-deadline.md) | Sync takes a deadline, and running out is not an error | Accepted |
+| [0020](0020-sync-takes-a-deadline.md) | Sync takes a deadline, and running out is not an error | Accepted, amended by 0050 |
 | [0021](0021-the-platform-supplies-the-keystore.md) | On mobile, the app supplies the keystore | Accepted |
 | [0022](0022-the-service-announces-arrivals.md) | The rendezvous service announces arrivals | Accepted |
 | [0023](0023-one-person-per-account.md) | One person per operating-system account | Accepted, default location amended by 0037 |
@@ -76,3 +76,4 @@ is worth more than a tidy directory.
 | [0047](0047-versions-and-upgrades.md) | Versions, installing, and upgrading | Accepted — no automatic updater, by decision |
 | [0048](0048-the-design-direction.md) | The design direction | Accepted — revised the same day for the owner's direction, and to build it in the apps rather than in Figma; built on the desktop and Android, light only |
 | [0049](0049-adding-a-file-puts-it-where-you-are-looking.md) | Adding a file puts it where you are looking | Accepted — amends 0036; built on Android |
+| [0050](0050-large-files-from-a-phone.md) | Large files from a phone: fetched in parallel, resumed, and served in the foreground | Accepted — amends 0020; built, not yet measured on hardware |

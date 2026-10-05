@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Sync needs the network. Nothing else is asked for: no storage
          permission, because the synced directory is this app's own private
@@ -22,6 +23,14 @@
          never at launch, and the app works without it: the code can always be
          typed instead. -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- A long transfer, and only a long one, runs in the foreground so that
+         Android does not freeze the app while a device is collecting a large
+         file from it, with a notification saying how far it has got
+         (decision 0050). Asked for when the first such transfer starts. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
@@ -110,5 +119,11 @@
                 <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
             </intent-filter>
         </provider>
+        <!-- WorkManager's own service, declared with the type its long passes
+             use; Android 14 refuses a foreground service without one. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 </manifest>

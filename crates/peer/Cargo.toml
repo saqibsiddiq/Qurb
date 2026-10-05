@@ -22,6 +22,10 @@ qurb-signal = { path = "../signal" }
 qurb-sync = { path = "../sync" }
 
 quinn = "0.11"
+# Several chunk requests in flight at once, answered in order. FuturesOrdered
+# is the whole of what is used; it polls on the fetching task, so nothing
+# needs to be spawned or `Send`.
+futures-util = "0.3"
 # Local-network beacons are encrypted to the group, so a stranger on the same
 # café wifi sees packets of random bytes rather than a list of who is here.
 chacha20poly1305 = "0.10"

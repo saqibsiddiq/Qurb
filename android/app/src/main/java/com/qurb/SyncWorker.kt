@@ -6,12 +6,18 @@ import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
 /**
@@ -26,6 +32,13 @@ import java.util.concurrent.TimeUnit
  * and, since Android 14, a declared type that "syncing files" does not cleanly
  * fit. WorkManager is the arrangement Android actually wants, and it backs off
  * on its own when the system is busy.
+ *
+ * With one exception, decision 0050: a pass with a large file waiting to be
+ * collected from this phone runs in the foreground, under a notification that
+ * says how far it has got, for as long as a device is collecting -- because
+ * Android freezes an app it cannot see, and an 800 MB video collected by the
+ * laptop stopped part-way every time. Not permanent: the notification goes
+ * when the pass does.
  *
  * [decision 0020]: ../../../../../docs/decisions/0020-sync-takes-a-deadline.md
  */
@@ -44,10 +57,37 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // how an app's future windows get rationed, and a sync that needs
             // longer can simply have the next one.
             engine.scan()
+
+            // A large collection waiting: run in the foreground and keep
+            // answering while a device collects (decision 0050). Refused when
+            // Android will not let this app start a foreground service from
+            // where it is -- then the ordinary pass, and resuming carries the
+            // file on next time.
+            val forOthers = runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
+            val long = forOthers >= LONG_PASS_BYTES && inForeground(forOthers)
+
             // Holding the multicast lock, or the phone cannot hear the devices
             // on its own Wi-Fi answering. See `Engine.hearingTheNetwork`.
-            val outcome = Engine.hearingTheNetwork(applicationContext) {
-                engine.syncWithin(BUDGET_SECONDS)
+            val outcome = coroutineScope {
+                val from = engine.serving().bytes
+                val showing = if (long) launch {
+                    while (true) {
+                        delay(2_000)
+                        runCatching {
+                            setForeground(Transfers.foreground(applicationContext, engine.serving().bytes - from, forOthers))
+                        }
+                    }
+                } else null
+                try {
+                    withContext(Dispatchers.IO) {
+                        Engine.hearingTheNetwork(applicationContext) {
+                            if (long) engine.syncServing(BUDGET_SECONDS, SERVING_SECONDS)
+                            else engine.syncWithin(BUDGET_SECONDS)
+                        }
+                    }
+                } finally {
+                    showing?.cancel()
+                }
             }
 
             // Recorded because a background worker is otherwise invisible.
@@ -129,8 +169,34 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         }
     }
 
+    /** Required of an expedited worker on Android before 12, which runs it as
+     *  a foreground service; and the notice a long pass shows. */
+    override suspend fun getForegroundInfo(): ForegroundInfo =
+        Transfers.foreground(applicationContext, 0uL, 0uL)
+
+    /** Into the foreground for a long pass, if Android allows it from here. */
+    private suspend fun inForeground(total: ULong): Boolean = try {
+        setForeground(Transfers.foreground(applicationContext, 0uL, total))
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "could not run in the foreground; an ordinary pass instead", e)
+        false
+    }
+
     companion object {
         private const val TAG = "qurb"
+
+        /**
+         * How much waiting to be collected makes a pass a long one, run in the
+         * foreground. Below it a device collects within the ordinary window on
+         * any network worth the name; above it, the 800 MB video that kept
+         * stopping part-way.
+         */
+        val LONG_PASS_BYTES = 32uL * 1024uL * 1024uL
+
+        /** The longest a long pass keeps answering: half an hour, well inside
+         *  the six hours a day Android 15 allows a data-sync service. */
+        private const val SERVING_SECONDS = 1800u
         /**
          * The schedule's name, versioned.
          *

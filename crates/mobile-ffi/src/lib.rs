@@ -453,6 +453,49 @@ pub struct Qurb {
     /// Lazy because a phone that only browses its files should not pay for a
     /// thread pool, and kept because building one per call would be worse.
     runtime: Mutex<Option<Arc<tokio::runtime::Runtime>>>,
+    /// What this device has handed to devices collecting from it. Read while
+    /// a pass runs, from another thread, so it takes no lock.
+    serving: Arc<ServingStats>,
+}
+
+/// Bytes served to devices collecting from this one, and when the last went.
+#[derive(Default)]
+struct ServingStats {
+    bytes: std::sync::atomic::AtomicU64,
+    /// Milliseconds since the Unix epoch; zero before anything has gone.
+    last: std::sync::atomic::AtomicU64,
+}
+
+impl ServingStats {
+    fn now_millis() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+
+    /// Whether a chunk went to somebody within `window`: someone is collecting.
+    fn recently(&self, window: std::time::Duration) -> bool {
+        let last = self.last.load(std::sync::atomic::Ordering::Relaxed);
+        last != 0 && Self::now_millis().saturating_sub(last) <= window.as_millis() as u64
+    }
+}
+
+impl qurb_peer::Served for ServingStats {
+    fn served(&self, _to: &qurb_peer::Fingerprint, _chunk: &blake3::Hash, bytes: u64) {
+        self.bytes.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+        self.last.store(Self::now_millis(), std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// What this device is handing to devices collecting from it.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Serving {
+    /// Bytes sent to collecting devices since this handle was opened. A screen
+    /// showing progress takes the difference from when it started looking.
+    pub bytes: u64,
+    /// Whether any went in the last few seconds.
+    pub collecting: bool,
 }
 
 /// Set up a new device, generating a key and its recovery phrase.
@@ -934,7 +977,38 @@ impl Qurb {
     /// watching; pass what the platform granted when it is not.
     pub fn sync_within(&self, seconds: u32) -> Result<SyncOutcome, QurbError> {
         let deadline = std::time::Duration::from_secs(seconds.max(1) as u64);
-        self.sync_inner(deadline)
+        self.sync_inner(deadline, deadline)
+    }
+
+    /// The same, then keep answering a device that is collecting from this
+    /// one, up to `serving_seconds` from the start.
+    ///
+    /// A pass ends when its window does, and a device pulling a large file
+    /// from the phone lost it there: an 800 MB video failed part-way, every
+    /// time. For a caller the platform will let run longer -- a foreground
+    /// worker -- this keeps the pass open while chunks are being asked for,
+    /// and ends it [`COLLECTING`] after the last one went.
+    pub fn sync_serving(&self, seconds: u32, serving_seconds: u32) -> Result<SyncOutcome, QurbError> {
+        let deadline = std::time::Duration::from_secs(seconds.max(1) as u64);
+        let serving = std::time::Duration::from_secs(serving_seconds as u64).max(deadline);
+        self.sync_inner(deadline, serving)
+    }
+
+    /// What this device is handing to devices collecting from it. Takes no
+    /// lock, so a screen can ask while a pass is running.
+    pub fn serving(&self) -> Serving {
+        Serving {
+            bytes: self.serving.bytes.load(std::sync::atomic::Ordering::Relaxed),
+            collecting: self.serving.recently(COLLECTING),
+        }
+    }
+
+    /// Bytes a device reached would come and take from this one: sends not
+    /// yet collected, shared files only this device has, and -- when a device
+    /// keeps this one's files -- private ones not yet kept. What decides
+    /// whether a sync is worth running as a long one.
+    pub fn waiting_for_others_bytes(&self) -> Result<u64, QurbError> {
+        Ok(self.for_others()?.1)
     }
 
     /// What this device made and nothing else has taken yet.
@@ -1397,6 +1471,7 @@ impl Qurb {
             discover: settings.discover,
             wake_token: settings.wake_token,
             runtime: Mutex::new(None),
+            serving: Arc::new(ServingStats::default()),
         })
     }
 }
@@ -1480,7 +1555,11 @@ impl Qurb {
     }
 
     /// One sync pass against every trusted peer, bounded by `budget`.
-    fn sync_inner(&self, budget: std::time::Duration) -> Result<SyncOutcome, QurbError> {
+    fn sync_inner(
+        &self,
+        budget: std::time::Duration,
+        serving: std::time::Duration,
+    ) -> Result<SyncOutcome, QurbError> {
         let started = std::time::Instant::now();
         let mut outcome = SyncOutcome {
             reached: 0,
@@ -1588,15 +1667,17 @@ impl Qurb {
             let store = Arc::clone(&served);
             let generation = Arc::clone(&generation);
             let trust = trust.clone();
+            let watcher = Arc::clone(&self.serving);
             accepting.push(runtime.spawn(async move {
                 while let Some(incoming) = endpoint.accept().await {
                     let store = Arc::clone(&store);
                     let generation = Arc::clone(&generation);
                     let trust = trust.clone();
+                    let watcher: Arc<dyn qurb_peer::Served> = watcher.clone();
                     tokio::spawn(async move {
                         if let Ok(connection) = incoming.await {
-                            qurb_peer::server::serve_connection(
-                                connection, store, generation, &trust,
+                            qurb_peer::server::serve_connection_watched(
+                                connection, store, generation, watcher, &trust,
                             )
                             .await;
                         }
@@ -1686,10 +1767,24 @@ impl Qurb {
         // So a pass that reached somebody and has something waiting for them
         // says so and keeps answering, until it has been collected or
         // `LINGER` has passed, and never beyond the window.
-        if outcome.reached > 0 && !outcome.timed_out && self.waiting_for_others().unwrap_or(false) {
-            let until = std::cmp::min(started + budget, std::time::Instant::now() + LINGER);
+        //
+        // And while a device is actually collecting -- a chunk went within
+        // `COLLECTING` -- it keeps answering past the window, up to `serving`.
+        // That is no longer than the window unless the caller asked through
+        // `sync_serving`, which it does only where the platform will let it
+        // run on.
+        let collecting = self.serving.recently(COLLECTING);
+        if outcome.reached > 0 && !outcome.timed_out && (collecting || self.waiting_for_others().unwrap_or(false)) {
+            let come_by = std::cmp::min(started + budget, std::time::Instant::now() + LINGER);
+            let at_most = started + serving;
             runtime.block_on(connector.announce_news());
-            while std::time::Instant::now() < until && self.waiting_for_others().unwrap_or(false) {
+            while keep_answering(
+                std::time::Instant::now(),
+                come_by,
+                at_most,
+                self.serving.recently(COLLECTING),
+                || self.waiting_for_others().unwrap_or(false),
+            ) {
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
         }
@@ -1707,21 +1802,30 @@ impl Qurb {
     /// A private file with nobody chosen to keep it is waiting for no one, and
     /// staying open for it would spend every pass's spare seconds for nothing.
     fn waiting_for_others(&self) -> Result<bool, QurbError> {
+        Ok(self.for_others()?.0 > 0)
+    }
+
+    /// How many files a reached device would come for, and their bytes.
+    fn for_others(&self) -> Result<(usize, u64), QurbError> {
         let engine = self.engine()?;
         let store = engine.store();
-        if !store.pending_deliveries()?.is_empty() {
-            return Ok(true);
-        }
+        let pending = store.pending_deliveries()?;
+        let mut files = pending.len();
+        let mut bytes: u64 = pending.iter().map(|(_, size, _)| *size).sum();
+
         let only_here = store.undelivered()?;
-        if only_here.is_empty() {
-            return Ok(false);
+        if !only_here.is_empty() {
+            let kept = !store.db().holders()?.is_empty();
+            let db = store.db();
+            for (path, size) in &only_here {
+                let private = matches!(db.folder_row(path), Ok(Some((_, Some(_)))));
+                if !private || kept {
+                    files += 1;
+                    bytes += size;
+                }
+            }
         }
-        let kept = !store.db().holders()?.is_empty();
-        let db = store.db();
-        Ok(only_here.iter().any(|(path, _)| {
-            let private = matches!(db.folder_row(path), Ok(Some((_, Some(_)))));
-            !private || kept
-        }))
+        Ok((files, bytes))
     }
 
     /// Sync against a peer already reached. `Ok(None)` means the time ran out.
@@ -1821,6 +1925,29 @@ impl Qurb {
 /// that hears the phone to dial back and pull a few photos; short enough that
 /// a device which never comes costs a background window little.
 const LINGER: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Whether a pass that has finished its own syncing goes on answering.
+///
+/// Never past `at_most`. Before that, while a device is collecting; and
+/// otherwise while something is still waiting to be collected and there is
+/// time left for a device to come for it (`come_by`). `waiting` is asked only
+/// when nobody is collecting: it reads the index, and the answer does not
+/// matter while chunks are going.
+fn keep_answering(
+    now: std::time::Instant,
+    come_by: std::time::Instant,
+    at_most: std::time::Instant,
+    collecting: bool,
+    waiting: impl FnOnce() -> bool,
+) -> bool {
+    now < at_most && (collecting || (now < come_by && waiting()))
+}
+
+/// How recently a chunk must have gone for a device to count as still
+/// collecting. Long enough to cover a pause between files and a slow chunk on
+/// a poor link; short enough that a device that has finished, or gone, lets
+/// the pass end soon after.
+const COLLECTING: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Where the store lives inside the synced root.
 ///
@@ -2121,3 +2248,49 @@ impl Pairing {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    /// A device collecting keeps the pass open past its window, up to the
+    /// limit and no further; nobody collecting ends it once nothing is
+    /// waiting or there is no time left for anyone to come.
+    #[test]
+    fn a_pass_answers_while_it_is_being_collected_from() {
+        let start = Instant::now();
+        let come_by = start + Duration::from_secs(10);
+        let at_most = start + Duration::from_secs(1800);
+        let at = |s: u64| start + Duration::from_secs(s);
+
+        // Past the window, while chunks are going: on.
+        assert!(keep_answering(at(600), come_by, at_most, true, || false));
+        // At the limit, even mid-collection: off.
+        assert!(!keep_answering(at(1800), come_by, at_most, true, || true));
+        // Nobody collecting, something waiting, still time for a device to come.
+        assert!(keep_answering(at(5), come_by, at_most, false, || true));
+        // Nobody collecting, and nobody came in time.
+        assert!(!keep_answering(at(11), come_by, at_most, false, || true));
+        // Nobody collecting and nothing waiting: done.
+        assert!(!keep_answering(at(5), come_by, at_most, false, || false));
+    }
+
+    /// The window is the limit when nobody asked for longer: `sync_within`
+    /// passes the window as both, so a collection never holds its pass open
+    /// beyond what the platform granted.
+    #[test]
+    fn without_asking_the_window_is_the_limit() {
+        let start = Instant::now();
+        let window = start + Duration::from_secs(20);
+        assert!(!keep_answering(start + Duration::from_secs(20), window, window, true, || true));
+    }
+
+    #[test]
+    fn a_chunk_just_served_counts_as_collecting() {
+        let stats = ServingStats::default();
+        assert!(!stats.recently(COLLECTING), "nothing has gone yet");
+        qurb_peer::Served::served(&stats, &qurb_peer::Fingerprint::from_bytes([1; 32]), &blake3::hash(b"x"), 512);
+        assert!(stats.recently(COLLECTING));
+        assert_eq!(stats.bytes.load(std::sync::atomic::Ordering::Relaxed), 512);
+    }
+}

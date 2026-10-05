@@ -450,7 +450,8 @@ This is the single most useful trace to have in your head.
  8. Record the file's chunk list    ✅ SQLite: path → ordered hashes
  9. Bump the vector clock           ✅ this device's counter += 1
 10. Tell peers what changed         ✅ the tree, over QUIC
-11. Peers request chunks they lack  ✅ only the missing ones move
+11. Peers request chunks they lack  ✅ only the missing ones move, eight at
+                                       a time; a fetch cut off carries on
 12. The peer says it has it now     ✅ so this device can stop calling
                                        the file undelivered
 ```
@@ -669,7 +670,10 @@ qurb/
 │       │                  ShareActivity.kt    the share sheet's way in: save it, or
 │       │                                      send it to one device
 │       │                  AndroidKeyStore.kt  the platform half of decision 0021
-│       │                  SyncWorker.kt       background sync, on WorkManager
+│       │                  SyncWorker.kt       background sync, on WorkManager;
+│       │                                      a long pass in the foreground
+│       │                  Transfers.kt        the notification a long transfer
+│       │                                      runs under, and its progress
 │       │                  QurbDocumentsProvider.kt
 │       │                                      the files, in the system picker,
 │       │                                      from the index; freed ones download
@@ -820,7 +824,7 @@ for the workspace as it stands.
 | QUIC transport | one bidirectional stream per request |
 | Mutual authentication | pinned fingerprints, handshake signature verified |
 | Wire format | length-bounded; decoder has no panicking path |
-| Incremental transfer | only chunks the receiver lacks cross the wire |
+| Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
@@ -839,7 +843,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-758 tests in 89 test binaries on Linux, all passing (2026-10-03, debug build,
+763 tests in 89 test binaries on Linux, all passing (2026-10-04, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has

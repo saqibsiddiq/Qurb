@@ -162,6 +162,11 @@ qurb.joinPairing(scannedCode)         // the other direction, usually the phone'
 qurb.peers()                          // who this device trusts
 
 qurb.syncWithin(25)                   // one pass, giving up after 25 seconds
+qurb.waitingForOthersBytes()          // what a device reached would come and take
+qurb.syncServing(20, 1800)            // a pass that goes on answering while a device
+                                      //   collects, up to 30 minutes (decision 0050)
+qurb.serving()                        // bytes handed over so far; no lock, so a
+                                      //   notification can ask while a pass runs
 ```
 
 `Settings.wakeToken` carries the platform's push token, so the rendezvous
@@ -195,6 +200,14 @@ sets `SyncOutcome.timedOut` and is not an error: every file is committed as it
 lands, so a pass that stops early leaves work done rather than work lost. Pass
 something generous when the app is in the foreground and the user is watching;
 pass what the platform granted when it is not.
+
+The one exception is a device collecting a large file *from* the phone: every
+device pulls, so the phone has to keep answering until the other side is done,
+and a pass that ended at its window cut an 800 MB video off part-way.
+`syncServing(seconds, servingSeconds)` keeps answering while a chunk has gone
+in the last ten seconds, up to `servingSeconds` — for a caller the platform will
+let run that long, which on Android is a worker in the foreground
+([decision 0050](../../docs/decisions/0050-large-files-from-a-phone.md)).
 
 **Errors.** A Rust error chain does not survive the crossing. Everything becomes
 `QurbError`, which is flat, matchable, and short on purpose: it lists only the

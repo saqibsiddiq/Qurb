@@ -36,9 +36,10 @@ record](../roadmap.md).
 | removing a device | ✅ on the S23 on 2026-09-29, from its history: the laptop removed, then paired again |
 | designed to the owner's direction: four tabs, Private Vault inside Files | ✅ on the S23, every place walked, 2026-10-03 ([below](#the-designed-app-on-the-s23)) |
 | adding a file into the area on screen | 🧪 in the FFI's tests ([0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)) |
+| a large file collected from the phone | ◻ fetched eight chunks at a time, resumed, served in the foreground — built and tested, not yet measured on the phone ([below](#an-800-mb-video-and-what-stopped-it)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-758 tests pass in 89 test binaries on Linux (2026-10-03, debug build, the
+763 tests pass in 89 test binaries on Linux (2026-10-04, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -1389,6 +1390,44 @@ Not done here: measuring the designed app against
 [decision 0039](../decisions/0039-a-light-android-app.md); the share sheet
 actually saving or sending; pairing by the phone's own code, watched; and the
 owner's review.
+
+## An 800 MB video, and what stopped it
+
+**Reported 2026-10-03 by the owner**: an 800 MB video added on the phone was
+"very slow and also it failed". The laptop's log has it. The phone, paired
+again at 17:58 UTC, was reached over the home Wi-Fi; the laptop began pulling
+the video into `~/qurb` and at 18:01:18 the fetch ended with *connection lost*,
+two minutes and thirty-two seconds in. Nothing fetched it again.
+
+Three causes, each enough on its own:
+
+- **Chunks were fetched one at a time**, each waited out before the next was
+  asked for. 800 MB had not crossed in 152 seconds: under 5.3 MB/s, on a link
+  that carries several times that.
+- **An interrupted fetch started again from nothing.** The partial file was
+  opened fresh on every attempt.
+- **The phone stopped answering.** A pass waits at most ten seconds for a
+  device to collect and never past its window, and Android freezes an app
+  nobody is looking at; a connection already open lasted until then.
+
+Fixed on 2026-10-04 —
+[decision 0050](../decisions/0050-large-files-from-a-phone.md): every device
+fetches eight chunks at once; a fetch that was cut off chunks what it has and
+carries on from the last chunk that matches; and a pass with 32 MiB or more
+waiting to be collected runs in the background worker as a foreground service,
+under a notification with the bytes sent so far, answering for as long as a
+device collects, up to thirty minutes. *Sync now* hands such a pass to the
+worker.
+
+Tested: the network tests, now fetching eight at a time; a 12 MiB file cut
+two-thirds through arrives intact with only the rest crossing — and with
+resuming switched off, all 12,582,912 bytes cross and the test fails; a partial
+file that is not the content is not kept; and the rule for when a pass goes on
+answering, on its own.
+
+**Not yet measured on the phone**: the speed of a large file before and
+after, and a long transfer surviving the owner leaving the app. The 5.3 MB/s
+is a ceiling from one failure, not a measurement.
 
 ## Deliberately left undone
 

@@ -4,6 +4,9 @@
 now covers starting, a dropped connector stops its background work, and a pass
 stays open briefly for peers to collect — see [Found on a phone](#found-on-a-phone)
 and [A pass that waits to be collected from](#a-pass-that-waits-to-be-collected-from).
+Amended 2026-10-04 by [0050](0050-large-files-from-a-phone.md): a pass may go on
+answering a device that is collecting from it past its window, when its caller
+asks with `sync_serving` -- the background worker, running in the foreground.
 **Date:** 2026-09-17
 
 ## Decision

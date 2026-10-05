@@ -1005,16 +1005,11 @@ impl Store {
         content: &blake3::Hash,
         out: &mut impl std::io::Write,
     ) -> Result<Option<u64>> {
-        let Some(chunks) = self.chunk_hashes_for_content(content)? else {
-            return Ok(None);
-        };
         // Checked before anything is written, so the caller's `None` really does
         // mean nothing happened.
-        for chunk in &chunks {
-            if !self.has_chunk(chunk)? {
-                return Ok(None);
-            }
-        }
+        let Some(chunks) = self.readable_chunks(content)? else {
+            return Ok(None);
+        };
 
         let mut whole = blake3::Hasher::new();
         let mut written = 0u64;
@@ -1029,6 +1024,29 @@ impl Store {
             return Err(Error::ChunkCorrupt { hash: content.to_hex().to_string() });
         }
         Ok(Some(written))
+    }
+
+    /// Whether [`read_content_into`](Self::read_content_into) would produce
+    /// `content` from this device alone.
+    ///
+    /// Asked before a destination is touched, by a caller that would otherwise
+    /// have to open it to find out -- and opening it fresh would wipe what an
+    /// interrupted transfer left there to be resumed.
+    pub fn can_read_content(&self, content: &blake3::Hash) -> Result<bool> {
+        Ok(self.readable_chunks(content)?.is_some())
+    }
+
+    /// The chunks of `content`, if every one of them can be read here.
+    fn readable_chunks(&self, content: &blake3::Hash) -> Result<Option<Vec<blake3::Hash>>> {
+        let Some(chunks) = self.chunk_hashes_for_content(content)? else {
+            return Ok(None);
+        };
+        for chunk in &chunks {
+            if !self.has_chunk(chunk)? {
+                return Ok(None);
+            }
+        }
+        Ok(Some(chunks))
     }
 
     /// Whether this device holds a chunk, in the index and on disk both.

@@ -4,6 +4,7 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.animation.LinearInterpolator
@@ -62,8 +63,16 @@ class MainActivity : AppCompatActivity() {
     private var againQuiet = true
 
     /** What to do when the running sync ends, and when the one after it does. */
-    private val afterThisSync = mutableListOf<suspend (SyncOutcome?) -> Unit>()
-    private val afterNextSync = mutableListOf<suspend (SyncOutcome?) -> Unit>()
+    private val afterThisSync = mutableListOf<suspend (Synced) -> Unit>()
+    private val afterNextSync = mutableListOf<suspend (Synced) -> Unit>()
+
+    /** How a sync went: its outcome, or null if it failed -- or that it was
+     *  handed to the worker to run in the foreground (decision 0050). */
+    class Synced(val outcome: SyncOutcome?, val inBackground: Boolean)
+
+    private val notifyAsk = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
 
     /** Whether this launch has freed what nothing needs yet. Once is enough. */
     private var housekept = false
@@ -445,13 +454,28 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- sync
 
     /**
+     * Ask, once, to show notifications: the first time a long transfer is
+     * handed to the worker, whose notification says how far it has got. Not
+     * at install -- a permission asked for before it means anything is a
+     * permission refused. The transfer runs either way.
+     */
+    private fun askToNotify() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notifyAsk.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    /**
      * Sync with every paired device that answers. `quiet` when it was started
      * by a change rather than by somebody asking: the Transfers bar shows it
      * moving, and its outcome is not announced. `then` runs when the pass that
      * includes this request has ended -- with its outcome, or null if it
      * failed.
      */
-    fun sync(quiet: Boolean = false, then: (suspend (SyncOutcome?) -> Unit)? = null) {
+    fun sync(quiet: Boolean = false, then: (suspend (Synced) -> Unit)? = null) {
         if (syncing) {
             // The running pass may have started before this change existed.
             again = true
@@ -465,13 +489,30 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             var result: SyncOutcome? = null
+            var inBackground = false
             try {
                 val engine = Engine.open(this@MainActivity)
+                val forOthers = withContext(Dispatchers.IO) {
+                    engine.scan()
+                    runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
+                }
+                // A large file for a device to collect, and Android freezes an
+                // app nobody is looking at: handed to the worker, which runs it
+                // in the foreground under a notification (decision 0050).
+                if (forOthers >= SyncWorker.LONG_PASS_BYTES) {
+                    inBackground = true
+                    askToNotify()
+                    withContext(Dispatchers.IO) { SyncWorker.runNow(this@MainActivity) }
+                    if (!quiet) say(
+                        "Sending ${Words.size(forOthers)} to your devices. It carries on if you " +
+                            "leave Qurb; a notification shows how far it has got."
+                    )
+                    return@launch
+                }
                 // 25 seconds: generous for someone watching, and still inside
                 // what a background window would grant. The deadline is the
                 // point of `syncWithin` -- see decision 0020.
                 val outcome = withContext(Dispatchers.IO) {
-                    engine.scan()
                     // Holding the multicast lock, or the phone cannot hear the
                     // devices on its own Wi-Fi answering.
                     Engine.hearingTheNetwork(this@MainActivity) { engine.syncWithin(25u) }
@@ -505,7 +546,7 @@ class MainActivity : AppCompatActivity() {
                 changed()
                 val done = afterThisSync.toList()
                 afterThisSync.clear()
-                for (callback in done) callback(result)
+                for (callback in done) callback(Synced(result, inBackground))
                 if (again) {
                     val quietly = againQuiet
                     again = false
@@ -526,7 +567,11 @@ class MainActivity : AppCompatActivity() {
      */
     private fun sendGoes(to: PeerInfo, names: List<String>) {
         say(if (names.size == 1) "Sending ${names[0]} to ${to.name}…" else "Sending ${names.size} files to ${to.name}…")
-        sync(quiet = true) {
+        sync(quiet = true) { synced ->
+            if (synced.inBackground) {
+                say("Sending to ${to.name}. It carries on if you leave Qurb; a notification shows how far it has got.")
+                return@sync
+            }
             val left = runCatching {
                 withContext(Dispatchers.IO) { Engine.open(this@MainActivity).waiting() }
             }.getOrDefault(emptyList()).count { it.toFingerprint == to.fingerprint && it.path in names }

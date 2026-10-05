@@ -279,6 +279,55 @@ async fn a_large_file_arrives_intact() {
     assert_eq!(b.on_disk().get("big.bin"), Some(&content), "the file did not survive transfer");
 }
 
+/// A file cut off part-way is carried on from, not started again. What the
+/// interrupted attempt left beside the destination is chunked and checked
+/// against the sender's manifest, and only what follows crosses the network.
+/// An 800 MB video from a phone that kept stopping part-way started again from
+/// nothing every time.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_cut_off_part_way_carries_on_where_it_stopped() {
+    let mut a = Device::new();
+    let mut b = Device::new();
+    let content = pseudo_random(7, 12 << 20);
+    a.write("video.mp4", &content);
+
+    // What an interrupted attempt leaves: the start of the file, beside its
+    // destination, ending part-way through a chunk.
+    let cut = content.len() * 2 / 3 + 12_345;
+    let partial = b.root.join(".video.mp4.incoming");
+    fs::write(&partial, &content[..cut]).unwrap();
+
+    let b_fp = b.identity.fingerprint();
+    let served = serve(&a, &[b_fp]);
+    pull(&mut b, &served).await;
+
+    assert_eq!(b.on_disk().get("video.mp4"), Some(&content), "the file did not arrive intact");
+    assert!(!partial.exists(), "the partial file should have become the file");
+    let sent = served.stats.bytes();
+    let rest = (content.len() - cut) as u64;
+    assert!(
+        sent < rest + (2 << 20),
+        "{sent} bytes crossed for the last {rest}; what was already here was fetched again"
+    );
+}
+
+/// What is already there is checked, not trusted: a partial file that is not
+/// the start of the content is replaced rather than built on.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_partial_file_that_is_not_the_content_is_not_kept() {
+    let mut a = Device::new();
+    let mut b = Device::new();
+    let content = pseudo_random(8, 6 << 20);
+    a.write("video.mp4", &content);
+    fs::write(b.root.join(".video.mp4.incoming"), pseudo_random(9, 3 << 20)).unwrap();
+
+    let b_fp = b.identity.fingerprint();
+    let served = serve(&a, &[b_fp]);
+    pull(&mut b, &served).await;
+
+    assert_eq!(b.on_disk().get("video.mp4"), Some(&content), "a wrong partial file was built on");
+}
+
 // -- incremental transfer ----------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]

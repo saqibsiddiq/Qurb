@@ -10,6 +10,8 @@ edition = "2021"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
+# Only for the type `Served` names a served chunk by.
+blake3.workspace = true
 qurb-engine = { path = "../engine" }
 qurb-storage = { path = "../storage" }
 qurb-watcher = { path = "../watcher" }

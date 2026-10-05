@@ -196,8 +196,14 @@ gesture bar.
 `INTERNET` and `ACCESS_NETWORK_STATE`, to sync; `CHANGE_WIFI_MULTICAST_STATE`,
 to hear devices on the same Wi-Fi answer; `CAMERA`, asked for only when
 scanning a code to add a device, and refusable — the code can be typed
-instead. Nothing else: no storage permission, because the synced directory is
-the app's own private storage, and no location, contacts or anything like them.
+instead. `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` and
+`POST_NOTIFICATIONS`, for one thing only: a long transfer runs in the
+foreground under a notification, so Android does not freeze the app while a
+device collects a large file from it ([decision 0050](../docs/decisions/0050-large-files-from-a-phone.md)).
+The notification permission is asked for the first time that happens, not at
+install, and refusing it stops nothing. Nothing else: no storage permission,
+because the synced directory is the app's own private storage, and no
+location, contacts or anything like them.
 
 `allowBackup` is `false` on purpose. Android's backup would copy the vault to
 Google's servers, and the Keystore key wrapping it does **not** travel — so a
@@ -257,6 +263,16 @@ sync that works from one that silently stopped — and "silently stopped" is the
 failure mode a sync app actually dies of. Settings → **Background sync** shows
 it.
 
+**A long pass runs in the foreground.** When 32 MiB or more is waiting for
+another device to collect, the worker declares itself a foreground service of
+type `dataSync`, shows *Sending to your devices* with the bytes sent so far,
+and keeps answering for as long as a device is collecting — up to thirty
+minutes — instead of ending at its window. Android freezes an app nobody is
+looking at; an 800 MB video the laptop was collecting stopped there, every
+time. *Sync now*, and every sync the app starts, hands such a pass to the
+worker. Ordinary passes stay silent. See
+[decision 0050](../docs/decisions/0050-large-files-from-a-phone.md).
+
 A pass that reached a device and has something waiting for it stays open up
 to ten seconds, until that device has collected it: every device pulls, and a
 phone that finishes its own syncing in a second would otherwise close before
@@ -288,9 +304,12 @@ replaced by uninstalling — which deletes the phone's key and index. See
 
 ## Not built
 
-- **No progress while a file moves.** A phone syncs in short windows, mostly in
-  the background; Transfers shows what is waiting and what happened, not bytes
-  in flight.
+- **Progress in the app.** A long transfer from the phone shows how far it
+  has got in its notification; inside the app, the Transfers bar still shows
+  what is waiting and what happened, not bytes in flight.
+- **Large files, measured.** Collecting a large file from the phone was slow
+  and failed part-way (decision 0050); what fixed it is built and tested, and
+  the speed before and after has not been measured on the phone yet.
 - **No storage question during setup, by design.** Phones have no allowance;
   the question is the desktop's, and is built there
   ([decision 0038](../docs/decisions/0038-the-storage-question-during-setup.md)).

@@ -130,6 +130,64 @@ impl ContentSource for NetworkSource<'_> {
 
         result.map_err(|e| qurb_engine::Error::Source { detail: e.to_string() })
     }
+
+    /// Carries on from what an earlier, interrupted attempt left in
+    /// `partial`, rather than starting again.
+    fn resume_into(
+        &mut self,
+        hash: &[u8; 32],
+        _size: u64,
+        partial: &std::path::Path,
+        progress: &mut dyn qurb_engine::Progress,
+    ) -> qurb_engine::Result<u64> {
+        self.resume(hash, partial, progress)
+            .map_err(|e| qurb_engine::Error::Source { detail: e.to_string() })
+    }
+}
+
+impl NetworkSource<'_> {
+    /// The resuming form of [`fetch_into`](ContentSource::fetch_into); see
+    /// [`PeerClient::resume_point`].
+    fn resume(
+        &mut self,
+        hash: &[u8; 32],
+        partial: &std::path::Path,
+        progress: &mut dyn qurb_engine::Progress,
+    ) -> crate::error::Result<u64> {
+        tokio::task::block_in_place(|| {
+            self.runtime.block_on(async {
+                let resume = self.client.resume_point(*hash, partial).await?;
+                if resume.kept() > 0 {
+                    tracing::info!(kept = resume.kept(), "carrying on from an earlier attempt");
+                    progress.advanced(resume.kept());
+                }
+                let mut file = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(partial)
+                    .map_err(|e| crate::error::Error::Io { path: partial.to_path_buf(), source: e })?;
+                let mut sink = Counted { out: &mut file, progress };
+                self.client.fetch_rest_into(self.local, *hash, resume, &mut sink).await
+            })
+        })
+    }
+}
+
+/// Reports what passes through to `out`.
+struct Counted<'a> {
+    out: &'a mut dyn std::io::Write,
+    progress: &'a mut dyn qurb_engine::Progress,
+}
+
+impl std::io::Write for Counted<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.out.write(buf)?;
+        self.progress.advanced(n as u64);
+        Ok(n)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.out.flush()
+    }
 }
 
 /// Lets a `&mut dyn Write` satisfy an `impl Write` parameter.

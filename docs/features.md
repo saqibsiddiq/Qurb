@@ -139,6 +139,7 @@ was walked through on the emulator.
 | **Background sync** | WorkManager, every 15 minutes — every hour once a push has arrived in the last week | ✅ |
 | **Push** | a change on the laptop wakes the sleeping phone, through Firebase; about five seconds from a change on the laptop to the phone syncing it, on mobile data with the screen off | ✅ |
 | **Syncing from mobile data** | through the rendezvous service, directly to the laptop | ✅ |
+| **A large file collected from the phone** | 32 MiB or more waiting: the sync runs in the foreground under *Sending to your devices*, with the bytes sent so far, for as long as a device collects — up to half an hour ([0050](decisions/0050-large-files-from-a-phone.md)) | ◻ built; not yet seen on the phone |
 
 ---
 
@@ -200,6 +201,7 @@ The parts nobody sees, and the reason the features above can be trusted.
 | **Files go directly between devices, encrypted.** The servers never hold them. | ✅ |
 | **A file costs its size once.** The file in the folder is its own storage; no second copy ([0024](decisions/0024-the-file-is-the-payload-store.md)). | ✅ |
 | **An edit sends only what changed.** A 16-byte insert into a 200 MB file moved 248 KiB, between two devices on one machine. | 🧪 |
+| **A large file cut off part-way carries on where it stopped**, rather than starting again, and is fetched several chunks at a time ([0050](decisions/0050-large-files-from-a-phone.md)). | 🧪 |
 | **Nothing is waiting on the other device being awake.** Added while every other device is off, a file goes when one is next reachable. | ✅ |
 | **An edit is never silently lost.** Two devices changing one file keep both versions ([0005](decisions/0005-conflict-resolution.md)). | ✅ |
 | **A deletion can be undone for thirty days**, on every device. | ✅ |

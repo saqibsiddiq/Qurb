@@ -44,6 +44,27 @@ pub trait ContentSource {
         Ok(bytes.len() as u64)
     }
 
+    /// Fetch into the file at `partial`, keeping whatever of the content an
+    /// earlier attempt that was cut off left there, and reporting the bytes
+    /// written -- kept ones included -- to `progress`.
+    ///
+    /// The default starts again from nothing, which is right for a source that
+    /// cannot tell what the partial file holds. A network source can, and
+    /// should override this: a large file from a phone may take several of its
+    /// short windows to arrive, and starting each from zero means it never
+    /// does.
+    fn resume_into(
+        &mut self,
+        hash: &[u8; 32],
+        size: u64,
+        partial: &Path,
+        progress: &mut dyn Progress,
+    ) -> Result<u64> {
+        let mut file = std::fs::File::create(partial)
+            .map_err(|e| Error::Io { path: partial.to_path_buf(), source: e })?;
+        self.fetch_into(hash, size, &mut Counting { out: &mut file, progress })
+    }
+
     /// Told once content has been committed here, so the source can stop
     /// counting it as undelivered.
     ///
@@ -685,38 +706,15 @@ impl Engine {
                 // unverified bytes where the user can see them. And a transfer
                 // interrupted halfway would otherwise leave a truncated file
                 // that looks complete.
+                //
+                // Left where it is if the fetch is cut off, so the next attempt
+                // carries on from it; the scan ignores `.incoming` files.
                 let staging = staging_path(&path);
-                let written = {
-                    let mut file = std::fs::File::create(&staging)
-                        .map_err(|e| Error::Io { path: staging.clone(), source: e })?;
-
-                    // Prefer content already on this device. A renamed or copied
-                    // file, or one that arrived by another route, is already
-                    // here under some name.
-                    //
-                    // Asked by hash rather than by live path: a rename arrives
-                    // as additions and deletions applied in path order, so the
-                    // old path may already be tombstoned by the time the new one
-                    // is written. Its chunks are still on disk.
-                    match self.store().read_content_into(
-                        &blake3::Hash::from(*hash),
-                        &mut file,
-                    )? {
-                        Some(bytes) => bytes,
-                        None => {
-                            stats.fetched += 1;
-                            progress.started(&version.path, *size);
-                            let fetched = source.fetch_into(
-                                hash,
-                                *size,
-                                &mut Counting { out: &mut file, progress: &mut *progress },
-                            );
-                            progress.finished(&version.path);
-                            fetched?
-                        }
-                    }
-                };
-                let _ = written;
+                // Asked by hash rather than by live path: a rename arrives as
+                // additions and deletions applied in path order, so the old
+                // path may already be tombstoned by the time the new one is
+                // written. Its chunks are still on disk.
+                self.bring_in(hash, *size, &staging, &version.path, source, stats, progress)?;
 
                 std::fs::rename(&staging, &path).map_err(|e| {
                     let _ = std::fs::remove_file(&staging);
@@ -788,21 +786,13 @@ impl Engine {
         };
         let content = blake3::Hash::from(*hash);
 
+        // Named by the content, so an attempt cut off part-way is picked up by
+        // the next one rather than started again.
         let staging = self.store().root().join(format!("holding-{}.incoming", content.to_hex()));
-        let written = (|| -> Result<()> {
-            let mut file = std::fs::File::create(&staging)
-                .map_err(|e| Error::Io { path: staging.clone(), source: e })?;
-            // Already here -- a send the owner collected, or the same bytes
-            // under another name -- costs a copy, not a transfer.
-            if self.store().read_content_into(&content, &mut file)?.is_none() {
-                stats.fetched += 1;
-                source.fetch_into(hash, *size, &mut file)?;
-            }
-            Ok(())
-        })();
-        let held = written.and_then(|()| {
-            self.store_mut().hold_file(version, owner, &staging).map_err(Error::from)
-        });
+        // Already here -- a send the owner collected, or the same bytes under
+        // another name -- costs a copy, not a transfer.
+        self.bring_in(hash, *size, &staging, &version.path, source, stats, &mut NoProgress)?;
+        let held = self.store_mut().hold_file(version, owner, &staging).map_err(Error::from);
         let _ = std::fs::remove_file(&staging);
         held?;
 
@@ -868,27 +858,13 @@ impl Engine {
         // that nobody opens a half-written file. And on disk before the rename:
         // the sender is told it can stop holding this the moment the rename is
         // done, so it has to survive the power going off straight afterwards.
+        // Left in place if the fetch is cut off, for the next attempt to carry
+        // on from.
         let staging = staging_path(&path);
-        let written = (|| -> Result<()> {
-            let mut file = std::fs::File::create(&staging)
-                .map_err(|e| Error::Io { path: staging.clone(), source: e })?;
-            if self.store().read_content_into(&content, &mut file)?.is_none() {
-                stats.fetched += 1;
-                progress.started(&version.path, *size);
-                let fetched = source.fetch_into(
-                    hash,
-                    *size,
-                    &mut Counting { out: &mut file, progress: &mut *progress },
-                );
-                progress.finished(&version.path);
-                fetched?;
-            }
-            file.sync_all().map_err(|e| Error::Io { path: staging.clone(), source: e })
-        })();
-        if let Err(e) = written {
-            let _ = std::fs::remove_file(&staging);
-            return Err(e);
-        }
+        self.bring_in(hash, *size, &staging, &version.path, source, stats, progress)?;
+        std::fs::File::open(&staging)
+            .and_then(|file| file.sync_all())
+            .map_err(|e| Error::Io { path: staging.clone(), source: e })?;
         std::fs::rename(&staging, &path).map_err(|e| {
             let _ = std::fs::remove_file(&staging);
             Error::Io { path: path.clone(), source: e }
@@ -964,6 +940,40 @@ fn prune_empty_parents(removed: &Path, root: &Path) {
 /// Beside the destination rather than in a temporary directory, so the move is
 /// a rename within one filesystem and therefore atomic. Across filesystems it
 /// would be a copy, which reintroduces the half-written file this avoids.
+impl Engine {
+    /// Put `hash`'s content in the file at `staging`: from what this device
+    /// already holds if it can, or else from `source` -- which carries on from
+    /// whatever an earlier attempt that was cut off left in the file.
+    ///
+    /// Whether the content is here is asked before the file is touched:
+    /// opening it to find out would empty it, and with it the part of a
+    /// large file that already crossed the network.
+    #[allow(clippy::too_many_arguments)]
+    fn bring_in(
+        &mut self,
+        hash: &[u8; 32],
+        size: u64,
+        staging: &Path,
+        label: &str,
+        source: &mut dyn ContentSource,
+        stats: &mut PlanStats,
+        progress: &mut dyn Progress,
+    ) -> Result<()> {
+        let content = blake3::Hash::from(*hash);
+        if self.store().can_read_content(&content)? {
+            let mut file = std::fs::File::create(staging)
+                .map_err(|e| Error::Io { path: staging.to_path_buf(), source: e })?;
+            self.store().read_content_into(&content, &mut file)?;
+            return Ok(());
+        }
+        stats.fetched += 1;
+        progress.started(label, size);
+        let fetched = source.resume_into(hash, size, staging, &mut *progress);
+        progress.finished(label);
+        fetched.map(|_| ())
+    }
+}
+
 fn staging_path(destination: &Path) -> std::path::PathBuf {
     let name = destination
         .file_name()
