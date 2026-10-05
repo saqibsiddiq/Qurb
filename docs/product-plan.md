@@ -643,6 +643,12 @@ then.*
   phone, then on two real ones.
 - [ ] A phone left alone for a day: battery and survival (Phase 5's kill
   criterion).
+- [ ] A folder deleted while qurb runs: the daemon notices and stops, and no
+  command but setup creates a store or an identity
+  ([phase 4](phases/phase-4-product.md#a-folder-deleted-while-qurb-ran)).
+- [ ] A large file collected from the phone, measured on the S23 before and
+  after [0050](decisions/0050-large-files-from-a-phone.md), and seen to
+  survive leaving the app.
 
 **4. Release.**
 - [ ] Decided and recorded: how a replica frees space (§4.7), and whether

@@ -1042,6 +1042,41 @@ A desktop whose Home says *Add your first device* while another folder on the
 same computer is paired with a phone is a state worth noticing, and nothing
 notices it yet.
 
+## A folder deleted while qurb ran
+
+**Found 2026-10-05.** At 23:25 on 2026-10-03, `~/qurb` was moved to the
+desktop's Trash — by the file manager; qurb never uses that Trash, its own
+Recently deleted is inside `.qurb/trash` — while the desktop app was running.
+Nothing said so. A restarted desktop found no folder set up, which is how it
+came to light.
+
+What the running app did in the meantime:
+
+- **The daemon carried on**, on the store inside the Trash, through the files
+  it already had open: it synced with the phone, began pulling the 800 MB video
+  ([phase 5](phase-5-mobile.md#an-800-mb-video-and-what-stopped-it)), and
+  wrote its index there.
+- **The window's commands made a second device.** Removing the phone and
+  showing a pairing code open the folder by its path; finding none, they made
+  one — `~/qurb/.qurb` with a new identity and an empty index — and the phone
+  paired with that new identity at 23:28, while the daemon, under the old one,
+  went on syncing with it.
+
+Restored on 2026-10-05 with the owner's agreement: the half-made folder moved
+aside to `~/qurb-made-after-deletion`, kept; the original moved back from the
+Trash. Identity `410cac55`, the phone paired, the files and history intact;
+the desktop restarted on it. The phone may list a second "saqib" — the
+half-made identity — to remove from its Devices.
+
+Two faults, **not fixed yet**:
+
+- **The daemon does not notice its folder has gone.** It should stop syncing
+  and say why, not go on serving a store in the Trash.
+- **Opening a store creates one.** `Store::open` and `Identity::load_or_create`
+  make a store and an identity wherever they are pointed, so a command run
+  against a folder that is not set up makes half a device in it. Only setting
+  a device up should create; every other command should refuse.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a
