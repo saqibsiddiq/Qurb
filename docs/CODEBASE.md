@@ -718,6 +718,9 @@ qurb/
 │   │           ├── chunkbench.rs measures the five Phase 0 kill criteria
 │   │           ├── sweep.rs      compares chunk size configurations
 │   │           └── quictest.rs   NAT classification + QUIC throughput
+│   ├── phone-serving/     Throwaway. A phone's serving of a large file, timed
+│   │                      on the phone outside the app: what found Cubic
+│   │                      holding transfers to 5 MB/s (decision 0051).
 │   └── service-capacity/  Throwaway. Load for the rendezvous service and the
 │                          relay: what a small server carries, measured.
 │
@@ -825,7 +828,8 @@ for the workspace as it stands.
 | QUIC transport | one bidirectional stream per request |
 | Mutual authentication | pinned fingerprints, handshake signature verified |
 | Wire format | length-bounded; decoder has no panicking path |
-| Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s, barely faster than one at a time, and where the limit is remains unknown ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)) |
+| Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s, barely faster than one at a time ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)) |
+| Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
@@ -844,7 +848,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-765 tests in 89 test binaries on Linux, all passing (2026-10-05, debug build,
+766 tests in 90 test binaries on Linux, all passing (2026-10-05, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
@@ -1093,8 +1097,9 @@ A pass with 32 MiB or more waiting to be collected runs in the worker as a
 foreground service, under a notification. It answers for as long as chunks
 keep going, up to thirty minutes
 ([decision 0050](decisions/0050-large-files-from-a-phone.md)). On the S23 it
-survived the owner leaving the app. It ends if the collector pauses for ten
-seconds. The app watches the worker's passes, shows them as syncing and runs
+survived the owner leaving the app. It ends ten seconds after the last chunk
+went, or a minute after if what was being collected is still waiting, so a
+collector that restarts mid-file is waited for. The app watches the worker's passes, shows them as syncing and runs
 its own after them, and *Sync now* queues behind a running pass rather than
 replacing it.
 
@@ -1213,12 +1218,13 @@ Seven things are known-missing rather than merely unbuilt:
    [decisions/0039](decisions/0039-a-light-android-app.md). See
    [features.md](features.md) for which is which.
 
-7. **A large file leaves a phone at about 5 MB/s**, on a home Wi-Fi link of
-   several hundred megabits, and fetching eight chunks at once instead of one
-   barely changed that. The round trip is 13 ms with nothing lost, so the
-   path and the requests are not the limit. The phone's sending is, either
-   its serving of each chunk or its QUIC sender's congestion window, and the
-   phone does not yet report which. See
+7. **Transfer speed is measured only outside the app.** A large file left
+   the phone at 5 MB/s because quinn's default congestion controller read
+   Wi-Fi's stray losses as congestion. BBR, now built in, sent 12.5–14.0 MB/s
+   from the S23 in a spike ([decisions/0051](decisions/0051-bbr-not-cubic.md)),
+   but not yet through the app. It is also unmeasured on mobile data, through
+   the relay, and alongside other traffic, where BBR is known to take more
+   than its share. See
    [phases/phase-5-mobile.md](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05).
 
 Three earlier entries here have since been closed, and how they were closed is

@@ -52,8 +52,9 @@ and a delivery into Downloads alike.
 **A phone keeps answering while a device collects from it** — when its
 caller can let it. `sync_serving(window, up_to)` is `sync_within(window)`
 whose pass, once its own syncing is done, stays open while a chunk has gone in
-the last ten seconds, up to `up_to` from the start. `sync_within` is unchanged:
-the window is still the limit.
+the last ten seconds, or in the last minute while what was being collected is
+still waiting (added 2026-10-05, below), up to `up_to` from the start.
+`sync_within` is unchanged: the window is still the limit.
 
 **A pass with a large collection runs in the foreground.** When 32 MiB or
 more is waiting to be collected, the background worker declares itself a
@@ -120,7 +121,10 @@ there.
     (765 MB at 4.95 MB/s) the round trip was 13 ms with nothing lost, which
     leaves the requests room for hundreds of megabytes a second. So the limit
     is in the phone's sending, its serving of each chunk or its sender's
-    congestion window, and only the phone can say which.
+    congestion window. It was the congestion window: a spike on the phone
+    served at 63–73 MB/s over its own loopback and sent 5.2–5.3 MB/s over
+    Wi-Fi with quinn's Cubic and 12.5–14.0 with BBR. See
+    [0051](0051-bbr-not-cubic.md).
   - **The foreground pass held**: the phone was swiped to its home screen
     two minutes into a transfer, Samsung's freezer gave up on the process,
     and serving went on.
@@ -132,8 +136,10 @@ there.
     mid-transfer, which with re-reading its partial file kept it from asking
     for twelve seconds. The phone, having served nothing for `COLLECTING`,
     closed the pass at 202 seconds of its thirty minutes and was frozen ten
-    seconds later. A collector that pauses longer than `COLLECTING` loses the
-    phone, and the transfer waits for the next pass. Not changed yet.
+    seconds later. A collector that pauses longer than `COLLECTING` lost the
+    phone, and the transfer waited for the next pass. Changed the same day:
+    while what was being collected is still waiting, the pass waits up to a
+    minute (`PAUSED`). Tested as a function; not yet watched on the phone.
   - **Both files arrived** at the next *Sync now*, carried on from where they
     stopped and checked whole.
   - **The app did not know about the pass.** Having handed it to the worker,

@@ -205,7 +205,8 @@ The one exception is a device collecting a large file *from* the phone: every
 device pulls, so the phone has to keep answering until the other side is done,
 and a pass that ended at its window cut an 800 MB video off part-way.
 `syncServing(seconds, servingSeconds)` keeps answering while a chunk has gone
-in the last ten seconds, up to `servingSeconds` — for a caller the platform will
+in the last ten seconds, or the last minute while what was being collected is
+still waiting, up to `servingSeconds` — for a caller the platform will
 let run that long, which on Android is a worker in the foreground
 ([decision 0050](../../docs/decisions/0050-large-files-from-a-phone.md)).
 

@@ -311,15 +311,17 @@ replaced by uninstalling — which deletes the phone's key and index. See
 - **Progress in the app.** A long transfer from the phone shows how far it
   has got in its notification; inside the app, the Transfers bar still shows
   what is waiting and what happened, not bytes in flight.
-- **Large files are still slow.** Collecting a large file from the phone was
-  slow and failed part-way (decision 0050). Measured on the S23 on 2026-10-05,
-  the long pass kept serving after the app was left and resuming worked, but
-  the speed stayed near 5 MB/s, with eight chunks in flight or one. With a
-  13 ms round trip and nothing lost, the limit is in the phone's sending,
-  which it does not yet report. Started from the background, the long pass is
-  refused by Android and runs as an ordinary one. It also ends if the
-  collector pauses for ten seconds
-  ([phase 5](../docs/phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)).
+- **Large files, measured outside the app.** Collecting a large file from the
+  phone was slow and failed part-way (decision 0050). Measured on the S23 on
+  2026-10-05, the long pass kept serving after the app was left and resuming
+  worked, but the speed stayed near 5 MB/s: quinn's default congestion
+  controller, Cubic, read Wi-Fi's stray losses as congestion. BBR sent
+  12.5–14.0 MB/s in a spike on the phone and is built in (decision 0051); the
+  app's own rate with it is not measured yet. Started from the background,
+  the long pass is refused by Android and runs as an ordinary one. A
+  collector that pauses mid-file is now waited for up to a minute, which is
+  tested but not yet watched on the phone
+  ([phase 5](../docs/phases/phase-5-mobile.md#where-the-5-mbs-went)).
 - **No storage question during setup, by design.** Phones have no allowance;
   the question is the desktop's, and is built there
   ([decision 0038](../docs/decisions/0038-the-storage-question-during-setup.md)).

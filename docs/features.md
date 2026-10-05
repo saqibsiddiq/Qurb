@@ -139,7 +139,7 @@ was walked through on the emulator.
 | **Background sync** | WorkManager, every 15 minutes — every hour once a push has arrived in the last week | ✅ |
 | **Push** | a change on the laptop wakes the sleeping phone, through Firebase; about five seconds from a change on the laptop to the phone syncing it, on mobile data with the screen off | ✅ |
 | **Syncing from mobile data** | through the rendezvous service, directly to the laptop | ✅ |
-| **A large file collected from the phone** | 32 MiB or more waiting: the sync runs in the foreground under *Sending to your devices*, with the bytes sent so far, for as long as a device collects — up to half an hour ([0050](decisions/0050-large-files-from-a-phone.md)) | ✅ on the S23, 2026-10-05: it went on serving after the app was left. About 5 MB/s, and a collector that pauses ten seconds ends it ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)) |
+| **A large file collected from the phone** | 32 MiB or more waiting: the sync runs in the foreground under *Sending to your devices*, with the bytes sent so far, for as long as a device collects — up to half an hour, waiting a minute for a device that pauses part-way ([0050](decisions/0050-large-files-from-a-phone.md)); paced by BBR ([0051](decisions/0051-bbr-not-cubic.md)) | ✅ on the S23, 2026-10-05: it went on serving after the app was left, at about 5 MB/s with Cubic. BBR sent 12.5–14 MB/s in a spike, not yet through the app ([phase 5](phases/phase-5-mobile.md#where-the-5-mbs-went)) |
 
 ---
 

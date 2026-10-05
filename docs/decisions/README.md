@@ -76,4 +76,5 @@ is worth more than a tidy directory.
 | [0047](0047-versions-and-upgrades.md) | Versions, installing, and upgrading | Accepted — no automatic updater, by decision |
 | [0048](0048-the-design-direction.md) | The design direction | Accepted — revised the same day for the owner's direction, and to build it in the apps rather than in Figma; built on the desktop and Android, light only |
 | [0049](0049-adding-a-file-puts-it-where-you-are-looking.md) | Adding a file puts it where you are looking | Accepted — amends 0036; built on Android |
-| [0050](0050-large-files-from-a-phone.md) | Large files from a phone: fetched in parallel, resumed, and served in the foreground | Accepted — amends 0020; built, not yet measured on hardware |
+| [0050](0050-large-files-from-a-phone.md) | Large files from a phone: fetched in parallel, resumed, and served in the foreground | Accepted — amends 0020; built, and measured on the S23, where fetching in parallel gained little |
+| [0051](0051-bbr-not-cubic.md) | QUIC paces by measured bandwidth (BBR), not by loss (Cubic) | Accepted — built; 2.5× from the phone over Wi-Fi, measured with the spike |

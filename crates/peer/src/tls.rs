@@ -328,6 +328,7 @@ pub fn server_config(identity: &Identity, allowed: &TrustList) -> Result<quinn::
     // a peer whose laptop was shut.
     transport.max_idle_timeout(Some(std::time::Duration::from_secs(30).try_into().unwrap()));
     transport.keep_alive_interval(Some(std::time::Duration::from_secs(10)));
+    paced_by_bandwidth(&mut transport);
     config.transport_config(Arc::new(transport));
 
     Ok(config)
@@ -374,9 +375,21 @@ fn client_config_inner(
     let mut transport = quinn::TransportConfig::default();
     transport.max_idle_timeout(Some(std::time::Duration::from_secs(30).try_into().unwrap()));
     transport.keep_alive_interval(Some(std::time::Duration::from_secs(10)));
+    paced_by_bandwidth(&mut transport);
     config.transport_config(Arc::new(transport));
 
     Ok(config)
+}
+
+/// BBR rather than quinn's default, Cubic, for whatever this end sends.
+///
+/// Cubic reads every lost packet as congestion and backs off, and Wi-Fi loses
+/// a fraction of a percent of packets for reasons that have nothing to do with
+/// congestion. From a Galaxy S23 to the laptop over home Wi-Fi -- a path that
+/// carried 15 MB/s of raw UDP at 0.1–0.4% loss -- Cubic sent 5.2 to 5.3 MB/s
+/// and BBR 12.5 to 14.0. See decision 0051.
+fn paced_by_bandwidth(transport: &mut quinn::TransportConfig) {
+    transport.congestion_controller_factory(Arc::new(quinn::congestion::BbrConfig::default()));
 }
 
 #[cfg(test)]

@@ -50,9 +50,19 @@ is far above it.
 Measured on 2026-10-05 it bought little. A Galaxy S23 served the laptop over
 home Wi-Fi at 5.33 MB/s with eight in flight, against 3.81–4.77 MB/s one at a
 time, on links of several hundred megabits. So the waits were not the limit.
-Each fetch of 8 MiB or more is now logged with its rate and the connection's
-round trip, congestion window and losses (`report_fetch`), to find what is.
-See [phase 5](../../docs/phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05).
+Each fetch of 8 MiB or more is logged with its rate and the connection's
+round trip, congestion window and losses (`report_fetch`), and the limit
+turned out to be the congestion controller (next section).
+
+## Paced by bandwidth, not by loss
+
+Every connection that carries files uses BBR (`paced_by_bandwidth` in
+`src/tls.rs`), not quinn's default, Cubic. Cubic reads each lost packet as
+congestion, and Wi-Fi loses a fraction of a percent for other reasons: from a
+Galaxy S23 to the laptop, on a path that carried 15 MB/s of raw UDP, Cubic
+sent 5.2–5.3 MB/s and BBR 12.5–14.0. See
+[decision 0051](../../docs/decisions/0051-bbr-not-cubic.md) and
+[`experiments/phone-serving`](../../experiments/phone-serving/README.md).
 
 ## A fetch that was cut off carries on
 

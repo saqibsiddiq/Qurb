@@ -703,10 +703,27 @@ impl Daemon {
                 // The backoff is cleared as well as the sync triggered: the
                 // device is demonstrably there, so the reason for waiting has
                 // gone.
+                //
+                // Every arrival already queued is taken with it, and one pass
+                // serves them all. A phone announces itself again and again
+                // while it waits to be collected from, and those queue up
+                // behind a long sync: after one that took 2½ minutes the laptop
+                // synced thirteen times in half a second (2026-10-05), each
+                // fetching the phone's tree to find nothing new.
                 Ok(member) = arrivals.recv() => {
-                    if let Some(peer) = peers.member(&self.master, member) {
+                    let mut arrived = vec![member];
+                    while let Ok(more) = arrivals.try_recv() {
+                        arrived.push(more);
+                    }
+                    let arrived: std::collections::BTreeSet<Fingerprint> = arrived
+                        .into_iter()
+                        .filter_map(|member| peers.member(&self.master, member))
+                        .collect();
+                    for peer in &arrived {
                         tracing::info!(peer = %peer.short(), "a peer is reachable and has news; syncing now");
-                        peers.ready_now(peer);
+                        peers.ready_now(*peer);
+                    }
+                    if !arrived.is_empty() {
                         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
                 }

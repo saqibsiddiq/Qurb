@@ -987,7 +987,8 @@ impl Qurb {
     /// from the phone lost it there: an 800 MB video failed part-way, every
     /// time. For a caller the platform will let run longer -- a foreground
     /// worker -- this keeps the pass open while chunks are being asked for,
-    /// and ends it [`COLLECTING`] after the last one went.
+    /// and ends it [`COLLECTING`] after the last one went: [`PAUSED`] after,
+    /// if what was being collected is not collected yet.
     pub fn sync_serving(&self, seconds: u32, serving_seconds: u32) -> Result<SyncOutcome, QurbError> {
         let deadline = std::time::Duration::from_secs(seconds.max(1) as u64);
         let serving = std::time::Duration::from_secs(serving_seconds as u64).max(deadline);
@@ -1783,6 +1784,7 @@ impl Qurb {
                 come_by,
                 at_most,
                 self.serving.recently(COLLECTING),
+                self.serving.recently(PAUSED),
                 || self.waiting_for_others().unwrap_or(false),
             ) {
                 std::thread::sleep(std::time::Duration::from_millis(200));
@@ -1929,8 +1931,9 @@ const LINGER: std::time::Duration = std::time::Duration::from_secs(10);
 /// Whether a pass that has finished its own syncing goes on answering.
 ///
 /// Never past `at_most`. Before that, while a device is collecting; and
-/// otherwise while something is still waiting to be collected and there is
-/// time left for a device to come for it (`come_by`). `waiting` is asked only
+/// otherwise while something is still waiting to be collected and either
+/// there is time left for a device to come for it (`come_by`) or one was
+/// collecting a moment ago (`paused`) and may be back. `waiting` is asked only
 /// when nobody is collecting: it reads the index, and the answer does not
 /// matter while chunks are going.
 fn keep_answering(
@@ -1938,9 +1941,10 @@ fn keep_answering(
     come_by: std::time::Instant,
     at_most: std::time::Instant,
     collecting: bool,
+    paused: bool,
     waiting: impl FnOnce() -> bool,
 ) -> bool {
-    now < at_most && (collecting || (now < come_by && waiting()))
+    now < at_most && (collecting || ((now < come_by || paused) && waiting()))
 }
 
 /// How recently a chunk must have gone for a device to count as still
@@ -1948,6 +1952,18 @@ fn keep_answering(
 /// a poor link; short enough that a device that has finished, or gone, lets
 /// the pass end soon after.
 const COLLECTING: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long a device that stopped collecting part-way is waited for, while
+/// what it was collecting is still waiting.
+///
+/// A collector pauses: its program restarts and re-reads what it already has,
+/// its Wi-Fi drops, the laptop's lid opens again. On 2026-10-05 a laptop that
+/// restarted mid-transfer took twelve seconds to ask again, and the phone,
+/// having served nothing for `COLLECTING`, had already closed its pass. A
+/// minute covers that and the laptop's half-minute retry; a device gone for
+/// longer is not coming back to this pass. Only while something is still
+/// waiting: a collection that finished ends the pass `COLLECTING` after.
+const PAUSED: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Where the store lives inside the synced root.
 ///
@@ -2264,15 +2280,36 @@ mod tests {
         let at = |s: u64| start + Duration::from_secs(s);
 
         // Past the window, while chunks are going: on.
-        assert!(keep_answering(at(600), come_by, at_most, true, || false));
+        assert!(keep_answering(at(600), come_by, at_most, true, true, || false));
         // At the limit, even mid-collection: off.
-        assert!(!keep_answering(at(1800), come_by, at_most, true, || true));
+        assert!(!keep_answering(at(1800), come_by, at_most, true, true, || true));
         // Nobody collecting, something waiting, still time for a device to come.
-        assert!(keep_answering(at(5), come_by, at_most, false, || true));
+        assert!(keep_answering(at(5), come_by, at_most, false, false, || true));
         // Nobody collecting, and nobody came in time.
-        assert!(!keep_answering(at(11), come_by, at_most, false, || true));
+        assert!(!keep_answering(at(11), come_by, at_most, false, false, || true));
         // Nobody collecting and nothing waiting: done.
-        assert!(!keep_answering(at(5), come_by, at_most, false, || false));
+        assert!(!keep_answering(at(5), come_by, at_most, false, false, || false));
+    }
+
+    /// A device that stops part-way -- restarting, or its Wi-Fi dropping -- is
+    /// waited for while what it was collecting is still waiting; one that
+    /// finished is not, and nor is one gone longer than `PAUSED`.
+    #[test]
+    fn a_collector_that_pauses_part_way_is_waited_for() {
+        let start = Instant::now();
+        let come_by = start + Duration::from_secs(10);
+        let at_most = start + Duration::from_secs(1800);
+        let at = |s: u64| start + Duration::from_secs(s);
+
+        // Long past `come_by`, nothing went in ten seconds, but something did
+        // within the minute and the file is not collected yet: on.
+        assert!(keep_answering(at(300), come_by, at_most, false, true, || true));
+        // The same pause with everything collected: off.
+        assert!(!keep_answering(at(300), come_by, at_most, false, true, || false));
+        // Gone longer than the minute: off, though the file still waits.
+        assert!(!keep_answering(at(300), come_by, at_most, false, false, || true));
+        // And never past the limit.
+        assert!(!keep_answering(at(1800), come_by, at_most, false, true, || true));
     }
 
     /// The window is the limit when nobody asked for longer: `sync_within`
@@ -2282,7 +2319,7 @@ mod tests {
     fn without_asking_the_window_is_the_limit() {
         let start = Instant::now();
         let window = start + Duration::from_secs(20);
-        assert!(!keep_answering(start + Duration::from_secs(20), window, window, true, || true));
+        assert!(!keep_answering(start + Duration::from_secs(20), window, window, true, true, || true));
     }
 
     #[test]

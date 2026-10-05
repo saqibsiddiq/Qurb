@@ -654,13 +654,15 @@ then.*
   ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)).
   It survived, but fetching in parallel barely changed the speed: 5.33 MB/s
   against 3.81–4.77 one at a time.
-- [ ] Large files from the phone at the speed of the link. They run at about
-  5 MB/s on a link of several hundred Mbit/s. A 13 ms round trip with nothing
-  lost puts the limit in the phone's sending: its serving of each chunk, or
-  its sender's congestion window. Next: have the phone report both.
+- [ ] Large files from the phone at the speed of the link. Found on
+  2026-10-05: quinn's default congestion controller, Cubic, held the phone to
+  5 MB/s on a Wi-Fi path that carries 15. BBR sent 12.5–14.0 MB/s in a spike on
+  the S23 ([0051](decisions/0051-bbr-not-cubic.md)), and is built into both
+  apps. Left: the rate measured through the app.
 - [ ] A collector that pauses for more than ten seconds (a laptop restarting,
   sleeping, a Wi-Fi drop) ends the phone's pass, and the transfer waits for
-  the next one.
+  the next one. Fixed in code on 2026-10-05: a minute's wait while what it was
+  collecting is still waiting. Left: watching it on the S23.
 
 **4. Release.**
 - [ ] Decided and recorded: how a replica frees space (§4.7), and whether

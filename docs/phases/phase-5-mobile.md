@@ -39,7 +39,7 @@ record](../roadmap.md).
 | a large file collected from the phone | ◻ fetched eight chunks at a time, resumed, served in the foreground — built and tested, not yet measured on the phone ([below](#an-800-mb-video-and-what-stopped-it)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-765 tests pass in 89 test binaries on Linux (2026-10-05, debug build, the
+766 tests pass in 90 test binaries on Linux (2026-10-05, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -1478,9 +1478,16 @@ and a new one started. It connected at 12:59:27 and spent two more seconds
 re-reading 942 MB of partial file before it asked for a chunk. By then the
 phone had seen no chunk go out for ten seconds (`COLLECTING`). It closed the
 pass, dropped its notification, and was frozen ten seconds after that. The new
-connection fetched until the freeze and was lost at 13:00:14. Anything that pauses a collector
-for ten seconds will do the same: a laptop restarting or waking from sleep, or
-a Wi-Fi drop.
+connection fetched until the freeze and was lost at 13:00:14. Anything that
+pauses a collector for ten seconds will do the same: a laptop restarting or
+waking from sleep, or a Wi-Fi drop.
+
+Changed the same day. While what a device was collecting is still waiting, a
+pass now waits for it up to a minute after the last chunk went (`PAUSED` in
+`crates/mobile-ffi`), still never past its thirty minutes. A collection that
+finished ends the pass ten seconds after, as before. Test:
+`a_collector_that_pauses_part_way_is_waited_for`. Not yet watched on the
+phone, which had left the network by the time the build was ready.
 
 **Resuming worked on hardware twice**: *carrying on from an earlier attempt
 kept=114864514*, then *kept=942721024*, each followed by the file growing from
@@ -1553,7 +1560,34 @@ device's list being its own.
 
 **The laptop then synced thirteen times in half a second.** Arrival events
 had queued while it spent 2½ minutes on one sync, and each found nothing to
-do. Harmless, but each is a tree fetched from the phone; not changed.
+do. Each one fetched the phone's tree. Changed the same day: the daemon takes
+every arrival already queued together, and one pass serves them all.
+
+### Where the 5 MB/s went
+
+The phone's sending was the limit. To see which part of it, a spike,
+[`experiments/phone-serving`](../../experiments/phone-serving/README.md), ran
+on the S23 as a shell process, outside the app, with the app's two runtime
+threads and 256 MiB of random bytes:
+
+- **Not the serving.** The phone read every chunk as a request would, with the
+  visibility check, read, decrypt and hash, at 96.5 MB/s for sealed chunks
+  and 717.7 MB/s for a file. It served and fetched over its own loopback, QUIC
+  and all, at 63.5–73.5 MB/s.
+- **Not the path.** Raw UDP from the phone to the laptop arrived at up to
+  15 MB/s, with 0.1–0.4% lost.
+- **The congestion controller.** The same spike over Wi-Fi sent 5.16–5.34 MB/s
+  with quinn's default, Cubic, which is what the app had measured. NewReno
+  sent 5.92–6.11, and BBR 12.49–14.03.
+
+Cubic reads Wi-Fi's stray losses as congestion and never fills the path. Every
+connection that carries files now uses BBR:
+[decision 0051](../decisions/0051-bbr-not-cubic.md). The app and the desktop
+were built with it the same afternoon. The phone left the network before a
+file could be sent through them, so the app's rate with BBR is not measured
+yet. Nor is adding a file into Private Vault on the phone, the one half of
+[decision 0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)
+still unwatched.
 
 ## Deliberately left undone
 
