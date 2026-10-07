@@ -63,8 +63,10 @@ Add `&at=storage` as well to be taken straight to the storage question, and
 the 24 words. The fixture disk has about
 188 GiB free, so the two largest presets show as too big.
 
-Pairing answers "waiting" for six seconds and then "paired", so the countdown
-and the arrival can both be looked at without a second device. It returns no QR,
+Pairing answers "waiting" for four seconds, then a phone asks to join showing
+232 760 (decision 0053): *Approve* pairs it, *Decline* goes back to waiting.
+So the countdown, the question and the arrival can all be looked at without a
+second device. It returns no QR,
 which is also worth seeing: the window has to cope with a code it could not
 draw, because that code still works typed and read aloud.
 

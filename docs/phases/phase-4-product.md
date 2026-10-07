@@ -1172,6 +1172,22 @@ and warns when no other device holds it. The daemon's trust list re-reads the
 store when an unknown device connects, so a device paired from a terminal is
 accepted on its first try.
 
+Looked at the same day against the fixtures, which now ask to join after four
+seconds (`experiments/desktop-fixtures`), driven in headless Chromium over the
+DevTools protocol. *Show a code*; *Pixel 8 wants to pair*, the number in
+large type, *Decline* and *Approve*. *Decline* went back to the countdown
+with the question gone, and *Approve* to *Device added*. The key row read
+"On this computer and on Galaxy S23 …". A real pairing through the window,
+with a second device, is not done.
+
+**A file on no device** ([decision 0055](../decisions/0055-a-file-on-no-device-says-so.md)),
+in the same fixtures: its row reads *On no device*, its menu offers *Details*
+and *Delete* only, and its details panel says why, with "On: No device".
+That showed a fault older than it: a badge in the *attention* tone (*Only
+copy here*, and now *On no device*) took the attention card's grid layout,
+whose class name it shares, and stretched across the panel with its words
+pushed to the middle. `.badge.attention` now restates a badge's own shape.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

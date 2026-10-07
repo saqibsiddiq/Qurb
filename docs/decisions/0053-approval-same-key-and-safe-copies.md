@@ -136,10 +136,15 @@ store when an unknown device connects, at most once a second.
     day. See [phase 5](../phases/phase-5-mobile.md#a-send-taken-before-and-sent-again).
   - The key row in the phone's Settings said the key is on the phone and in
     its Google backup, end-to-end encrypted.
-- **Not watched**: the desktop window's approval panel and its key row; two
-  devices with different keys refused on hardware, where only the tests
-  check it; a device being given the key while joining (0052's half);
-  uninstalling with the offer to keep the data.
+- **The desktop window, against its fixtures** (2026-10-07): *Show a code*,
+  then a phone asking with 232 760, *Decline* back to the countdown,
+  *Approve* to *Device added*; the key row naming the paired phone and its
+  Google backup. The fixtures answer the window's commands, so this checks
+  the window and not a real pairing through it.
+- **Not watched**: pairing through the real window; two devices with
+  different keys refused on hardware, where only the tests check it; a
+  device being given the key while joining (0052's half); uninstalling with
+  the offer to keep the data.
 
 ## Reversing it
 

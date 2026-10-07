@@ -103,5 +103,6 @@ listed, since listing it notes its author as a holder.
   showed all 18 as *On no device*.
 - The phone's sheet for such a file, seen the same evening: *On no device*,
   the reason, and only *Delete*.
-- **Not watched**: the window's details panel and menu for such a file, which
-  the fixtures show only as a row; a confirmation going stale.
+- The window's row, menu and details panel for such a file, against its
+  fixtures: *Details* and *Delete* only, the reason, "On: No device".
+- **Not watched**: the real window showing one; a confirmation going stale.

@@ -39,6 +39,8 @@ const WORDS = [
 ];
 
 let startedPairingAt = 0;
+// The person's answer to a device asking to join: null until given.
+let pairingAnswer = null;
 
 /** One directory, as `browse` answers it. */
 function browse({ dir, private: priv }) {
@@ -94,7 +96,7 @@ const ANSWERS = {
   join_new_device: () => "Galaxy S23",
   pairing_number: () => "482 913",
   setup_pairing_number: () => "482 913",
-  answer_pairing: () => null,
+  answer_pairing: ({ approve }) => { pairingAnswer = approve; return null; },
   enrol_device: () => null,
   reveal_phrase: () => WORDS,
   unlock: ({ passphrase }) => {
@@ -147,12 +149,16 @@ const ANSWERS = {
     qr: window.__fixtureQr ?? null,
   }),
 
-  // Answers "waiting" for a few seconds and then "paired", so the countdown
-  // and the arrival can both be looked at without a second device.
+  // Answers "waiting" for a few seconds, then a phone asks to join with the
+  // number it shows (decision 0053) until approved -- "paired" -- or
+  // declined, when the code waits again. The countdown, the question and the
+  // arrival can all be looked at without a second device.
   pairing_state: () => {
     const since = Math.floor(Date.now() / 1000) - startedPairingAt;
-    if (since < 6) return { state: "waiting", name: null, fingerprint: null, message: null };
-    return { state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null };
+    const waiting = { state: "waiting", name: null, fingerprint: null, message: null };
+    if (since < 4 || pairingAnswer === false) return waiting;
+    if (pairingAnswer === true) return { state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null };
+    return { ...waiting, state: "asking", name: "Pixel 8", number: "232 760", kind: "phone", wants_key: false };
   },
 
   send_files: ({ paths }) => ({
@@ -219,7 +225,7 @@ const ANSWERS = {
     const file = FILES.find((f) => f.path === path) ?? { path, size: "2400000", modified: now - 300, availability: "here", private: false };
     return {
       file,
-      holders: file.availability === "only here" ? [] : ["Galaxy S23"],
+      holders: ["only here", "nowhere"].includes(file.availability) ? [] : ["Galaxy S23"],
       history: [
         { id: 3, at: now - 300, kind: "stored", path, size: file.size, device: null, detail: null },
         { id: 2, at: now - 90000, kind: "received", path, size: file.size, device: "Galaxy S23", detail: null },
@@ -348,7 +354,7 @@ window.__TAURI__ = {
 
   core: {
     invoke: async (name, args = {}) => {
-      if (name === "start_pairing") startedPairingAt = Math.floor(Date.now() / 1000);
+      if (name === "start_pairing") { startedPairingAt = Math.floor(Date.now() / 1000); pairingAnswer = null; }
       const answer = ANSWERS[name];
       if (!answer) throw new Error(`no fixture for ${name}`);
       // A promise, like the real thing, so anything that depends on the call

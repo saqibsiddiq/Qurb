@@ -525,7 +525,18 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
   font-weight: 500;
 }
 .badge.healthy { background: var(--healthy-bg); color: var(--healthy); }
-.badge.attention { background: var(--attention-bg); color: var(--attention); }
+/* "attention" is also the attention card's class, declared later and laid out
+   as a grid: a badge in that tone restates its own shape, or it stretches
+   across the panel with its words pushed to the middle. */
+.badge.attention {
+  display: inline-flex;
+  margin-top: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--attention-bg);
+  color: var(--attention);
+}
 .badge.error { background: var(--error-bg); color: var(--error); }
 .badge.neutral { background: var(--neutral-bg); color: var(--neutral); }
 .badge svg.i { width: 14px; height: 14px; }

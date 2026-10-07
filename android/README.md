@@ -340,8 +340,9 @@ replaced by uninstalling — which deletes the phone's key and index. See
   *Copies of files you sent* when there are any, and the Clear-data screen
   offers *Let go of copies of sent files*. Both warn first that a recipient
   may have deleted its copy since. *Free unused space* does not touch them
-  (`SentCopies.kt`). The screen's line was watched; letting go was not
-  tapped.
+  (`SentCopies.kt`). The storage screen's line, the Settings row ("1.6 GB,
+  kept here after they arrived") and its warning were watched, the warning
+  closed with *Keep*; letting go was not tapped.
 - **Pairing is approved** (`Approval.kt`): the device showing the code asks
   whether to let a device in, with the six digits it should be showing, and
   the phone joining shows its digits meanwhile (decision 0053). Watched both
