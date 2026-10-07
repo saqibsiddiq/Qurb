@@ -111,8 +111,11 @@ be worked on without a folder, a paired device or a running daemon — with
 `./scripts/desktop-smoke.sh` runs the real application, commands and engine
 included, and drives it through WebKit's WebDriver on a display of its own: it
 sets a device up through the window, opens every place, adds a second device by
-the code the window shows, sends it a file and sees it under Transfers, removes
-it, and protects the key with a passphrase and unlocks it again. It fails if any command the
+the code the window shows -- a folder not set up, which takes the key, and is
+approved in the window once the number it prints matches the window's
+(decision 0053) -- sends it a file and sees it under Transfers, removes it, and
+protects the key with a passphrase and unlocks it again. `SMOKE_THINK=90` waits
+that many seconds before approving, as a person comparing numbers might. It fails if any command the
 page calls returns an error — the page keeps the last fifty as
 `window.qurbFailures` for that, and for reading from the web inspector.
 

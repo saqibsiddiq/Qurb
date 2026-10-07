@@ -625,6 +625,38 @@ async fn a_declined_device_gets_no_key_and_sets_nothing_up() {
     assert!(host.trusted().is_empty());
 }
 
+/// Nobody answers before the code expires: the device asking is told that,
+/// rather than "connection lost" (2026-10-08). Both ways of joining.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_not_approved_before_the_code_expires_is_told_so() {
+    let host = Device::new();
+    let fresh = Fresh::new();
+    let got = Arc::new(Mutex::new(None));
+
+    // Two seconds of the code left, and an approval that never comes.
+    let now = NOW + 300 - 2;
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let never = |_| std::future::pending::<bool>();
+    let waiting = listener.wait(Arc::clone(&host.store), ours("Desktop"), now, never);
+    let joining = join(&invite, &fresh.identity, "Phone", "phone", now, fresh.set_up(Arc::clone(&got)));
+    let (host_saw, joiner_saw) = tokio::join!(waiting, joining);
+
+    assert!(matches!(host_saw, Err(Error::InviteExpired)), "{host_saw:?}");
+    assert!(matches!(joiner_saw, Err(Error::NotApprovedInTime)), "{joiner_saw:?}");
+    assert!(got.lock().unwrap().is_none());
+
+    let host = Device::new();
+    let joiner = Device::new();
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let waiting = listener.wait(Arc::clone(&host.store), ours("Desktop"), now, never);
+    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), ours("Laptop"), now);
+    let (_, joiner_saw) = tokio::join!(waiting, joining);
+    assert!(matches!(joiner_saw, Err(Error::NotApprovedInTime)), "{joiner_saw:?}");
+    assert!(joiner.trusted().is_empty());
+}
+
 // -- approval, the same key, and kinds (decision 0053) ------------------------
 
 /// The person at the device showing the code is shown the number the asking

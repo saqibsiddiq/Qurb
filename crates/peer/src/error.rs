@@ -31,6 +31,11 @@ pub enum Error {
     #[error("the other device said no")]
     Declined,
 
+    /// The device showing the code stops waiting when its code expires, and
+    /// closes without an answer.
+    #[error("the code expired before the other device approved this one: show a new code there, and approve it when asked")]
+    NotApprovedInTime,
+
     #[error("these two devices have different keys: set this one up again by joining the other with its code")]
     DifferentKey,
 

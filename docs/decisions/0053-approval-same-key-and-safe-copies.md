@@ -141,8 +141,12 @@ store when an unknown device connects, at most once a second.
   *Approve* to *Device added*; the key row naming the paired phone and its
   Google backup. The fixtures answer the window's commands, so this checks
   the window and not a real pairing through it.
-- **Not watched**: pairing through the real window; two devices with
-  different keys refused on hardware, where only the tests check it; a
+- **The real window, driven by `scripts/desktop-smoke.sh`** (2026-10-08): a
+  device not set up joins with the window's code, the window asks with the
+  number the device printed, and *Approve* pairs them, also after waiting 40
+  and 90 seconds. A device not approved before the code expires is now told
+  so, rather than "connection lost".
+- **Not watched**: two devices with different keys refused on hardware, where only the tests check it; a
   device being given the key while joining (0052's half); uninstalling with
   the offer to keep the data.
 

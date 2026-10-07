@@ -113,17 +113,30 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
 
         kit.groupTitle(page, "Recovery")
         group = kit.group(page)
-        // Where the key is safe, said plainly (decision 0053): Block Store
+        // Where the key is safe, said plainly (decision 0053), and checked:
+        // the key Block Store gives back is compared with this phone's own,
+        // so the row says what is kept rather than what could be. Block Store
         // backs it up end to end encrypted only when the phone has a screen
         // lock, and a phone without one should know its key stays here.
         val safe = kit.item(group, "Where your key is safe", "Checking…")
         scope.launch {
-            safe.value.text = if (Backup.leavesThePhone(app)) {
-                "On this phone, and in your Google backup, end-to-end encrypted with your screen lock. " +
-                    "Any of your devices can also give it to a new one with a code."
-            } else {
-                "On this phone only: with no screen lock, it is not backed up. Set one, or keep your " +
+            val (kept, cloud) = withContext(Dispatchers.IO) {
+                val found = Backup.find(app)
+                val mine = runCatching { engine().recoveryPhrase() }.getOrNull()
+                (found != null && found == mine) to Backup.leavesThePhone(app)
+            }
+            safe.value.text = when {
+                !kept -> "Not kept for this phone yet: a new phone restored from this one's backup would " +
+                    "not have it. Tap to keep it now. Any of your devices can also give it to a new one with a code."
+                cloud -> "On this phone, and in your Google backup, end-to-end encrypted with your screen lock " +
+                    "— read back and checked just now. Any of your devices can also give it to a new one with a code."
+                else -> "On this phone only: with no screen lock, it is not backed up. Set one, or keep your " +
                     "computer paired: it can give the key to a new phone with a code."
+            }
+            if (!kept) {
+                safe.chevron.visibility = View.VISIBLE
+                safe.root.isClickable = true
+                safe.root.setOnClickListener { keepKey() }
             }
         }
         kit.item(group, "Recovery phrase", "The 24 words that spell your key, if you want them. Nobody needs to write them down.") {
@@ -279,6 +292,20 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                 SyncWorker.runNow(app)
             } catch (e: Exception) {
                 app.fail("Could not change that", e)
+            }
+        }
+    }
+
+    /** Keep the key in Block Store now, for a phone that does not have it. */
+    private fun keepKey() {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { Backup.save(app, engine().recoveryPhrase()) }
+                app.say("Your key is kept")
+            } catch (e: Exception) {
+                app.fail("Could not keep the key", e)
+            } finally {
+                refresh()
             }
         }
     }

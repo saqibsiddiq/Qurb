@@ -5,11 +5,12 @@ Broadway display and the WebDriver server this expects; see there.
 
 What it does, in the real application with the real engine behind it:
 
-1. Sets a device up from nothing through the window -- folder, storage, the 24
-   words and three of them confirmed.
+1. Sets a device up from nothing through the window -- folder and storage;
+   nothing to write down since decision 0052.
 2. Opens every place in the sidebar.
-3. Adds a device: shows a pairing code, and has a second device (the command
-   line, enrolled with the same words) join with it.
+3. Adds a device: shows a pairing code, has a second device (the command line,
+   in a folder not set up) join with it and take the key, and approves it in
+   the window once the two numbers match (decision 0053).
 4. Sends that device a file, and sees it waiting under Transfers.
 5. Removes that device, from its details, answering the question.
 6. Protects the key with a passphrase from Settings, starts again, and
@@ -24,6 +25,7 @@ geometry, so screenshots from it are not worth reading.
 import base64
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -104,16 +106,9 @@ def set_up(window):
     window.until("a size chosen", "return !document.getElementById('storage-next').disabled")
     window.click("storage-next")
 
-    words = window.until("the 24 words",
-        "const w = [...document.querySelectorAll('#words li')].map(l => l.textContent); return w.length === 24 && w")
-    window.click("phrase-next")
-    window.js("""for (const input of document.querySelectorAll('#asks input'))
-                   input.value = arguments[0][Number(input.dataset.position) - 1];""", words)
-    window.click("verify-next")
     window.until("the ready screen", visible("ready"))
     window.click("ready-next")
     window.until("the main window", "return document.getElementById('setup').classList.contains('hidden')")
-    return words
 
 
 def go(window, place):
@@ -129,9 +124,8 @@ def every_tab(window):
     return places
 
 
-def pair(window, words):
+def pair(window):
     other = f"{HOME}/other"
-    subprocess.run([QURB, "enrol", other, " ".join(words)], check=True, capture_output=True)
 
     go(window, "devices")
     window.click("add-device")
@@ -142,8 +136,29 @@ def pair(window, words):
     qr = window.js("return document.getElementById('qr').innerHTML.length")
     assert qr > 1000, f"no QR drawn ({qr} characters)"
 
-    joined = subprocess.run([QURB, "join", other, code], capture_output=True, text=True, timeout=60)
-    assert joined.returncode == 0, f"qurb join failed: {joined.stdout}{joined.stderr}"
+    # The joining side prints the number before it connects, then waits for
+    # the window's answer; the window shows who asks and the number it should
+    # be showing. Approved only when the two agree.
+    joining = subprocess.Popen([QURB, "join", other, code], stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True)
+    said = ""
+    expected = None
+    for line in joining.stdout:
+        said += line
+        found = re.search(r"\b(\d{3} \d{3})\b", line)
+        if found:
+            expected = found.group(1)
+            break
+    assert expected, f"qurb join printed no number: {said}"
+    shown = window.until("the window asking about the device",
+        "const a = document.getElementById('pair-asking');"
+        "return a && !a.classList.contains('hidden') && document.getElementById('pair-number').textContent")
+    assert shown == expected, f"the window shows {shown}, the joining device {expected}"
+    # As long as a person comparing two numbers might take.
+    time.sleep(float(os.environ.get("SMOKE_THINK", "0")))
+    window.click("pair-approve")
+    rest, _ = joining.communicate(timeout=60)
+    assert joining.returncode == 0, f"qurb join failed: {said}{rest}"
     named = window.until("the window saying paired",
         "return document.getElementById('pair-done') && document.getElementById('pair-with').textContent")
     window.click("pair-finish")
@@ -248,13 +263,13 @@ def main():
     ok = False
     try:
         time.sleep(2)
-        words = set_up(window)
+        set_up(window)
         print("set up through the window")
 
         print("opened", ", ".join(every_tab(window)))
 
-        other, named = pair(window, words)
-        print(f"paired by code with {named}")
+        other, named = pair(window)
+        print(f"paired by code with {named}, approved in the window by its number")
 
         device = named.split(" (")[0]
         send(window, device)

@@ -678,8 +678,8 @@ then.*
   Settings; the key row in Settings; the laptop becoming the phone's vault
   keeper.
 - [x] Watched in the desktop window: its approval panel and key row —
-  2026-10-07, against the window's fixtures; a real pairing through the
-  window is still to be done.
+  2026-10-07, against the window's fixtures; and a real pairing through the
+  window, approved by its number, on 2026-10-08 (`scripts/desktop-smoke.sh`).
 - [x] Files no device has any more say so — 2026-10-07
   ([0054](decisions/0054-a-file-the-other-device-does-not-hold.md),
   [0055](decisions/0055-a-file-on-no-device-says-so.md)): the phone no

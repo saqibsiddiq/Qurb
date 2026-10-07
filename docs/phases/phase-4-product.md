@@ -1188,6 +1188,25 @@ copy here*, and now *On no device*) took the attention card's grid layout,
 whose class name it shares, and stretched across the panel with its words
 pushed to the middle. `.badge.attention` now restates a badge's own shape.
 
+**And in the real window**, the next day (2026-10-08), with
+`scripts/desktop-smoke.sh`. The smoke test still set a device up with 24 words
+and paired without a question, so it had stopped matching the window after
+decisions 0052 and 0053. It now sets up with nothing to write down. A second
+device, the command line in a folder not set up, joins with the window's code
+and takes its key. The window asks, and is approved once the number it shows
+matches the one `qurb join` printed. The run passed whole: setup, every place,
+pairing, a send, removing the device, and the passphrase. It passed again with
+40 and with 90 seconds of waiting before *Approve*, and `qurb pair` against
+`qurb join` took 90 seconds the same way.
+
+Its first attempt, which never approved, found something worth fixing. When
+the code ran out, the device asking was told only "connection lost: closed by
+peer". The device showing the code stops waiting at expiry and closes without
+an answer. A device whose wait ends that way after the code's time is now
+told *the code expired before the other device approved this one*
+(`Error::NotApprovedInTime`; test
+`a_device_not_approved_before_the_code_expires_is_told_so`).
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

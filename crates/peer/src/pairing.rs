@@ -454,7 +454,8 @@ pub async fn accept(
     endpoint.set_default_client_config(tls::client_config(identity, invite.fingerprint)?);
 
     let connection = endpoint.connect(invite.address, "qurb-device")?.await?;
-    let host = pair_on(&connection, invite, store, ours.name, ours.kind, key_check(ours.key)).await;
+    let host =
+        pair_on(&connection, invite, store, ours.name, ours.kind, key_check(ours.key), now).await;
     hang_up(&connection, &endpoint).await;
     host
 }
@@ -519,7 +520,12 @@ where
     let ask = Request::Join { token: invite.token, name: our_name.to_string(), kind: our_kind.to_string() };
     send.write_all(&ask.encode()).await?;
     send.finish()?;
-    let key = match Response::decode(&recv.read_to_end(MAX_MESSAGE).await?)? {
+    let waiting = std::time::Instant::now();
+    let raw = recv
+        .read_to_end(MAX_MESSAGE)
+        .await
+        .map_err(|e| while_waiting(e.into(), invite, now, waiting))?;
+    let key = match Response::decode(&raw)? {
         Response::Key { key } => qurb_keys::MasterKey::from_bytes(key),
         Response::Declined => return Err(Error::Declined),
         Response::NotFound => return Err(Error::NoKeyGiven),
@@ -530,9 +536,21 @@ where
 
     let check = key_check(&key);
     let store = set_up(key).map_err(|detail| Error::SetUpFailed { detail })?;
-    let host = pair_on(&connection, invite, store, our_name, our_kind, check).await;
+    let host = pair_on(&connection, invite, store, our_name, our_kind, check, now).await;
     hang_up(&connection, &endpoint).await;
     host
+}
+
+/// What to say when the connection drops while the person at the other
+/// device decides. That device stops waiting when its code expires and closes
+/// without an answer, and "connection lost" said nothing of the reason
+/// (2026-10-08). Allowed two seconds either way, for two clocks.
+fn while_waiting(e: Error, invite: &Invite, now: i64, since: std::time::Instant) -> Error {
+    if now + since.elapsed().as_secs() as i64 + 2 >= invite.expires_at {
+        Error::NotApprovedInTime
+    } else {
+        e
+    }
 }
 
 /// The pairing exchange itself, on a connection already pinned to the
@@ -544,6 +562,7 @@ async fn pair_on(
     our_name: &str,
     our_kind: &str,
     check: [u8; 32],
+    now: i64,
 ) -> Result<Paired> {
     let our_device = { store.lock().expect("store mutex").device_id()? };
     let (mut send, mut recv) = connection.open_bi().await?;
@@ -557,7 +576,11 @@ async fn pair_on(
     send.write_all(&request.encode()).await?;
     send.finish()?;
 
-    let raw = recv.read_to_end(MAX_MESSAGE).await?;
+    let waiting = std::time::Instant::now();
+    let raw = recv
+        .read_to_end(MAX_MESSAGE)
+        .await
+        .map_err(|e| while_waiting(e.into(), invite, now, waiting))?;
     let host = match Response::decode(&raw)? {
         // Checked here as well as there: a device that answers "paired" to a
         // device holding another key is not one to trust.
