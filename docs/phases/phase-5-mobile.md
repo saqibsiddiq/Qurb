@@ -1849,6 +1849,59 @@ for these. Looked at on the screen at 20:27: Files reads "15 days ago" and
 the like, and a file's sheet says *On no device*, why, and offers only
 *Delete*.
 
+## Finishing what was left
+
+**2026-10-08**, on the S23 and the laptop, whenever the phone was free.
+
+**Tap to finish sending, watched.** A 300 MB file of random bytes, made in
+the phone's Downloads, was picked with *Add files*, and the app was left a
+second later while it imported. At 00:52:38 the import finished, and Android
+refused the worker's foreground service from the background
+(`ForegroundServiceStartNotAllowedException`, "Background started FGS:
+Disallowed"). The ordinary pass went on, and the laptop dialled in and
+collected. At 00:53:03 the notification was up: *Tap to finish sending —
+300.0 MB is waiting.* Tapping it opened the app. The laptop had finished
+three seconds after the notification went up: 314,572,800 bytes in 22.4 s,
+14.04 MB/s, 13 ms round trip, nothing lost. Android had not frozen the app
+straight after its pass, so the pass kept serving. The notification was true
+when posted, and the next sync, or opening the app, withdraws it. The test
+file was then deleted on the laptop, deleted for good from the phone's
+Recently deleted, and removed from its Downloads.
+
+**Block Store gives the key back.** Settings now reads the key from Block
+Store and compares it with this phone's own, rather than saying where it
+would be. On the S23: *On this phone, and in your Google backup, end-to-end
+encrypted with your screen lock — read back and checked just now.* That is
+the same call setup makes to offer *Use the key from your Google backup*. A
+phone set up again after a wipe has not been watched, since that means
+clearing this one.
+
+**The 1.33 MB/s, looked for.** The phone-serving spike, rebuilt with BBR, ran
+four sessions of three fetches of a 256 MiB file kept in the folder, phone
+to laptop. Each session followed the phone's link: 5180 MHz, RSSI −50 to −61,
+link speed 263–650 Mbit/s. The phone was idle on its home screen. With three
+more fetches by hand, 15 runs:
+
+| session | MB/s | round trip | lost |
+|---|---|---|---:|
+| by hand | 9.45, 10.00, 11.24 | 57, 22, 23 ms | 69 |
+| 1 | 12.60, 11.36, 11.71 | 18–20 ms | 0 |
+| 2 | 10.99, 12.10, 10.63 | 17–28 ms | 10 |
+| 3 | 11.39, 11.44, 11.54 | 20–27 ms | 0 |
+| 4 | 11.66, 11.99, 12.06 | 14–15 ms | 0 |
+
+Nothing near 1.33. The slowest runs, with the longest round trips, came with
+lost packets, which fits a Wi-Fi link having a bad moment. The 124 ms round
+trip of the slow run is the same signature, ten times worse. Not proven
+either way. It stays recorded as seen once, and not since.
+
+**Copies of files you sent**, in Settings: *1.6 GB, kept here after they
+arrived*, and its warning, closed with *Keep*. Nothing was let go.
+
+Still not watched: scanning a pairing code with the camera, which needs
+somebody to point the phone; and a phone set up again from Block Store after
+a wipe.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

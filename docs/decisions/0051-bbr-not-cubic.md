@@ -76,6 +76,10 @@ do.
   laptop restarted. One resumed run went at 1.33 MB/s with a 124 ms round
   trip and is not explained; repeated, the same test ran at 12.05. See
   [phase 5](../phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared).
+- **Looked for again on 2026-10-08**, with the spike and BBR: 15 runs of 256
+  MiB from the idle S23 ran at 9.45–12.64 MB/s, round trips 14–57 ms; and
+  300 MB through the app, left during its import, at 14.04. The 1.33 was not
+  seen again. See [phase 5](../phases/phase-5-mobile.md#finishing-what-was-left).
 - **Not measured**: on mobile data, through the relay, with other traffic
   sharing the link, or between two desktops on a wired network.
 

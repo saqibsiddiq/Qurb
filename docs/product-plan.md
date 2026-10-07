@@ -661,9 +661,9 @@ then.*
 - [x] A collector that pauses for more than ten seconds no longer ends the
   phone's pass — 2026-10-05: a minute's wait while what it was collecting is
   still waiting, watched twice with the laptop gone for 20 seconds.
-- [ ] *Tap to finish sending*, watched: the notification a large transfer
-  leaves when Android refuses it the foreground because the app was left
-  during the import.
+- [x] *Tap to finish sending*, watched — 2026-10-08: the notification a large
+  transfer leaves when Android refuses it the foreground because the app was
+  left during the import; tapping it opened the app.
 - [x] Decide what counts as a safe last copy — 2026-10-07
   ([0053](decisions/0053-approval-same-key-and-safe-copies.md)): not a phone's.
   On 2026-10-05 the phone's data was cleared from Android's Settings, and 18
@@ -694,7 +694,8 @@ then.*
   unfinished setup can join instead.)
 - [ ] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):
   ~~the S23 joining the laptop with a code~~ (typed, 2026-10-05); scanning it;
-  the laptop joining with the phone's code; Block Store returning the key.
+  the laptop joining with the phone's code; ~~Block Store returning the key~~
+  (read back and compared in Settings, 2026-10-08; not after a wipe).
 
 **4. Release.**
 - [ ] Decided and recorded: how a replica frees space (§4.7). Recovery

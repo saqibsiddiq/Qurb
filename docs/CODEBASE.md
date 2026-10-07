@@ -1255,9 +1255,11 @@ Eight things are known-missing rather than merely unbuilt:
 7. **Transfer speed is measured on one home Wi-Fi only.** A large file left
    the phone at 5 MB/s because quinn's default congestion controller read
    Wi-Fi's stray losses as congestion. With BBR
-   ([decisions/0051](decisions/0051-bbr-not-cubic.md)) it goes at 10.6–12.1
-   MB/s through the app. Unmeasured on mobile data, through the relay, and
-   alongside other traffic, where BBR is known to take more than its share.
+   ([decisions/0051](decisions/0051-bbr-not-cubic.md)) it goes at 10.6–14.0
+   MB/s through the app. One run at 1.33 MB/s on 2026-10-05 was not seen
+   again in 15 more on 2026-10-08. Unmeasured on mobile data, through the
+   relay, and alongside other traffic, where BBR is known to take more than
+   its share.
    See [phases/phase-5-mobile.md](phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared).
 
 8. **A phone is still a fragile place for a file.** On 2026-10-05 the S23's

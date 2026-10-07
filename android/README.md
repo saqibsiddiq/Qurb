@@ -326,7 +326,7 @@ replaced by uninstalling — which deletes the phone's key and index. See
   pauses mid-file is waited for up to a minute, which was watched. Started
   after the app has left the screen, as when it is left during a long
   import, the long pass is refused by Android. It then runs as an ordinary
-  one and leaves *Tap to finish sending*, which is built and not yet watched
+  one and leaves *Tap to finish sending*, watched on 2026-10-08
   ([phase 5](../docs/phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared)).
 - **Clear data lost what only the phone held**, on 2026-10-05: 18 files the
   laptop had freed because the phone kept them, and its Private Vault. Since

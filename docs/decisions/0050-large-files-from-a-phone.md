@@ -148,7 +148,11 @@ there.
     it only after the import, and Android refuses it from the background.
     After such a pass, with a device there and a large collection still
     waiting, the worker now posts *Tap to finish sending*, which opens the
-    app and syncs. Built; not watched.
+    app and syncs. Built, and watched on 2026-10-08: a 300 MB file picked and
+    the app left a second later; Android refused the foreground
+    (`ForegroundServiceStartNotAllowedException`); the notification said
+    "300.0 MB is waiting", and tapping it opened the app. See
+    [phase 5](../phases/phase-5-mobile.md#finishing-what-was-left).
   - **Both files arrived** at the next *Sync now*, carried on from where they
     stopped and checked whole.
   - **The app did not know about the pass.** Having handed it to the worker,
