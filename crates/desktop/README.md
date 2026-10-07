@@ -218,8 +218,6 @@ Settings turns off. See [decision 0040](../../docs/decisions/0040-the-menu-opens
   at every login (see [phase 4](../../docs/phases/phase-4-product.md#a-folder-typed-without-a-slash)).
 - **Linux only, in practice.** The Rust is portable and Tauri is
   cross-platform; this has never been built or run on Windows or macOS.
-- **Moving a file into or out of Private Vault.** The vault is shown and
-  browsed; the move needs an engine addition (docs/design/brief.md §2).
 - **Checked by eye only in a renderer without compositing.** The screens were
   looked at in WebKitGTK offscreen, which draws no backdrop blur and no
   running animations; the real window has both, and the owner has not yet

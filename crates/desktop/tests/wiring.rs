@@ -17,6 +17,7 @@ use std::collections::BTreeSet;
 /// Every script the page loads, in the order index.html loads them.
 fn page() -> String {
     [
+        include_str!("../ui/theme.js"),
         include_str!("../ui/core.js"),
         include_str!("../ui/setup.js"),
         include_str!("../ui/home.js"),
@@ -41,7 +42,7 @@ fn every_script_the_page_loads_is_read() {
         .collect();
     assert_eq!(
         loaded,
-        ["core.js", "setup.js", "home.js", "files.js", "devices.js", "settings.js", "app.js"],
+        ["theme.js", "core.js", "setup.js", "home.js", "files.js", "devices.js", "settings.js", "app.js"],
         "index.html loads a different set of scripts from the one this test reads"
     );
 }

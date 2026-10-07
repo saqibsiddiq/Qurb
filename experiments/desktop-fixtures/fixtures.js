@@ -232,6 +232,14 @@ const ANSWERS = {
       ],
     };
   },
+  move_file_area: ({ path, private: into }) => {
+    const f = FILES.find((x) => x.path === path);
+    if (!f || f.private === into) return false;
+    f.private = into;
+    return true;
+  },
+  // No device keeps this computer's vault in the fixture: the warning shows.
+  vault_keepers: () => [],
   free_file: ({ path }) => {
     const f = FILES.find((x) => x.path === path);
     if (!f || f.availability === "only here") throw new Error(`cannot evict ${path}: no other device is known to hold this content`);

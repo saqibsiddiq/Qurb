@@ -3141,6 +3141,9 @@ pub enum Event {
     Cancelled,
     /// A device stopped being trusted here.
     Removed,
+    /// A file moved into this device's Private Vault, or out of it to every
+    /// device (decision 0057). The detail says which.
+    Moved,
     /// Written by a build that knew a kind this one does not.
     Other(String),
 }
@@ -3160,6 +3163,7 @@ impl Event {
             Event::Failed => "failed",
             Event::Cancelled => "cancelled",
             Event::Removed => "removed",
+            Event::Moved => "moved",
             Event::Other(word) => word,
         }
     }
@@ -3178,6 +3182,7 @@ impl Event {
             "failed" => Event::Failed,
             "cancelled" => Event::Cancelled,
             "removed" => Event::Removed,
+            "moved" => Event::Moved,
             other => Event::Other(other.to_string()),
         }
     }

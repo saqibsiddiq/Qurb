@@ -158,10 +158,11 @@ Since then (2026-10-03): the mark on Linux — the applications menu and the
 tray — and the website, built with the apps as its reference
 ([website/README.md](../../website/README.md)).
 
-**Next:** the owner's review at the checkpoints (dark mode is built: [0056](../decisions/0056-dark-mode.md)); then *Move to
-Private Vault* and *Move to shared*, which need the engine addition in §2. One
-smaller thing the table in §3 places and nothing draws yet: notifications on
-the phone.
+**Next:** the owner's review at the checkpoints. Dark mode is built
+([0056](../decisions/0056-dark-mode.md)), and so are *Move to Private Vault*
+and *Move to shared* ([0057](../decisions/0057-moving-a-file-into-or-out-of-private-vault.md)).
+One smaller thing the table in §3 places and nothing draws yet: notifications
+on the phone.
 
 The desktop's frames for review: the window at its default 1200 × 800; the
 phone at 360 × 780, the Galaxy S23's size in dp.

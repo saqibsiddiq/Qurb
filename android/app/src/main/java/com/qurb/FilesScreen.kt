@@ -274,6 +274,12 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             sheet.action(R.drawable.ic_save, "Save a copy to this phone") { app.saveCopy(entry) }
             sheet.action(R.drawable.ic_pencil, "Rename…") { rename(entry) }
             sheet.action(R.drawable.ic_folder_input, "Move to folder…") { move(entry) }
+            // Between the shared area and this phone's own (decision 0057).
+            if (entry.private) {
+                sheet.action(R.drawable.ic_folder, "Move to Files, on all your devices") { moveArea(entry, false) }
+            } else {
+                sheet.action(R.drawable.ic_lock_keyhole, "Move to Private Vault…") { moveArea(entry, true) }
+            }
         }
         sheet.action(R.drawable.ic_trash_2, "Delete", danger = true) { delete(entry) }
         sheet.show()
@@ -351,6 +357,46 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             } finally {
                 app.changed()
             }
+        }
+    }
+
+    /**
+     * Into this phone's Private Vault, or out of it to every device (decision
+     * 0057). Into it, the person is told first what happens to the copies on
+     * their other devices, and whether anything still keeps one.
+     */
+    private fun moveArea(entry: FileEntry, private: Boolean) {
+        val name = entry.path.substringAfterLast('/')
+        val move = {
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) { engine().moveToPrivate(entry.path, private) }
+                    app.say(if (private) "$name is in Private Vault" else "$name goes to all your devices")
+                    app.madeChange()
+                } catch (e: Exception) {
+                    app.fail("Could not move that", e)
+                    app.changed()
+                }
+            }
+        }
+        if (!private) {
+            move()
+            return
+        }
+        scope.launch {
+            val keepers = runCatching { withContext(Dispatchers.IO) { engine().holders() } }.getOrDefault(emptyList())
+            val kept = if (keepers.isEmpty()) {
+                "No device keeps a backup of your Private Vault, so this phone will have the only copy. " +
+                    "Choose one in Devices to keep it."
+            } else {
+                "${keepers.joinToString(", ") { it.name }} keeps a backup of your Private Vault, so it keeps this file too."
+            }
+            kit.sheet()
+                .header(R.drawable.ic_lock_keyhole, "Move $name to Private Vault?")
+                .text("It stays on this phone, and your other devices remove their copies at their next sync " +
+                    "— each keeps it in Recently deleted for 30 days, as with any deletion. $kept")
+                .buttons("Move") { move() }
+                .show()
         }
     }
 

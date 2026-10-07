@@ -34,6 +34,8 @@ qurb — private cloud storage
                                       take back a send not yet collected
   qurb free [dir] <path>              free the local copy of a file another
                                         device keeps; `fetch` brings it back
+  qurb private [dir] <path>           move a file into this device's Private
+                                        Vault; `unprivate` moves it back out
   qurb conflicts [dir] [keep <copy> this|other|both]
                                       files two devices changed at once, and
                                         settling one: nothing is lost either way
@@ -235,6 +237,11 @@ fn run() -> Result<()> {
         "free" => {
             let (root, path) = split_path(&args)?;
             free(&root, &path.context("give a file to free: qurb free <path>")?)
+        }
+        "private" | "unprivate" => {
+            let (root, path) = split_path(&args)?;
+            let path = path.with_context(|| format!("give a file: qurb {} <path>", args[0]))?;
+            move_area(&root, &path, args[0] == "private")
         }
         "holders" => {
             // `qurb holders`, `qurb holders add phone`, or with the folder first.
@@ -854,6 +861,32 @@ fn send(root: &Path, picked: &[PathBuf], recipient: &str) -> Result<()> {
 /// back. Refused when no other device is known to hold these bytes -- the same
 /// rule the storage cap follows, and the difference between freeing space and
 /// deleting the only copy.
+/// Move a file into this device's Private Vault, or out of it to every device
+/// (decision 0057).
+fn move_area(root: &Path, logical: &str, private: bool) -> Result<()> {
+    let (_, _, mut store, _) = open(root)?;
+    let logical = logical.trim_start_matches("./");
+    let keepers = store.db().holders()?.len();
+    match store.move_area(logical, private) {
+        Ok(false) if private => println!("{logical} is already in Private Vault"),
+        Ok(false) => println!("{logical} is already shared"),
+        Ok(true) if private => {
+            println!("moved {logical} into Private Vault");
+            println!("  your other devices remove their copies at their next sync");
+            if keepers == 0 {
+                println!("  no device keeps this one's Private Vault: this is now the only copy");
+            }
+        }
+        Ok(true) => println!("moved {logical} out of Private Vault; it goes to all your devices"),
+        Err(qurb_storage::Error::NotHere { .. }) => {
+            bail!("{logical} is not on this device: `qurb fetch {logical}` brings it back first")
+        }
+        Err(qurb_storage::Error::NotFound { .. }) => bail!("{logical} is not a file here"),
+        Err(e) => return Err(e.into()),
+    }
+    Ok(())
+}
+
 fn free(root: &Path, logical: &str) -> Result<()> {
     let (_, _, mut store, _) = open(root)?;
     let logical = logical.trim_start_matches("./");

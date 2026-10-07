@@ -1525,6 +1525,57 @@ impl Store {
         self.rename_in_folder(&root, from, to, scope)
     }
 
+    /// Move a file between the shared area and this device's own Private
+    /// Vault (decision 0057): the same file, at the same path, in the other
+    /// area. Returns whether it moved; a file already there does not.
+    ///
+    /// Into the vault, the shared row is retired with a tombstone, so every
+    /// other device removes its copy at its next sync, as with any deletion,
+    /// and only a device keeping this one's vault holds it from then on. Out
+    /// of it, the private row is retired the same way, which tells a device
+    /// keeping the vault to let it go, and the file becomes an ordinary shared
+    /// one that reaches every device.
+    ///
+    /// Refused for a file whose bytes are not here: the move writes the file
+    /// into the other area from the folder, and a freed file has nothing
+    /// there. And for a path live in both areas, which is ambiguous.
+    pub fn move_area(&mut self, logical_path: &str, private: bool) -> Result<bool> {
+        let Some(root) = self.tree.clone() else {
+            return Err(Error::NotFound { path: logical_path.to_string() });
+        };
+        let Some((_, scope)) = self.db.folder_row(logical_path)? else {
+            return Err(Error::NotFound { path: logical_path.to_string() });
+        };
+        let me = self.device_id()?;
+        let target = private.then_some(me);
+        if scope == target {
+            return Ok(false);
+        }
+        if scope.is_some_and(|owner| owner != me) {
+            return Err(Error::Sharing { why: "that file is another device's, kept here for it".into() });
+        }
+        // The shared row is the one found when both are live, so that is the
+        // only way the path can be in both.
+        if scope.is_none() && self.db.own_vault_row(logical_path)?.is_some() {
+            return Err(Error::Sharing {
+                why: format!("Private Vault already has a file called {logical_path}"),
+            });
+        }
+        let disk = root.join(logical_path);
+        if self.db.is_materialised(logical_path)? != Some(true) || !disk.is_file() {
+            return Err(Error::NotHere { path: logical_path.to_string() });
+        }
+        self.put_file_in(logical_path, &disk, target)?;
+        let _ = self.db.record(
+            db::Event::Moved,
+            Some(logical_path),
+            None,
+            None,
+            Some(if private { "into Private Vault" } else { "out of Private Vault, to every device" }),
+        );
+        Ok(true)
+    }
+
     /// Move a file in the folder from one path to another, recording both
     /// sides as changes made here, and keeping it in `scope`'s area.
     fn rename_in_folder(

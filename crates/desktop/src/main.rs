@@ -159,6 +159,8 @@ fn run() -> Result<()> {
             commands::find,
             commands::details,
             commands::free_file,
+            commands::move_file_area,
+            commands::vault_keepers,
             commands::freeable,
             commands::delete_file,
             commands::open_file,

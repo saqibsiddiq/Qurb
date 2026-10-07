@@ -1107,6 +1107,27 @@ pub fn free_file(hosted: Host<'_>, path: String) -> Answer<String> {
         .map_err(failed)
 }
 
+/// Move a file into this computer's Private Vault, or out of it to every
+/// device (decision 0057). Returns whether it moved. Refused, by the store,
+/// for a file whose bytes are not here.
+#[tauri::command]
+pub fn move_file_area(hosted: Host<'_>, path: String, private: bool) -> Answer<bool> {
+    hosted.with_store_mut(|store| Ok(store.move_area(&path, private)?)).map_err(failed)
+}
+
+/// The devices keeping this computer's Private Vault, by name: what moving a
+/// file into it says keeps a copy.
+#[tauri::command]
+pub fn vault_keepers(hosted: Host<'_>) -> Answer<Vec<String>> {
+    hosted
+        .with_store(|store| {
+            let db = store.db();
+            let named = db.device_names()?;
+            Ok(db.holders()?.iter().map(|id| named.get(id).cloned().unwrap_or_else(|| id.short())).collect())
+        })
+        .map_err(failed)
+}
+
 /// What could be freed without losing anything, and the largest files that
 /// would free it (brief §20).
 #[derive(Serialize)]

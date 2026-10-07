@@ -52,7 +52,7 @@ not yet looked at by the owner.
 |---|---|---|
 | **Home** | one state — *Everything is synced*, *Syncing…*, *Your devices are away*, *Add your first device*, *Something needs attention* — with a ring that turns while syncing; one action, *Send to device*; used space and devices connected; attention when a file has two versions; Recent, and *See all* for Activity | 🧪 |
 | **Files** | search; breadcrumbs from *Qurb*; folders as tiles apart from files; each file with its state — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](decisions/0055-a-file-on-no-device-says-so.md)), *Downloading* — size and when it changed | 🧪 |
-| | per file: open, show in folder, *Keep on this device*, *Free local space* (refused for the only copy), send to a device, details, delete (into Recently deleted) | 🧪 |
+| | per file: open, show in folder, *Keep on this device*, *Free local space* (refused for the only copy), send to a device, *Move to Private Vault* / *Move to shared* ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md)), details, delete (into Recently deleted) | 🧪 |
 | | a file's details: type, size, location, which devices hold it, when it changed, its history | 🧪 |
 | | a folder's options, from its menu: which devices have it ([0044](decisions/0044-sharing-with-chosen-devices.md)); *Free local space* / *Keep here* for the whole folder ([0045](decisions/0045-a-folder-kept-remotely.md)) | 🧪 |
 | | conflicts: both versions, who made each and when; keep this one, the other, or both ([0043](decisions/0043-settling-a-conflict.md)) | 🧪 |
@@ -120,7 +120,7 @@ was walked through on the emulator.
 | **Home** | one state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Not synced yet*, *Add your first device*; one action, *Send to device*; when it last synced; *Sync now*, or pull down; Recent, and *See all* for Activity | ✅ on the S23 |
 | | a file with two versions: attention, then a sheet with both — keep this version, the other, or both ([0043](decisions/0043-settling-a-conflict.md)) | ✅ |
 | **Files** | the shared area a folder at a time: search across every folder, breadcrumbs, folders as tiles, sort by name, newest or largest; each file's state — *On this phone*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](decisions/0055-a-file-on-no-device-says-so.md)), *Downloading* | 🧪 |
-| | per file, in a sheet: open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move to a folder, delete (into Recently deleted) | 🧪 · freeing and getting back ✅ |
+| | per file, in a sheet: open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move to a folder, *Move to Private Vault* / *Move to Files* ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md)), delete (into Recently deleted) | 🧪 · freeing and getting back ✅ |
 | | *Add files* into the folder on screen; new folder; save everything here to the phone at once | ✅ *Add files* on the S23, 2026-10-05; the rest 🧪 |
 | **Private Vault** | from Files: the phone's own files, in the same browser; *Add files* here adds privately, whatever the setting says | 🧪 in the FFI's tests |
 | **Devices** | this phone and each paired device as cards, with when each was last seen; *Add* — scan a code, **show a code on this phone**, or type one | ✅ scan · ◻ show |
@@ -164,6 +164,7 @@ set up, so most commands need no path.
 | `ls [path]` / `find <text>` | what the folder holds and where each file's bytes are / search names |
 | `activity [path]` | what happened, newest first, or to one file |
 | `fetch <path>` / `free <path>` | bring a freed file back / free a local copy another device keeps |
+| `private <path>` / `unprivate <path>` | move a file into this device's Private Vault / out of it to every device ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md)) |
 | `send <files and folders> to <device>` / `cancel <name> to <device>` | send to one device / take a send back before it is collected |
 | `holders [add\|remove <device>]` | which devices keep this one's own files |
 | `conflicts [keep <copy> this\|other\|both]` | list conflicts, settle one |
@@ -241,8 +242,6 @@ Stated plainly so that a design does not assume it:
   network that blocks a direct path cannot sync.
 - **The owner's review of the design**, on both.
 - **Notifications on the phone.** Settings says so.
-- **Moving a file into or out of Private Vault** — designed, and needs an
-  engine addition.
 - **A formal release** — after the relay.
 - **iOS, macOS and Windows.** Linux and Android first.
 - **Placeholders on Linux.** A freed file is absent from the folder, not shown

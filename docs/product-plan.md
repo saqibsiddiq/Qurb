@@ -621,8 +621,9 @@ it is started.
 - [ ] The owner's review of both apps at the checkpoints.
 - [x] Dark mode, on both — 2026-10-08, ahead of the review at the owner's
   asking ([0056](decisions/0056-dark-mode.md)).
-- [ ] Moving a file into and out of Private Vault, on both
-  ([brief §2](design/brief.md)) — an engine addition.
+- [x] Moving a file into and out of Private Vault, on both — built
+  2026-10-08 ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md));
+  watched on hardware: see there.
 - [ ] The three notifications on the phone.
 - [ ] A preview when comparing a conflict's two versions.
 - [ ] The designed app measured against [0039](decisions/0039-a-light-android-app.md).

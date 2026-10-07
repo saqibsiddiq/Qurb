@@ -453,3 +453,65 @@ async fn the_sender_holds_the_copy_until_the_recipient_confirms() {
     let released = host_store.release_held_payloads().unwrap();
     assert!(released.bytes_reclaimed > 0, "the sender is still paying for a delivered file");
 }
+
+/// Pull everything `from` offers into `into`, over a real connection.
+async fn sync(into: &mut Device, from: &Device) {
+    let (addr, fingerprint) = serve(from, &[into.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &into.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&into.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&into.root);
+    let tree = client.tree().await.unwrap();
+    let plan = into.engine.plan_against(&tree).unwrap();
+    let stats = into.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    client.close();
+    assert!(stats.failures.is_empty(), "{:?}", stats.failures);
+}
+
+/// Moved into Private Vault, a file leaves the other device at its next sync
+/// and nothing of it shows there from then on. Moved back out, it arrives
+/// there again as an ordinary shared file (decision 0057).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_moved_into_private_vault_leaves_the_other_device_and_returns_when_shared() {
+    let mut phone = Device::new();
+    let mut laptop = Device::new();
+    introduce(&phone, &laptop);
+    phone.write("diary.txt", b"for this phone only, later");
+    sync(&mut laptop, &phone).await;
+    assert_eq!(fs::read(laptop.root.join("diary.txt")).unwrap(), b"for this phone only, later");
+
+    assert!(phone.engine.store_mut().move_area("diary.txt", true).unwrap());
+    assert!(!phone.engine.store_mut().move_area("diary.txt", true).unwrap(), "moved twice");
+    let here = phone.engine.store().db().folder_entry("diary.txt").unwrap().unwrap();
+    assert!(here.private, "not in Private Vault after the move");
+    assert_eq!(fs::read(phone.root.join("diary.txt")).unwrap(), b"for this phone only, later");
+
+    sync(&mut laptop, &phone).await;
+    assert!(!laptop.root.join("diary.txt").exists(), "still on the other device");
+    let (addr, fingerprint) = serve(&phone, &[laptop.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &laptop.identity, fingerprint).await.unwrap();
+    let offered = client.tree().await.unwrap();
+    client.close();
+    assert!(
+        offered.iter().all(|v| v.path != "diary.txt" || v.is_deleted()),
+        "the private file is still offered: {offered:?}"
+    );
+
+    assert!(phone.engine.store_mut().move_area("diary.txt", false).unwrap());
+    sync(&mut laptop, &phone).await;
+    assert_eq!(fs::read(laptop.root.join("diary.txt")).unwrap(), b"for this phone only, later");
+    assert!(!phone.engine.store().db().folder_entry("diary.txt").unwrap().unwrap().private);
+}
+
+/// Only a file that is here can move, and a received file can be shared.
+#[tokio::test(flavor = "multi_thread")]
+async fn moving_needs_the_bytes_here() {
+    let mut phone = Device::new();
+    phone.write("big.bin", b"freed here");
+    let elsewhere = qurb_sync::DeviceId::from_bytes([3; 32]);
+    phone.engine.store().db().trust_peer(&elsewhere, &[3; 32], "laptop").unwrap();
+    phone.engine.store().note_replica(&blake3::hash(b"freed here"), &elsewhere).unwrap();
+    phone.engine.store_mut().free_local("big.bin").unwrap();
+    let refused = phone.engine.store_mut().move_area("big.bin", true).unwrap_err();
+    assert!(matches!(refused, qurb_storage::Error::NotHere { .. }), "{refused:?}");
+}

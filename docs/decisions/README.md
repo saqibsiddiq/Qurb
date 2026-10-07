@@ -83,3 +83,4 @@ is worth more than a tidy directory.
 | [0054](0054-a-file-the-other-device-does-not-hold.md) | A file the other device does not hold is listed, not failed every sync | Accepted — built, tested, and watched on the S23; extended by 0055 |
 | [0055](0055-a-file-on-no-device-says-so.md) | A file on no device says so | Accepted — built on the desktop, the phone and the command line |
 | [0056](0056-dark-mode.md) | Dark mode, on the same tokens | Accepted — built on the desktop and Android |
+| [0057](0057-moving-a-file-into-or-out-of-private-vault.md) | Moving a file into or out of Private Vault | Accepted — built on the desktop, Android and the command line |

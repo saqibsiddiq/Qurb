@@ -145,3 +145,33 @@ async fn a_phone_frees_a_photo_the_desktop_holds_and_gets_it_back() {
     let content = blake3::hash(&photo);
     assert_eq!(desktop.engine.store().read_content(&content).unwrap().unwrap(), photo);
 }
+
+/// A shared file moved into the phone's Private Vault leaves the desktop's
+/// folder, and the desktop, keeping that vault, holds it still: moving a
+/// file into private does not make it the only copy (decision 0057).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_moved_into_the_vault_is_kept_by_the_device_holding_it() {
+    let mut phone = Device::new();
+    let mut desktop = Device::new();
+    introduce(&phone, &desktop);
+    phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+
+    fs::write(phone.root.join("notes.txt"), b"shared, then private").unwrap();
+    phone.engine.reconcile().unwrap();
+    desktop.sync_from(&phone).await;
+    assert!(desktop.root.join("notes.txt").exists());
+
+    assert!(phone.engine.store_mut().move_area("notes.txt", true).unwrap());
+    desktop.sync_from(&phone).await;
+
+    assert!(!desktop.root.join("notes.txt").exists(), "still in the desktop's folder");
+    let content = blake3::hash(b"shared, then private");
+    assert!(
+        desktop.engine.store().db().holds_for(&content, &phone.id()).unwrap(),
+        "the desktop does not hold the phone's file for it"
+    );
+    assert_eq!(
+        desktop.engine.store().read_content(&content).unwrap().as_deref(),
+        Some(&b"shared, then private"[..]),
+    );
+}

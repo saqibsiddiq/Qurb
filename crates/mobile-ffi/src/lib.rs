@@ -1234,6 +1234,15 @@ impl Qurb {
         Ok(self.engine()?.store_mut().free_local(&qurb_watcher::normalize(&path))?)
     }
 
+    /// Move a file into this phone's Private Vault, or out of it to every
+    /// device (decision 0057). Into the vault, the person's other devices
+    /// remove their copies at their next sync, and only a device keeping this
+    /// phone's vault holds it from then on. Refused for a file whose bytes
+    /// are not on this phone. Returns whether it moved.
+    pub fn move_to_private(&self, path: String, private: bool) -> Result<bool, QurbError> {
+        Ok(self.engine()?.store_mut().move_area(&qurb_watcher::normalize(&path), private)?)
+    }
+
     /// Ask for a freed file back. Acted on at the next sync with a device that
     /// has it, so asking while offline works. Returns whether it was freed at
     /// all -- asking for a file already here is not an error, and changes

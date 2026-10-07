@@ -172,6 +172,11 @@ function fileActions(f, redraw) {
     items.push(["Free local space", "cloud-off", () => freeLocal(f.path, rowFor(f.path), redraw)]);
   }
   if (here) items.push(["Send to device…", "send", () => openSend([`${rootPath}/${f.path}`])]);
+  if (here) {
+    items.push(f.private
+      ? ["Move to shared", "folder", () => moveArea(f, false, redraw)]
+      : ["Move to Private Vault…", "lock-keyhole", () => moveArea(f, true, redraw)]);
+  }
   items.push(["Details", "info", () => openDetails(f.path)]);
   items.push("-");
   items.push(["Delete", "trash-2", () => deleteFile(f.path, redraw), true]);
@@ -227,6 +232,42 @@ function onlyCopy(e) {
   return /no other device is known to hold|only holder/.test(String(e))
     ? "This is the only copy currently stored in Qurb, so it can't be freed."
     : String(e);
+}
+
+/** Into this computer's Private Vault, or out of it to every device
+ *  (decision 0057). Into it, says first what happens to the other devices'
+ *  copies, and whether any device still keeps one. */
+async function moveArea(f, intoVault, redraw) {
+  const name = base(f.path);
+  const move = async () => {
+    try {
+      await invoke("move_file_area", { path: f.path, private: intoVault });
+      toast(intoVault ? `${name} is in Private Vault.` : `${name} goes to all your devices.`);
+      redraw?.();
+    } catch (e) {
+      toast(String(e), true);
+    }
+  };
+  if (!intoVault) return move();
+
+  let keepers = [];
+  try { keepers = await invoke("vault_keepers"); } catch (e) { /* said below as none */ }
+  const box = sheet();
+  box.append(el("h2", null, `Move ${name} to Private Vault?`));
+  box.append(el("p", "lead",
+    "It stays on this computer, and your other devices remove their copies at their next sync — " +
+    "each keeps it in Recently deleted for 30 days, as with any deletion."));
+  box.append(el("p", keepers.length ? "lead" : "caution", keepers.length
+    ? `${keepers.join(", ")} keeps a backup of this computer's Private Vault, so it keeps this file too.`
+    : "No device keeps a backup of this computer's Private Vault, so this computer will have the only copy."));
+  const actions = el("div", "actions");
+  const cancel = button("Cancel", "btn");
+  cancel.addEventListener("click", () => box.close());
+  const go = button("Move", "btn primary", "lock-keyhole");
+  go.id = "move-private-go";
+  go.addEventListener("click", () => { box.close(); move(); });
+  actions.append(cancel, go);
+  box.append(actions);
 }
 
 async function deleteFile(path, redraw) {
@@ -327,6 +368,10 @@ async function openDetails(path) {
     add("Free local space", "btn", "cloud-off", () => { closePanel(); freeLocal(f.path, rowFor(f.path), redraw); });
   }
   if (isHere(f)) add("Send to device…", "btn", "send", () => openSend([`${rootPath}/${f.path}`]));
+  if (isHere(f)) {
+    if (f.private) add("Move to shared", "btn", "folder", () => { closePanel(); moveArea(f, false, redraw); });
+    else add("Move to Private Vault…", "btn", "lock-keyhole", () => { closePanel(); moveArea(f, true, redraw); });
+  }
   add("Delete", "btn ghost quiet-danger", "trash-2", () => deleteFile(f.path, redraw));
   body.append(actions);
 
