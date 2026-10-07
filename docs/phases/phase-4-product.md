@@ -1207,6 +1207,12 @@ told *the code expired before the other device approved this one*
 (`Error::NotApprovedInTime`; test
 `a_device_not_approved_before_the_code_expires_is_told_so`).
 
+The other way round as well, with `SMOKE_MODE=join`: the window set up from
+nothing by *I already use Qurb* and a code that `qurb pair` showed. The
+window showed the number to approve at, `qurb pair` asked about the same
+number (199 134), a yes gave the window its key, and every place opened. The
+full run passed again after the change.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

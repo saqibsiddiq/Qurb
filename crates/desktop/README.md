@@ -115,7 +115,10 @@ the code the window shows -- a folder not set up, which takes the key, and is
 approved in the window once the number it prints matches the window's
 (decision 0053) -- sends it a file and sees it under Transfers, removes it, and
 protects the key with a passphrase and unlocks it again. `SMOKE_THINK=90` waits
-that many seconds before approving, as a person comparing numbers might. It fails if any command the
+that many seconds before approving, as a person comparing numbers might.
+`SMOKE_MODE=join` instead sets the window up by joining another device's code,
+the way a computer joins a phone: the command line shows the code and says
+yes only when the window's number is the one it asks about. It fails if any command the
 page calls returns an error — the page keeps the last fifty as
 `window.qurbFailures` for that, and for reading from the web inspector.
 

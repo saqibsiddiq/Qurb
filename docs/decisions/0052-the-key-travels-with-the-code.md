@@ -144,9 +144,14 @@ elsewhere, such as a replica, and join their rendezvous group. So:
 - **Block Store gives the key back**, 2026-10-08: the phone's Settings read
   it back and found it is this phone's own. Not after a wipe, which would
   mean clearing the phone.
+- **The window's *I already use Qurb***, 2026-10-08, in the real window
+  (`SMOKE_MODE=join scripts/desktop-smoke.sh`): a computer not set up, given
+  another device's code, showed the number to approve at, and was set up
+  with that device's key once `qurb pair` there was told yes at 199 134. The
+  other device was the command line rather than the phone; the window's path
+  is the same either way.
 - **Not yet watched**: joining by scanning (the same `join_new`, behind the
-  camera); a phone set up again from Block Store after a wipe; the window's
-  *Enter a code* on a computer not set up, with the phone's code.
+  camera); a phone set up again from Block Store after a wipe.
 
 ## Reversing it
 
