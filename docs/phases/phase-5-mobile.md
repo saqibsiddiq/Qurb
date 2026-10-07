@@ -1898,6 +1898,15 @@ either way. It stays recorded as seen once, and not since.
 **Copies of files you sent**, in Settings: *1.6 GB, kept here after they
 arrived*, and its warning, closed with *Keep*. Nothing was let go.
 
+**A computer taking the phone's key.** The S23 showed a code (*Devices →
+Add → Show a code on this phone*). `qurb join` on a fresh folder on the
+laptop, in a home of its own so it touched nothing real, printed *check that
+it shows 659 937*. The phone asked *saqib wants to join, and take this
+phone's key*, showing 659 937. *Approve* set the folder up with the phone's
+key and paired it. The test device was then removed on the phone. *Not seen
+yet* told it apart from the real laptop of the same name, which shows *Last
+seen just now*. Its folder was deleted.
+
 Still not watched: scanning a pairing code with the camera, which needs
 somebody to point the phone; and a phone set up again from Block Store after
 a wipe.

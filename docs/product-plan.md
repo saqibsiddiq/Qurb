@@ -694,8 +694,9 @@ then.*
   unfinished setup can join instead.)
 - [ ] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):
   ~~the S23 joining the laptop with a code~~ (typed, 2026-10-05); scanning it;
-  the laptop joining with the phone's code; ~~Block Store returning the key~~
-  (read back and compared in Settings, 2026-10-08; not after a wipe).
+  ~~a computer joining with the phone's code and taking its key~~ (the command
+  line, 2026-10-08); ~~Block Store returning the key~~ (read back and compared
+  in Settings, 2026-10-08; not after a wipe).
 
 **4. Release.**
 - [ ] Decided and recorded: how a replica frees space (§4.7). Recovery

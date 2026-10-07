@@ -134,9 +134,19 @@ elsewhere, such as a replica, and join their rendezvous group. So:
   laptop's daemon refused the phone's first connection, four seconds before it
   reloaded its trust list: pairing from a terminal does not nudge it, as the
   window's pairing does. The key went to Block Store with no error.
+- **On hardware, 2026-10-08**: a computer not set up taking the phone's key.
+  The S23 showed a code. `qurb join` on a fresh folder on the laptop, in a
+  home of its own, printed *check that it shows 659 937*. The phone asked
+  "saqib wants to join, and take this phone's key" with 659 937 (decision
+  0053), and *Approve* set the folder up as another device, paired with
+  SM-S911B. The test device was then removed from the phone and its folder
+  deleted.
+- **Block Store gives the key back**, 2026-10-08: the phone's Settings read
+  it back and found it is this phone's own. Not after a wipe, which would
+  mean clearing the phone.
 - **Not yet watched**: joining by scanning (the same `join_new`, behind the
-  camera), the desktop joining with a code from the phone, and Block Store
-  giving the key back.
+  camera); a phone set up again from Block Store after a wipe; the window's
+  *Enter a code* on a computer not set up, with the phone's code.
 
 ## Reversing it
 
