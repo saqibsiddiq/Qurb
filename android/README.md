@@ -33,7 +33,7 @@ them, and the sheets that rise over them:
 | place | what it is for |
 |---|---|
 | Home | is my Qurb space okay? One state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Not synced yet*, *Add your first device* — with a ring that turns while syncing; one action, *Send to device*; a line of facts and *Sync now*; attention when a file has two versions ([0043](../docs/decisions/0043-settling-a-conflict.md)); Recent, and *See all* for Activity. Pulling down syncs |
-| Files | the shared space, folder by folder: search across all of them, breadcrumbs, folders as tiles apart from files, and each file's state in words — *On this phone*, *Available elsewhere*, *Only copy here*, *Downloading*. Tapping a file opens a sheet: its details, then open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move, delete (into Recently deleted). ⋯ sorts, makes a folder, saves everything here to the phone. *Add files* adds into the shared space. Back goes up a folder |
+| Files | the shared space, folder by folder: search across all of them, breadcrumbs, folders as tiles apart from files, and each file's state in words — *On this phone*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](../docs/decisions/0055-a-file-on-no-device-says-so.md)), *Downloading*. Tapping a file opens a sheet: its details, then open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move, delete (into Recently deleted). ⋯ sorts, makes a folder, saves everything here to the phone. *Add files* adds into the shared space. Back goes up a folder |
 | Private Vault | a step inside Files: this phone's own files, in the same browser. *Add files* here adds privately, whatever *Keep new files private* says |
 | Devices | this phone and each paired device as cards, with when each was last here; a device's sheet chooses whether it keeps a backup of the Private Vault, sends it files, and removes it after saying what that does ([0041](../docs/decisions/0041-removing-a-device.md)). *Add* scans a code, shows one on this phone, or takes one typed |
 | Settings | grouped lists: this phone and its key, devices, storage (space, who has each folder — [0044](../docs/decisions/0044-sharing-with-chosen-devices.md), [0045](../docs/decisions/0045-a-folder-kept-remotely.md) — Recently deleted, freeing unused space), privacy, notifications, the recovery phrase, appearance, and advanced (background sync, rendezvous, relay, version) |
@@ -69,7 +69,10 @@ into qurb through the system picker, and a share when no device is paired.
 only for a file another device is known to hold, and the engine refuses it
 anyway when that is not so, so no screen can get it wrong. A freed file stays in
 the list, marked *Available elsewhere*, and *Keep on this phone* in its sheet
-asks for it back at the next sync — *Downloading* until it is here.
+asks for it back at the next sync — *Downloading* until it is here. A file no
+device this phone syncs with has is marked *On no device*, and its sheet says
+why and offers only *Delete*; the system file picker shows it with that
+summary and does not try to open it.
 
 The screens are plain classes holding their views, not Fragments: built the
 first time each is shown, kept for the life of the activity, and changing tab

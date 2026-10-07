@@ -204,6 +204,11 @@ class QurbDocumentsProvider : DocumentsProvider() {
         if (!file.isFile) {
             val engine = engine()
             val entry = engine.entry(path) ?: throw FileNotFoundException("$path is not in qurb")
+            if (entry.available == Available.NOWHERE) {
+                throw FileNotFoundException(
+                    "${path.substringAfterLast('/')} is on no device this phone syncs with any more."
+                )
+            }
             if (entry.available != Available.ELSEWHERE) {
                 // The bytes are here without a copy in the folder -- a file
                 // removed from it that the next scan has not noticed yet.
@@ -332,6 +337,9 @@ class QurbDocumentsProvider : DocumentsProvider() {
             add(Document.COLUMN_FLAGS, if (here) Document.FLAG_SUPPORTS_WRITE else 0)
             if (entry.available == Available.ELSEWHERE) {
                 add(Document.COLUMN_SUMMARY, "Not on this phone — downloads when opened")
+            }
+            if (entry.available == Available.NOWHERE) {
+                add(Document.COLUMN_SUMMARY, "On no device")
             }
         }
     }

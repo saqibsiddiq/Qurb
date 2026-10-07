@@ -1620,10 +1620,11 @@ impl Store {
             "INSERT INTO files
                  (path, size, content_hash, mtime_ns, created_at, updated_at, deleted_at,
                   vector, modified_by, scope, materialised)
-             VALUES (?1, ?2, ?3, 0, unixepoch(), ?4, NULL, ?5, ?6, NULL, 0)
+             VALUES (?1, ?2, ?3, ?7, unixepoch(), ?4, NULL, ?5, ?6, NULL, 0)
              ON CONFLICT (path) WHERE scope IS NULL DO UPDATE SET
                  size = excluded.size,
                  content_hash = excluded.content_hash,
+                 mtime_ns = excluded.mtime_ns,
                  updated_at = excluded.updated_at,
                  deleted_at = NULL,
                  vector = excluded.vector,
@@ -1636,6 +1637,10 @@ impl Store {
                 version.modified_at,
                 version.vector.encode(),
                 version.modified_by.as_bytes().as_slice(),
+                // When the version was made: there is no file here to have a
+                // time of its own. Written as 0 before 2026-10-07, which a
+                // phone showed as "20734 days ago".
+                version.modified_at.saturating_mul(1_000_000_000),
             ],
         )?;
         // The chunks of whatever content the row described before, which

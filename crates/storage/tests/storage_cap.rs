@@ -342,6 +342,9 @@ fn a_file_says_which_devices_hold_it() {
     let hash = blake3::hash(&data);
     let (phone, laptop, vault) =
         (DeviceId::from_bytes([1; 32]), DeviceId::from_bytes([2; 32]), DeviceId::from_bytes([3; 32]));
+    for (device, seed) in [(&phone, 1u8), (&laptop, 2), (&vault, 3)] {
+        f.store.db().trust_peer(device, &[seed; 32], "a device").unwrap();
+    }
     f.store.note_replica(&hash, &phone).unwrap();
     f.store.note_replica(&hash, &laptop).unwrap();
     f.store.note_replica_in_vault(&hash, &vault).unwrap();

@@ -137,9 +137,10 @@ pub struct FileEntry {
 
 /// Where a file's bytes are, as the phone should say it.
 ///
-/// Three answers, decided in the storage crate so the phone and the desktop
+/// Four answers, decided in the storage crate so the phone and the desktop
 /// cannot disagree. The third is the one that matters: a file only on this
 /// phone is lost with the phone, and must never be offered as space to free.
+/// The fourth, since decision 0055, says plainly that a listed file is gone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum Available {
     /// On this phone, and another device has it too.
@@ -148,6 +149,9 @@ pub enum Available {
     Elsewhere,
     /// On this phone and nowhere else anybody knows of.
     OnlyHere,
+    /// Not on this phone, and no device it can ask is known to have it
+    /// (decision 0055): listed, and not something to fetch.
+    Nowhere,
 }
 
 impl From<qurb_storage::db::Availability> for Available {
@@ -156,6 +160,7 @@ impl From<qurb_storage::db::Availability> for Available {
             qurb_storage::db::Availability::Here => Available::Here,
             qurb_storage::db::Availability::Elsewhere => Available::Elsewhere,
             qurb_storage::db::Availability::OnlyHere => Available::OnlyHere,
+            qurb_storage::db::Availability::Nowhere => Available::Nowhere,
         }
     }
 }
@@ -2055,6 +2060,9 @@ impl Qurb {
                 &tree,
                 64,
             ));
+            // And the other way: what it is recorded as holding for files
+            // freed here, asked a few at a time (decision 0055).
+            runtime.block_on(qurb_peer::check_holders(client, &reader, &known.device_id, 16));
         }
 
         if plan.is_empty() {
@@ -2079,7 +2087,7 @@ impl Qurb {
         // one of those rather than a current-thread runtime.
         let stats = runtime.block_on(async {
             tokio::task::block_in_place(|| {
-                let mut source = qurb_peer::NetworkSource::new(client, &reader);
+                let mut source = qurb_peer::NetworkSource::new(client, &reader).for_peer(peer_device);
                 engine.apply_plan(&plan, &mut source)
             })
         })?;

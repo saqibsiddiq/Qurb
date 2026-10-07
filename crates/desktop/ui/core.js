@@ -131,6 +131,8 @@ function stateOf(availability) {
     case "here": return { cls: "here", icon: "hard-drive", words: "On this device" };
     case "elsewhere": return { cls: "elsewhere", icon: "cloud", words: "Available elsewhere" };
     case "only here": return { cls: "only", icon: "triangle-alert", words: "Only copy here" };
+    // Decision 0055: listed, and no device this one syncs with has it.
+    case "nowhere": return { cls: "nowhere", icon: "circle-alert", words: "On no device" };
     default: return { cls: "here", icon: "check", words: availability };
   }
 }

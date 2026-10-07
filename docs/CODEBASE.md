@@ -159,6 +159,13 @@ rather than failing at the first chunk on every sync, which a phone did for 18
 files nobody had any more. A failure that repeats is recorded in the history
 once. See [decisions/0054](decisions/0054-a-file-the-other-device-does-not-hold.md).
 
+What another device is recorded as holding is a claim, made by the device that
+made a file or by a report. A copy counts as one to ask for only on a paired
+device, and each sync asks the other device about up to 16 of its claims on
+files freed here, each once (`check_holders`, the `confirmed` table). A file
+not here that no device this one can ask holds reads as *On no device*. See
+[decisions/0055](decisions/0055-a-file-on-no-device-says-so.md).
+
 For that question to have an answer, a device that finishes receiving content
 tells the device it got it from: `Got { content }`, the only message in the
 protocol that asks for nothing. Credited to the certificate the connection
@@ -870,7 +877,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-781 tests in 90 test binaries on Linux, all passing (2026-10-07, debug build,
+784 tests in 90 test binaries on Linux, all passing (2026-10-07, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
@@ -1150,7 +1157,7 @@ network. iOS needs Xcode, which needs a Mac. See
 | A window | Tauri 2, no framework and no build step; designed from the owner's direction ([design/direction.md](design/direction.md)): a translucent sidebar — Home, Files, Devices, Storage, Private Vault set apart, Settings — glass materials over a quiet environment, Inter, Lucide icons, motion that shows what moved |
 | It hosts the daemon | the same one `qurb run` starts, on its own threads |
 | Home | one state — synced, syncing, devices away, add your first device, needs attention — one action, *Send to device*, attention only when something needs a decision, and Recent |
-| Files | a file browser from the index: search, breadcrumbs, folders apart from files, and where each file's bytes are — *On this device*, *Available elsewhere*, *Only copy here*; keep a file here, free its local space, send it, delete it; a details panel naming the devices that hold it |
+| Files | a file browser from the index: search, breadcrumbs, folders apart from files, and where each file's bytes are — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](decisions/0055-a-file-on-no-device-says-so.md)); keep a file here, free its local space, send it, delete it; a details panel naming the devices that hold it |
 | Private Vault | this computer's own files, browsed the same way; moving a file in or out is not built |
 | Devices | who is paired, whether each is connected now and whether directly or through the relay, when each was last reached; removing one, with what that will and will not do said first |
 | Activity | reached from Home: what this device did, paged, with the reason where there is one |
@@ -1259,10 +1266,9 @@ Eight things are known-missing rather than merely unbuilt:
    a phone's copy does not let another device free its own, a phone's
    Private Vault is kept by its first computer, and *Clear data* opens qurb's
    own screen, which says what would be lost. What is left is what no app can
-   prevent: a phone lost or broken before it has synced. And the 18 files lost
-   that day are still listed on both devices as *available elsewhere*, though
-   no device has them: there is no state for a file on no device
-   ([decisions/0054](decisions/0054-a-file-the-other-device-does-not-hold.md)).
+   prevent: a phone lost or broken before it has synced. The 18 files lost
+   that day stay listed on both devices, as *On no device*
+   ([decisions/0055](decisions/0055-a-file-on-no-device-says-so.md)).
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:

@@ -79,9 +79,10 @@ qurb.outstanding()                    // what this device made and nobody else h
 qurb.housekeep()                      // free what nothing needs; run it off the main thread
 ```
 
-Each `FileEntry` says where its bytes are — `Here`, `Elsewhere` or `OnlyHere`,
-decided in the storage crate so the phone and the desktop cannot disagree — and
-whether it is in the phone's own vault.
+Each `FileEntry` says where its bytes are — `Here`, `Elsewhere`, `OnlyHere` or
+`Nowhere` (no device this phone can ask has it, decision 0055), decided in the
+storage crate so the phone and the desktop cannot disagree — and whether it is
+in the phone's own vault.
 
 A phone's own files, and a device to keep them (decision 0036):
 
@@ -136,7 +137,7 @@ qurb.removeDevice(peer.fingerprint, deleteKept = false)
 ```
 
 And two free functions: `engineVersion()` — `qurb 0.1.0 · protocol qurb/2 ·
-index schema 15` — and `qrCode(text)`, the matrix a phone draws to show a
+index schema 17` — and `qrCode(text)`, the matrix a phone draws to show a
 pairing code, so the app needs no image library.
 
 `outstanding()` is the honest answer to "did it get there yet": live files this

@@ -22,7 +22,7 @@ one frosted stage the content floats in:
 | place | what it answers |
 |---|---|
 | Home | is my Qurb space okay? One state (synced, syncing, devices away, add your first device, needs attention), one action — *Send to device* — a line of secondary facts, attention only when something needs a decision, and a little that is recent |
-| Files | the shared area as a file browser: search, breadcrumbs, folders apart from files, and for every file **where its bytes are** — *On this device*, *Available elsewhere*, *Only copy here* — with *Keep here*, *Free local space*, *Send*, *Delete* in its menu. Conflicts at the top ([0043](../../docs/decisions/0043-settling-a-conflict.md)); a folder's options — which devices have it, whether this computer keeps it ([0044](../../docs/decisions/0044-sharing-with-chosen-devices.md), [0045](../../docs/decisions/0045-a-folder-kept-remotely.md)) — from its right-click menu; Recently deleted at the foot ([0042](../../docs/decisions/0042-recently-deleted.md)) |
+| Files | the shared area as a file browser: search, breadcrumbs, folders apart from files, and for every file **where its bytes are** — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* — with *Keep here*, *Free local space*, *Send*, *Delete* in its menu. Conflicts at the top ([0043](../../docs/decisions/0043-settling-a-conflict.md)); a folder's options — which devices have it, whether this computer keeps it ([0044](../../docs/decisions/0044-sharing-with-chosen-devices.md), [0045](../../docs/decisions/0045-a-folder-kept-remotely.md)) — from its right-click menu; Recently deleted at the foot ([0042](../../docs/decisions/0042-recently-deleted.md)) |
 | file details | a panel over the list: type, size, location, which devices hold it, when it changed, its history, and what can be done to it |
 | Devices | this computer and each paired device, whether each is here now; a device's details (send to it, remove it after saying what that does — [0041](../../docs/decisions/0041-removing-a-device.md)); *Add a device* by showing a code or entering one |
 | Storage | free space without losing files: how much can be freed safely, the largest files that would free it, and the allowance |
@@ -46,6 +46,10 @@ offering to free the second is offering to delete it. So: *On this device*,
 *Available elsewhere*, *Only copy here*, each an icon and words, and only the
 last in a colour that asks for attention. *Free local space* is never drawn as
 deleting, and is refused for the only copy with the direction's words for it.
+Since [decision 0055](../../docs/decisions/0055-a-file-on-no-device-says-so.md)
+a fourth, *On no device*, also in that colour: a file not here that no paired
+device has. Its menu and details offer nothing to open or fetch, only
+*Details* and *Delete*, and say why.
 
 ## How it is put together
 

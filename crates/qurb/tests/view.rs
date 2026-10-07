@@ -40,6 +40,14 @@ impl Device {
     fn view(&self) -> View<'_> {
         View::new(&self.store, 0)
     }
+
+    /// A device this one is paired with: only a copy on one of those is a
+    /// copy it can ask for (decision 0055).
+    fn paired(&self, seed: u8) -> DeviceId {
+        let device = DeviceId::from_bytes([seed; 32]);
+        self.store.db().trust_peer(&device, &[seed; 32], "the other device").unwrap();
+        device
+    }
 }
 
 #[test]
@@ -48,10 +56,8 @@ fn a_file_nobody_else_has_is_not_merely_available() {
     device.write("alone.txt", b"the only copy in the world");
     device.write("shared.txt", b"this one is elsewhere too");
 
-    device
-        .store
-        .note_replica(&blake3::hash(b"this one is elsewhere too"), &DeviceId::from_bytes([4; 32]))
-        .unwrap();
+    let other = device.paired(4);
+    device.store.note_replica(&blake3::hash(b"this one is elsewhere too"), &other).unwrap();
 
     let files = device.view().files(None, 100, 0).unwrap();
     let by_path = |name: &str| {
@@ -66,10 +72,8 @@ fn a_file_nobody_else_has_is_not_merely_available() {
 fn a_file_this_device_dropped_reads_as_somewhere_else() {
     let mut device = Device::new();
     device.write("big.bin", &vec![9u8; 40_000]);
-    device
-        .store
-        .note_replica(&blake3::hash(&vec![9u8; 40_000]), &DeviceId::from_bytes([4; 32]))
-        .unwrap();
+    let other = device.paired(4);
+    device.store.note_replica(&blake3::hash(&vec![9u8; 40_000]), &other).unwrap();
 
     let freed = device.store.evict("big.bin").unwrap();
     assert!(freed > 0);
@@ -77,6 +81,36 @@ fn a_file_this_device_dropped_reads_as_somewhere_else() {
     let files = device.view().files(None, 100, 0).unwrap();
     assert_eq!(files[0].availability, Availability::Elsewhere);
     assert_eq!(files[0].size, 40_000, "an evicted file still knows how big it is");
+}
+
+/// Freed here, and the device that kept it is removed: on no device this one
+/// can ask, and said so rather than shown as somewhere else (decision 0055).
+/// On 2026-10-07 a laptop listed 18 files as available elsewhere whose only
+/// copies had gone with a phone's cleared data.
+#[test]
+fn a_file_whose_keeper_is_removed_reads_as_on_no_device() {
+    let mut device = Device::new();
+    device.write("lost.bin", &vec![3u8; 40_000]);
+    let phone = device.paired(5);
+    device.store.note_replica(&blake3::hash(&vec![3u8; 40_000]), &phone).unwrap();
+    device.store.evict("lost.bin").unwrap();
+    assert_eq!(device.view().files(None, 100, 0).unwrap()[0].availability, Availability::Elsewhere);
+
+    device.store.remove_device(&phone, "the old phone", false).unwrap();
+    assert_eq!(device.view().files(None, 100, 0).unwrap()[0].availability, Availability::Nowhere);
+}
+
+/// A copy recorded for a device this one was never paired with -- the device
+/// that made a file, reached through another -- is not one it can ask for.
+#[test]
+fn a_copy_on_a_device_never_paired_is_not_counted() {
+    let mut device = Device::new();
+    device.write("relayed.txt", b"made by a device this one never met");
+    device
+        .store
+        .note_replica(&blake3::hash(b"made by a device this one never met"), &DeviceId::from_bytes([6; 32]))
+        .unwrap();
+    assert_eq!(device.view().files(None, 100, 0).unwrap()[0].availability, Availability::OnlyHere);
 }
 
 #[test]

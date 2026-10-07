@@ -73,6 +73,47 @@ pub async fn report_holdings(
     told
 }
 
+/// Ask a peer whether it holds what it is recorded as holding: content of
+/// files freed here, a few per pass and each once (decision 0055).
+///
+/// A copy is recorded on the word of the device that made the file, or of a
+/// report, and nothing took it back when that device freed its own. So a
+/// phone listed 7 files as on the laptop that the laptop had freed long
+/// before, and that no device had any more. A copy denied is marked as one
+/// this device cannot ask for, and the file is shown as on no device.
+///
+/// Best effort, like [`report_holdings`]: it corrects what a screen says, and
+/// never fails a sync. Returns how many were asked.
+pub async fn check_holders(
+    client: &PeerClient,
+    store: &Store,
+    peer: &qurb_sync::DeviceId,
+    limit: usize,
+) -> usize {
+    let claims = match store.db().unconfirmed_holdings(peer, limit) {
+        Ok(claims) => claims,
+        Err(e) => {
+            tracing::debug!(error = %e, "could not work out what to ask");
+            return 0;
+        }
+    };
+    let mut asked = 0;
+    for content in claims {
+        let recorded = match client.manifest(*content.as_bytes()).await {
+            Ok(Some(_)) => store.db().note_confirmed(peer, &content),
+            Ok(None) => store.db().note_not_held(peer, &content),
+            // The connection is probably gone; the rest wait for next time.
+            Err(_) => break,
+        };
+        if let Err(e) = recorded {
+            tracing::debug!(error = %e, "could not record what the peer said");
+            break;
+        }
+        asked += 1;
+    }
+    asked
+}
+
 /// Serves the engine's content requests from a connected peer.
 ///
 /// Holds the local store as well as the connection, because most of what a
@@ -82,6 +123,8 @@ pub struct NetworkSource<'a> {
     client: &'a PeerClient,
     local: &'a Store,
     runtime: tokio::runtime::Handle,
+    /// The device at the other end, where the caller knows it.
+    peer: Option<qurb_sync::DeviceId>,
 }
 
 impl<'a> NetworkSource<'a> {
@@ -93,7 +136,14 @@ impl<'a> NetworkSource<'a> {
     /// cannot do — it would deadlock rather than fail, which is why this
     /// captures the handle up front and panics here instead.
     pub fn new(client: &'a PeerClient, local: &'a Store) -> Self {
-        Self { client, local, runtime: tokio::runtime::Handle::current() }
+        Self { client, local, runtime: tokio::runtime::Handle::current(), peer: None }
+    }
+
+    /// Name the device at the other end, so that its saying it does not hold
+    /// something is recorded against it (decision 0055).
+    pub fn for_peer(mut self, device: Option<qurb_sync::DeviceId>) -> Self {
+        self.peer = device;
+        self
     }
 }
 
@@ -105,6 +155,16 @@ impl ContentSource for NetworkSource<'_> {
         });
 
         result.map_err(for_the_engine)
+    }
+
+    /// Record against the device at the other end that it does not hold this,
+    /// when the caller said which device that is.
+    fn not_held(&mut self, content: &[u8; 32]) {
+        if let Some(peer) = &self.peer {
+            if let Err(e) = self.local.db().note_not_held(peer, &blake3::Hash::from(*content)) {
+                tracing::debug!(error = %e, "could not record that the peer does not hold it");
+            }
+        }
     }
 
     /// Tell the peer we now hold it.

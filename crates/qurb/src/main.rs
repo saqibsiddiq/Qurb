@@ -1261,6 +1261,8 @@ fn mark(availability: qurb_cli::Availability) -> &'static str {
         qurb_cli::Availability::Here => "here",
         qurb_cli::Availability::Elsewhere => "not here",
         qurb_cli::Availability::OnlyHere => "only here",
+        // Decision 0055: no device this one can ask has it.
+        qurb_cli::Availability::Nowhere => "nowhere",
     }
 }
 

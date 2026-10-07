@@ -308,11 +308,19 @@ async fn a_file_the_peer_does_not_hold_is_listed_not_failed_every_sync() {
         .record(qurb_storage::db::Event::Failed, Some("photo.jpg"), None, None, Some("not there"))
         .unwrap();
 
+    let laptop_id = laptop.engine.store().device_id().unwrap();
     let tree = client.tree().await.unwrap();
     let plan = phone.engine.plan_against(&tree).unwrap();
-    let stats = phone.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    let mut source = NetworkSource::new(&client, &reader).for_peer(Some(laptop_id));
+    let stats = phone.engine.apply_plan(&plan, &mut source).unwrap();
     assert!(stats.failures.is_empty(), "{:?}", stats.failures);
     assert_eq!(fs::read(phone.root.join("here.txt")).unwrap(), b"still on the laptop");
+    // And not shown as on the laptop, which made it and said it has it not.
+    let listed = phone.engine.store().db().folder_entry("photo.jpg").unwrap().unwrap();
+    assert_eq!(listed.availability, qurb_storage::db::Availability::Nowhere);
+    // With the time it was made, not 1970.
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    assert!((listed.mtime_ns / 1_000_000_000 - now).abs() < 600, "listed as changed at {}", listed.mtime_ns);
     let failed = phone.engine.store().db().activity_for("photo.jpg", 10).unwrap();
     assert!(
         failed.iter().all(|e| e.kind != qurb_storage::db::Event::Failed),
@@ -377,4 +385,56 @@ async fn a_file_asked_for_that_the_peer_does_not_hold_still_fails() {
         .filter(|e| e.kind == qurb_storage::db::Event::Failed)
         .count();
     assert_eq!(failed, 1, "the same failure recorded on every sync");
+}
+
+/// A copy this device was told of -- by the device that made the file -- and
+/// that device freed since, is asked about once and then not counted
+/// (decision 0055). A copy that is there is asked about once and confirmed.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_copy_recorded_for_a_peer_is_asked_about_once() {
+    let mut laptop = Device::new();
+    let mut phone = Device::new();
+    introduce(&laptop, &phone);
+    let laptop_id = laptop.engine.store().device_id().unwrap();
+
+    laptop.write("gone.bin", b"the laptop freed this later");
+    laptop.write("kept.bin", b"the laptop still has this");
+
+    // The phone takes both, and records the laptop as holding them, as the
+    // device that made them.
+    let (addr, fingerprint) = serve(&laptop, &[phone.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&phone.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&phone.root);
+    let tree = client.tree().await.unwrap();
+    let plan = phone.engine.plan_against(&tree).unwrap();
+    phone.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+
+    // Then each frees its copy: the laptop of one, on the strength of a third
+    // device; the phone of both, on the strength of the laptop.
+    let third = qurb_sync::DeviceId::from_bytes([9; 32]);
+    let gone = blake3::hash(b"the laptop freed this later");
+    let mut laptop_store = Store::open(&laptop.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&laptop.root);
+    laptop_store.db().note_replica(&gone, &third).unwrap();
+    laptop_store.free_local("gone.bin").unwrap();
+    phone.engine.store_mut().free_local("gone.bin").unwrap();
+    phone.engine.store_mut().free_local("kept.bin").unwrap();
+
+    let availability = |phone: &Device, path: &str| {
+        phone.engine.store().db().folder_entry(path).unwrap().unwrap().availability
+    };
+    use qurb_storage::db::Availability;
+    assert_eq!(availability(&phone, "gone.bin"), Availability::Elsewhere, "setup");
+
+    let asked = qurb_peer::check_holders(&client, phone.engine.store(), &laptop_id, 16).await;
+    let again = qurb_peer::check_holders(&client, phone.engine.store(), &laptop_id, 16).await;
+    client.close();
+
+    assert_eq!(asked, 2);
+    assert_eq!(again, 0, "asked again about what was settled");
+    assert_eq!(availability(&phone, "gone.bin"), Availability::Nowhere);
+    assert_eq!(availability(&phone, "kept.bin"), Availability::Elsewhere);
 }

@@ -1,6 +1,7 @@
 # 0032 — The interface hosts the daemon, and asks it nouns
 
-**Status:** Accepted
+**Status:** Accepted — availability gained a fourth value, *on no device*, in
+[0055](0055-a-file-on-no-device-says-so.md)
 **Date:** 2026-09-23
 
 ## Decision
@@ -83,6 +84,11 @@ offered to free the second would be offering to delete it.
 This is the same distinction the storage cap enforces
 ([decision 0025](0025-a-storage-cap-that-cannot-lose-data.md)); making it
 visible is what lets an interface be honest about what "free up space" will do.
+
+*(2026-10-07: a fourth, `Nowhere`, for a file not here that no device this
+one can ask has -- the other side of the same honesty. Before it, every file
+not here read as available elsewhere, and 18 lost files did. See
+[0055](0055-a-file-on-no-device-says-so.md).)*
 
 ## Search is by name
 

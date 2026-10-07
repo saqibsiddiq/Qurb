@@ -987,9 +987,9 @@ pub struct Entry {
     size: String,
     /// Unix seconds, when the file was last changed.
     modified: i64,
-    /// "here", "elsewhere" or "only here" -- decision 0032's three, which the
-    /// window words as *On this device*, *Available elsewhere* and *Only copy
-    /// here*.
+    /// "here", "elsewhere", "only here" or "nowhere" -- decision 0032's three,
+    /// which the window words as *On this device*, *Available elsewhere* and
+    /// *Only copy here*, and decision 0055's *On no device*.
     availability: &'static str,
     /// In this device's own vault rather than the shared area.
     private: bool,
@@ -1004,6 +1004,7 @@ fn as_entry(e: qurb_storage::db::FolderEntry) -> Entry {
             Availability::Here => "here",
             Availability::Elsewhere => "elsewhere",
             Availability::OnlyHere => "only here",
+            Availability::Nowhere => "nowhere",
         },
         private: e.private,
     }
@@ -1148,8 +1149,14 @@ fn on_disk(hosted: &Hosted, path: &str) -> Answer<std::path::PathBuf> {
         .with_store(|store| Ok(store.db().folder_entry(path)?))
         .map_err(failed)?
         .ok_or("that file is not in qurb any more")?;
-    if here.availability == Availability::Elsewhere {
-        return Err("that file is not on this device — keep it here first".to_string());
+    match here.availability {
+        Availability::Elsewhere => {
+            return Err("that file is not on this device — keep it here first".to_string())
+        }
+        Availability::Nowhere => {
+            return Err("no device this one syncs with has that file any more".to_string())
+        }
+        Availability::Here | Availability::OnlyHere => {}
     }
     Ok(hosted.root().join(path))
 }

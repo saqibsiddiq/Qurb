@@ -24,6 +24,7 @@ const FILES = [
   { path: "Work/archive.tar.gz", size: "912000000", modified: now - 900000, availability: "elsewhere", private: false },
   { path: "Budget 2026.xlsx", size: "88000", modified: now - 7200, availability: "only here", private: false },
   { path: "Interview.m4a", size: "31000000", modified: now - 190000, availability: "elsewhere", private: false },
+  { path: "Lost with an old phone.jpg", size: "2100000", modified: now - 900000, availability: "nowhere", private: false },
   { path: "Passport scan.pdf", size: "1200000", modified: now - 400000, availability: "here", private: true },
   { path: "Tax/2025 return.pdf", size: "640000", modified: now - 800000, availability: "only here", private: true },
 ];

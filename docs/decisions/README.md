@@ -58,7 +58,7 @@ is worth more than a tidy directory.
 | [0029](0029-two-areas-shared-and-private.md) | Two areas: one shared, one private per device | Accepted, extended by 0036 |
 | [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted, amended by 0037, extended by 0036; a delivery sent again is acknowledged, and a phone lets go of delivered sends only when asked by name, since 2026-10-07 |
 | [0031](0031-what-happened-is-written-down.md) | What happened is written down | Accepted |
-| [0032](0032-the-interface-hosts-the-daemon.md) | The interface hosts the daemon, and asks it nouns | Accepted |
+| [0032](0032-the-interface-hosts-the-daemon.md) | The interface hosts the daemon, and asks it nouns | Accepted — availability's fourth value in 0055 |
 | [0033](0033-the-phrase-on-a-screen.md) | The recovery phrase on a screen | Superseded by 0052 for setup: no phrase shown or checked; showing it in Settings stands |
 | [0034](0034-finding-each-other-with-no-server.md) | Finding each other with no server | Accepted |
 | [0035](0035-a-rendezvous-on-a-bare-address.md) | A rendezvous on a bare address | Accepted |
@@ -67,7 +67,7 @@ is worth more than a tidy directory.
 | [0038](0038-the-storage-question-during-setup.md) | The storage question is asked during setup | Accepted — built |
 | [0039](0039-a-light-android-app.md) | A light Android app, on the platform's own views | Accepted |
 | [0040](0040-the-menu-opens-the-window.md) | The applications menu opens the window | Accepted |
-| [0041](0041-removing-a-device.md) | Removing a device | Accepted — built on the desktop, the phone and the command line |
+| [0041](0041-removing-a-device.md) | Removing a device | Accepted — built on the desktop, the phone and the command line; what only it kept reads as on no device since 0055 |
 | [0042](0042-recently-deleted.md) | Recently deleted | Accepted — built on the desktop, the phone and the command line |
 | [0043](0043-settling-a-conflict.md) | Settling a conflict | Accepted — built on the desktop, the phone and the command line |
 | [0044](0044-sharing-with-chosen-devices.md) | Sharing a folder with chosen devices | Accepted — built on the desktop, the phone and the command line |
@@ -80,4 +80,5 @@ is worth more than a tidy directory.
 | [0051](0051-bbr-not-cubic.md) | QUIC paces by measured bandwidth (BBR), not by loss (Cubic) | Accepted — built; 2.5× from the phone over Wi-Fi, measured with the spike |
 | [0052](0052-the-key-travels-with-the-code.md) | The key travels with the pairing code; nobody writes 24 words down | Accepted — built on the command line, the desktop and Android; the S23 rejoined the laptop with a code |
 | [0053](0053-approval-same-key-and-safe-copies.md) | Pairing is approved, checks the key, and a phone's copy is not a safe last one | Accepted — built and tested on all three; watched on the S23 with the command line, not in the desktop window |
-| [0054](0054-a-file-the-other-device-does-not-hold.md) | A file the other device does not hold is listed, not failed every sync | Accepted — built, tested, and watched on the S23 |
+| [0054](0054-a-file-the-other-device-does-not-hold.md) | A file the other device does not hold is listed, not failed every sync | Accepted — built, tested, and watched on the S23; extended by 0055 |
+| [0055](0055-a-file-on-no-device-says-so.md) | A file on no device says so | Accepted — built on the desktop, the phone and the command line |

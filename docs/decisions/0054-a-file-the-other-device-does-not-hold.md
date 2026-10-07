@@ -1,6 +1,8 @@
 # 0054 — A file the other device does not hold is listed, not failed every sync
 
-**Status:** Accepted — built and tested; watched on the S23 on 2026-10-07
+**Status:** Accepted — built and tested; watched on the S23 on 2026-10-07;
+extended by [0055](0055-a-file-on-no-device-says-so.md), which shows such a
+file as on no device
 **Date:** 2026-10-07
 
 ## What happened
@@ -61,10 +63,9 @@ device it meets has.
   noise, but kept a manifest round trip per such file on every sync, and the
   phone would not show that the files exist.
 - **A fourth availability, "on no device".** That is the honest way to show
-  these 18 files, and it is not built. Every file not here still shows as
-  *Available elsewhere*, as it did on the laptop before this. Settling it
-  needs knowing which holders still exist. Removing the old phone identity,
-  which is the owner's call, is the first step towards that.
+  these 18 files, and it was not built here. Built the same day, after the
+  owner removed the old phone identity:
+  [0055](0055-a-file-on-no-device-says-so.md).
 - **Marking such files wanted**, so that they arrive by themselves when a
   device that has them is met. It would turn the same files back into a
   failure on every sync with every device that does not have them.

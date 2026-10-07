@@ -153,14 +153,19 @@ function fileRow(f, browser, showFolder) {
   return li;
 }
 
-/** What can be done to a file, in the order people reach for them. */
+/** Whether a file's bytes are on this computer. */
+const isHere = (f) => f.availability === "here" || f.availability === "only here";
+
+/** What can be done to a file, in the order people reach for them. A file on
+ *  no device can be looked at and deleted, and nothing else: there is nothing
+ *  to open and nowhere to fetch it from (decision 0055). */
 function fileActions(f, redraw) {
-  const here = f.availability !== "elsewhere";
+  const here = isHere(f);
   const items = [];
   if (here) {
     items.push(["Open", "external-link", () => openFile(f.path)]);
     items.push(["Show in folder", "folder-search", () => showFile(f.path)]);
-  } else {
+  } else if (f.availability === "elsewhere") {
     items.push(["Keep on this device", "download", () => keepHere(f.path, rowFor(f.path))]);
   }
   if (f.availability === "here") {
@@ -259,7 +264,8 @@ async function openDetails(path) {
 
   const body = el("div", "panel-body");
   const s = stateOf(f.availability);
-  const badge = el("span", `badge ${f.availability === "only here" ? "attention" : f.availability === "here" ? "healthy" : "neutral"}`);
+  const tone = { "only here": "attention", nowhere: "attention", here: "healthy" }[f.availability] ?? "neutral";
+  const badge = el("span", `badge ${tone}`);
   badge.append(icon(wanted.has(f.path) ? "download" : s.icon), el("span", null, wanted.has(f.path) ? "Downloading" : s.words));
   body.append(badge);
   if (f.private) {
@@ -272,9 +278,12 @@ async function openDetails(path) {
   if (f.availability === "only here") {
     body.append(el("p", "note", "This is the only copy currently stored in Qurb. It reaches your other devices the next time one is online."));
   }
+  if (f.availability === "nowhere") {
+    body.append(el("p", "note", "No device this computer syncs with has this file. It was freed here while another device kept it, and that device no longer has it or is no longer paired. It stays listed so you know it existed; deleting it removes it from your devices' lists."));
+  }
 
   const holders = [
-    ...(f.availability === "elsewhere" ? [] : ["This computer"]),
+    ...(isHere(f) ? ["This computer"] : []),
     ...d.holders,
   ];
   const facts = el("dl", "facts");
@@ -282,7 +291,7 @@ async function openDetails(path) {
     ["Type", KIND_WORD[kindOf(f.path)]],
     ["Size", size(f.size)],
     ["Location", `${f.private ? "Private Vault" : "Qurb"}${folderOf(f.path) ? ` / ${folderOf(f.path)}` : ""}`],
-    ["On", holders.length ? holders.join(", ") : "No device has told this one yet"],
+    ["On", holders.length ? holders.join(", ") : f.availability === "nowhere" ? "No device" : "No device has told this one yet"],
     ["Modified", `${when(f.modified)} · ${new Date(f.modified * 1000).toLocaleString()}`],
   ]) {
     facts.append(el("dt", null, term), el("dd", null, value));
@@ -310,14 +319,14 @@ async function openDetails(path) {
   const redraw = () => refreshScreen();
   if (f.availability === "elsewhere") {
     if (!wanted.has(f.path)) add("Keep on this device", "btn primary", "download", () => { keepHere(f.path, rowFor(f.path)); closePanel(); });
-  } else {
+  } else if (isHere(f)) {
     add("Open", "btn primary", "external-link", () => openFile(f.path));
     add("Show in folder", "btn", "folder-search", () => showFile(f.path));
   }
   if (f.availability === "here") {
     add("Free local space", "btn", "cloud-off", () => { closePanel(); freeLocal(f.path, rowFor(f.path), redraw); });
   }
-  if (f.availability !== "elsewhere") add("Send to device…", "btn", "send", () => openSend([`${rootPath}/${f.path}`]));
+  if (isHere(f)) add("Send to device…", "btn", "send", () => openSend([`${rootPath}/${f.path}`]));
   add("Delete", "btn ghost quiet-danger", "trash-2", () => deleteFile(f.path, redraw));
   body.append(actions);
 

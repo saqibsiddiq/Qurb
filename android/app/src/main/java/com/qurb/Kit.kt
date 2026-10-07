@@ -369,8 +369,13 @@ object States {
             State(R.drawable.ic_download, "Downloading", R.color.green)
         entry.available == Available.HERE -> State(R.drawable.ic_hard_drive, "On this phone", R.color.text_3)
         entry.available == Available.ONLY_HERE -> State(R.drawable.ic_triangle_alert, "Only copy here", R.color.attention)
+        // Decision 0055: listed, and no device this phone syncs with has it.
+        entry.available == Available.NOWHERE -> State(R.drawable.ic_circle_alert, "On no device", R.color.attention)
         else -> State(R.drawable.ic_cloud, "Available elsewhere", R.color.neutral)
     }
+
+    /** Whether a file's bytes are on this phone. */
+    fun here(entry: FileEntry): Boolean = entry.available == Available.HERE || entry.available == Available.ONLY_HERE
 
     private val kinds = mapOf(
         R.drawable.ic_file_image to setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "avif", "bmp", "svg", "dng"),

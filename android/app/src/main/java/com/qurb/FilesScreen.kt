@@ -223,7 +223,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             }
         }
         if (query.isEmpty() && !private) sheet.action(R.drawable.ic_folder_plus, "New folder…") { newFolder() }
-        val here = shown.filter { it.available != Available.ELSEWHERE }
+        val here = shown.filter { States.here(it) }
         if (here.isNotEmpty()) {
             sheet.action(R.drawable.ic_save, "Save ${Words.files(here.size)} to this phone…") { app.saveAll(here) }
         }
@@ -248,15 +248,20 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             Available.ONLY_HERE -> "This is the only copy currently stored in Qurb. It reaches your other devices the next time one is online."
             Available.ELSEWHERE -> if (downloading) "Coming to this phone at the next sync."
                 else "Not on this phone right now. It stays in Qurb; keep it here to open it."
+            Available.NOWHERE -> "No device this phone syncs with has this file. It was freed while another " +
+                "device kept it, and that device no longer has it or is no longer paired. It stays listed so " +
+                "you know it existed; deleting it removes it from your devices' lists."
         })
         kit.item(group, "${States.kind(entry.path)}  ·  ${Words.size(entry.size)}",
             "Changed ${Words.ago(entry.modifiedAt / 1_000_000_000)}")
         sheet.view(facts, top = 16)
 
-        val here = entry.available != Available.ELSEWHERE
+        // A file on no device can be read about and deleted, and nothing
+        // else: there is nothing to open and nowhere to fetch it from.
+        val here = States.here(entry)
         if (here) {
             sheet.action(R.drawable.ic_external_link, "Open") { app.open(entry) }
-        } else if (!downloading) {
+        } else if (entry.available == Available.ELSEWHERE && !downloading) {
             sheet.action(R.drawable.ic_download, "Keep on this phone") { fetch(entry) }
         }
         if (entry.available == Available.HERE) {
@@ -443,7 +448,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             val name = if (query.isNotEmpty()) entry.path else entry.path.substringAfterLast('/')
             val meta = "${Words.size(entry.size)}  ·  ${Words.ago(entry.modifiedAt / 1_000_000_000)}"
             kit.bindRow(row, States.icon(entry.path), name, meta, States.of(entry, downloading)) { choose(entry) }
-            row.tile.alpha = if (entry.available == Available.ELSEWHERE && !downloading) 0.7f else 1f
+            row.tile.alpha = if (!States.here(entry) && !downloading) 0.7f else 1f
         }
 
         fun bind(link: Item.Link) {

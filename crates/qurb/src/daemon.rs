@@ -992,6 +992,12 @@ impl Daemon {
             if told > 0 {
                 tracing::debug!(peer = %peer.short(), told, "reported holdings");
             }
+            // And the other way: what it is recorded as holding for files
+            // freed here, asked a few at a time (decision 0055).
+            let asked = qurb_peer::check_holders(&client, &reader, &known.device_id, 16).await;
+            if asked > 0 {
+                tracing::debug!(peer = %peer.short(), asked, "asked what it holds");
+            }
         }
 
         if plan.is_empty() {
@@ -1012,7 +1018,7 @@ impl Daemon {
             .collect();
 
         let outcome = tokio::task::block_in_place(|| {
-            let mut source = qurb_peer::NetworkSource::new(&client, &reader);
+            let mut source = qurb_peer::NetworkSource::new(&client, &reader).for_peer(peer_device);
             let mut progress = Reporting::new(self.status.as_ref(), from);
             engine.apply_plan_reporting(&plan, &mut source, &mut progress)
         })?;

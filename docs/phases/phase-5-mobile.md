@@ -1812,10 +1812,40 @@ other. Its history holds no failures now. Its three files that are here were
 untouched. Read from the phone's database; the screen itself was not looked
 at, the phone being in use.
 
-What is still not right: the 18 files show as *available elsewhere*, on the
-phone and on the laptop, though no device has them. There is no state for a
-file on no device. Removing the phone's old identity from the laptop, the
-owner's call, is the first step towards one.
+What was still not right: the 18 files showed as *available elsewhere*, on
+the phone and on the laptop, though no device had them. The next section
+settles it.
+
+### On no device
+
+The owner asked for the old phone identity to be removed and this finished.
+[Decision 0055](../decisions/0055-a-file-on-no-device-says-so.md) gives
+availability a fourth value, *On no device*: not here, and no device this one
+can ask is known to have it. The window and the phone show it in the
+attention colour, and offer only *Details* and *Delete*. A copy counts only on
+a paired device. Each sync asks the other device about up to 16 of the copies
+it is recorded as holding, of files freed here, each once. That catches a
+record made on the word of whoever made a file, which nothing withdrew when
+that device freed its own.
+
+On the laptop, at 20:04, `qurb remove-device 7a4ebf0c --yes` removed the old
+phone identity and kept the one 244 KiB file the laptop keeps for it. Its
+preview named 7 files freed on its strength. The other 11 already had that
+copy marked out of reach. On the new build (index schema 17, the old index
+kept as `index.before-schema-17.db`), `qurb ls` lists the 18 as `nowhere` and
+the 3 files that are here as `here`. The window's Files list was looked at
+against the fixtures, with a file in the new state.
+
+On the phone, with the new APK, *Sync now* at 20:16. The phone's index
+upgraded to schema 17. The sync asked the laptop about the 7 files it was
+recorded as holding, and the laptop said it holds none of them. The other 11
+were recorded only for the old phone identity, which this phone was never
+paired with. All 18 read *On no device* in Files, in the attention colour,
+and Home's *Recent* showed no failures. One thing was wrong on screen: each
+said "20734 days ago". A file listed without its bytes had been given a time
+of 0, which is 1970. It now carries the time its version was made, and rows
+already written fall back to when the row last changed: 18 to 24 September
+for these. That is built and installed, and not yet looked at on the screen.
 
 ## Deliberately left undone
 

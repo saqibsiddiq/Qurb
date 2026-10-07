@@ -1,6 +1,7 @@
 # 0041 — Removing a device
 
-**Status:** Accepted
+**Status:** Accepted — files kept only by a removed device read as *on no
+device* since [0055](0055-a-file-on-no-device-says-so.md)
 **Date:** 2026-09-28
 
 ## Decision
@@ -27,7 +28,8 @@ it cannot actually do. From the Devices screen on either platform, or
    is refused on the strength of it from then on.
 6. **Files already freed on the strength of it are named first**, with the
    offer to fetch them before removing it. Afterwards they have nowhere to come
-   back from.
+   back from, and since [0055](0055-a-file-on-no-device-says-so.md) each says
+   so: *On no device*.
 7. **It is removed from this device only.** The person's other devices go on
    trusting it until it is removed on each of them. The question says that
    too.

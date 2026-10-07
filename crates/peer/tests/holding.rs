@@ -114,6 +114,19 @@ async fn a_phone_frees_a_photo_the_desktop_holds_and_gets_it_back() {
     phone.engine.store_mut().evict("IMG_0001.jpg").unwrap();
     assert!(!phone.root.join("IMG_0001.jpg").exists());
 
+    // Asked whether it holds the freed photo, the desktop says it does:
+    // a phone's own file kept for it is not shown as on no device
+    // (decision 0055).
+    let (addr, fingerprint) = desktop.serve(phone.identity.fingerprint());
+    let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    let asked = qurb_peer::check_holders(&client, phone.engine.store(), &desktop.id(), 16).await;
+    client.close();
+    assert_eq!(asked, 1);
+    assert_eq!(
+        phone.engine.store().db().folder_entry("IMG_0001.jpg").unwrap().unwrap().availability,
+        qurb_storage::db::Availability::Elsewhere
+    );
+
     phone.engine.store().db().want("IMG_0001.jpg").unwrap();
     let back = phone.sync_from(&desktop).await;
     assert_eq!(back.adopted, 1);

@@ -510,6 +510,7 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 .state.here { color: var(--text-3); }
 .state.elsewhere { color: var(--neutral); }
 .state.only { color: var(--attention); }
+.state.nowhere { color: var(--attention); }
 .state.moving { color: var(--green); }
 .state.private { color: var(--text-2); }
 

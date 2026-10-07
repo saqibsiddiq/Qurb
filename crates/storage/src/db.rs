@@ -29,7 +29,8 @@ use std::path::Path;
 /// what lets one open the other's index (decision 0047).
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
-const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16];
+const MIGRATIONS: &[&str] =
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -476,6 +477,27 @@ CREATE TABLE IF NOT EXISTS local_facts (
 ) STRICT;
 "#;
 
+const V17: &str = r#"
+-- Copies this device has confirmed by asking the device recorded as holding
+-- them (decision 0055). A copy is recorded on the word of the device that
+-- made the file, or of a report, and stays recorded after that device frees
+-- it. Asked once per device and content, a few at each sync.
+CREATE TABLE IF NOT EXISTS confirmed (
+    device_id    BLOB NOT NULL,
+    content_hash BLOB NOT NULL,
+    at           INTEGER NOT NULL,
+    PRIMARY KEY (device_id, content_hash)
+) STRICT;
+"#;
+
+/// A copy this device could ask for: on a device it is paired with, and not
+/// known to be out of reach (decision 0055). For a query over `replicas r`.
+///
+/// What a person is shown as "on another device". A copy recorded for a device
+/// never paired with this one -- the device that made a file, reached through
+/// another -- or for one since removed is a copy this device cannot get back.
+const ASKABLE: &str = "r.private = 0 AND EXISTS (SELECT 1 FROM peers p WHERE p.device_id = r.device_id)";
+
 /// A copy held by a device not known to be a phone (decision 0053): the other
 /// copy that lets this device free its own. For a query over `replicas r`.
 const SAFE_ELSEWHERE: &str = "NOT EXISTS (SELECT 1 FROM peer_kinds k
@@ -828,13 +850,68 @@ impl Db {
         Ok(n as usize)
     }
 
+    /// Other devices holding these bytes that this device could ask for them:
+    /// paired, and not known to be out of reach ([`ASKABLE`]).
     pub fn replica_count(&self, content: &blake3::Hash) -> Result<usize> {
         let n: i64 = self.conn.query_row(
-            "SELECT count(*) FROM replicas WHERE content_hash = ?1 AND private = 0",
+            &format!("SELECT count(*) FROM replicas r WHERE r.content_hash = ?1 AND {ASKABLE}"),
             params![content.as_bytes().as_slice()],
             |r| r.get(0),
         )?;
         Ok(n as usize)
+    }
+
+    /// Content of files freed here that `device` is recorded as holding and
+    /// has not been asked about: what a sync with it asks, a few at a time
+    /// (decision 0055).
+    pub fn unconfirmed_holdings(&self, device: &DeviceId, limit: usize) -> Result<Vec<blake3::Hash>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT f.content_hash
+               FROM files f
+               JOIN replicas r ON r.content_hash = f.content_hash
+              WHERE f.deleted_at IS NULL
+                AND f.materialised = 0
+                AND (f.scope IS NULL OR f.scope = (SELECT device_id FROM local WHERE id = 1))
+                AND r.device_id = ?1 AND r.private = 0
+                AND NOT EXISTS (
+                      SELECT 1 FROM confirmed c
+                       WHERE c.device_id = ?1 AND c.content_hash = f.content_hash
+                    )
+              LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![device.as_bytes().as_slice(), limit as i64], |r| {
+            let raw: Vec<u8> = r.get(0)?;
+            Ok(to_hash(&raw))
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// `device` said it holds this content.
+    pub fn note_confirmed(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO confirmed (device_id, content_hash, at) VALUES (?1, ?2, unixepoch())
+             ON CONFLICT (device_id, content_hash) DO UPDATE SET at = excluded.at",
+            params![device.as_bytes().as_slice(), content.as_bytes().as_slice()],
+        )?;
+        Ok(())
+    }
+
+    /// `device`, recorded as holding this content, said it does not: a copy
+    /// this device cannot ask for, as a removed device's is
+    /// ([`forget_peer`](Self::forget_peer)). Marked rather than deleted, for
+    /// the same reason; a later report of holding it marks it back.
+    pub fn note_not_held(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {
+        let id = device.as_bytes().as_slice();
+        let content = content.as_bytes().as_slice();
+        self.conn.execute(
+            "UPDATE replicas SET private = 1 WHERE device_id = ?1 AND content_hash = ?2",
+            params![id, content],
+        )?;
+        self.conn.execute(
+            "DELETE FROM confirmed WHERE device_id = ?1 AND content_hash = ?2",
+            params![id, content],
+        )?;
+        Ok(())
     }
 
     /// The other devices holding these bytes that would hand them back: the
@@ -842,11 +919,11 @@ impl Db {
     /// reported first. Vault deliveries are left out for the same reason as in
     /// [`replica_count`](Self::replica_count).
     pub fn holders_of_content(&self, content: &blake3::Hash) -> Result<Vec<DeviceId>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT device_id FROM replicas
-              WHERE content_hash = ?1 AND private = 0
-              ORDER BY at DESC",
-        )?;
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT r.device_id FROM replicas r
+              WHERE r.content_hash = ?1 AND {ASKABLE}
+              ORDER BY r.at DESC"
+        ))?;
         let rows = stmt.query_map(params![content.as_bytes().as_slice()], |r| r.get::<_, Vec<u8>>(0))?;
         let mut holders = Vec::new();
         for raw in rows {
@@ -1571,9 +1648,13 @@ impl Db {
         tail: &str,
     ) -> Result<Vec<FolderEntry>> {
         let mut stmt = self.conn.prepare(&format!(
-            "SELECT f.path, f.size, f.mtime_ns, f.materialised, f.scope IS NOT NULL,
+            "SELECT f.path, f.size,
+                    -- A file listed without its bytes was given no time
+                    -- before 2026-10-07; when it last changed here stands in.
+                    CASE WHEN f.mtime_ns = 0 THEN f.updated_at * 1000000000 ELSE f.mtime_ns END,
+                    f.materialised, f.scope IS NOT NULL,
                     EXISTS (SELECT 1 FROM replicas r
-                             WHERE r.content_hash = f.content_hash AND r.private = 0)
+                             WHERE r.content_hash = f.content_hash AND {ASKABLE})
                FROM files f
               WHERE f.deleted_at IS NULL
                 AND (f.scope IS NULL OR f.scope = (SELECT device_id FROM local WHERE id = 1))
@@ -2786,11 +2867,13 @@ fn file_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<FileRow> {
 
 /// Where a file's bytes are, from this device's point of view.
 ///
-/// Three values, not two. A file that is here and also on another device, and
+/// More than two values. A file that is here and also on another device, and
 /// a file that is here and nowhere else in the world, look identical to
 /// anything that only checks whether the bytes are on disk -- and offering to
-/// free the second is offering to delete it. Decided here, once, so that the
-/// desktop's window and the phone's app cannot disagree about it.
+/// free the second is offering to delete it. So do, from the other side, a
+/// file freed here that another device has and one no device has any more
+/// (decision 0055). Decided here, once, so that the desktop's window and the
+/// phone's app cannot disagree about it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Availability {
     /// In the folder, openable now, and another device holds it too.
@@ -2800,6 +2883,11 @@ pub enum Availability {
     /// In the folder, and no other device is known to hold it. While this is
     /// true, losing this device loses the file.
     OnlyHere,
+    /// Known about, not here, and no device this one can ask is known to hold
+    /// it (decision 0055): freed here on the strength of a copy since lost,
+    /// or kept by a device since removed. Listed, so that it is not mistaken
+    /// for a file never made, and offered to nobody as something to fetch.
+    Nowhere,
 }
 
 impl Availability {
@@ -2809,7 +2897,8 @@ impl Availability {
         match (here, elsewhere) {
             (true, true) => Availability::Here,
             (true, false) => Availability::OnlyHere,
-            (false, _) => Availability::Elsewhere,
+            (false, true) => Availability::Elsewhere,
+            (false, false) => Availability::Nowhere,
         }
     }
 }

@@ -77,6 +77,13 @@ pub trait ContentSource {
     /// delivery that then failed would be worse than reporting none, because
     /// it is evidence the other device may drop its own copy on.
     fn received(&mut self, _content: &[u8; 32]) {}
+
+    /// Told when the source said it does not hold content it was asked for,
+    /// once the engine has recorded the file as elsewhere. A source that knows
+    /// which device it is records that the device does not have it, so the
+    /// file is not shown as on that device (decision 0055). The default, for
+    /// a source with no device behind it, does nothing.
+    fn not_held(&mut self, _content: &[u8; 32]) {}
 }
 
 /// Told about content as it arrives from another device, so that something
@@ -741,6 +748,9 @@ impl Engine {
                         let _ = std::fs::remove_file(&staging);
                         self.store_mut().know_elsewhere(version)?;
                         self.store().db().forget_failures(&version.path)?;
+                        // Last: recording the file notes its author as
+                        // holding it, which the source may just have denied.
+                        source.not_held(hash);
                         return Ok(());
                     }
                     Err(e) => return Err(e),

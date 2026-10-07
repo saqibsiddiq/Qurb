@@ -678,6 +678,12 @@ then.*
   Settings; the key row in Settings; the laptop becoming the phone's vault
   keeper.
 - [ ] Watched in the desktop window: its approval panel and key row.
+- [x] Files no device has any more say so — 2026-10-07
+  ([0054](decisions/0054-a-file-the-other-device-does-not-hold.md),
+  [0055](decisions/0055-a-file-on-no-device-says-so.md)): the phone no
+  longer fails on them at every sync, and both devices list the 18 lost on
+  2026-10-05 as *On no device*; the old phone identity is removed from the
+  laptop.
 - [ ] A phone letting go of its copies of sent files, watched
   ([0030](decisions/0030-sending-a-file-to-one-device.md), 2026-10-07): the
   storage screen's line was seen; the S23's one such copy is probably the
