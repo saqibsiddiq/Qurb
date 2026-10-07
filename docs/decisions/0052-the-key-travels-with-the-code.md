@@ -39,7 +39,9 @@ Chosen by the owner from three questions put to him the same day:
    few bytes per app. It survives a reinstall, and when the phone has a screen
    lock it is backed up end-to-end encrypted with that lock, so a phone
    restored from this one's backup gets the key back. Setup offers *Use the
-   key from your Google backup* when one is there.
+   key from your Google backup* when one is there. It does **not** survive
+   *Clear data*, found on 2026-10-08: a phone whose data is cleared joins
+   its other devices with a code instead (see *Checked, and not*).
 
 The 24 words still exist. They are the key's spelling, and the key's
 derivations are unchanged. *Use my 24 words instead* stays as a way in for
@@ -142,8 +144,17 @@ elsewhere, such as a replica, and join their rendezvous group. So:
   SM-S911B. The test device was then removed from the phone and its folder
   deleted.
 - **Block Store gives the key back**, 2026-10-08: the phone's Settings read
-  it back and found it is this phone's own. Not after a wipe, which would
-  mean clearing the phone.
+  it back and found it is this phone's own.
+- **Across a reinstall, and not across *Clear data***, 2026-10-08, on the S23
+  with a second copy of the app installed beside the real one
+  (`-Pqurb.idSuffix=.storetest`, its own package and its own Block Store), so
+  the person's was never touched. Set up, the copy's key was kept and read
+  back. After `pm clear`, setup offered no backup and Block Store returned
+  nothing: clearing an app's data clears its Block Store too. Set up again
+  (key fingerprint `12ab1d9d…`), uninstalled and reinstalled, setup offered
+  *Use the key from your Google backup*, and the key it gave was the same
+  fingerprint. A whole phone restored from a Google backup is still not
+  watched.
 - **The window's *I already use Qurb***, 2026-10-08, in the real window
   (`SMOKE_MODE=join scripts/desktop-smoke.sh`): a computer not set up, given
   another device's code, showed the number to approve at, and was set up
@@ -151,7 +162,7 @@ elsewhere, such as a replica, and join their rendezvous group. So:
   other device was the command line rather than the phone; the window's path
   is the same either way.
 - **Not yet watched**: joining by scanning (the same `join_new`, behind the
-  camera); a phone set up again from Block Store after a wipe.
+  camera); a new phone restored from this one's Google backup.
 
 ## Reversing it
 

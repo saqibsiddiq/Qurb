@@ -1907,9 +1907,30 @@ key and paired it. The test device was then removed on the phone. *Not seen
 yet* told it apart from the real laptop of the same name, which shows *Last
 seen just now*. Its folder was deleted.
 
+**Block Store across a reinstall, and not across *Clear data*.** A second
+copy of the app, built with `-Pqurb.idSuffix=.storetest`, installs beside
+the real one with its own package, its own data and its own Block Store.
+Every step below happened to that copy. The person's app and key were not
+touched, and its store was checked to be intact afterwards. Each key was
+fingerprinted by hashing its 24 words off the screen, and the words were
+never printed.
+
+| step | setup offered the backup | key |
+|---|---|---|
+| set up as new | — | `3a400287…`, read back from Block Store |
+| `pm clear`, the same as *Clear data* | no | Block Store returned nothing |
+| set up as new again | — | `12ab1d9d…`, read back |
+| uninstalled, reinstalled | yes | *Use the key from your Google backup* gave `12ab1d9d…` |
+
+So Block Store carries the key across a reinstall, as decision 0052 says. It
+does not carry it across *Clear data*, which empties it along with the rest.
+That is what was cleared on 2026-10-05, so Block Store would not have
+helped then. A phone that has been cleared joins its other devices with a
+code, which is why the Clear-data screen says so. The test copy was cleared,
+which removed its key from Block Store, and then uninstalled.
+
 Still not watched: scanning a pairing code with the camera, which needs
-somebody to point the phone; and a phone set up again from Block Store after
-a wipe.
+somebody to point the phone; and a new phone restored from a Google backup.
 
 ## Deliberately left undone
 

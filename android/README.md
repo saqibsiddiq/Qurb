@@ -296,6 +296,20 @@ whose computer was switched off reported "no paired devices" and pushed its
 next sync further and further away. See
 [decision 0020](../docs/decisions/0020-sync-takes-a-deadline.md#found-on-a-phone).
 
+## A second copy, for trying what wipes data
+
+```bash
+cd android && gradle assembleDebug -Pqurb.idSuffix=.storetest
+```
+
+builds the app as `com.qurb.storetest`. It installs beside the real one with
+its own data, its own keystore and its own Block Store, and it builds without
+push, since Firebase knows only `com.qurb`. That is how *Clear data* and a
+reinstall were tried on the S23 without touching the person's app
+([phase 5](../docs/phases/phase-5-mobile.md#finishing-what-was-left)). Clear
+its data before uninstalling it: that removes its key from Block Store, and
+an uninstall alone does not.
+
 ## Signing
 
 A release APK (`./scripts/android-app.sh release`) is signed when

@@ -13,6 +13,10 @@ import kotlin.coroutines.resumeWithException
 /**
  * This phone's key, kept by Google Play services' Block Store (decision 0052).
  *
+ * Kept across a reinstall, and not across *Clear data*, which empties it with
+ * the rest -- both seen on the S23 on 2026-10-08. A cleared phone joins its
+ * other devices with a code.
+ *
  * Instead of a person writing 24 words down: Block Store keeps a few bytes for
  * an app, carries them across a reinstall, and — when the phone has a screen
  * lock — backs them up end to end encrypted with it, so a new phone restored

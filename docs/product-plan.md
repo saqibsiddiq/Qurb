@@ -695,8 +695,9 @@ then.*
 - [ ] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):
   ~~the S23 joining the laptop with a code~~ (typed, 2026-10-05); scanning it;
   ~~a computer joining with the phone's code and taking its key~~ (the command
-  line, 2026-10-08); ~~Block Store returning the key~~ (read back and compared
-  in Settings, 2026-10-08; not after a wipe).
+  line, 2026-10-08); ~~Block Store returning the key~~ (read back in
+  Settings, and restored after a reinstall, 2026-10-08; *Clear data* empties
+  it, so a cleared phone joins with a code).
 
 **4. Release.**
 - [ ] Decided and recorded: how a replica frees space (§4.7). Recovery

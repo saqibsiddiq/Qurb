@@ -906,7 +906,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun documentUri(path: String): Uri =
-        android.provider.DocumentsContract.buildDocumentUri("com.qurb.documents", "qurb/$path")
+        android.provider.DocumentsContract.buildDocumentUri("$packageName.documents", "qurb/$path")
 
     private fun mimeType(path: String): String {
         val extension = path.substringAfterLast('.', "").lowercase()

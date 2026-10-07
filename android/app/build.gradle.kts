@@ -16,7 +16,14 @@ plugins {
 //
 // Two source sets rather than a runtime check, because the alternative is
 // compiling against an SDK that is not there.
-val firebaseConfigured = file("google-services.json").exists()
+//
+// `-Pqurb.idSuffix=.x` installs a second copy beside the real one, under its
+// own package -- its own data, its own Block Store -- so that what clearing an
+// app's data does can be tried on a phone without clearing the person's
+// (2026-10-08). Firebase knows only `com.qurb`, so that copy builds without
+// push.
+val idSuffix = (findProperty("qurb.idSuffix") as String?).orEmpty()
+val firebaseConfigured = file("google-services.json").exists() && idSuffix.isEmpty()
 if (firebaseConfigured) {
     apply(plugin = "com.google.gms.google-services")
 }
@@ -51,6 +58,7 @@ android {
 
     defaultConfig {
         applicationId = "com.qurb"
+        applicationIdSuffix = idSuffix.ifEmpty { null }
         // 26 matches the API level the native library is built against; see
         // scripts/android-build.sh. It is also where the NDK's 64-bit file APIs
         // are complete, which SQLite needs for files over 2 GB.
