@@ -693,7 +693,8 @@ then.*
   (Setup's lack of a way back from a new key is answered by 0052: an
   unfinished setup can join instead.)
 - [ ] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):
-  ~~the S23 joining the laptop with a code~~ (typed, 2026-10-05); scanning it;
+  ~~the S23 joining the laptop with a code~~ (typed, 2026-10-05); ~~scanning
+  it~~ (the window's code, by the owner, 2026-10-08);
   ~~a computer joining with the phone's code and taking its key~~ (the command
   line, 2026-10-08); ~~Block Store returning the key~~ (read back in
   Settings, and restored after a reinstall, 2026-10-08; *Clear data* empties

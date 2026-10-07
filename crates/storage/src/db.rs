@@ -861,18 +861,25 @@ impl Db {
         Ok(n as usize)
     }
 
-    /// Content of files freed here that `device` is recorded as holding and
-    /// has not been asked about: what a sync with it asks, a few at a time
-    /// (decision 0055).
+    /// Content `device` is recorded about and has not been asked about: what
+    /// a sync with it asks, a few at a time (decision 0055). Two kinds:
+    ///
+    /// - files freed here that it is recorded as holding, on the word of
+    ///   whoever made them -- which nothing withdrew when that device freed
+    ///   its own;
+    /// - files whose copy there is marked out of reach. Removing a device
+    ///   marks all of them, and pairing it again restored none: on
+    ///   2026-10-08 a laptop called three files the only copy, minutes after
+    ///   the phone it had removed and paired again had synced them.
     pub fn unconfirmed_holdings(&self, device: &DeviceId, limit: usize) -> Result<Vec<blake3::Hash>> {
         let mut stmt = self.conn.prepare(
             "SELECT DISTINCT f.content_hash
                FROM files f
                JOIN replicas r ON r.content_hash = f.content_hash
               WHERE f.deleted_at IS NULL
-                AND f.materialised = 0
                 AND (f.scope IS NULL OR f.scope = (SELECT device_id FROM local WHERE id = 1))
-                AND r.device_id = ?1 AND r.private = 0
+                AND r.device_id = ?1
+                AND ((f.materialised = 0 AND r.private = 0) OR r.private = 1)
                 AND NOT EXISTS (
                       SELECT 1 FROM confirmed c
                        WHERE c.device_id = ?1 AND c.content_hash = f.content_hash
@@ -886,18 +893,20 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
-    /// `device` said it holds this content.
-    pub fn note_confirmed(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {
+    /// `device`, asked, said it holds this content: a copy this device can ask
+    /// for, whatever its record said before.
+    pub fn note_held(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {
+        let id = device.as_bytes().as_slice();
+        let content = content.as_bytes().as_slice();
         self.conn.execute(
-            "INSERT INTO confirmed (device_id, content_hash, at) VALUES (?1, ?2, unixepoch())
-             ON CONFLICT (device_id, content_hash) DO UPDATE SET at = excluded.at",
-            params![device.as_bytes().as_slice(), content.as_bytes().as_slice()],
+            "UPDATE replicas SET private = 0 WHERE device_id = ?1 AND content_hash = ?2",
+            params![id, content],
         )?;
-        Ok(())
+        self.note_asked(id, content)
     }
 
-    /// `device`, recorded as holding this content, said it does not: a copy
-    /// this device cannot ask for, as a removed device's is
+    /// `device`, asked or fetched from, said it does not hold this content: a
+    /// copy this device cannot ask for, as a removed device's is
     /// ([`forget_peer`](Self::forget_peer)). Marked rather than deleted, for
     /// the same reason; a later report of holding it marks it back.
     pub fn note_not_held(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {
@@ -907,9 +916,16 @@ impl Db {
             "UPDATE replicas SET private = 1 WHERE device_id = ?1 AND content_hash = ?2",
             params![id, content],
         )?;
+        self.note_asked(id, content)
+    }
+
+    /// Asked once, whatever the answer: not asked again unless the device is
+    /// removed and paired again.
+    fn note_asked(&self, device: &[u8], content: &[u8]) -> Result<()> {
         self.conn.execute(
-            "DELETE FROM confirmed WHERE device_id = ?1 AND content_hash = ?2",
-            params![id, content],
+            "INSERT INTO confirmed (device_id, content_hash, at) VALUES (?1, ?2, unixepoch())
+             ON CONFLICT (device_id, content_hash) DO UPDATE SET at = excluded.at",
+            params![device, content],
         )?;
         Ok(())
     }
@@ -2424,6 +2440,9 @@ impl Db {
     ///   collected, and a collected send must not reappear as waiting.
     /// - `reported`: what it was told this device holds; told again if it is
     ///   ever paired again.
+    /// - `confirmed`: what it was asked about holding; asked again if it is
+    ///   ever paired again, which is how its copies come to count again
+    ///   (decision 0055).
     ///
     /// Returns whether it was trusted.
     pub fn forget_peer(&self, device: &DeviceId) -> Result<bool> {
@@ -2433,6 +2452,7 @@ impl Db {
         tx.execute("DELETE FROM holders WHERE device_id = ?1", params![id])?;
         tx.execute("UPDATE replicas SET private = 1 WHERE device_id = ?1", params![id])?;
         tx.execute("DELETE FROM reported WHERE device_id = ?1", params![id])?;
+        tx.execute("DELETE FROM confirmed WHERE device_id = ?1", params![id])?;
         tx.commit()?;
         Ok(n > 0)
     }

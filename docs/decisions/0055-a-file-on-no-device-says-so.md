@@ -52,6 +52,15 @@ device's is, and marked back if that device later reports holding it.
 answered (`ContentSource::not_held`). That is recorded after the file is
 listed, since listing it notes its author as a holder.
 
+**A copy marked out of reach is asked about too**, once, and counts again if
+the device holds it (amended 2026-10-08). Removing a device marks all its
+copies so ([0041](0041-removing-a-device.md), rule 5), and pairing it again
+undid none of it. The owner removed the S23 from the laptop and paired it
+again by scanning, and the laptop then called three files the only copy,
+though the phone had just synced them. Removing a device also forgets what
+it was asked, so pairing it again starts the asking afresh. Test:
+`a_device_paired_again_has_its_copies_counted_again`.
+
 ## Why this, and not something else
 
 - **Leaving them *Available elsewhere*.** It is what the screen said, and it

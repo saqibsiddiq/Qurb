@@ -1929,8 +1929,20 @@ helped then. A phone that has been cleared joins its other devices with a
 code, which is why the Clear-data screen says so. The test copy was cleared,
 which removed its key from Block Store, and then uninstalled.
 
-Still not watched: scanning a pairing code with the camera, which needs
-somebody to point the phone; and a new phone restored from a Google backup.
+**Scanning, by the owner.** At 01:26 the S23 scanned the code the laptop's
+window showed (*Devices → Add → Scan a code*), and the pairing was approved
+in the window. That watches the camera, and a real phone pairing through the
+real window. A minute before, the phone had been removed from the laptop.
+Removing a device marks every copy it holds as one that cannot be asked for,
+and pairing it again undid none of that. The laptop called its three files,
+which the old phone had made and the new one had synced, the only copy.
+Since then the laptop asks a device paired again about such copies, once at
+a sync, and what it holds counts again ([decision 0055](../decisions/0055-a-file-on-no-device-says-so.md)).
+With that build on the laptop, the phone's next sync came at 01:41, and
+`qurb ls` read the three as `here` again, the 18 still `nowhere`.
+
+Still not watched: a new phone restored from a Google backup, which needs a
+second phone.
 
 ## Deliberately left undone
 

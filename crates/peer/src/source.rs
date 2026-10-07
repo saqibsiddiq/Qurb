@@ -80,7 +80,9 @@ pub async fn report_holdings(
 /// report, and nothing took it back when that device freed its own. So a
 /// phone listed 7 files as on the laptop that the laptop had freed long
 /// before, and that no device had any more. A copy denied is marked as one
-/// this device cannot ask for, and the file is shown as on no device.
+/// this device cannot ask for, and the file is shown as on no device. A copy
+/// marked so -- by removing the device, which pairing it again did not undo
+/// -- and confirmed counts again.
 ///
 /// Best effort, like [`report_holdings`]: it corrects what a screen says, and
 /// never fails a sync. Returns how many were asked.
@@ -100,7 +102,7 @@ pub async fn check_holders(
     let mut asked = 0;
     for content in claims {
         let recorded = match client.manifest(*content.as_bytes()).await {
-            Ok(Some(_)) => store.db().note_confirmed(peer, &content),
+            Ok(Some(_)) => store.db().note_held(peer, &content),
             Ok(None) => store.db().note_not_held(peer, &content),
             // The connection is probably gone; the rest wait for next time.
             Err(_) => break,

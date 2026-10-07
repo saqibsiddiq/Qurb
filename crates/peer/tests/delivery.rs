@@ -438,3 +438,51 @@ async fn a_copy_recorded_for_a_peer_is_asked_about_once() {
     assert_eq!(availability(&phone, "gone.bin"), Availability::Nowhere);
     assert_eq!(availability(&phone, "kept.bin"), Availability::Elsewhere);
 }
+
+/// A device removed and paired again: removing it marked its copies out of
+/// reach, and pairing again undid none of it. Asked once, what it holds counts
+/// again (decision 0055). On 2026-10-08 a laptop called three files the only
+/// copy, minutes after the phone it had removed and paired again synced them.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_paired_again_has_its_copies_counted_again() {
+    use qurb_storage::db::Availability;
+    let mut laptop = Device::new();
+    let mut phone = Device::new();
+    introduce(&laptop, &phone);
+    laptop.write("photo.jpg", b"on both devices");
+
+    // The phone takes it over the network, and its Got records the copy.
+    let (addr, fingerprint) = serve(&laptop, &[phone.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&phone.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&phone.root);
+    let tree = client.tree().await.unwrap();
+    let plan = phone.engine.plan_against(&tree).unwrap();
+    phone.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    client.close();
+
+    let availability = |d: &Device| {
+        d.engine.store().db().folder_entry("photo.jpg").unwrap().unwrap().availability
+    };
+    assert_eq!(availability(&laptop), Availability::Here, "setup");
+
+    let phone_id = phone.engine.store().device_id().unwrap();
+    laptop.engine.store_mut().remove_device(&phone_id, "the phone", false).unwrap();
+    laptop
+        .engine
+        .store()
+        .db()
+        .trust_peer(&phone_id, phone.identity.fingerprint().as_bytes(), "the phone")
+        .unwrap();
+    assert_eq!(availability(&laptop), Availability::OnlyHere, "paired again, and still marked");
+
+    let (addr, fingerprint) = serve(&phone, &[laptop.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &laptop.identity, fingerprint).await.unwrap();
+    let asked = qurb_peer::check_holders(&client, laptop.engine.store(), &phone_id, 16).await;
+    let again = qurb_peer::check_holders(&client, laptop.engine.store(), &phone_id, 16).await;
+    client.close();
+
+    assert_eq!((asked, again), (1, 0));
+    assert_eq!(availability(&laptop), Availability::Here);
+}

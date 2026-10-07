@@ -146,6 +146,9 @@ store when an unknown device connects, at most once a second.
   number the device printed, and *Approve* pairs them, also after waiting 40
   and 90 seconds. A device not approved before the code expires is now told
   so, rather than "connection lost".
+- **The real window with the phone**, 2026-10-08, by the owner: the
+  window's *Show a code*, scanned by the S23, approved in the window by its
+  number.
 - **Not watched**: two devices with different keys refused on hardware, where only the tests check it; a
   device being given the key while joining (0052's half); uninstalling with
   the offer to keep the data.

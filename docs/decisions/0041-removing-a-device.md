@@ -25,7 +25,9 @@ it cannot actually do. From the Devices screen on either platform, or
 5. **Copies it was known to hold stop counting as copies.** The `replicas` rows
    for it are marked `private` — "it has these bytes, and this device cannot ask
    for them" — which is exactly true once it is removed. Freeing a local copy
-   is refused on the strength of it from then on.
+   is refused on the strength of it from then on. Paired again, it is asked
+   about each such copy at its syncs, and what it still holds counts again
+   (since 2026-10-08, [0055](0055-a-file-on-no-device-says-so.md)).
 6. **Files already freed on the strength of it are named first**, with the
    offer to fetch them before removing it. Afterwards they have nowhere to come
    back from, and since [0055](0055-a-file-on-no-device-says-so.md) each says

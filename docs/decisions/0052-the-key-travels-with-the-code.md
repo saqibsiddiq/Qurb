@@ -161,8 +161,12 @@ elsewhere, such as a replica, and join their rendezvous group. So:
   with that device's key once `qurb pair` there was told yes at 199 134. The
   other device was the command line rather than the phone; the window's path
   is the same either way.
-- **Not yet watched**: joining by scanning (the same `join_new`, behind the
-  camera); a new phone restored from this one's Google backup.
+- **Scanning with the camera**, 2026-10-08, by the owner: the S23's *Devices →
+  Add → Scan a code*, pointed at the laptop's window showing a code, and
+  approved there. That is the scanner setup uses too; setup's own scan,
+  into `join_new`, was not run, since the phone is set up, and `join_new` was
+  watched typed.
+- **Not yet watched**: a new phone restored from this one's Google backup.
 
 ## Reversing it
 
