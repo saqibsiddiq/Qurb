@@ -1,7 +1,8 @@
 # 0053 — Pairing is approved, checks the key, and a phone's copy is not a safe last one
 
 **Status:** Accepted — built and tested on the command line, the desktop and
-Android; not yet watched on the phone (see *Checked, and not*); amends
+Android; watched on the S23 with the laptop's command line on 2026-10-07,
+not in the desktop window (see *Checked, and not*); amends
 [0014](0014-pairing.md), [0025](0025-a-storage-cap-that-cannot-lose-data.md),
 [0036](0036-a-phone-keeps-its-own-files.md) and
 [0052](0052-the-key-travels-with-the-code.md)
@@ -112,9 +113,33 @@ store when an unknown device connects, at most once a second.
 - `crates/peer/src/tls.rs`:
   `an_unknown_device_makes_the_list_reread_the_store_once_a_second`.
 - `crates/qurb/tests/arguments.rs`: `qurb pair` asks, and a `y` approves.
-- **Not watched on the phone**, which refused ADB on 2026-10-07: the approval
-  dialog on either side, the Clear-data screen opened from Settings, the key
-  row in Settings, and the laptop becoming the phone's vault keeper.
+- **Watched on the S23 on 2026-10-07**, with the laptop on the command line,
+  both already holding the same key:
+  - The phone joining the laptop's `qurb pair`. The phone showed 232 760, and
+    the laptop asked about "SM-S911B (…, a phone)" with the same number. A
+    `y` paired them.
+  - The laptop's `qurb join` with the phone's code. The laptop printed
+    996 097, and the phone's dialog showed 996 097 with *Decline* and
+    *Approve*. *Approve* paired them.
+  - Declining on the phone. The laptop got "the other device said no", and
+    the phone's code stayed open with its time running.
+  - Kinds in both databases: each recorded the other as `phone` or
+    `computer`, and itself likewise. The phone had the laptop keep its vault
+    and marked that default as made.
+  - Android's Settings → qurb → Storage → *Clear data* opened
+    `ManageSpaceActivity`. It listed one file, 1.6 GB, as existing only on
+    the phone. *Free space safely* said "Nothing to free" and removed
+    nothing. *Delete everything* was not tapped. The file was a send the
+    laptop had already taken from the phone before its data was cleared,
+    sent again afterwards. The laptop skipped it and never said so, a fault
+    in [0030](0030-sending-a-file-to-one-device.md)'s rule 2, fixed the same
+    day. See [phase 5](../phases/phase-5-mobile.md#a-send-taken-before-and-sent-again).
+  - The key row in the phone's Settings said the key is on the phone and in
+    its Google backup, end-to-end encrypted.
+- **Not watched**: the desktop window's approval panel and its key row; two
+  devices with different keys refused on hardware, where only the tests
+  check it; a device being given the key while joining (0052's half);
+  uninstalling with the offer to keep the data.
 
 ## Reversing it
 

@@ -1710,9 +1710,112 @@ only here before anything goes, and uninstalling offers to keep the data.
 Settings says where the key is safe: in the Google backup, end-to-end
 encrypted, or on the phone only when it has no screen lock.
 
-Built and tested (`crates/peer`, `crates/storage`, `crates/mobile-ffi`); the
-APK builds. **Not watched on the S23**: it refused ADB on 2026-10-07, and every
-part of this needs the phone in hand.
+Built and tested (`crates/peer`, `crates/storage`, `crates/mobile-ffi`).
+**Watched on the S23 later the same day**, with the laptop on the command line
+and both already holding the same key:
+
+- The phone joining the laptop's `qurb pair` showed 232 760, the number the
+  laptop asked about. The laptop's `qurb join` with the phone's code printed
+  996 097, and the phone's dialog showed the same. Both pairings went through
+  on approval. Declined on the phone, the laptop was told "the other device
+  said no" and the code stayed open.
+- Each database recorded the other device's kind, and the phone had the
+  laptop keep its vault, once.
+- *Clear data* in Android's Settings opened `ManageSpaceActivity`, which
+  listed one file, 1.6 GB, existing only on the phone. *Free space safely*
+  freed nothing and removed nothing. The screen read "1 file … exist only",
+  and now uses the singular for one file. It no longer marks such a file
+  "(private)", since that flag also covers a send not yet collected. What
+  that one file was is the next section.
+- The key row in Settings named the Google backup.
+
+Not watched: the desktop window's side of this, two devices with different
+keys refused outside the tests, and uninstalling.
+
+### A send taken before and sent again
+
+The file the Clear-data screen listed was the 1.7 GB video of
+[An 800 MB video](#an-800-mb-video-and-what-stopped-it), 1,729,528,613 bytes.
+The laptop took it on 2026-10-05 at 13:41, sent by the phone's identity of
+the time, and filed it in Downloads (decision 0037). That evening the phone's
+data was cleared. At 19:11, under its new identity, the phone sent the
+laptop the same video again.
+
+The laptop skipped it, as [0030](../decisions/0030-sending-a-file-to-one-device.md)'s
+second rule says: a delivery is taken once, keyed by content. But nothing told
+the phone. For two days its database held the send as waiting: no device
+recorded as holding it, 1.6 GiB of chunks kept for it. Every pass of the
+phone's that reached the laptop announced news and stayed open another ten
+seconds (`LINGER`) to be collected from, and the laptop's log shows the other
+end of it: "a peer is reachable and has news; syncing now" again and again,
+and almost never a sync that did anything.
+
+Fixed on 2026-10-07. `report_holdings` is now given the peer's tree. It tells
+the sender, once (the `reported` table), about any send whose content this
+device has already taken, the same `Got` it would have sent on delivery.
+Test: `a_delivery_sent_again_is_acknowledged_and_not_taken_twice`.
+
+Watched the same day. The fixed build went onto the laptop at 18:35. At 18:57
+the phone's app was opened and synced, and the laptop recorded telling it
+(`reported`, 18:57:51). The phone's database now records the laptop as
+holding the video, and nothing as waiting to be delivered. Its Clear-data
+screen then said every file is also on another device.
+
+**The phone kept the bytes, and they were probably the last copy.** The video
+was no longer in the laptop's Downloads. No file of its exact size was on the
+phone's shared storage, anywhere in the laptop's home folder, or on its other
+drives. So qurb's encrypted copy on the phone is probably the only one left.
+The owner chose to leave it there for now, neither recovered nor freed.
+
+That copy also showed a gap in [0030](../decisions/0030-sending-a-file-to-one-device.md)'s
+rule 4. A sender keeps a send's bytes after delivery, and they are the first
+thing to go when space runs short, but only a storage cap says when that is,
+and a phone has none. Nothing on a phone ever let go of a send. A first fix
+folded them into *Free unused space* and *Free space safely*. It was built and
+then withdrawn before any phone used it, since here it would have destroyed
+the last copy of a video while saying no file was removed. Asked, the owner
+chose a line of its own. Settings shows *Copies of files you sent* with
+their size, and the Clear-data screen says how much of qurb's space they
+are, with *Let go of copies of sent files*. Either way the person is first
+told what it can cost, and freeing space in general leaves them alone. Its
+delete-everything confirmation now says they go too. Test:
+`a_send_that_arrived_is_let_go_when_asked_by_name`.
+
+Watched: the Clear-data screen reading "1.6 GB of that is this phone's copies
+of files it sent, kept after they arrived", with the button. Not watched:
+the Settings row, the confirmations, and letting go. Letting go was not
+tapped, on purpose, since it would lose the video.
+
+
+### Didn't finish, every sync
+
+The phone's Home showed little but *Didn't finish* under *Recent*: "fetching
+content failed: peer does not have content …", for 18 files, on every sync.
+They were the files the laptop freed on 2026-09-29 because the phone kept
+them, lost when the phone was cleared. The laptop still lists them, and still
+answered each request with the file's chunk list, then had none of the
+chunks. The phone failed on each, recorded each, and asked again at the next
+sync. By 18:57 on 2026-10-07 its history held 216 such failures, and each
+fifteen-minute sync added 18 more.
+
+[Decision 0054](../decisions/0054-a-file-the-other-device-does-not-hold.md):
+a device gives a manifest only for content it holds. The device asking then
+records a shared file it does not have as being elsewhere, as freeing leaves
+one, removes its leftover partial file, and drops its earlier failures. A
+failure that repeats is recorded once.
+
+Watched the same day. With the laptop on the new build from 19:38, and the
+APK installed in the background while the phone was in use, the phone's
+19:44 sync recorded no failures. It listed the 18 files as elsewhere and
+removed the 18 `.incoming` files those failed fetches had left, and none
+other. Its history holds no failures now. Its three files that are here were
+untouched. Read from the phone's database; the screen itself was not looked
+at, the phone being in use.
+
+What is still not right: the 18 files show as *available elsewhere*, on the
+phone and on the laptop, though no device has them. There is no state for a
+file on no device. Removing the phone's old identity from the laptop, the
+owner's call, is the first step towards one.
 
 ## Deliberately left undone
 

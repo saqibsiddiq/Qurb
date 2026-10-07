@@ -988,7 +988,7 @@ impl Daemon {
         // What a transfer from this peer is shown as coming from.
         let from = known.as_ref().map(|k| k.name.clone()).unwrap_or_else(|| peer.short());
         if let Some(known) = known {
-            let told = qurb_peer::report_holdings(&client, &reader, &known.device_id, 64).await;
+            let told = qurb_peer::report_holdings(&client, &reader, &known.device_id, &tree, 64).await;
             if told > 0 {
                 tracing::debug!(peer = %peer.short(), told, "reported holdings");
             }

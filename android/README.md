@@ -330,10 +330,19 @@ replaced by uninstalling — which deletes the phone's key and index. See
   decision 0053 *Clear data* opens `ManageSpaceActivity`, which lists what
   exists only here before anything goes; uninstalling asks to keep the data;
   the laptop no longer frees what only a phone also has; and the phone's
-  vault is kept by its first computer. Not yet watched on the phone.
+  vault is kept by its first computer. Watched on the S23 on 2026-10-07,
+  except for uninstalling.
+- **Copies of files the phone sent** are kept after they arrive (decision
+  0030), and a phone has no storage cap to let go of them. Settings shows
+  *Copies of files you sent* when there are any, and the Clear-data screen
+  offers *Let go of copies of sent files*. Both warn first that a recipient
+  may have deleted its copy since. *Free unused space* does not touch them
+  (`SentCopies.kt`). The screen's line was watched; letting go was not
+  tapped.
 - **Pairing is approved** (`Approval.kt`): the device showing the code asks
   whether to let a device in, with the six digits it should be showing, and
-  the phone joining shows its digits meanwhile (decision 0053).
+  the phone joining shows its digits meanwhile (decision 0053). Watched both
+  ways with the laptop's command line, and declining, on 2026-10-07.
 - **No storage question during setup, by design.** Phones have no allowance;
   the question is the desktop's, and is built there
   ([decision 0038](../docs/decisions/0038-the-storage-question-during-setup.md)).

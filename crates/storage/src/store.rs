@@ -1036,6 +1036,34 @@ impl Store {
         Ok(self.readable_chunks(content)?.is_some())
     }
 
+    /// The chunks of `content`, if this device holds every one of them by its
+    /// index: in the chunk store, or in a live file in the folder. What a peer
+    /// asking for the content is told.
+    ///
+    /// [`chunk_hashes_for_content`](Self::chunk_hashes_for_content) answers
+    /// for content merely known, and a file freed here is known: its chunk
+    /// list stays, its bytes do not. Answering a peer with that list sent it
+    /// off to fail at the first chunk, and a phone did, on every sync, for 18
+    /// files the laptop had freed and nobody had any more (2026-10-07).
+    ///
+    /// Not [`can_read_content`](Self::can_read_content), which reads the
+    /// folder's file to be sure and would read a whole video to answer one
+    /// request. A file changed under the index fails at the chunk, as it
+    /// always has, until the next scan.
+    pub fn held_chunks(&self, content: &blake3::Hash) -> Result<Option<Vec<blake3::Hash>>> {
+        let Some(chunks) = self.chunk_hashes_for_content(content)? else {
+            return Ok(None);
+        };
+        for chunk in &chunks {
+            let held = self.cas.contains(chunk)
+                || (self.tree.is_some() && self.db.chunk_in_folder(chunk)?);
+            if !held {
+                return Ok(None);
+            }
+        }
+        Ok(Some(chunks))
+    }
+
     /// The chunks of `content`, if every one of them can be read here.
     fn readable_chunks(&self, content: &blake3::Hash) -> Result<Option<Vec<blake3::Hash>>> {
         let Some(chunks) = self.chunk_hashes_for_content(content)? else {
@@ -1834,6 +1862,18 @@ impl Store {
         self.db.forget_peer(device)?;
         let _ = self.db.record(db::Event::Removed, None, None, Some(device), Some(name));
         Ok(plan)
+    }
+
+    /// What [`release_held_payloads`](Self::release_held_payloads) would free
+    /// now, in bytes on disk.
+    pub fn releasable_held_bytes(&self) -> Result<u64> {
+        let mut total = 0;
+        for hash in self.db.releasable_held_chunks()? {
+            if self.cas.contains(&hash) {
+                total += self.cas.stored_size(&hash).unwrap_or(0);
+            }
+        }
+        Ok(total)
     }
 
     /// Drop payloads this device is holding only on somebody else's behalf.

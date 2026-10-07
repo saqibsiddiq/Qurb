@@ -91,6 +91,12 @@ pub enum Error {
     #[error("peer does not have content {hash}")]
     ContentUnavailable { hash: String },
 
+    /// Asked for content, the peer said it does not hold it -- before any
+    /// bytes moved. An answer rather than a failure: the content was freed
+    /// there, is kept for it elsewhere, or is gone.
+    #[error("the other device does not have content {hash}")]
+    NotHeld { hash: String },
+
     /// Bytes arrived, but not the bytes that were asked for.
     #[error("content {hash} did not match what the peer sent")]
     ContentMismatch { hash: String },

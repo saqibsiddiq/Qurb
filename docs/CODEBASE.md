@@ -152,6 +152,13 @@ asked of the index as "live files this device made, whose content no other
 device is known to hold". It cannot drift from the truth, because it is read
 fresh each time rather than maintained.
 
+A device asked for content it does not hold says so before any bytes move. A
+manifest is given only for content whose every chunk is in the chunk store or
+in a live file in the folder. The asker then lists the file as elsewhere,
+rather than failing at the first chunk on every sync, which a phone did for 18
+files nobody had any more. A failure that repeats is recorded in the history
+once. See [decisions/0054](decisions/0054-a-file-the-other-device-does-not-hold.md).
+
 For that question to have an answer, a device that finishes receiving content
 tells the device it got it from: `Got { content }`, the only message in the
 protocol that asks for nothing. Credited to the certificate the connection
@@ -163,6 +170,11 @@ each only once. Without that, anything delivered before this existed would be
 counted as delivered nowhere for ever, since a file both devices already have
 is never transferred again. See
 [decisions/0026](decisions/0026-sharing-while-the-other-device-is-off.md).
+The same report covers a send of content the device has already taken,
+offered again by another device or by the same one set up afresh. It is
+skipped, since a delivery is taken once, and acknowledged once
+(`report_holdings` is given the peer's tree). Before 2026-10-07 the sender was
+never told, and held the send as waiting indefinitely.
 
 #### Nobody waits for a poll to find out
 
@@ -298,7 +310,11 @@ advertising it onward. See
 model and [decisions/0030](decisions/0030-sending-a-file-to-one-device.md) for
 what a send promises — including the rule that a copy in somebody's vault is a
 copy this device may *not* count on, which is the difference between eviction
-and data loss.
+and data loss. A sender keeps its copy after delivery until space runs short,
+which a desktop's cap decides. A phone has no cap. It shows its copies of
+delivered sends on a line of their own in Settings and on Android's storage
+screen, and lets go of them only when asked by name (`sent_copies`,
+`release_sent_copies`).
 
 **On a desktop, a received file leaves qurb.** The daemon saves it as an
 ordinary file in `Downloads/qurb`, outside the folder, and stops tracking it:
@@ -854,7 +870,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-777 tests in 90 test binaries on Linux, all passing (2026-10-07, debug build,
+781 tests in 90 test binaries on Linux, all passing (2026-10-07, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
@@ -1243,7 +1259,10 @@ Eight things are known-missing rather than merely unbuilt:
    a phone's copy does not let another device free its own, a phone's
    Private Vault is kept by its first computer, and *Clear data* opens qurb's
    own screen, which says what would be lost. What is left is what no app can
-   prevent: a phone lost or broken before it has synced.
+   prevent: a phone lost or broken before it has synced. And the 18 files lost
+   that day are still listed on both devices as *available elsewhere*, though
+   no device has them: there is no state for a file on no device
+   ([decisions/0054](decisions/0054-a-file-the-other-device-does-not-hold.md)).
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:

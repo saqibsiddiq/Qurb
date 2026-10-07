@@ -258,7 +258,7 @@ impl PeerClient {
         out: &mut impl std::io::Write,
     ) -> Result<u64> {
         let Some(chunks) = self.manifest(content).await? else {
-            return Err(Error::ContentUnavailable { hash: blake3::Hash::from(content).to_hex().to_string() });
+            return Err(Error::NotHeld { hash: blake3::Hash::from(content).to_hex().to_string() });
         };
         self.fetch_rest_into(local, content, Resume::from_start(chunks), out).await
     }
@@ -277,7 +277,7 @@ impl PeerClient {
     /// another version of the same path costs only what does not match.
     pub async fn resume_point(&self, content: [u8; 32], partial: &Path) -> Result<Resume> {
         let Some(chunks) = self.manifest(content).await? else {
-            return Err(Error::ContentUnavailable { hash: blake3::Hash::from(content).to_hex().to_string() });
+            return Err(Error::NotHeld { hash: blake3::Hash::from(content).to_hex().to_string() });
         };
         let io = |e: std::io::Error| Error::Io { path: partial.to_path_buf(), source: e };
 

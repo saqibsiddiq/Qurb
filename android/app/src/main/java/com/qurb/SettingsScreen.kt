@@ -36,6 +36,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         val background: String,
         val deleted: List<DeletedFile>,
         val peers: List<PeerInfo>,
+        val sentCopies: ULong,
     )
 
     override fun refresh() {
@@ -45,7 +46,8 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                     // `state` waits on WorkManager's own database; off the main
                     // thread like everything else.
                     val engine = engine()
-                    State(engine.usage(), SyncWorker.state(app), engine.recentlyDeleted(), engine.peers())
+                    State(engine.usage(), SyncWorker.state(app), engine.recentlyDeleted(), engine.peers(),
+                        engine.sentCopies())
                 }
                 show(state)
             } catch (e: Exception) {
@@ -89,6 +91,12 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
             app.push(DeletedScreen(app))
         }
         kit.item(group, "Free unused space", "Clears what nothing needs any more", chevron = false) { tidy() }
+        // Its own line, never part of the one above: the devices sent to have
+        // these, but one may have lost its copy since (decision 0030).
+        if (state.sentCopies > 0uL) {
+            kit.item(group, "Copies of files you sent",
+                "${Words.size(state.sentCopies)}, kept here after they arrived") { letGoOfSentCopies(state.sentCopies) }
+        }
 
         kit.groupTitle(page, "Privacy")
         group = kit.group(page)
@@ -286,6 +294,31 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                 refresh()
             }
         }
+    }
+
+    /**
+     * This phone's copies of files it sent that have arrived (decision 0030).
+     * Kept until asked for by name, and the asking says what it can cost: on
+     * 2026-10-07 the S23 held the last copy of a video the laptop had taken
+     * and since lost.
+     */
+    private fun letGoOfSentCopies(bytes: ULong) {
+        kit.sheet()
+            .header(R.drawable.ic_send, "Let go of ${Words.size(bytes)}?")
+            .text(SentCopies.COST)
+            .buttons("Let go", danger = true, secondary = "Keep") {
+                scope.launch {
+                    try {
+                        val freed = withContext(Dispatchers.IO) { engine().releaseSentCopies() }
+                        app.say("Freed ${Words.size(freed)}")
+                    } catch (e: Exception) {
+                        app.fail("Could not free that", e)
+                    } finally {
+                        refresh()
+                    }
+                }
+            }
+            .show()
     }
 
     /**

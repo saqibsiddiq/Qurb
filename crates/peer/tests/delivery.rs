@@ -238,7 +238,7 @@ async fn a_peer_reports_what_it_is_merely_holding() {
     let client = PeerClient::connect(addr, &receiver.identity, fingerprint).await.unwrap();
 
     let sender_id = sender.engine.store().device_id().unwrap();
-    let told = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, 64).await;
+    let told = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, &[], 64).await;
     client.close();
 
     assert_eq!(told, 1, "the receiver reported nothing");
@@ -269,10 +269,112 @@ async fn a_holding_is_reported_only_once() {
     let client = PeerClient::connect(addr, &receiver.identity, fingerprint).await.unwrap();
     let sender_id = sender.engine.store().device_id().unwrap();
 
-    let first = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, 64).await;
-    let second = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, 64).await;
+    let first = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, &[], 64).await;
+    let second = qurb_peer::report_holdings(&client, receiver.engine.store(), &sender_id, &[], 64).await;
     client.close();
 
     assert_eq!(first, 1);
     assert_eq!(second, 0, "the same holding was reported twice");
+}
+
+/// A file the other device lists and does not hold -- freed there on the
+/// strength of a device that has since lost it -- is recorded as being
+/// elsewhere, not fetched and failed on every sync. On 2026-10-07 a phone
+/// showed *Didn't finish* for 18 such files every time it synced.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_the_peer_does_not_hold_is_listed_not_failed_every_sync() {
+    let mut laptop = Device::new();
+    let mut phone = Device::new();
+    introduce(&laptop, &phone);
+
+    laptop.write("photo.jpg", b"kept by a phone whose data was cleared");
+    laptop.write("here.txt", b"still on the laptop");
+    let gone = qurb_sync::DeviceId::from_bytes([7; 32]);
+    let photo = blake3::hash(b"kept by a phone whose data was cleared");
+    laptop.engine.store().db().note_replica(&photo, &gone).unwrap();
+    laptop.engine.store_mut().free_local("photo.jpg").unwrap();
+
+    let (addr, fingerprint) = serve(&laptop, &[phone.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&phone.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&phone.root);
+
+    // As a phone left it: failed on earlier syncs, which said so.
+    phone
+        .engine
+        .store()
+        .db()
+        .record(qurb_storage::db::Event::Failed, Some("photo.jpg"), None, None, Some("not there"))
+        .unwrap();
+
+    let tree = client.tree().await.unwrap();
+    let plan = phone.engine.plan_against(&tree).unwrap();
+    let stats = phone.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    assert!(stats.failures.is_empty(), "{:?}", stats.failures);
+    assert_eq!(fs::read(phone.root.join("here.txt")).unwrap(), b"still on the laptop");
+    let failed = phone.engine.store().db().activity_for("photo.jpg", 10).unwrap();
+    assert!(
+        failed.iter().all(|e| e.kind != qurb_storage::db::Event::Failed),
+        "the old failures still show: {failed:?}"
+    );
+
+    // Listed, not here, and no half-made file left beside it.
+    assert!(!phone.root.join("photo.jpg").exists());
+    assert_eq!(phone.engine.store().is_materialised("photo.jpg").unwrap(), Some(false));
+    assert!(!phone.root.join(".photo.jpg.incoming").exists(), "a staging file was left");
+
+    // And the next sync has nothing to do about it.
+    let tree = client.tree().await.unwrap();
+    assert!(phone.engine.plan_against(&tree).unwrap().is_empty(), "asked for again");
+    client.close();
+}
+
+/// Asked for by name, the same file is still a failure: somebody asked for
+/// it, and should hear that it did not come.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_asked_for_that_the_peer_does_not_hold_still_fails() {
+    let mut laptop = Device::new();
+    let mut phone = Device::new();
+    introduce(&laptop, &phone);
+
+    laptop.write("photo.jpg", b"freed on the laptop");
+    let elsewhere = qurb_sync::DeviceId::from_bytes([7; 32]);
+    laptop
+        .engine
+        .store()
+        .db()
+        .note_replica(&blake3::hash(b"freed on the laptop"), &elsewhere)
+        .unwrap();
+    laptop.engine.store_mut().free_local("photo.jpg").unwrap();
+
+    let (addr, fingerprint) = serve(&laptop, &[phone.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&phone.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&phone.root);
+
+    let tree = client.tree().await.unwrap();
+    let plan = phone.engine.plan_against(&tree).unwrap();
+    phone.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    assert!(phone.engine.store().db().want("photo.jpg").unwrap());
+
+    let plan = phone.engine.plan_with(&tree, None).unwrap();
+    let stats = phone.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    assert_eq!(stats.failures.len(), 1, "asked for, and nothing said it did not come");
+
+    // Said once in its history, though it fails again on the next sync.
+    let again = phone.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    client.close();
+    assert_eq!(again.failures.len(), 1);
+    let failed = phone
+        .engine
+        .store()
+        .db()
+        .activity_for("photo.jpg", 10)
+        .unwrap()
+        .into_iter()
+        .filter(|e| e.kind == qurb_storage::db::Event::Failed)
+        .count();
+    assert_eq!(failed, 1, "the same failure recorded on every sync");
 }

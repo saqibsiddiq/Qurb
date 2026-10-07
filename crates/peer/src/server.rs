@@ -399,7 +399,10 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
                 // refusal itself tells a peer what exists.
                 return Ok(Response::NotFound);
             }
-            match store.chunk_hashes_for_content(&content)? {
+            // Held, not merely known: a file freed here keeps its chunk list,
+            // and answering with it sends the peer off to fail at the first
+            // chunk instead of being told plainly.
+            match store.held_chunks(&content)? {
                 Some(hashes) => {
                     Response::Manifest(hashes.iter().map(|h| *h.as_bytes()).collect())
                 }

@@ -1,6 +1,6 @@
 # 0030 — Sending a file to one device
 
-**Status:** Accepted — rule 3 amended by [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md) on devices with a downloads directory; extended by [0036](0036-a-phone-keeps-its-own-files.md)
+**Status:** Accepted — rule 3 amended by [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md) on devices with a downloads directory; extended by [0036](0036-a-phone-keeps-its-own-files.md); rule 2 completed and rule 4 given a phone's form on 2026-10-07
 **Date:** 2026-09-23
 
 ## Decision
@@ -14,7 +14,14 @@ Four rules, which together are the whole feature:
 1. **The sender keeps the bytes.** They live in the sender's chunk store, not
    in its folder, until the recipient confirms they arrived.
 2. **A delivery is taken once.** Keyed by content, counting tombstones, so that
-   a file the recipient deleted does not come back.
+   a file the recipient deleted does not come back. *(2026-10-07: and the
+   sender is told even so. Content taken before and sent again, by another
+   device or by the same one set up afresh, was skipped without a word, and
+   its sender held it as undelivered indefinitely. The recipient now reports
+   it once, through the same holdings report
+   ([0026](0026-sharing-while-the-other-device-is-off.md)) that covers content
+   delivered before reports existed: `report_holdings` is given the peer's
+   tree.)*
 3. **The recipient files it privately.** It lands in their folder like any other
    file, but its index row is scoped to them, so it is never advertised onward.
 4. **The sender releases it first.** Once the recipient confirms, the sender's
@@ -22,6 +29,16 @@ Four rules, which together are the whole feature:
    the sender's own files.
 
 Rule 4 is the user's explicit instruction: *keep it, but evict it first.*
+
+*(2026-10-07: rule 4 never acted on a phone. Its trigger is the storage cap,
+and a phone has none, so a phone kept every send it ever made: 1.6 GiB for
+one video on the S23, two days after the laptop took it. The laptop had since
+lost its copy, so the phone's was probably the last. Releasing on any request
+for space would have lost it without saying so. Asked, the owner chose a line
+of its own: Settings and Android's storage screen show the phone's copies of
+delivered sends by size, and let go of them only when asked by name, after
+saying that one may be the last copy (`Qurb::sent_copies`,
+`Qurb::release_sent_copies`). Freeing space in general does not touch them.)*
 
 ## Why the sender keeps its copy at all
 

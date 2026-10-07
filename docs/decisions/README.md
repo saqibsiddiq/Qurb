@@ -56,7 +56,7 @@ is worth more than a tidy directory.
 | [0027](0027-plaintext-stops-at-the-local-network.md) | Plaintext rendezvous stops at the local network | Accepted |
 | [0028](0028-waking-a-sleeping-device.md) | Waking a sleeping device, and what it costs | Accepted |
 | [0029](0029-two-areas-shared-and-private.md) | Two areas: one shared, one private per device | Accepted, extended by 0036 |
-| [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted, amended by 0037, extended by 0036 |
+| [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted, amended by 0037, extended by 0036; a delivery sent again is acknowledged, and a phone lets go of delivered sends only when asked by name, since 2026-10-07 |
 | [0031](0031-what-happened-is-written-down.md) | What happened is written down | Accepted |
 | [0032](0032-the-interface-hosts-the-daemon.md) | The interface hosts the daemon, and asks it nouns | Accepted |
 | [0033](0033-the-phrase-on-a-screen.md) | The recovery phrase on a screen | Superseded by 0052 for setup: no phrase shown or checked; showing it in Settings stands |
@@ -79,4 +79,5 @@ is worth more than a tidy directory.
 | [0050](0050-large-files-from-a-phone.md) | Large files from a phone: fetched in parallel, resumed, and served in the foreground | Accepted — amends 0020; built, and measured on the S23, where fetching in parallel gained little |
 | [0051](0051-bbr-not-cubic.md) | QUIC paces by measured bandwidth (BBR), not by loss (Cubic) | Accepted — built; 2.5× from the phone over Wi-Fi, measured with the spike |
 | [0052](0052-the-key-travels-with-the-code.md) | The key travels with the pairing code; nobody writes 24 words down | Accepted — built on the command line, the desktop and Android; the S23 rejoined the laptop with a code |
-| [0053](0053-approval-same-key-and-safe-copies.md) | Pairing is approved, checks the key, and a phone's copy is not a safe last one | Accepted — built and tested on all three; not yet watched on the phone |
+| [0053](0053-approval-same-key-and-safe-copies.md) | Pairing is approved, checks the key, and a phone's copy is not a safe last one | Accepted — built and tested on all three; watched on the S23 with the command line, not in the desktop window |
+| [0054](0054-a-file-the-other-device-does-not-hold.md) | A file the other device does not hold is listed, not failed every sync | Accepted — built, tested, and watched on the S23 |

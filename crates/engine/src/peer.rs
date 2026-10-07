@@ -493,14 +493,21 @@ impl Engine {
             if let Err(e) = outcome {
                 let path = self.root().join(action.path());
                 tracing::warn!(path = %path.display(), error = %e, "plan step failed, continuing");
-                crate::note(
-                    self.store(),
-                    db::Event::Failed,
-                    Some(action.path()),
-                    None,
-                    None,
-                    Some(&e.to_string()),
-                );
+                // Said once. A failure that will happen again next sync -- a
+                // name taken by a file sent here, a file no device it meets
+                // has -- was recorded on every one, and a phone's Home showed
+                // nothing else (2026-10-07). Still a failure of this sync.
+                let detail = e.to_string();
+                if !self.store().db().failed_last_with(action.path(), &detail).unwrap_or(false) {
+                    crate::note(
+                        self.store(),
+                        db::Event::Failed,
+                        Some(action.path()),
+                        None,
+                        None,
+                        Some(&detail),
+                    );
+                }
                 stats.failures.push(crate::FileFailure { path, error: e });
             }
         }
@@ -714,7 +721,30 @@ impl Engine {
                 // additions and deletions applied in path order, so the old
                 // path may already be tombstoned by the time the new one is
                 // written. Its chunks are still on disk.
-                self.bring_in(hash, *size, &staging, &version.path, source, stats, progress)?;
+                match self.bring_in(hash, *size, &staging, &version.path, source, stats, progress) {
+                    Ok(()) => {}
+                    // The other device does not hold these bytes: it freed
+                    // them, or keeps them for somebody else, or they are gone.
+                    // A shared file not here is then recorded as it is --
+                    // listed, and elsewhere, the state freeing leaves. Before
+                    // 2026-10-07 it was asked for again on every sync and
+                    // failed every time: a phone showed *Didn't finish* for 18
+                    // files lost with another phone's data. A file that is
+                    // here keeps its version and the failure, since a stub
+                    // would replace bytes; so does one somebody asked for, who
+                    // should hear that it did not come.
+                    Err(Error::ContentUnavailable { .. })
+                        if version.area == Area::Shared
+                            && self.store().is_materialised(&version.path)? != Some(true)
+                            && !self.store().db().is_wanted(&version.path)? =>
+                    {
+                        let _ = std::fs::remove_file(&staging);
+                        self.store_mut().know_elsewhere(version)?;
+                        self.store().db().forget_failures(&version.path)?;
+                        return Ok(());
+                    }
+                    Err(e) => return Err(e),
+                }
 
                 std::fs::rename(&staging, &path).map_err(|e| {
                     let _ = std::fs::remove_file(&staging);

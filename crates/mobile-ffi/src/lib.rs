@@ -1197,6 +1197,28 @@ impl Qurb {
         })
     }
 
+    /// The bytes this phone keeps of files it sent that have arrived.
+    ///
+    /// A send's bytes are kept after delivery and are the first thing to go
+    /// when space runs short (decision 0030). A desktop's storage cap says
+    /// when that is. A phone has no cap, so nothing ever said it, and the
+    /// phone kept every send it had made: 1.6 GiB for one video on the S23,
+    /// on 2026-10-07, two days after the laptop took it. So the app shows
+    /// this as its own line, and lets go of it only when asked by name
+    /// ([`release_sent_copies`](Self::release_sent_copies)), never as part of
+    /// freeing space in general. The laptop had since lost its copy of that
+    /// video, and the phone's was probably the last.
+    pub fn sent_copies(&self) -> Result<u64, QurbError> {
+        Ok(self.engine()?.store().releasable_held_bytes()?)
+    }
+
+    /// Let go of [`sent_copies`](Self::sent_copies). Only sends the recipient
+    /// is recorded as having, as under a desktop's cap. Returns the bytes
+    /// freed.
+    pub fn release_sent_copies(&self) -> Result<u64, QurbError> {
+        Ok(self.engine()?.store_mut().release_held_payloads()?.bytes_reclaimed)
+    }
+
     /// Free this phone's copy of a file another device keeps: *Free local
     /// space*. The file stays known, and `fetch` brings it back.
     ///
@@ -2030,6 +2052,7 @@ impl Qurb {
                 client,
                 &reader,
                 &known.device_id,
+                &tree,
                 64,
             ));
         }

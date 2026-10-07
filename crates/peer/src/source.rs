@@ -19,21 +19,43 @@ use qurb_storage::Store;
 /// So holdings are reported too, a few per pass, each one only once. Returns
 /// how many were reported.
 ///
+/// And deliveries taken before, sent again. `offered` is the peer's tree. A
+/// send of content this device has already taken is skipped, rightly, since
+/// a delivery is taken once -- but the sender is then never told, and keeps it
+/// waiting for good, announcing news on every pass. That happened on
+/// 2026-10-05: a phone cleared and set up again sent a 1.7 GB video the laptop
+/// had taken from it earlier that day, and two days later still held it as
+/// undelivered. Told now, as it would have been on delivery.
+///
 /// Best effort throughout. This corrects a number on someone's screen; it must
 /// never be the reason a sync reports failure.
 pub async fn report_holdings(
     client: &PeerClient,
     store: &Store,
     peer: &qurb_sync::DeviceId,
+    offered: &[qurb_sync::FileVersion],
     limit: usize,
 ) -> usize {
-    let holdings = match store.db().unreported_to(peer, limit) {
+    let mut holdings = match store.db().unreported_to(peer, limit) {
         Ok(holdings) => holdings,
         Err(e) => {
             tracing::debug!(error = %e, "could not work out what to report");
             return 0;
         }
     };
+    for version in offered.iter().filter(|v| v.area == qurb_sync::Area::Sent) {
+        if holdings.len() >= limit {
+            break;
+        }
+        let Some(hash) = version.content.hash() else { continue };
+        let content = blake3::Hash::from(*hash);
+        if !holdings.contains(&content)
+            && matches!(store.vault_knows(&content), Ok(true))
+            && matches!(store.db().was_reported(peer, &content), Ok(false))
+        {
+            holdings.push(content);
+        }
+    }
 
     let mut told = 0;
     for content in holdings {
@@ -82,7 +104,7 @@ impl ContentSource for NetworkSource<'_> {
                 .block_on(self.client.fetch_content(self.local, *hash, size))
         });
 
-        result.map_err(|e| qurb_engine::Error::Source { detail: e.to_string() })
+        result.map_err(for_the_engine)
     }
 
     /// Tell the peer we now hold it.
@@ -128,7 +150,7 @@ impl ContentSource for NetworkSource<'_> {
             })
         });
 
-        result.map_err(|e| qurb_engine::Error::Source { detail: e.to_string() })
+        result.map_err(for_the_engine)
     }
 
     /// Carries on from what an earlier, interrupted attempt left in
@@ -140,8 +162,7 @@ impl ContentSource for NetworkSource<'_> {
         partial: &std::path::Path,
         progress: &mut dyn qurb_engine::Progress,
     ) -> qurb_engine::Result<u64> {
-        self.resume(hash, partial, progress)
-            .map_err(|e| qurb_engine::Error::Source { detail: e.to_string() })
+        self.resume(hash, partial, progress).map_err(for_the_engine)
     }
 }
 
@@ -170,6 +191,20 @@ impl NetworkSource<'_> {
                 self.client.fetch_rest_into(self.local, *hash, resume, &mut sink).await
             })
         })
+    }
+}
+
+/// What a failed fetch tells the engine.
+///
+/// "It does not hold that" is passed on as such, and the engine records the
+/// file as being elsewhere. Passed on as a failure, it was asked again on
+/// every sync and failed every time: a phone listed *Didn't finish* for 18
+/// files nobody had any more (2026-10-07). Everything else stays a failure,
+/// to be tried again.
+fn for_the_engine(e: crate::error::Error) -> qurb_engine::Error {
+    match e {
+        crate::error::Error::NotHeld { hash } => qurb_engine::Error::ContentUnavailable { hash },
+        e => qurb_engine::Error::Source { detail: e.to_string() },
     }
 }
 

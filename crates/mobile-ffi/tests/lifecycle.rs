@@ -422,6 +422,50 @@ fn housekeeping_gives_back_what_the_folder_already_holds() {
     assert_eq!(std::fs::read(&out).unwrap(), bytes);
 }
 
+/// A send's bytes stay while it waits and after it arrives. Once it has
+/// arrived they are counted, and go when the person asks for them by name --
+/// not before it arrives, and not as part of freeing space in general.
+///
+/// Nothing on a phone ever released them: it has no storage cap, which is
+/// what releases them on a desktop (decision 0030). The S23 was holding
+/// 1.6 GiB for one video the laptop had taken two days before.
+#[test]
+fn a_send_that_arrived_is_let_go_when_asked_by_name() {
+    let dir = scratch();
+    let staging = scratch();
+    let root = dir.path().display().to_string();
+    create(root.clone()).unwrap();
+    let laptop = pair_with_somebody(dir.path(), "laptop", 0x1A);
+    let qurb = Qurb::open(root, None).unwrap();
+
+    let video = staging.path().join("video.mp4");
+    const SIZE: u64 = 2 << 20;
+    write_incompressible(&video, SIZE as usize);
+    let content = blake3::hash(&std::fs::read(&video).unwrap());
+    qurb.send_file(video.display().to_string(), "video.mp4".into(), laptop).unwrap();
+    let held = qurb.usage().unwrap().on_disk;
+    assert!(held >= SIZE, "the send is not held here: {held}");
+
+    // Waiting: the only copy the laptop will ever get.
+    assert_eq!(qurb.sent_copies().unwrap(), 0, "a waiting send counted as a copy");
+    assert_eq!(qurb.release_sent_copies().unwrap(), 0, "a send was let go before it arrived");
+
+    // Arrived, as the laptop's `Got` records it.
+    let store = Store::open(&dir.path().join(".qurb"), chunk_key_of(dir.path())).unwrap();
+    store.db().note_replica_in_vault(&content, &qurb_sync::DeviceId::from_bytes([0x1A; 32])).unwrap();
+    assert!(qurb.waiting().unwrap().is_empty());
+    let counted = qurb.sent_copies().unwrap();
+    assert!(counted >= SIZE, "counted only {counted} bytes");
+
+    // Kept when space is freed in general...
+    assert!(qurb.housekeep().unwrap().freed < SIZE, "let go without being asked");
+    assert_eq!(qurb.sent_copies().unwrap(), counted);
+    // ...and let go when asked for by name: what was counted, no more.
+    assert_eq!(qurb.release_sent_copies().unwrap(), counted);
+    assert_eq!(qurb.sent_copies().unwrap(), 0);
+    assert!(qurb.usage().unwrap().on_disk < held - SIZE / 2);
+}
+
 /// Pair `qurb` with a made-up device, the way pairing would record it, and
 /// return the fingerprint the app would name it by.
 fn pair_with_somebody(dir: &std::path::Path, name: &str, seed: u8) -> String {

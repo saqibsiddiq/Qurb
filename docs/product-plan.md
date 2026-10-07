@@ -672,10 +672,16 @@ then.*
   Built: freeing and eviction count only a computer or replica as the other
   copy, the phone's vault is kept by its first computer, Clear data opens
   qurb's own screen, uninstalling offers to keep the data.
-- [ ] Watched on the S23 ([0053](decisions/0053-approval-same-key-and-safe-copies.md)):
-  approving a device by its number on either side, the Clear-data screen
-  opened from Settings, the key row in Settings, the laptop becoming the
-  phone's vault keeper.
+- [x] Watched on the S23 ([0053](decisions/0053-approval-same-key-and-safe-copies.md)),
+  2026-10-07: approving a device by its number on either side, and declining,
+  with the laptop on the command line; the Clear-data screen opened from
+  Settings; the key row in Settings; the laptop becoming the phone's vault
+  keeper.
+- [ ] Watched in the desktop window: its approval panel and key row.
+- [ ] A phone letting go of its copies of sent files, watched
+  ([0030](decisions/0030-sending-a-file-to-one-device.md), 2026-10-07): the
+  storage screen's line was seen; the S23's one such copy is probably the
+  last of a video, so it was not let go.
   (Setup's lack of a way back from a new key is answered by 0052: an
   unfinished setup can join instead.)
 - [ ] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):

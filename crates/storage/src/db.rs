@@ -1227,6 +1227,18 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
+    /// Whether `device` has been told this content is held here.
+    pub fn was_reported(&self, device: &DeviceId, content: &blake3::Hash) -> Result<bool> {
+        let told: bool = self.conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM reported WHERE device_id = ?1 AND content_hash = ?2
+             )",
+            params![device.as_bytes().as_slice(), content.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(told)
+    }
+
     /// Remember that `device` has been told this content is held here.
     pub fn note_reported(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {
         self.conn.execute(
@@ -1454,6 +1466,30 @@ impl Db {
                 device.map(|d| d.as_bytes().to_vec()),
                 detail,
             ],
+        )?;
+        Ok(())
+    }
+
+    /// Whether the last thing recorded about `path` is this same failure.
+    pub fn failed_last_with(&self, path: &str, detail: &str) -> Result<bool> {
+        let last: Option<(String, Option<String>)> = self
+            .conn
+            .query_row(
+                "SELECT kind, detail FROM activity WHERE path = ?1 ORDER BY at DESC, id DESC LIMIT 1",
+                params![path],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        Ok(matches!(last, Some((kind, Some(said))) if kind == Event::Failed.as_str() && said == detail))
+    }
+
+    /// Forget that `path` did not arrive, once that has been settled another
+    /// way. The failures say something no longer true, and on a phone's Home
+    /// they were the most recent thing it had to show.
+    pub fn forget_failures(&self, path: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM activity WHERE kind = ?1 AND path = ?2",
+            params![Event::Failed.as_str(), path],
         )?;
         Ok(())
     }
@@ -2628,6 +2664,21 @@ impl Db {
             )
             .optional()
             .map_err(Into::into)
+    }
+
+    /// Whether a live file in the folder holds this chunk, by the index alone:
+    /// [`locate_chunk`](Self::locate_chunk)'s question, asked for a yes or no.
+    pub fn chunk_in_folder(&self, hash: &blake3::Hash) -> Result<bool> {
+        let held: bool = self.conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM file_chunks fc
+                   JOIN files f ON f.id = fc.file_id
+                  WHERE fc.chunk_hash = ?1 AND f.deleted_at IS NULL AND f.materialised = 1
+             )",
+            params![hash.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(held)
     }
 
     /// Live paths whose content includes this chunk.

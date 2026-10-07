@@ -17,6 +17,14 @@ NetworkSource  plugs the client into the engine's ContentSource seam
 Fetching a file asks first for its **manifest** — the list of chunks it is made
 of — and then only for the chunks this device does not already hold.
 
+A manifest is given only for content the server holds: every chunk in its
+chunk store or in a live file in its folder (`Store::held_chunks`). A file it
+freed keeps its chunk list but not its bytes, and is answered *not found*.
+The client reports that as `Error::NotHeld`, which `NetworkSource` passes to
+the engine as `ContentUnavailable`. The engine then lists the file as
+elsewhere instead of failing on it at every sync
+([decision 0054](../../docs/decisions/0054-a-file-the-other-device-does-not-hold.md)).
+
 Measured on a 200 MB file, inserting 16 bytes at offset 1000, over loopback on
 this machine:
 

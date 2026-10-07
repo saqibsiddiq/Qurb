@@ -63,10 +63,10 @@ class ManageSpaceActivity : AppCompatActivity() {
                 deleteButton(emptyList())
                 return@launch
             }
-            val (usage, only) = try {
+            val (usage, only, sent) = try {
                 withContext(Dispatchers.IO) {
                     val engine = Engine.open(this@ManageSpaceActivity)
-                    engine.usage() to engine.onlyHere()
+                    Triple(engine.usage(), engine.onlyHere(), engine.sentCopies())
                 }
             } catch (e: Exception) {
                 text("Could not read Qurb's files: ${e.message}", R.style.Text_Body)
@@ -81,9 +81,11 @@ class ManageSpaceActivity : AppCompatActivity() {
                     "your other devices with a code.", R.style.Text_Body)
             } else {
                 val total = only.sumOf { it.size.toLong() }.toULong()
-                text("${Words.files(only.size)} (${Words.size(total)}) exist only on this phone. " +
-                    "Deleting Qurb's data deletes them for good:", R.style.Text_Body)
-                only.take(20).forEach { text("· ${it.path}${if (it.private) "  (private)" else ""}", R.style.Text_Quiet) }
+                val verb = if (only.size == 1) "exists" else "exist"
+                text("${Words.files(only.size)} (${Words.size(total)}) $verb only on this phone. " +
+                    "Deleting Qurb's data deletes ${if (only.size == 1) "it" else "them"} for good:", R.style.Text_Body)
+                // Not "private": the flag also covers a send not collected yet.
+                only.take(20).forEach { text("· ${it.path}", R.style.Text_Quiet) }
                 if (only.size > 20) text("and ${only.size - 20} more", R.style.Text_Quiet)
                 text("Open Qurb and sync with your computer first, and they will be safe there.", R.style.Text_Meta)
             }
@@ -100,16 +102,44 @@ class ManageSpaceActivity : AppCompatActivity() {
                         .show()
                 }
             }
+            // Named on its own, never part of the button above (decision 0030).
+            if (sent > 0uL) {
+                text("${Words.size(sent)} of that is this phone's copies of files it sent, kept after " +
+                    "they arrived.", R.style.Text_Meta)
+                button("Let go of copies of sent files") {
+                    MaterialAlertDialogBuilder(this@ManageSpaceActivity)
+                        .setTitle("Let go of ${Words.size(sent)}?")
+                        .setMessage(SentCopies.COST)
+                        .setNegativeButton("Keep", null)
+                        .setPositiveButton("Let go") { _, _ ->
+                            lifecycleScope.launch {
+                                val freed = withContext(Dispatchers.IO) {
+                                    runCatching { Engine.open(this@ManageSpaceActivity).releaseSentCopies() }
+                                        .getOrDefault(0uL)
+                                }
+                                MaterialAlertDialogBuilder(this@ManageSpaceActivity)
+                                    .setTitle("Freed ${Words.size(freed)}")
+                                    .setPositiveButton("OK") { _, _ -> load() }
+                                    .show()
+                            }
+                        }
+                        .show()
+                }
+            }
             button("Open Qurb") { startActivity(Intent(this@ManageSpaceActivity, MainActivity::class.java)) }
-            deleteButton(only)
+            deleteButton(only, sent)
         }
     }
 
     /** Still possible, as it should be -- after saying what it costs. */
-    private fun deleteButton(only: List<OnlyHere>) {
+    private fun deleteButton(only: List<OnlyHere>, sent: ULong = 0uL) {
         button("Delete everything Qurb keeps here…", danger = true) {
-            val lost = if (only.isEmpty()) "Nothing exists only on this phone."
-            else "${Words.files(only.size)} that exist only on this phone will be gone for good."
+            val files = if (only.isEmpty()) "Nothing in your folders exists only on this phone."
+            else "${Words.files(only.size)} that ${if (only.size == 1) "exists" else "exist"} only on this phone " +
+                "will be gone for good."
+            // The devices sent to may have deleted theirs since (decision 0030).
+            val lost = if (sent == 0uL) files
+            else "$files This phone's copies of files it sent (${Words.size(sent)}) go too."
             MaterialAlertDialogBuilder(this)
                 .setTitle("Delete everything Qurb keeps here?")
                 .setMessage("$lost This phone's key and its pairings go too. Your other devices keep what they have.")
