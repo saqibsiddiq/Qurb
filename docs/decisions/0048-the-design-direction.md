@@ -94,5 +94,6 @@ the smoke test — and reviewed there at the checkpoints.
   site, and the product drawn from the apps' own parts. It calls the product
   *Qurb*, as the apps do, where it used to say *Qurb Cloud*. See
   [website/README.md](../../website/README.md).
-- **Not yet done:** the owner's review at the three checkpoints; dark mode;
-  moving a file into or out of Private Vault.
+- **Not yet done:** the owner's review at the three checkpoints; moving a
+  file into or out of Private Vault. Dark mode was built on 2026-10-08, ahead
+  of the review, at the owner's asking ([0056](0056-dark-mode.md)).

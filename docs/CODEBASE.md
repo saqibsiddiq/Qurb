@@ -773,8 +773,8 @@ Being precise about this matters, because the architecture document describes a
 complete system and a good deal of it is still unbuilt. The engine is real, and
 so, on Linux and Android, is a product around it that does what the brief asks
 of the features, designed to the owner's direction; what it does not have yet
-is the owner's review of that design, dark mode, a relay on a server, and a
-release. The unbuilt parts are listed at the end of this section.
+is the owner's review of that design, a relay on a server, and a release.
+Dark mode is built on both ([decisions/0056](decisions/0056-dark-mode.md)). The unbuilt parts are listed at the end of this section.
 
 ### Built and tested (`crates/storage`, Phase 1)
 
@@ -1197,8 +1197,9 @@ Closing it hides it and qurb keeps syncing; it starts at login without a
 window, and *Quit qurb* in Settings stops it. Its design follows the owner's
 direction ([design/direction.md](design/direction.md),
 [decisions/0048](decisions/0048-the-design-direction.md)) and was built on
-2026-09-29, and the Android app was rebuilt to it the same day. Both are light
-only; dark mode follows the owner's review.
+2026-09-29, and the Android app was rebuilt to it the same day. Both have a
+dark mode on the same colour roles since 2026-10-08, chosen in Settings or
+following the system ([decisions/0056](decisions/0056-dark-mode.md)).
 
 Selective sync is built in both halves: a device drops local copies when it is
 over its storage limit and fetches them back on request, and a person can say

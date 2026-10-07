@@ -34,6 +34,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
+        android:name=".QurbApplication"
         android:allowBackup="false"
         android:hasFragileUserData="true"
         android:manageSpaceActivity=".ManageSpaceActivity"

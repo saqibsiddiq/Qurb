@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Qurb</title>
+  <script src="theme.js"></script>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -394,8 +395,12 @@
           <div class="group-title">Appearance</div>
           <div class="group glass-frosted">
             <div class="item">
-              <div class="label"><strong>Theme</strong><span>A dark theme is designed after this one.</span></div>
-              <span class="value">Light</span>
+              <div class="label"><strong>Theme</strong><span>Light, dark, or as your system is set.</span></div>
+              <div class="segmented" id="theme-choice" role="radiogroup" aria-label="Theme">
+                <button data-theme="system" role="radio">System</button>
+                <button data-theme="light" role="radio">Light</button>
+                <button data-theme="dark" role="radio">Dark</button>
+              </div>
             </div>
             <div class="item">
               <div class="label"><strong>Motion</strong><span>Follows your system's reduce-motion setting.</span></div>

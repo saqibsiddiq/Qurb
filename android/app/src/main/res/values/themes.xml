@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- The whole app's look, from docs/design/direction.md, as roles mapped
-         onto Material's. Light: dark comes after the light design is approved.
+         onto Material's. DayNight: the roles take values-night's values in
+         dark (decision 0056).
 
          NoActionBar because each screen draws its own heading; with the default,
          the window decor would supply a bar as well. -->
-    <style name="Theme.Qurb" parent="Theme.Material3.Light.NoActionBar">
+    <style name="Theme.Qurb" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/green</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorPrimaryContainer">@color/green_soft</item>
@@ -57,7 +58,7 @@
     <!-- The share sheet's screen is a dialog rather than a page. It reports one
          short outcome and gets out of the way, and framing it as a dialog keeps
          the app the person was actually using visible behind it. -->
-    <style name="Theme.Qurb.Share" parent="Theme.Material3.Light.Dialog">
+    <style name="Theme.Qurb.Share" parent="Theme.Material3.DayNight.Dialog">
         <item name="colorPrimary">@color/green</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorSurface">@color/glass_elevated</item>
@@ -195,7 +196,7 @@
         <item name="android:windowIsFloating">false</item>
         <item name="android:backgroundDimAmount">0.2</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowLightNavigationBar">@bool/light_bars</item>
     </style>
     <style name="Widget.Qurb.Sheet" parent="Widget.Material3.BottomSheet.Modal">
         <item name="backgroundTint">@color/glass_elevated</item>

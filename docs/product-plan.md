@@ -26,7 +26,7 @@ Android. The design is built directly in the apps, from the owner's direction
 owner made, is [design/brief.md](design/brief.md)
 ([0048](decisions/0048-the-design-direction.md)). Both apps were built to it
 on 2026-09-29, in light only, and wait for the owner's look; the Android app's
-was walked on the S23 on 2026-10-03. Dark mode follows the review. On 2026-10-03 the owner asked to focus on completing the project; §13
+was walked on the S23 on 2026-10-03. Dark mode was built on 2026-10-08. On 2026-10-03 the owner asked to focus on completing the project; §13
 is the list, checked off as it goes.
 
 **Four things the brief asks for disagreed with decisions already recorded.**
@@ -618,7 +618,9 @@ it is started.
   2026-10-03; it had been on the phone since 2026-09-29 ([phase 5](phases/phase-5-mobile.md#the-designed-app-on-the-s23)).
   Walking it found the laptop four days out of sync, from a folder typed
   without a slash ([phase 4](phases/phase-4-product.md#a-folder-typed-without-a-slash)).
-- [ ] The owner's review of both apps at the checkpoints; then dark mode.
+- [ ] The owner's review of both apps at the checkpoints.
+- [x] Dark mode, on both — 2026-10-08, ahead of the review at the owner's
+  asking ([0056](decisions/0056-dark-mode.md)).
 - [ ] Moving a file into and out of Private Vault, on both
   ([brief §2](design/brief.md)) — an engine addition.
 - [ ] The three notifications on the phone.

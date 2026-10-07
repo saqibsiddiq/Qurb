@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The palette: docs/design/direction.md §8, the same as the desktop's.
+     Dark is values-night/colors.xml, the desktop's dark values (decision
+     0056); which one shows is Settings → Theme, or the system's.
 
-     Light only for now. Dark is designed after the light one is approved
-     (docs/design/brief.md §1), and the app is kept light until then, so the
-     night palette of the old design does not return underneath the new one.
-
-     Layouts name roles, never hex values. -->
+     Layouts and drawables name roles, never hex values. -->
 <resources>
     <color name="bg">#F7F7F4</color>
     <color name="surface">#FFFFFF</color>
@@ -42,6 +40,25 @@
     <color name="glass_edge">#B3FFFFFF</color>
     <color name="hairline">#12171816</color>
     <color name="scrim">#33171816</color>
+
+    <!-- What the drawables are painted with. -->
+    <color name="nav_glass">#F2FBFBF9</color>
+    <color name="tile_fill">#CCFFFFFF</color>
+    <color name="mark_fill">#E6FFFFFF</color>
+    <color name="mark_ring">#2E287052</color>
+    <color name="attention_fill">#D9F7F0DD</color>
+    <color name="attention_edge">#24946A24</color>
+    <color name="folder_top">#F2F0F6F3</color>
+    <color name="folder_bottom">#CCE8F0EC</color>
+    <color name="folder_edge">#1F2F6B57</color>
+    <color name="ripple">#14171816</color>
+    <color name="env_glow">#476FAF98</color>
+    <color name="env_glow_low">#1F6FAF98</color>
+    <color name="env_glow_none">#006FAF98</color>
+    <color name="env_cool">#6BC4D0D8</color>
+    <color name="env_cool_none">#00C4D0D8</color>
+    <color name="env_warm">#8CEADEC4</color>
+    <color name="env_warm_none">#00EADEC4</color>
 
     <!-- The old role names, for the screens that still say them. -->
     <color name="paper">@color/bg</color>

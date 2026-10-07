@@ -31,7 +31,7 @@ disagree, the direction won; the earlier answer is struck through.
 | Surfaces | the desktop window **and** the Android app, one language, not one layout (direction §50) |
 | Feel | calm and quiet — and, per the direction, *private infrastructure wrapped in glass* |
 | Accent | ~~deep teal~~ → **Qurb green `#2F6B57`** (direction §8); fixed, no Material You |
-| Theme | light first; **dark after light is approved**, as a Dark mode on the colour variables |
+| Theme | light first; **dark after light is approved**, as a Dark mode on the colour variables — built on 2026-10-08, ahead of the review, at the owner's asking ([0056](../decisions/0056-dark-mode.md)) |
 | Type | **Inter** |
 | Desktop look | qurb's own, not GNOME's; window controls stay native |
 | Desktop navigation | ~~Home, Files, Devices, Activity, Settings~~ → **Home, Files, Devices, Storage; Private Vault set apart; Settings** in a translucent sidebar (§24) |
@@ -158,7 +158,7 @@ Since then (2026-10-03): the mark on Linux — the applications menu and the
 tray — and the website, built with the apps as its reference
 ([website/README.md](../../website/README.md)).
 
-**Next:** the owner's review at the checkpoints; then dark mode; then *Move to
+**Next:** the owner's review at the checkpoints (dark mode is built: [0056](../decisions/0056-dark-mode.md)); then *Move to
 Private Vault* and *Move to shared*, which need the engine addition in §2. One
 smaller thing the table in §3 places and nothing draws yet: notifications on
 the phone.

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark (decision 0056): the desktop's dark values, role for role. Warm
+     near-blacks, never pure black; the green lifted so it still reads as
+     Qurb's on them; glass a slightly lighter dark with a faint light edge.
+     Roles not named here keep their light value, and are ones that work on
+     both: the glow, and white on green. -->
+<resources>
+    <color name="bg">#121311</color>
+    <color name="surface">#1C1D1B</color>
+    <color name="surface_2">#242622</color>
+    <color name="text">#ECEDE8</color>
+    <color name="text_2">#B0B3AB</color>
+    <color name="text_3">#868980</color>
+    <color name="border">#2E302C</color>
+    <color name="border_strong">#3C3F3A</color>
+
+    <color name="green">#3F8C70</color>
+    <color name="green_hover">#4A9A7D</color>
+    <color name="green_pressed">#357A61</color>
+    <color name="green_soft">#1C2A24</color>
+
+    <color name="healthy">#74C29B</color>
+    <color name="healthy_bg">#19291F</color>
+    <color name="attention">#DCB064</color>
+    <color name="attention_bg">#2D2617</color>
+    <color name="error">#E5847A</color>
+    <color name="error_bg">#331F1D</color>
+    <color name="neutral">#A2AAA7</color>
+    <color name="neutral_bg">#232625</color>
+
+    <color name="glass_clear">#6B222421</color>
+    <color name="glass_frosted">#9E20221F</color>
+    <color name="glass_elevated">#F71E201D</color>
+    <color name="glass_edge">#14FFFFFF</color>
+    <color name="hairline">#14ECEDE8</color>
+    <color name="scrim">#99000000</color>
+
+    <color name="nav_glass">#F21E201D</color>
+    <color name="tile_fill">#CC282A26</color>
+    <color name="mark_fill">#E6282A26</color>
+    <color name="mark_ring">#4074C29B</color>
+    <color name="attention_fill">#D92D2617</color>
+    <color name="attention_edge">#33DCB064</color>
+    <color name="folder_top">#F2222F29</color>
+    <color name="folder_bottom">#CC1C2A24</color>
+    <color name="folder_edge">#336FAF98</color>
+    <color name="ripple">#1FECEDE8</color>
+    <color name="env_glow">#386FAF98</color>
+    <color name="env_glow_low">#186FAF98</color>
+    <color name="env_cool">#4D1E262E</color>
+    <color name="env_cool_none">#001E262E</color>
+    <color name="env_warm">#663A3224</color>
+    <color name="env_warm_none">#003A3224</color>
+</resources>

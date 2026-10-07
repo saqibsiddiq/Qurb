@@ -145,7 +145,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
 
         kit.groupTitle(page, "Appearance")
         group = kit.group(page)
-        kit.item(group, "Theme", "Light. A dark theme comes after this one is settled.")
+        kit.item(group, "Theme", Appearance.chosen(app).words) { chooseTheme() }
         kit.item(group, "Motion", if (Kit.calm()) "Reduced, as this phone's settings ask" else "Full; follows this phone's animation settings")
 
         kit.groupTitle(page, "Advanced")
@@ -294,6 +294,19 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                 app.fail("Could not change that", e)
             }
         }
+    }
+
+    /** Light, dark, or as the phone is set (decision 0056), applied at once. */
+    private fun chooseTheme() {
+        val chosen = Appearance.chosen(app)
+        val sheet = kit.sheet().header(R.drawable.ic_palette, "Theme")
+        for (theme in Appearance.Theme.entries) {
+            sheet.action(if (theme == chosen) R.drawable.ic_check else R.drawable.ic_palette, theme.words) {
+                Appearance.choose(app, theme)
+                refresh()
+            }
+        }
+        sheet.show()
     }
 
     /** Keep the key in Block Store now, for a phone that does not have it. */

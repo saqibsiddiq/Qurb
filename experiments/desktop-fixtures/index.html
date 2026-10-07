@@ -33,7 +33,8 @@ const REAL = "../../crates/desktop/ui/";
 
   // The real page's own script tags are taken out and run after the stub, in
   // their order: the window's scripts read `window.__TAURI__` as they start.
-  const scripts = [...page.body.querySelectorAll("script")].map((s) => REAL + s.getAttribute("src"));
+  // The head's too: theme.js sets the theme before anything draws.
+  const scripts = [...page.querySelectorAll("script[src]")].map((s) => REAL + s.getAttribute("src"));
   page.body.querySelectorAll("script").forEach((s) => s.remove());
   document.body.replaceChildren(...page.body.children);
 

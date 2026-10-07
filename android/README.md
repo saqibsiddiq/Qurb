@@ -44,8 +44,9 @@ them, and the sheets that rise over them:
 | scan | the camera, reading the code another device shows when connecting |
 | share | anything on the phone, from the system share sheet: saved to Private Vault, saved to Files, or sent to one paired device |
 
-Light only for now: the dark theme is designed after the light one is
-approved. Sheets blur what is behind them where the phone does that (Android
+Light or dark, as Settings → Theme says or as the phone is set
+([decision 0056](../docs/decisions/0056-dark-mode.md)): the colour roles have
+night values in `values-night/`, and the drawables name roles too. Sheets blur what is behind them where the phone does that (Android
 12 and later, when the device allows); elsewhere a surface is a translucent
 fill over the still environment, which looks the same and costs nothing.
 Motion follows the phone's animation setting: with animations off, nothing
@@ -372,9 +373,6 @@ replaced by uninstalling — which deletes the phone's key and index. See
   the S23 on 2026-10-03; decision 0039's measurements have not been repeated
   for it, and the owner has not reviewed it. See
   [phases/phase-5-mobile.md](../docs/phases/phase-5-mobile.md#the-designed-app-on-the-s23).
-- **A dark theme.** Light only until the light design is approved; the night
-  palette of the earlier screens was removed rather than left under the new
-  one.
 - **Notifications.** The phone raises none; Settings says so.
 - **Not yet tried on the phone**, though built and run on the emulator:
   removing a device, the share sheet sending to a device, showing a pairing

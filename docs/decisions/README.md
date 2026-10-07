@@ -82,3 +82,4 @@ is worth more than a tidy directory.
 | [0053](0053-approval-same-key-and-safe-copies.md) | Pairing is approved, checks the key, and a phone's copy is not a safe last one | Accepted — built and tested on all three; watched on the S23 with the command line, not in the desktop window |
 | [0054](0054-a-file-the-other-device-does-not-hold.md) | A file the other device does not hold is listed, not failed every sync | Accepted — built, tested, and watched on the S23; extended by 0055 |
 | [0055](0055-a-file-on-no-device-says-so.md) | A file on no device says so | Accepted — built on the desktop, the phone and the command line |
+| [0056](0056-dark-mode.md) | Dark mode, on the same tokens | Accepted — built on the desktop and Android |

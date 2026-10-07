@@ -2,7 +2,7 @@
 <!-- The tab bar: clear glass (§6), nearly opaque because nothing on Android
      blurs what scrolls behind a view, and text must not show through it. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#F2FBFBF9" />
+    <solid android:color="@color/nav_glass" />
     <stroke android:width="1dp" android:color="@color/glass_edge" />
     <corners android:radius="26dp" />
 </shape>

@@ -290,6 +290,7 @@ async function drawSettings() {
   $("set-private").checked = s.own_files_private;
   $("set-notify").checked = s.notifications;
   $("motion-says").textContent = calm() ? "Reduced" : "Full";
+  showTheme();
 
   // Where that actually is, since the setting can be empty or "off". Serde
   // sends a Result as {Ok} or {Err}.
@@ -309,6 +310,17 @@ async function drawSettings() {
 }
 
 /** A switch that applies at once, and puts itself back if that fails. */
+/** The theme choice (decision 0056): System, Light or Dark, applied at once. */
+function showTheme() {
+  const chosen = window.qurbTheme.chosen();
+  for (const b of $("theme-choice").querySelectorAll("button")) {
+    b.setAttribute("aria-checked", String(b.dataset.theme === chosen));
+  }
+}
+for (const b of $("theme-choice").querySelectorAll("button")) {
+  b.addEventListener("click", () => { window.qurbTheme.choose(b.dataset.theme); showTheme(); });
+}
+
 function applyAtOnce(id, apply, onWords, offWords) {
   $(id).addEventListener("change", async (event) => {
     const on = event.target.checked;

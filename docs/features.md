@@ -62,7 +62,7 @@ not yet looked at by the owner.
 | | a device's details: what is waiting for it, send it files, remove it — saying first what that will and will not do ([0041](decisions/0041-removing-a-device.md)) | 🧪 |
 | **Storage** | how much can be freed without losing anything, the largest files that would free it, *Free local space* for one or all; the storage limit ([0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md)) | 🧪 |
 | **Private Vault** | this computer's own files, in the same browser; moving a file in or out is not built yet | 🧪 |
-| **Settings** | grouped lists: this device (name, folder, key protection and changing it); devices and pairings; files sent to this computer (`Downloads/qurb` by default, [0037](decisions/0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md)); keep new files private; notifications; the recovery phrase; appearance; advanced — rendezvous, relay, port, start at login, Activity, identity, version, Quit | 🧪 |
+| **Settings** | grouped lists: this device (name, folder, key protection and changing it); devices and pairings; files sent to this computer (`Downloads/qurb` by default, [0037](decisions/0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md)); keep new files private; notifications; the recovery phrase; appearance — theme: system, light or dark ([0056](decisions/0056-dark-mode.md)); advanced — rendezvous, relay, port, start at login, Activity, identity, version, Quit | 🧪 |
 | **Activity** | from Home: everything this device did, newest first, with why a failure failed ([0031](decisions/0031-what-happened-is-written-down.md)) | 🧪 |
 
 ### Sending and transfers
@@ -126,7 +126,7 @@ was walked through on the emulator.
 | **Devices** | this phone and each paired device as cards, with when each was last seen; *Add* — scan a code, **show a code on this phone**, or type one | ✅ scan · ◻ show |
 | | a device's sheet: *Keep a backup of my Private Vault* — a device that keeps a copy of the phone's own files, so the phone can free space | ✅ |
 | | send files to it; remove it, saying first what that does ([0041](decisions/0041-removing-a-device.md)) | ✅ both in the S23's history, 2026-09-29 |
-| **Settings** | grouped lists: this phone (name, key protection); devices; storage — space used, who has each folder (choose devices, keep on this phone or download when opened), Recently deleted, *free unused space*; privacy — *Keep new files private*; notifications (none on the phone yet); the recovery phrase; appearance; advanced — background sync, rendezvous, relay, version | 🧪 |
+| **Settings** | grouped lists: this phone (name, key protection); devices; storage — space used, who has each folder (choose devices, keep on this phone or download when opened), Recently deleted, *free unused space*; privacy — *Keep new files private*; notifications (none on the phone yet); the recovery phrase; appearance — theme: as the phone is set, light or dark ([0056](decisions/0056-dark-mode.md)); advanced — background sync, rendezvous, relay, version | 🧪 |
 | **Activity** | from Home: what happened, newest first, sixty at a time | ✅ |
 | **Recently deleted** | from Files and Settings: thirty days, when each expires; restore — on every device — or delete for good ([0042](decisions/0042-recently-deleted.md)) | ✅ |
 | **Transfers** | a bar above the tabs while the phone syncs or has a send not yet collected; its sheet shows what is waiting, with *Stop*, and what finished | 🧪 stop sending |
@@ -240,8 +240,6 @@ Stated plainly so that a design does not assume it:
 - **The relay on a server.** Next, after design and UX. Until then a phone on a
   network that blocks a direct path cannot sync.
 - **The owner's review of the design**, on both.
-- **Dark mode** — after the light design is approved. The phone's earlier dark
-  theme was removed with the redesign rather than left under it.
 - **Notifications on the phone.** Settings says so.
 - **Moving a file into or out of Private Vault** — designed, and needs an
   engine addition.
