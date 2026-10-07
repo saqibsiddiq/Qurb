@@ -101,6 +101,7 @@ listed, since listing it notes its author as a holder.
   was recorded as holding and marked all 7 out of reach. The other 11 were
   recorded only for the old identity, never paired with this phone. Files
   showed all 18 as *On no device*.
+- The phone's sheet for such a file, seen the same evening: *On no device*,
+  the reason, and only *Delete*.
 - **Not watched**: the window's details panel and menu for such a file, which
-  the fixtures show only as a row; the phone's sheet for one; a confirmation
-  going stale.
+  the fixtures show only as a row; a confirmation going stale.

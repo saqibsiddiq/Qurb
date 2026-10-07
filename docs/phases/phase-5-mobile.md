@@ -1845,7 +1845,9 @@ and Home's *Recent* showed no failures. One thing was wrong on screen: each
 said "20734 days ago". A file listed without its bytes had been given a time
 of 0, which is 1970. It now carries the time its version was made, and rows
 already written fall back to when the row last changed: 18 to 24 September
-for these. That is built and installed, and not yet looked at on the screen.
+for these. Looked at on the screen at 20:27: Files reads "15 days ago" and
+the like, and a file's sheet says *On no device*, why, and offers only
+*Delete*.
 
 ## Deliberately left undone
 
