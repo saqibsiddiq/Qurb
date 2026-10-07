@@ -187,6 +187,18 @@ impl PeerClient {
         }
     }
 
+    /// What kind of device the peer is -- `phone`, `computer` or `replica` --
+    /// for a device paired before devices said so when pairing (decision
+    /// 0053). `None` from a device that does not say: an older build answers
+    /// "not found".
+    pub async fn about(&self) -> Result<Option<String>> {
+        match self.request(Request::About).await? {
+            Response::About { kind } => Ok(Some(kind)),
+            Response::NotFound => Ok(None),
+            other => Err(unexpected("description", &other)),
+        }
+    }
+
     /// Wait until the peer's state differs from `since`.
     ///
     /// Returns where the peer has got to, both when something changed and when
@@ -434,6 +446,9 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Noted => "acknowledgement",
         Response::Paired { .. } => "pairing reply",
         Response::Key { .. } => "key",
+        Response::About { .. } => "description",
+        Response::Mismatch => "key mismatch",
+        Response::Declined => "refusal",
         Response::Changed { .. } => "change notification",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }

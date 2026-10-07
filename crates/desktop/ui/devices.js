@@ -303,6 +303,45 @@ function openAddDevice() {
     actions.append(stop);
     body.append(actions);
 
+    // A device that used the code waits for the person here (decision 0053):
+    // who it is, the number it should be showing, and a yes or no. A device
+    // showing a different number has somebody else's copy of the code.
+    const asking = el("div", "asking glass-frosted hidden");
+    asking.id = "pair-asking";
+    asking.style.cssText = "margin-top: 16px; padding: 16px; border-radius: 16px";
+    body.insertBefore(asking, code);
+    let asked = null;
+    const ask = (state) => {
+      const key = `${state.name}|${state.number}`;
+      if (asked === key) return;
+      asked = key;
+      const what = state.wants_key ? "wants to join and take this computer's key" : "wants to pair";
+      const number = el("p", "number", state.number);
+      number.id = "pair-number";
+      number.style.cssText = "font-size: 32px; font-weight: 600; letter-spacing: 2px; margin: 8px 0; font-variant-numeric: tabular-nums";
+      const decline = button("Decline", "btn");
+      const approve = button("Approve", "btn primary");
+      approve.id = "pair-approve";
+      const answer = async (yes) => {
+        decline.disabled = approve.disabled = true;
+        try { await invoke("answer_pairing", { approve: yes }); } catch (e) { says.textContent = String(e); }
+        asked = null;
+        asking.classList.add("hidden");
+      };
+      decline.addEventListener("click", () => answer(false));
+      approve.addEventListener("click", () => answer(true));
+      const buttons = el("div", "actions");
+      buttons.append(decline, approve);
+      asking.replaceChildren(
+        el("strong", null, `${state.name} ${what}.`),
+        el("p", "meta", "Approve only if it shows this number:"),
+        number,
+        el("p", "meta", "A different number means someone else has this code: decline."),
+        buttons,
+      );
+      asking.classList.remove("hidden");
+    };
+
     clearInterval(watching);
     const follow = async () => {
       let state;
@@ -312,7 +351,13 @@ function openAddDevice() {
         says.textContent = String(e);
         return;
       }
+      if (state.state === "asking") {
+        says.textContent = "A device is asking to join.";
+        ask(state);
+        return;
+      }
       if (state.state === "waiting") {
+        if (asked !== null) { asked = null; asking.classList.add("hidden"); }
         // Counted down rather than left saying "waiting". A code that stopped
         // working minutes ago, under a screen that says it is waiting, is
         // worse than no screen: somebody reads it out and is told it is wrong.
@@ -348,11 +393,17 @@ function openAddDevice() {
       go.disabled = true;
       go.querySelector("span").textContent = "Joining…";
       try {
+        // The other device asks its person to approve this one: show the
+        // number it will be comparing (decision 0053).
+        const number = await invoke("pairing_number", { code: input.value });
+        says.classList.remove("warn", "hidden");
+        says.textContent = `Approve it on the other device. It should show ${number}.`;
         const state = await invoke("join_device", { code: input.value });
         input.value = "";
         done(state);
       } catch (e) {
         says.textContent = String(e);
+        says.classList.add("warn");
         says.classList.remove("hidden");
         go.disabled = false;
         go.querySelector("span").textContent = "Join";

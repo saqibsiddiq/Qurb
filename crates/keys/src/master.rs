@@ -30,6 +30,10 @@ pub enum Purpose {
     /// Beacons on the local network, so that devices can find each other with
     /// no server in the picture at all.
     LocalDiscovery,
+    /// What two devices compare when they pair, to know they hold the same
+    /// key without either sending it (decision 0053). One-way, like every
+    /// derivation here: seeing it says nothing about the key.
+    PairingCheck,
 }
 
 impl Purpose {
@@ -41,6 +45,7 @@ impl Purpose {
             Purpose::DeviceIdentity => b"qurb/device-identity/v1",
             Purpose::MetadataAuth => b"qurb/metadata-auth/v1",
             Purpose::LocalDiscovery => b"qurb/local-discovery/v1",
+            Purpose::PairingCheck => b"qurb/pairing-check/v1",
         }
     }
 }
@@ -177,13 +182,18 @@ mod tests {
         // If two purposes collided, compromising one would compromise the
         // other, and the whole point of deriving separately would be lost.
         let key = MasterKey::from_bytes([7; 32]);
-        let chunk = key.derive(Purpose::ChunkEncryption);
-        let identity = key.derive(Purpose::DeviceIdentity);
-        let metadata = key.derive(Purpose::MetadataAuth);
-
-        assert_ne!(chunk, identity);
-        assert_ne!(chunk, metadata);
-        assert_ne!(identity, metadata);
+        let all = [
+            Purpose::ChunkEncryption,
+            Purpose::DeviceIdentity,
+            Purpose::MetadataAuth,
+            Purpose::LocalDiscovery,
+            Purpose::PairingCheck,
+        ];
+        for (i, a) in all.iter().enumerate() {
+            for b in &all[i + 1..] {
+                assert_ne!(key.derive(*a), key.derive(*b), "{a:?} and {b:?} collide");
+            }
+        }
     }
 
     #[test]

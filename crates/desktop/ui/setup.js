@@ -267,6 +267,11 @@ $("join-next").addEventListener("click", async () => {
       $("given-phrase").value = "";
       $("ready-says").textContent = "This computer now shares your key, and Qurb is watching your folder. Pair it with your other devices from Devices.";
     } else {
+      // The phone asks its person to approve this computer: show the number
+      // it will be comparing (decision 0053).
+      const number = await invoke("setup_pairing_number", { path, code: $("given-code").value });
+      says.classList.remove("warn", "hidden");
+      says.textContent = `Approve this computer on your phone. It should show ${number}.`;
       const joined = await invoke("join_new_device", { path, code: $("given-code").value, allowance });
       $("given-code").value = "";
       $("ready-says").textContent = `This computer is now one of your devices, paired with ${joined}, and Qurb is watching your folder.`;
@@ -275,6 +280,7 @@ $("join-next").addEventListener("click", async () => {
     step("ready");
   } catch (e) {
     says.textContent = String(e);
+    says.classList.add("warn");
     says.classList.remove("hidden");
   } finally {
     b.disabled = false;

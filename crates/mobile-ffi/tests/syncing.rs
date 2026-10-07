@@ -12,6 +12,31 @@ use qurb_mobile::{create, join_new, restore, Qurb, Settings};
 use qurb_signal::SignalServer;
 use std::sync::Arc;
 
+/// The "desktop" in these tests is a second phone engine, which tells devices
+/// it is a phone; a real desktop says it is a computer. Recorded as one on the
+/// phone at `phone_root`, so the phone counts its copy as a safe one to free
+/// its own for (decision 0053).
+fn as_a_computer(phone_root: &std::path::Path) {
+    let store_dir = phone_root.join(".qurb");
+    let master = qurb_keys::Vault::at(&store_dir).unlock(None).unwrap();
+    let chunk_key = qurb_storage::ChunkKey::from_bytes(
+        master.derive(qurb_keys::Purpose::ChunkEncryption).to_bytes(),
+    );
+    let store = qurb_storage::Store::open(&store_dir, chunk_key).unwrap();
+    for peer in store.db().trusted_peers().unwrap() {
+        store.db().set_peer_kind(&peer.device_id, "computer").unwrap();
+    }
+}
+
+/// The person at the device showing the code approves whoever asks.
+struct Yes;
+
+impl qurb_mobile::PairingApprover for Yes {
+    fn approve(&self, _: qurb_mobile::PairingRequest) -> bool {
+        true
+    }
+}
+
 /// Keeps the memory measurement away from everything else in this file.
 ///
 /// `receiving_a_large_file_does_not_hold_it_in_memory` reads the *process's*
@@ -107,7 +132,7 @@ fn a_phone_pairs_with_a_desktop_and_takes_its_files() {
     assert!(!code.is_empty());
     assert!(!offer.spoken().is_empty(), "there must be something to read aloud");
 
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     let joined = phone.join_pairing(code).unwrap();
     let hosted = waiting.join().unwrap().unwrap();
 
@@ -183,7 +208,7 @@ fn a_new_phone_joins_with_the_code_and_needs_no_words() {
 
     let offer = desktop.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     let joined = join_new(phone_root.clone(), code, "phone".into(), None).unwrap();
     let hosted = waiting.join().unwrap().unwrap();
     assert_eq!(joined.name, "desktop");
@@ -233,7 +258,7 @@ fn receiving_a_large_file_does_not_hold_it_in_memory() {
 
     let offer = sender.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     phone.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
 
@@ -367,7 +392,7 @@ fn an_unreachable_peer_is_counted_not_raised() {
 
     let offer = a.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     b.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
 
@@ -418,7 +443,7 @@ fn a_relay_can_be_given_by_name() {
         Qurb::open_with(phone_dir.path().display().to_string(), None, with_relay("phone")).unwrap();
     let offer = desktop.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     phone.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
 
@@ -469,7 +494,7 @@ fn a_freed_shared_file_comes_back_when_asked_for() {
             .unwrap();
     let offer = desktop.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     phone.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
 
@@ -491,6 +516,7 @@ fn a_freed_shared_file_comes_back_when_asked_for() {
     assert_eq!(arrived.adopted, 1, "{arrived:?}");
 
     // Freed: the desktop made it, so the phone knows the desktop has it.
+    as_a_computer(phone_dir.path());
     phone.free_local("photo.jpg".into()).unwrap();
     let freed = phone_dir.path().join("photo.jpg");
     assert!(!freed.exists());
@@ -559,7 +585,7 @@ fn a_device_that_is_off_does_not_starve_one_that_is_on() {
             .unwrap();
     let offer = desktop.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     phone.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
     assert_eq!(phone.peers().unwrap()[0].name, "a laptop that is off", "tried first, or this tests nothing");
@@ -624,7 +650,7 @@ fn one_pass_is_enough_for_the_desktop_to_collect() {
 
     let offer = desktop.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     phone.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
 
@@ -693,7 +719,7 @@ fn a_device_that_never_answers_is_unreachable_not_out_of_time() {
     let b = Qurb::open_with(b_root.clone(), None, settings("b", &signal)).unwrap();
     let offer = a.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     b.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
     drop((a, b));
@@ -756,7 +782,7 @@ fn a_cancelled_offer_cannot_be_joined() {
     offer.cancel();
 
     // Waiting on a cancelled offer reports rather than blocking for ever.
-    assert!(offer.wait().is_err());
+    assert!(offer.wait(Arc::new(Yes)).is_err());
 }
 
 /// The phone shows a code and waits on it; the person gives up. The wait
@@ -773,7 +799,7 @@ fn giving_up_on_a_code_stops_the_wait_already_blocking() {
     let offer = qurb.offer_pairing().unwrap();
     let waiting = {
         let offer = Arc::clone(&offer);
-        std::thread::spawn(move || offer.wait())
+        std::thread::spawn(move || offer.wait(Arc::new(Yes)))
     };
     std::thread::sleep(std::time::Duration::from_millis(300));
     let started = std::time::Instant::now();
@@ -834,7 +860,7 @@ fn a_share_made_while_the_desktop_is_off_arrives_when_it_returns() {
     // Paired first, as they would have been long before today's photo.
     let offer = desktop.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     phone.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
 
@@ -932,7 +958,7 @@ fn a_phone_removes_a_device_that_kept_its_files() {
 
     let offer = desktop.offer_pairing().unwrap();
     let code = offer.code();
-    let waiting = std::thread::spawn(move || offer.wait());
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
     phone.join_pairing(code).unwrap();
     waiting.join().unwrap().unwrap();
 

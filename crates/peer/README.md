@@ -109,6 +109,17 @@ Both sides record the other in a trust store binding device id to fingerprint,
 and `PeerServer::bind_trusting` takes its guest list from there. See
 [decision 0014](../../docs/decisions/0014-pairing.md).
 
+Since [decision 0052](../../docs/decisions/0052-the-key-travels-with-the-code.md)
+a device with no key is given the key over the same connection, and since
+[0053](../../docs/decisions/0053-approval-same-key-and-safe-copies.md) nothing
+is given and nobody trusted until the person at the device showing the code
+approves. `PairingHost::wait` takes the approval as a closure, shown an
+`Asking` with the six digits (`pairing_number`) that the device asking also
+shows (`Invite::number_for`). Each side sends a one-way check of the key
+(`Purpose::PairingCheck`) and devices holding different keys are refused, and
+each says whether it is a `phone`, `computer` or `replica`. Devices paired
+before that ask once with `Request::About`.
+
 ## The wire format
 
 Hand-rolled and explicit. Every field is length-prefixed and bounded, so a

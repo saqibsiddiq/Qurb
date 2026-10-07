@@ -834,6 +834,7 @@ for the workspace as it stands.
 | Mutual authentication | pinned fingerprints, handshake signature verified |
 | Wire format | length-bounded; decoder has no panicking path |
 | Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s, barely faster than one at a time ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)) |
+| Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
@@ -853,7 +854,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-768 tests in 90 test binaries on Linux, all passing (2026-10-05, debug build,
+777 tests in 90 test binaries on Linux, all passing (2026-10-07, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
@@ -1236,12 +1237,13 @@ Eight things are known-missing rather than merely unbuilt:
    alongside other traffic, where BBR is known to take more than its share.
    See [phases/phase-5-mobile.md](phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared).
 
-8. **A phone's copy can be erased in one tap.** A phone's folder lives in
-   the app's private storage, which Android's *Clear data* wipes, and qurb
-   counts that copy as one that lets another device free its own. On
-   2026-10-05 the S23's data was cleared from Settings, and 18 files that the
-   laptop had freed went with it. What should count as a safe last copy is
-   undecided.
+8. **A phone is still a fragile place for a file.** On 2026-10-05 the S23's
+   data was cleared from Settings, and 18 files the laptop had freed went with
+   it. Since [decisions/0053](decisions/0053-approval-same-key-and-safe-copies.md)
+   a phone's copy does not let another device free its own, a phone's
+   Private Vault is kept by its first computer, and *Clear data* opens qurb's
+   own screen, which says what would be lost. What is left is what no app can
+   prevent: a phone lost or broken before it has synced.
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:

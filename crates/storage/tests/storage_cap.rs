@@ -74,6 +74,83 @@ fn content_another_device_holds_can_be_dropped() {
     assert_eq!(f.store.is_materialised("holiday.mp4").unwrap(), Some(false));
 }
 
+/// A copy only a phone holds is not a safe one: one tap in the phone's
+/// settings erases it (decision 0053). A computer's copy is.
+#[test]
+fn a_copy_only_a_phone_holds_does_not_let_the_bytes_go() {
+    let mut f = fixture();
+    let data = f.write("tickets.pdf", 256 * 1024, 0x3333_3333);
+    let hash = blake3::hash(&data);
+    let phone = DeviceId::from_bytes([7; 32]);
+    f.store.db().trust_peer(&phone, &[7; 32], "phone").unwrap();
+    f.store.db().set_peer_kind(&phone, "phone").unwrap();
+    f.store.note_replica(&hash, &phone).unwrap();
+
+    assert!(f.store.evictable().unwrap().is_empty(), "offered for eviction on a phone's copy");
+    assert_eq!(f.store.db().freeable(10).unwrap().count, 0, "offered as freeable on a phone's copy");
+    let refused = f.store.free_local("tickets.pdf").unwrap_err().to_string();
+    assert!(refused.contains("only a phone"), "{refused}");
+    assert!(f.exists("tickets.pdf"));
+
+    let laptop = DeviceId::from_bytes([8; 32]);
+    f.store.db().trust_peer(&laptop, &[8; 32], "laptop").unwrap();
+    f.store.db().set_peer_kind(&laptop, "computer").unwrap();
+    f.store.note_replica(&hash, &laptop).unwrap();
+    assert_eq!(f.store.free_local("tickets.pdf").unwrap(), data.len() as u64);
+}
+
+/// A phone lets the first computer it learns of keep its vault, once: a
+/// choice made afterwards is not overruled (decision 0053).
+#[test]
+fn a_phone_has_its_first_computer_keep_its_vault_once() {
+    let f = fixture();
+    f.store.db().set_local_kind("phone").unwrap();
+    let laptop = DeviceId::from_bytes([8; 32]);
+    let desk = DeviceId::from_bytes([9; 32]);
+    for (device, name) in [(&laptop, "laptop"), (&desk, "desk")] {
+        f.store.db().trust_peer(device, device.as_bytes(), name).unwrap();
+    }
+
+    assert!(!f.store.learn_kind(&laptop, "phone").unwrap(), "a phone is no keeper");
+    assert!(f.store.learn_kind(&laptop, "computer").unwrap());
+    assert_eq!(f.store.db().holders().unwrap(), vec![laptop]);
+    assert_eq!(f.store.db().peer_kind(&laptop).unwrap().as_deref(), Some("computer"));
+
+    // Removed by the person; a second computer does not bring the default back.
+    f.store.db().remove_holder(&laptop).unwrap();
+    assert!(!f.store.learn_kind(&desk, "computer").unwrap());
+    assert!(f.store.db().holders().unwrap().is_empty());
+}
+
+/// What a wipe would lose: a file no other device holds is listed, and stops
+/// being listed when one says it has it -- even a phone, whose copy is still a
+/// copy if this device is the one wiped (decision 0053).
+#[test]
+fn only_here_lists_what_a_wipe_would_lose() {
+    let mut f = fixture();
+    let data = f.write("only.jpg", 64 * 1024, 0x4444_4444);
+    f.write("big.bin", 128 * 1024, 0x5555_5555);
+    let names = |f: &Fixture| f.store.only_here().unwrap().into_iter().map(|(p, _, _)| p).collect::<Vec<_>>();
+    assert_eq!(names(&f), vec!["big.bin".to_string(), "only.jpg".to_string()], "largest first");
+
+    let phone = DeviceId::from_bytes([7; 32]);
+    f.store.db().trust_peer(&phone, &[7; 32], "phone").unwrap();
+    f.store.db().set_peer_kind(&phone, "phone").unwrap();
+    f.store.note_replica(&blake3::hash(&data), &phone).unwrap();
+    assert_eq!(names(&f), vec!["big.bin".to_string()]);
+}
+
+/// A computer makes nobody its keeper by default: it keeps its own files.
+#[test]
+fn a_computer_keeps_no_default_keeper() {
+    let f = fixture();
+    f.store.db().set_local_kind("computer").unwrap();
+    let laptop = DeviceId::from_bytes([8; 32]);
+    f.store.db().trust_peer(&laptop, &[8; 32], "laptop").unwrap();
+    assert!(!f.store.learn_kind(&laptop, "computer").unwrap());
+    assert!(f.store.db().holders().unwrap().is_empty());
+}
+
 /// Evicting frees space rather than merely moving it. With single-copy
 /// storage there is no encrypted duplicate left behind to pay for.
 #[test]

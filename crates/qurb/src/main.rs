@@ -512,8 +512,11 @@ async fn pair(root: PathBuf) -> Result<()> {
     println!("It expires in 5 minutes and works once. Waiting...");
 
     // A device with no key that joins with this code gets this one's
-    // (decision 0052), so setting up another computer is `qurb join <code>`.
-    match host.wait_giving_key(Arc::clone(&store), &config.name, now(), &master).await {
+    // (decision 0052), so setting up another computer is `qurb join <code>`
+    // -- once the person here approves it, comparing numbers (decision 0053).
+    let kind = kind_of(&store);
+    let ours = qurb_peer::Ours { name: &config.name, kind: &kind, key: &master };
+    match host.wait(Arc::clone(&store), &ours, now(), approve_in_terminal).await {
         Ok(peer) => {
             println!("\nPaired with {} ({})", peer.name, peer.fingerprint.short());
             Ok(())
@@ -529,21 +532,55 @@ async fn pair(root: PathBuf) -> Result<()> {
     }
 }
 
+/// Asked in the terminal: who wants to pair, the number it should be showing,
+/// and yes or no (decision 0053). Anything but yes is no, including a closed
+/// input, so an unattended `qurb pair` lets nobody in.
+async fn approve_in_terminal(asking: qurb_peer::Asking) -> bool {
+    let what = if asking.wants_key { "join, and take this device's key" } else { "pair" };
+    let kind = asking.kind.as_deref().map(|k| format!(", a {k}")).unwrap_or_default();
+    println!("\n{} ({}{kind}) wants to {what}.", asking.name, asking.fingerprint.short());
+    println!("It should be showing {}. If it is not, someone else has this code.", asking.number);
+    print!("Approve? [y/N] ");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    tokio::task::spawn_blocking(|| {
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line).ok();
+        matches!(line.trim().to_lowercase().as_str(), "y" | "yes")
+    })
+    .await
+    .unwrap_or(false)
+}
+
+/// What this folder is to the devices it pairs with: what its daemon last
+/// said it was, or a computer.
+fn kind_of(store: &Arc<Mutex<qurb_storage::Store>>) -> String {
+    store
+        .lock()
+        .ok()
+        .and_then(|s| s.db().local_kind().ok().flatten())
+        .unwrap_or_else(|| "computer".to_string())
+}
+
 async fn join(root: PathBuf, code: String) -> Result<()> {
     if !qurb_cli::is_set_up(&root) {
-        println!("Joining your other device, and taking its key...");
+        let number = qurb_cli::setup::number_for(&root, &code)?;
+        println!("Joining your other device. It will ask you to approve this one:");
+        println!("check that it shows {number}.");
         let peer = qurb_cli::setup::join(&root, &code).await?;
         println!("Set up {} as another of your devices.", root.display());
         println!("Paired with {} ({}). Run `qurb run` to start syncing.", peer.name, peer.fingerprint.short());
         return Ok(());
     }
-    let (_, identity, store, config) = open(&root)?;
+    let (master, identity, store, config) = open(&root)?;
     let store = Arc::new(Mutex::new(store));
 
     let invite = qurb_peer::Invite::parse(&code).context("that is not a valid pairing code")?;
     println!("Joining {} ...", invite.address);
+    println!("Approve it there: it should show {}.", invite.number_for(&identity.fingerprint()));
 
-    let peer = qurb_peer::accept(&invite, &identity, store, &config.name, now()).await?;
+    let kind = kind_of(&store);
+    let ours = qurb_peer::Ours { name: &config.name, kind: &kind, key: &master };
+    let peer = qurb_peer::accept(&invite, &identity, store, &ours, now()).await?;
     println!("Paired with {} ({})", peer.name, peer.fingerprint.short());
     Ok(())
 }

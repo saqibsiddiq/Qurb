@@ -143,8 +143,7 @@ pub async fn join(root: &Path, code: &str) -> Result<qurb_peer::Paired> {
     if Vault::at(&dir).exists() {
         bail!("{} is already set up", root.display());
     }
-    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-    let identity = Identity::load_or_create(&dir)?;
+    let identity = identity_for_joining(root)?;
     let name = Config::default().name;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -152,7 +151,7 @@ pub async fn join(root: &Path, code: &str) -> Result<qurb_peer::Paired> {
         .unwrap_or(0);
 
     let root = root.to_path_buf();
-    let paired = qurb_peer::join(&invite, &identity, &name, now, |key| {
+    let paired = qurb_peer::join(&invite, &identity, &name, "computer", now, |key| {
         enrol(&root, &key.to_phrase()).map_err(|e| format!("{e:#}"))?;
         let chunk_key = ChunkKey::from_bytes(key.derive(Purpose::ChunkEncryption).to_bytes());
         let store = Store::open(&dir, chunk_key).map_err(|e| e.to_string())?.in_tree(&root);
@@ -160,6 +159,22 @@ pub async fn join(root: &Path, code: &str) -> Result<qurb_peer::Paired> {
     })
     .await?;
     Ok(paired)
+}
+
+/// The number this folder's device will show while the device showing `code`
+/// approves it (decision 0053): show it before [`join`], so the person can
+/// compare the two screens.
+pub fn number_for(root: &Path, code: &str) -> Result<String> {
+    let invite = qurb_peer::Invite::parse(code.trim()).context("that is not a valid pairing code")?;
+    Ok(invite.number_for(&identity_for_joining(root)?.fingerprint()))
+}
+
+/// The certificate a device joining presents, made the first time it is
+/// asked for: before the key, which comes later, if it is given.
+fn identity_for_joining(root: &Path) -> Result<Identity> {
+    let dir = store_dir(root);
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    Ok(Identity::load_or_create(&dir)?)
 }
 
 /// How much disk a device may use, as somebody typed it while setting it up.

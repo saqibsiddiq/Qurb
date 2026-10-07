@@ -372,6 +372,11 @@ impl Daemon {
         let here = Here::of(&self.store_dir)?;
 
         let mut engine = self.engine()?;
+        // What this device tells peers it is (decision 0053).
+        let _ = engine
+            .store()
+            .db()
+            .set_local_kind(if self.is_replica() { "replica" } else { "computer" });
 
         // Where a file sent to this device goes. Checked before anything
         // syncs: a directory overlapping the folder would put deliveries where
@@ -398,6 +403,15 @@ impl Daemon {
         let trust = qurb_peer::tls::TrustList::new(qurb_peer::trusted_fingerprints(
             engine.store(),
         )?);
+        // A device paired by another process is accepted on its first
+        // connection, not after the next sweep (see `reread_with`).
+        {
+            let (store_dir, chunk_key) = (self.store_dir.clone(), self.chunk_key());
+            trust.reread_with(Arc::new(move || {
+                let store = Store::open(&store_dir, chunk_key.clone()).ok()?;
+                qurb_peer::trusted_fingerprints(&store).ok()
+            }));
+        }
         let trusted: Vec<Fingerprint> = qurb_peer::trusted_fingerprints(engine.store())?;
         if trusted.is_empty() {
             tracing::warn!("no paired devices; this daemon will sync with nobody");
@@ -948,6 +962,18 @@ impl Daemon {
             .ok()
             .flatten()
             .map(|p| p.device_id);
+        // What kind of device it is, if it has not said: paired before devices
+        // said so when pairing (decision 0053). Asked once; an older build
+        // that does not answer is asked again next time, which costs one
+        // round trip.
+        if let Some(device) = &peer_device {
+            if matches!(engine.store().db().peer_kind(device), Ok(None)) {
+                if let Ok(Some(kind)) = client.about().await {
+                    let _ = engine.store().learn_kind(device, &kind);
+                }
+            }
+        }
+
         // Files somebody asked to have back are in the plan too; see
         // `plan_with`.
         let plan = engine.plan_with(&tree, peer_device.as_ref())?;

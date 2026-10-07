@@ -664,10 +664,18 @@ then.*
 - [ ] *Tap to finish sending*, watched: the notification a large transfer
   leaves when Android refuses it the foreground because the app was left
   during the import.
-- [ ] Decide what counts as a safe last copy. On 2026-10-05 the phone's data
-  was cleared from Android's Settings, and 18 files the laptop had freed
-  because the phone kept them went with it
+- [x] Decide what counts as a safe last copy — 2026-10-07
+  ([0053](decisions/0053-approval-same-key-and-safe-copies.md)): not a phone's.
+  On 2026-10-05 the phone's data was cleared from Android's Settings, and 18
+  files the laptop had freed because the phone kept them went with it
   ([phase 5](phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared)).
+  Built: freeing and eviction count only a computer or replica as the other
+  copy, the phone's vault is kept by its first computer, Clear data opens
+  qurb's own screen, uninstalling offers to keep the data.
+- [ ] Watched on the S23 ([0053](decisions/0053-approval-same-key-and-safe-copies.md)):
+  approving a device by its number on either side, the Clear-data screen
+  opened from Settings, the key row in Settings, the laptop becoming the
+  phone's vault keeper.
   (Setup's lack of a way back from a new key is answered by 0052: an
   unfinished setup can join instead.)
 - [ ] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):

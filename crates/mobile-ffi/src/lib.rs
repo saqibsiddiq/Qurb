@@ -243,6 +243,16 @@ impl From<SyncStats> for ScanSummary {
     }
 }
 
+/// A file no other device is known to hold.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OnlyHere {
+    pub path: String,
+    pub size: u64,
+    /// In this phone's Private Vault, or sent to a device that has not
+    /// collected it yet.
+    pub private: bool,
+}
+
 /// What the store costs on this device.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct Usage {
@@ -671,7 +681,7 @@ pub fn join_new(
         .build()
         .map_err(|e| QurbError::Other { detail: format!("no runtime: {e}") })?;
     let paired = runtime
-        .block_on(qurb_peer::join(&invite, &identity, &device_name, now(), |key| {
+        .block_on(qurb_peer::join(&invite, &identity, &device_name, "phone", now(), |key| {
             let master = vault
                 .restore_with(&key.to_phrase(), protection, None)
                 .map_err(|e| e.to_string())?;
@@ -686,6 +696,9 @@ pub fn join_new(
             qurb_peer::Error::NoKeyGiven => QurbError::Network {
                 detail: "the other device did not give its key: the code may already have been used, or that device needs updating".into(),
             },
+            qurb_peer::Error::Declined => QurbError::Network {
+                detail: "the other device said no".into(),
+            },
             other => QurbError::Network { detail: other.to_string() },
         })?;
 
@@ -696,6 +709,43 @@ pub fn join_new(
         paired_at: now(),
         last_seen: None,
     })
+}
+
+/// The number this phone will show while the device showing `code` approves it
+/// (decision 0053). Shown before joining, so the person can compare the two
+/// screens; the certificate it is derived from is made here if this phone has
+/// none yet, and is the one joining then presents.
+#[uniffi::export]
+pub fn pairing_number(root: String, code: String) -> Result<String, QurbError> {
+    let invite = qurb_peer::Invite::parse(code.trim())
+        .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
+    let store_dir = store_dir(Path::new(&root));
+    std::fs::create_dir_all(&store_dir).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+    let identity = qurb_peer::Identity::load_or_create(&store_dir)
+        .map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+    Ok(invite.number_for(&identity.fingerprint()))
+}
+
+/// Who wants to pair with this phone, for the person to approve.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PairingRequest {
+    /// What it calls itself: a claim, which the number is there to check.
+    pub name: String,
+    /// `phone`, `computer` or `replica`, if it said.
+    pub kind: Option<String>,
+    /// The six digits it should be showing.
+    pub number: String,
+    /// Whether it asked for this phone's key, as a device with none does.
+    pub wants_key: bool,
+}
+
+/// Asked, while this phone shows a code, whether to let a device in
+/// (decision 0053). Implemented by the app: show who is asking and the number,
+/// and answer. Called on a background thread, and may block until the person
+/// answers.
+#[uniffi::export(with_foreign)]
+pub trait PairingApprover: Send + Sync {
+    fn approve(&self, request: PairingRequest) -> bool;
 }
 
 /// How a vault's key is kept, for a device already set up.
@@ -1017,8 +1067,11 @@ impl Qurb {
         let store = self.shared_store()?;
         let runtime = self.runtime()?;
 
+        // The other device asks its person to approve this one, comparing the
+        // number `pairing_number` gave this screen (decision 0053).
+        let ours = qurb_peer::Ours { name: &self.device_name, kind: "phone", key: &self.master };
         let paired = runtime
-            .block_on(qurb_peer::accept(&invite, &identity, store, &self.device_name, now()))
+            .block_on(qurb_peer::accept(&invite, &identity, store, &ours, now()))
             .map_err(|e| QurbError::Network { detail: e.to_string() })?;
 
         Ok(PeerInfo {
@@ -1114,6 +1167,19 @@ impl Qurb {
         // once and report that three copies of a photo take up one photo's
         // worth of space, which is true of the disk and not of the library.
         Ok(Usage { logical: db.live_bytes()?, on_disk: engine.store().usage()?.total() })
+    }
+
+    /// What would be gone if this phone's data were cleared: files no other
+    /// device is known to hold, largest first (decision 0053). What the screen
+    /// Android opens in place of *Clear data* lists before anything goes.
+    pub fn only_here(&self) -> Result<Vec<OnlyHere>, QurbError> {
+        let engine = self.engine()?;
+        Ok(engine
+            .store()
+            .only_here()?
+            .into_iter()
+            .map(|(path, size, private)| OnlyHere { path, size, private })
+            .collect())
     }
 
     /// Free what nothing needs: garbage past the retention window, and
@@ -1525,6 +1591,8 @@ impl Qurb {
         let root = PathBuf::from(&root);
         let mut store = Store::open(&store_dir, chunk_key)?;
         store.set_new_files_private(settings.own_files_private);
+        // What this phone tells devices that ask (decision 0053).
+        let _ = store.db().set_local_kind("phone");
         let ignore = IgnoreRules::new().with_store_dir(&store_dir);
 
         Ok(Self {
@@ -1936,6 +2004,19 @@ impl Qurb {
             .ok()
             .flatten()
             .map(|p| p.device_id);
+        // What kind of device it is, if it has not said: paired before
+        // devices said so when pairing (decision 0053). Briefly, so a slow
+        // answer does not spend the pass.
+        if let Some(device) = &peer_device {
+            if matches!(engine.store().db().peer_kind(device), Ok(None)) {
+                let asked = runtime.block_on(async {
+                    tokio::time::timeout(std::time::Duration::from_secs(2), client.about()).await
+                });
+                if let Ok(Ok(Some(kind))) = asked {
+                    let _ = engine.store().learn_kind(device, &kind);
+                }
+            }
+        }
         let plan = engine.plan_with(&tree, peer_device.as_ref())?;
 
         // Before the early return, not after: two devices that agree about
@@ -2304,8 +2385,10 @@ impl Pairing {
     /// Block until another device joins, or the invitation expires.
     ///
     /// Consumes the invitation: it works once, by design. A code that could be
-    /// replayed would let anyone who saw it once join later.
-    pub fn wait(&self) -> Result<PeerInfo, QurbError> {
+    /// replayed would let anyone who saw it once join later. A device that
+    /// presents it is let in only if `approver` says so, having been shown the
+    /// number it should be showing (decision 0053).
+    pub fn wait(&self, approver: Arc<dyn PairingApprover>) -> Result<PeerInfo, QurbError> {
         let host = self
             .inner
             .lock()
@@ -2316,9 +2399,24 @@ impl Pairing {
             })?;
 
         let cancelled = Arc::clone(&self.cancelled);
+        let ours = qurb_peer::Ours { name: &self.name, kind: "phone", key: &self.master };
+        // The person answers in the app, which blocks this call's thread: kept
+        // off the runtime's own.
+        let approve = |asking: qurb_peer::Asking| {
+            let approver = Arc::clone(&approver);
+            async move {
+                let request = PairingRequest {
+                    name: asking.name,
+                    kind: asking.kind,
+                    number: asking.number,
+                    wants_key: asking.wants_key,
+                };
+                tokio::task::spawn_blocking(move || approver.approve(request)).await.unwrap_or(false)
+            }
+        };
         let outcome = self.runtime.block_on(async {
             tokio::select! {
-                joined = host.wait_giving_key(Arc::clone(&self.store), &self.name, now(), &self.master) => Some(joined),
+                joined = host.wait(Arc::clone(&self.store), &ours, now(), approve) => Some(joined),
                 () = cancelled.notified() => None,
             }
         });

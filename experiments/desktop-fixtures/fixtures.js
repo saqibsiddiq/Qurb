@@ -91,6 +91,9 @@ const ANSWERS = {
   // Any code is taken here; the real one fetches the key from the device
   // showing it (decision 0052).
   join_new_device: () => "Galaxy S23",
+  pairing_number: () => "482 913",
+  setup_pairing_number: () => "482 913",
+  answer_pairing: () => null,
   enrol_device: () => null,
   reveal_phrase: () => WORDS,
   unlock: ({ passphrase }) => {
@@ -111,6 +114,8 @@ const ANSWERS = {
     version: "window 0.1.0 · engine 0.1.0 · protocol qurb/2 · index schema 15",
     own_files_private: false,
     notifications: true,
+    key_also_on: ["Galaxy S23"],
+    phone_holds_key: true,
   }),
   save_settings: () => null,
   set_privacy: () => null,

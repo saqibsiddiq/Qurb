@@ -73,17 +73,28 @@ pub enum Request {
     ///
     /// The device id and name are claims; the fingerprint that ends up trusted
     /// is taken from the connection, not from here.
+    ///
+    /// `kind` is `phone`, `computer` or `replica`, and `key_check` a one-way
+    /// derivation of the key: two devices with different keys do not pair
+    /// (decision 0053).
     Pair {
         token: [u8; 16],
         device_id: [u8; 32],
         name: String,
+        kind: String,
+        key_check: [u8; 32],
     },
 
     /// Ask for the key, as a device with none, presenting the invite's token
-    /// (decision 0052). Answered with [`Response::Key`], once per invite; the
-    /// device then sets itself up with it and pairs with [`Request::Pair`] on
-    /// the same connection.
-    Join { token: [u8; 16] },
+    /// (decision 0052). Answered with [`Response::Key`] once the person at the
+    /// other device approves (decision 0053), once per invite; the device then
+    /// sets itself up with it and pairs with [`Request::Pair`] on the same
+    /// connection. The name and kind are for that approval.
+    Join { token: [u8; 16], name: String, kind: String },
+
+    /// What kind of device this is. Asked of a peer paired before devices
+    /// said so when pairing.
+    About,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,8 +105,18 @@ pub enum Response {
     /// The peer does not have what was asked for. Not an error: content moves
     /// and a peer may legitimately have dropped it.
     NotFound,
-    /// Pairing accepted, with the accepting device's own identity.
-    Paired { device_id: [u8; 32], name: String },
+    /// Pairing accepted, with the accepting device's own identity, kind and
+    /// key check.
+    Paired { device_id: [u8; 32], name: String, kind: String, key_check: [u8; 32] },
+
+    /// The device's kind, answering [`Request::About`].
+    About { kind: String },
+
+    /// Pairing refused: the two devices hold different keys.
+    Mismatch,
+
+    /// Pairing refused by the person at the device showing the code.
+    Declined,
 
     /// The master key, for a device that asked with [`Request::Join`] and the
     /// invite's token. Only ever sent over a pairing connection, to a device
@@ -119,6 +140,7 @@ const TAG_PAIR: u8 = 4;
 const TAG_CHANGES: u8 = 5;
 const TAG_GOT: u8 = 6;
 const TAG_JOIN: u8 = 7;
+const TAG_ABOUT: u8 = 8;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
@@ -128,6 +150,9 @@ const STATUS_PAIRED: u8 = 5;
 const STATUS_CHANGED: u8 = 6;
 const STATUS_NOTED: u8 = 7;
 const STATUS_KEY: u8 = 8;
+const STATUS_ABOUT: u8 = 9;
+const STATUS_MISMATCH: u8 = 10;
+const STATUS_DECLINED: u8 = 11;
 
 impl Request {
     pub fn encode(&self) -> Vec<u8> {
@@ -150,16 +175,21 @@ impl Request {
                 out.push(TAG_GOT);
                 out.extend_from_slice(content);
             }
-            Request::Pair { token, device_id, name } => {
+            Request::Pair { token, device_id, name, kind, key_check } => {
                 out.push(TAG_PAIR);
                 out.extend_from_slice(token);
                 out.extend_from_slice(device_id);
                 put_name(&mut out, name);
+                put_name(&mut out, kind);
+                out.extend_from_slice(key_check);
             }
-            Request::Join { token } => {
+            Request::Join { token, name, kind } => {
                 out.push(TAG_JOIN);
                 out.extend_from_slice(token);
+                put_name(&mut out, name);
+                put_name(&mut out, kind);
             }
+            Request::About => out.push(TAG_ABOUT),
         }
         out
     }
@@ -175,13 +205,20 @@ impl Request {
             TAG_PAIR => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
-                Request::Pair { token, device_id: r.hash()?, name: r.name()? }
+                Request::Pair {
+                    token,
+                    device_id: r.hash()?,
+                    name: r.name()?,
+                    kind: r.name()?,
+                    key_check: r.hash()?,
+                }
             }
             TAG_JOIN => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
-                Request::Join { token }
+                Request::Join { token, name: r.name()?, kind: r.name()? }
             }
+            TAG_ABOUT => Request::About,
             tag => return Err(Error::Protocol { detail: format!("unknown request tag {tag}") }),
         };
         r.finished()?;
@@ -199,11 +236,19 @@ impl Response {
                 out.push(STATUS_CHANGED);
                 out.extend_from_slice(&generation.to_le_bytes());
             }
-            Response::Paired { device_id, name } => {
+            Response::Paired { device_id, name, kind, key_check } => {
                 out.push(STATUS_PAIRED);
                 out.extend_from_slice(device_id);
                 put_name(&mut out, name);
+                put_name(&mut out, kind);
+                out.extend_from_slice(key_check);
             }
+            Response::About { kind } => {
+                out.push(STATUS_ABOUT);
+                put_name(&mut out, kind);
+            }
+            Response::Mismatch => out.push(STATUS_MISMATCH),
+            Response::Declined => out.push(STATUS_DECLINED),
             Response::Key { key } => {
                 out.push(STATUS_KEY);
                 out.extend_from_slice(key);
@@ -237,9 +282,15 @@ impl Response {
             STATUS_NOT_FOUND => Response::NotFound,
             STATUS_NOTED => Response::Noted,
             STATUS_CHANGED => Response::Changed { generation: r.u64()? },
-            STATUS_PAIRED => {
-                Response::Paired { device_id: r.hash()?, name: r.name()? }
-            }
+            STATUS_PAIRED => Response::Paired {
+                device_id: r.hash()?,
+                name: r.name()?,
+                kind: r.name()?,
+                key_check: r.hash()?,
+            },
+            STATUS_ABOUT => Response::About { kind: r.name()? },
+            STATUS_MISMATCH => Response::Mismatch,
+            STATUS_DECLINED => Response::Declined,
             STATUS_KEY => Response::Key { key: r.hash()? },
             STATUS_TREE => {
                 let count = r.count()?;
@@ -447,7 +498,15 @@ mod tests {
             Request::Tree,
             Request::Manifest { content: [1; 32] },
             Request::Chunk { hash: [2; 32] },
-            Request::Join { token: [3; 16] },
+            Request::Join { token: [3; 16], name: "Phone".into(), kind: "phone".into() },
+            Request::About,
+            Request::Pair {
+                token: [5; 16],
+                device_id: [6; 32],
+                name: "Laptop".into(),
+                kind: "computer".into(),
+                key_check: [7; 32],
+            },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -463,6 +522,10 @@ mod tests {
             Response::Chunk(vec![0xAB; 5000]),
             Response::Chunk(vec![]),
             Response::Key { key: [4; 32] },
+            Response::About { kind: "replica".into() },
+            Response::Mismatch,
+            Response::Declined,
+            Response::Paired { device_id: [1; 32], name: "Phone".into(), kind: "phone".into(), key_check: [2; 32] },
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);

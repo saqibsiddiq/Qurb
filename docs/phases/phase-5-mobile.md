@@ -39,7 +39,7 @@ record](../roadmap.md).
 | a large file collected from the phone | ◻ fetched eight chunks at a time, resumed, served in the foreground — built and tested, not yet measured on the phone ([below](#an-800-mb-video-and-what-stopped-it)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-768 tests pass in 90 test binaries on Linux (2026-10-05, debug build, the
+777 tests pass in 90 test binaries on Linux (2026-10-07, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -1648,10 +1648,11 @@ Downloads where they were added from, is the owner's to check.
 What this shows about the design, and is not yet answered:
 
 - **A phone's copy is one tap from gone.** Its folder lives in the app's
-  private storage, which *Clear data* erases with no undo, and qurb counts it
-  as a holder that lets the laptop free its own copy. A device's copy that the
-  platform can erase this easily should perhaps not count as the last one.
-  On the product plan.
+  private storage, which *Clear data* erases with no undo, and qurb counted it
+  as a holder that lets the laptop free its own copy. Answered by
+  [decision 0053](../decisions/0053-approval-same-key-and-safe-copies.md) two
+  days later: a phone's copy no longer counts, the phone's vault is kept by
+  its first computer, and *Clear data* opens qurb's own screen.
 - **Setup has no way back.** Once a new key is made, setup shows its phrase
   and nothing else; joining with the existing 24 words means clearing the
   app's data again first.
@@ -1694,6 +1695,24 @@ phone, and are gone. One file from its Private Vault, 244 KiB, is still kept
 on the laptop. The old phone's identity, `7a4ebf0c`, is still trusted on the
 laptop. Its private key went with the cleared data, so nothing can use it,
 and removing it is the owner's call.
+
+## Approval, the same key, and a phone's copy
+
+**2026-10-07**, [decision 0053](../decisions/0053-approval-same-key-and-safe-copies.md),
+for the drawbacks 0052 left. On the phone: a device that uses this phone's
+code is let in only when the person taps *Approve*, having compared the six
+digits both screens show (`Approval.kt`); joining shows this phone's digits
+while the other device decides. Pairing refuses a device with a different key.
+Each side records what the other is, and a phone has its first computer keep its
+Private Vault, once. A phone's copy no longer lets the laptop free its own.
+Android's *Clear data* opens `ManageSpaceActivity`, which lists what exists
+only here before anything goes, and uninstalling offers to keep the data.
+Settings says where the key is safe: in the Google backup, end-to-end
+encrypted, or on the phone only when it has no screen lock.
+
+Built and tested (`crates/peer`, `crates/storage`, `crates/mobile-ffi`); the
+APK builds. **Not watched on the S23**: it refused ADB on 2026-10-07, and every
+part of this needs the phone in hand.
 
 ## Deliberately left undone
 

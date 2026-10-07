@@ -25,6 +25,7 @@ import uniffi.qurb_mobile.FileEntry
 import uniffi.qurb_mobile.PeerInfo
 import uniffi.qurb_mobile.SyncOutcome
 import uniffi.qurb_mobile.Waiting
+import uniffi.qurb_mobile.pairingNumber
 import java.io.File
 
 /**
@@ -681,8 +682,16 @@ class MainActivity : AppCompatActivity() {
     private fun joinWith(code: String) {
         lifecycleScope.launch {
             try {
-                val peer = withContext(Dispatchers.IO) {
-                    Engine.open(this@MainActivity).joinPairing(code)
+                // The other device asks its person to approve this phone: the
+                // number to compare is on this screen meanwhile (decision 0053).
+                val number = withContext(Dispatchers.IO) {
+                    pairingNumber(Engine.root(this@MainActivity).absolutePath, code)
+                }
+                val showing = Approval.showWhileJoining(this@MainActivity, number)
+                val peer = try {
+                    withContext(Dispatchers.IO) { Engine.open(this@MainActivity).joinPairing(code) }
+                } finally {
+                    showing.dismiss()
                 }
                 say("Connected to ${peer.name}")
                 madeChange()

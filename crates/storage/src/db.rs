@@ -29,7 +29,7 @@ use std::path::Path;
 /// what lets one open the other's index (decision 0047).
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
-const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15];
+const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -456,6 +456,31 @@ CREATE TABLE IF NOT EXISTS remote_folders (
 ) STRICT;
 "#;
 
+const V16: &str = r#"
+-- What kind of device each peer is: 'phone', 'computer' or 'replica'
+-- (decision 0053). A phone's copy is one tap in its settings from gone, so it
+-- does not count as the other copy that lets a device free its own. No row for
+-- a device that has not said yet; it is asked at the next sync. Tables rather
+-- than columns, so that running this again is harmless.
+CREATE TABLE IF NOT EXISTS peer_kinds (
+    device_id BLOB PRIMARY KEY,
+    kind      TEXT NOT NULL
+) STRICT;
+
+-- Facts about this device: its own kind, told to devices that ask, and
+-- whether a phone has already had a computer chosen to keep its vault by
+-- default -- once, so a person who later removes that choice is not overruled.
+CREATE TABLE IF NOT EXISTS local_facts (
+    name  TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+) STRICT;
+"#;
+
+/// A copy held by a device not known to be a phone (decision 0053): the other
+/// copy that lets this device free its own. For a query over `replicas r`.
+const SAFE_ELSEWHERE: &str = "NOT EXISTS (SELECT 1 FROM peer_kinds k
+                                  WHERE k.device_id = r.device_id AND k.kind = 'phone')";
+
 /// Excludes the sharing rules themselves from anything a person is shown or a
 /// storage cap may drop. For a query over `files` with no alias.
 const NOT_RULES: &str = "substr(path, 1, 14) <> '.qurb-sharing/'";
@@ -787,6 +812,22 @@ impl Db {
     /// Vault deliveries are excluded on purpose: they are copies that exist and
     /// cannot be retrieved, which is no help to a device deciding whether it is
     /// safe to drop its own.
+    /// Other devices holding these bytes that a device may free its own copy
+    /// for: any but a phone, whose copy one tap in its settings can erase
+    /// (decision 0053). On 2026-10-05 a laptop had freed 18 files because a
+    /// phone kept them, and the phone's data was cleared.
+    pub fn safe_copies_elsewhere(&self, content: &blake3::Hash) -> Result<usize> {
+        let n: i64 = self.conn.query_row(
+            &format!(
+                "SELECT count(*) FROM replicas r
+                  WHERE r.content_hash = ?1 AND r.private = 0 AND {SAFE_ELSEWHERE}"
+            ),
+            params![content.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(n as usize)
+    }
+
     pub fn replica_count(&self, content: &blake3::Hash) -> Result<usize> {
         let n: i64 = self.conn.query_row(
             "SELECT count(*) FROM replicas WHERE content_hash = ?1 AND private = 0",
@@ -831,7 +872,8 @@ impl Db {
              AND {NOT_RULES_F}
              AND f.materialised = 1
              AND EXISTS (SELECT 1 FROM replicas r
-                          WHERE r.content_hash = f.content_hash AND r.private = 0)"
+                          WHERE r.content_hash = f.content_hash AND r.private = 0
+                            AND {SAFE_ELSEWHERE})"
         );
         let (count, bytes): (i64, i64) = self.conn.query_row(
             &format!("SELECT count(*), coalesce(sum(f.size), 0) FROM files f WHERE {condition}"),
@@ -944,15 +986,16 @@ impl Db {
     ///
     /// - **Materialised.** There is nothing to free in a file already evicted.
     /// - **Known to be elsewhere.** At least one other device has taken
-    ///   delivery of this exact content. Without that this is the only copy,
-    ///   and dropping it is not eviction but deletion.
+    ///   delivery of this exact content, and it is not a phone (decision
+    ///   0053). Without that this is the only copy, or the only one besides a
+    ///   phone's, and dropping it is not eviction but deletion.
     /// - **Not a tombstone.** Deleted files are the garbage collector's
     ///   problem, not the cap's.
     ///
     /// Ordered by last touch, oldest first, then by size largest first so that
     /// among equally cold files the one that frees the most goes first.
     pub fn evictable(&self) -> Result<Vec<(String, u64, blake3::Hash)>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT f.path, f.size, f.content_hash
                FROM files f
               WHERE f.deleted_at IS NULL
@@ -964,9 +1007,10 @@ impl Db {
                 AND EXISTS (
                       SELECT 1 FROM replicas r
                        WHERE r.content_hash = f.content_hash AND r.private = 0
+                         AND {SAFE_ELSEWHERE}
                     )
-              ORDER BY f.touched_at ASC, f.size DESC",
-        )?;
+              ORDER BY f.touched_at ASC, f.size DESC"
+        ))?;
         let rows = stmt.query_map([], |r| {
             let raw: Vec<u8> = r.get(2)?;
             Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, to_hash(&raw)))
@@ -1128,6 +1172,28 @@ impl Db {
               ORDER BY f.updated_at DESC, f.path",
         )?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64)))?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// Everything whose bytes no other device is known to hold: what would be
+    /// gone if this device were wiped, largest first, with whether each is
+    /// private (decision 0053). Wherever it came from -- made here, sent here,
+    /// or left here when another device freed its copy -- and including sends
+    /// not collected yet; not what this device keeps for another, whose owner
+    /// has it.
+    pub fn only_here(&self) -> Result<Vec<(String, u64, bool)>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT f.path, f.size, f.scope IS NOT NULL
+               FROM files f
+              WHERE f.deleted_at IS NULL
+                AND f.held = 0
+                AND {NOT_RULES_F}
+                AND NOT EXISTS (SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash)
+              ORDER BY f.size DESC, f.path"
+        ))?;
+        let rows = stmt.query_map([], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? != 0))
+        })?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
@@ -2470,6 +2536,69 @@ impl Db {
             Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? != 0))
         })?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// Record what kind of device a peer is: `phone`, `computer` or
+    /// `replica`. Anything else is not recorded.
+    pub fn set_peer_kind(&self, device: &DeviceId, kind: &str) -> Result<()> {
+        if !matches!(kind, "phone" | "computer" | "replica") {
+            return Ok(());
+        }
+        self.conn.execute(
+            "INSERT INTO peer_kinds (device_id, kind) VALUES (?1, ?2)
+             ON CONFLICT (device_id) DO UPDATE SET kind = excluded.kind",
+            params![device.as_bytes().as_slice(), kind],
+        )?;
+        Ok(())
+    }
+
+    /// What kind of device a peer is, if it has said.
+    pub fn peer_kind(&self, device: &DeviceId) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT kind FROM peer_kinds WHERE device_id = ?1",
+                params![device.as_bytes().as_slice()],
+                |r| r.get::<_, String>(0),
+            )
+            .optional()?)
+    }
+
+    fn local_fact(&self, name: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM local_facts WHERE name = ?1", params![name], |r| r.get(0))
+            .optional()?)
+    }
+
+    fn set_local_fact(&self, name: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO local_facts (name, value) VALUES (?1, ?2)
+             ON CONFLICT (name) DO UPDATE SET value = excluded.value",
+            params![name, value],
+        )?;
+        Ok(())
+    }
+
+    /// This device's own kind, as it tells devices that ask.
+    pub fn local_kind(&self) -> Result<Option<String>> {
+        self.local_fact("kind")
+    }
+
+    /// Set by whatever opens the store for good: the phone app, the daemon, a
+    /// replica.
+    pub fn set_local_kind(&self, kind: &str) -> Result<()> {
+        self.set_local_fact("kind", kind)
+    }
+
+    /// Whether a computer has already been chosen, by default, to keep this
+    /// phone's vault.
+    pub fn holders_defaulted(&self) -> Result<bool> {
+        Ok(self.local_fact("holders_defaulted")?.is_some())
+    }
+
+    pub fn set_holders_defaulted(&self) -> Result<()> {
+        self.set_local_fact("holders_defaulted", "1")
     }
 
     pub fn mark_peer_seen(&self, fingerprint: &[u8; 32]) -> Result<()> {

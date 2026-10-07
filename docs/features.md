@@ -42,7 +42,7 @@ not yet looked at by the owner.
 |---|---|---|
 | Welcome | *Your files. Your devices. Your space.* — then new, or *I already use Qurb* | 🧪 |
 | Set up a new device | choose the folder, answer how much disk Qurb may use, and it starts; nothing to write down ([0052](decisions/0052-the-key-travels-with-the-code.md)) | 🧪 |
-| Join with a code | type the code a phone shows; this computer gets the key and is paired | 🧪 |
+| Join with a code | type the code a phone shows; this computer gets the key and is paired once the phone approves it, both showing the same six digits ([0053](decisions/0053-approval-same-key-and-safe-copies.md)) | 🧪 |
 | Join with the 24 words | the fallback, for somebody who has them | 🧪 |
 | Unlock | type the passphrase, when the key is protected by one; at login the window shows itself to ask ([0046](decisions/0046-the-window-asks-for-the-passphrase.md)) | 🧪 |
 
@@ -153,7 +153,8 @@ set up, so most commands need no path.
 | command | what it does |
 |---|---|
 | `init [dir]` | set up a device with a new key; nothing to write down |
-| `join [dir] <code>` | a folder not set up takes the key of the device showing the code, and pairs with it |
+| `join [dir] <code>` | a folder not set up takes the key of the device showing the code, and pairs with it; prints the number the other device should show |
+| `pair [dir]` | shows a code; asks in the terminal to approve each device that uses it, by the number it shows ([0053](decisions/0053-approval-same-key-and-safe-copies.md)) |
 | `enrol <dir> "<24 words>"` | set up a device with an existing key |
 | `pair` / `join <code>` | show a pairing code (QR in the terminal) / join one |
 | `run` | the daemon, without a window |

@@ -268,6 +268,14 @@ async function drawSettings() {
     return;
   }
 
+  // A computer has nothing like a phone's Google backup: what keeps its key
+  // safe is another device that holds it, best a phone (decision 0053).
+  const others = s.key_also_on ?? [];
+  $("key-safe").textContent = others.length === 0
+    ? "Only on this computer. Pair your phone: it can give the key to a new computer with a code, and keeps it in its Google backup."
+    : `On this computer and on ${others.join(", ")}. Any of them can give it to a new device with a code${s.phone_holds_key ? "; your phone also keeps it in its Google backup" : ". Pair a phone too: it keeps the key in its Google backup"}.`;
+  $("key-safe").classList.toggle("warn", others.length === 0);
+
   // Not rewritten under somebody who is in the middle of typing.
   const editing = document.activeElement?.closest?.("#settings .item");
   if (!editing) {

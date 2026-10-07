@@ -81,6 +81,9 @@ elsewhere, such as a replica, and join their rendezvous group. So:
 - Codes still expire in five minutes and still work once.
 - The spoken form of a code is now as sensitive as the QR. Reading it aloud
   over a phone line remains possible, and is now handing over the key.
+  (Answered by [0053](0053-approval-same-key-and-safe-copies.md): nothing is
+  handed over until the person at the device showing the code approves the
+  device asking, comparing a number both screens show.)
 
 ## Why this, and not something else
 
@@ -105,7 +108,8 @@ elsewhere, such as a replica, and join their rendezvous group. So:
   reinstall but not a lost phone.
 - **The pairing code now carries more weight**, as above.
 - **Two devices that already have different keys still pair** as before;
-  nothing yet refuses that or says it is wrong.
+  nothing yet refuses that or says it is wrong. (Refused since
+  [0053](0053-approval-same-key-and-safe-copies.md).)
 
 ## Checked, and not
 

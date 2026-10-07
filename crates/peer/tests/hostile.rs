@@ -72,7 +72,7 @@ fn start_hostile(
                             Some(Response::NotFound.encode())
                         }
                         // Pairing has its own listener; this one never serves it.
-                        (_, Request::Pair { .. } | Request::Join { .. }) => Some(Response::NotFound.encode()),
+                        (_, Request::Pair { .. } | Request::Join { .. } | Request::About) => Some(Response::NotFound.encode()),
                         // Being told a peer holds something asks nothing of us
                         // and gives a hostile peer nothing to work with: the
                         // report is credited to the connection's certificate,

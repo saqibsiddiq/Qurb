@@ -11,8 +11,11 @@ import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.qurb.databinding.ActivitySetupBinding
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.QurbException
+import uniffi.qurb_mobile.pairingNumber
 
 /**
  * First launch: make a key, or join the devices the person already has.
@@ -86,11 +89,26 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
-    /** Join with a code another device shows; its key comes with it. */
+    /**
+     * Join with a code another device shows; its key comes with it once the
+     * person there approves this phone, comparing the number shown here
+     * meanwhile (decision 0053).
+     */
     private fun join(code: String) {
         settle("Could not join") {
             if (Engine.unfinished(this)) Engine.discardUnfinished(this)
-            Engine.join(this, code)
+            // After putting an unfinished key aside: the number comes from the
+            // certificate that then joins.
+            val number = withContext(Dispatchers.IO) {
+                Engine.root(this@SetupActivity).mkdirs()
+                pairingNumber(Engine.root(this@SetupActivity).absolutePath, code)
+            }
+            val showing = Approval.showWhileJoining(this, number)
+            try {
+                Engine.join(this, code)
+            } finally {
+                showing.dismiss()
+            }
         }
     }
 

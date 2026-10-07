@@ -51,12 +51,30 @@ fn provider() -> Arc<CryptoProvider> {
 ///
 /// A read lock is taken per handshake, which is a handful of fingerprint
 /// comparisons against a list of one person's own devices — not a hot path.
-#[derive(Debug, Clone, Default)]
-pub struct TrustList(Arc<std::sync::RwLock<Vec<Fingerprint>>>);
+#[derive(Clone, Default)]
+pub struct TrustList {
+    allowed: Arc<std::sync::RwLock<Vec<Fingerprint>>>,
+    reread: Arc<std::sync::RwLock<Option<Reread>>>,
+    /// When the store was last re-read for an unknown peer.
+    last_reread: Arc<std::sync::Mutex<Option<std::time::Instant>>>,
+}
+
+/// Where a trust list re-reads the trust store from: the trusted
+/// fingerprints, or `None` if the store could not be read.
+pub type Reread = Arc<dyn Fn() -> Option<Vec<Fingerprint>> + Send + Sync>;
+
+impl std::fmt::Debug for TrustList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TrustList").field(&self.snapshot()).finish()
+    }
+}
+
+/// How often an unknown peer may make a trust list re-read its store.
+const REREAD_AT_MOST: std::time::Duration = std::time::Duration::from_secs(1);
 
 impl TrustList {
     pub fn new(allowed: Vec<Fingerprint>) -> Self {
-        Self(Arc::new(std::sync::RwLock::new(allowed)))
+        Self { allowed: Arc::new(std::sync::RwLock::new(allowed)), ..Self::default() }
     }
 
     /// Replace the set wholesale.
@@ -65,21 +83,56 @@ impl TrustList {
     /// the authority: a device forgotten there must stop being accepted here,
     /// and a set that only ever grows would keep letting it in.
     pub fn replace(&self, allowed: Vec<Fingerprint>) {
-        if let Ok(mut current) = self.0.write() {
+        if let Ok(mut current) = self.allowed.write() {
             *current = allowed;
         }
     }
 
+    /// Re-read the trust store, through `reread`, when a peer not in the list
+    /// connects -- at most once a second -- and accept it if it is there now.
+    ///
+    /// A device paired by another process -- `qurb pair` beside the window's
+    /// daemon -- was refused on its first connection: the list here was a
+    /// copy, refreshed on a timer, and the phone's first sync after joining
+    /// came four seconds too early (2026-10-05). The limit is so that an
+    /// unknown device knocking repeatedly costs one read a second, not one per
+    /// knock.
+    pub fn reread_with(&self, reread: Reread) {
+        if let Ok(mut slot) = self.reread.write() {
+            *slot = Some(reread);
+        }
+    }
+
     pub fn contains(&self, fingerprint: &Fingerprint) -> bool {
-        self.0.read().map(|a| a.contains(fingerprint)).unwrap_or(false)
+        if self.allowed.read().map(|a| a.contains(fingerprint)).unwrap_or(false) {
+            return true;
+        }
+        let Some(reread) = self.reread.read().ok().and_then(|r| r.clone()) else {
+            return false;
+        };
+        {
+            let Ok(mut last) = self.last_reread.lock() else { return false };
+            if last.is_some_and(|at| at.elapsed() < REREAD_AT_MOST) {
+                return false;
+            }
+            *last = Some(std::time::Instant::now());
+        }
+        match reread() {
+            Some(current) => {
+                let known = current.contains(fingerprint);
+                self.replace(current);
+                known
+            }
+            None => false,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.read().map(|a| a.is_empty()).unwrap_or(true)
+        self.allowed.read().map(|a| a.is_empty()).unwrap_or(true)
     }
 
     fn snapshot(&self) -> Vec<Fingerprint> {
-        self.0.read().map(|a| a.clone()).unwrap_or_default()
+        self.allowed.read().map(|a| a.clone()).unwrap_or_default()
     }
 }
 
@@ -423,6 +476,26 @@ mod trust_tests {
         assert!(held.contains(&fp(2)));
         trust.replace(vec![fp(1)]);
         assert!(!held.contains(&fp(2)), "a forgotten device is still accepted");
+    }
+
+    /// A device paired by another process is accepted on its first try: the
+    /// list re-reads the store on a miss. And an unknown device knocking again
+    /// within the second costs no second read.
+    #[test]
+    fn an_unknown_device_makes_the_list_reread_the_store_once_a_second() {
+        let trust = TrustList::new(vec![fp(1)]);
+        let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&reads);
+        trust.reread_with(Arc::new(move || {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Some(vec![fp(1), fp(2)])
+        }));
+
+        assert!(trust.contains(&fp(2)), "paired elsewhere, and refused");
+        assert!(!trust.contains(&fp(3)), "never paired, and accepted");
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1, "a second read within the second");
+        assert!(trust.contains(&fp(1)) && trust.contains(&fp(2)), "known ones cost nothing");
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     /// Clones share one list. If they did not, the daemon would be updating a

@@ -160,6 +160,72 @@ pub struct Paired {
     pub device_id: DeviceId,
     pub fingerprint: Fingerprint,
     pub name: String,
+    /// `phone`, `computer` or `replica`, as the device said (decision 0053).
+    pub kind: Option<String>,
+}
+
+/// This device, as pairing presents it: its name, its kind (`phone`,
+/// `computer` or `replica`) and its key, from which the check two devices
+/// compare is derived -- and which a device with none is given.
+pub struct Ours<'a> {
+    pub name: &'a str,
+    pub kind: &'a str,
+    pub key: &'a qurb_keys::MasterKey,
+}
+
+/// A device asking to pair, for the person at the device showing the code to
+/// approve (decision 0053).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Asking {
+    /// What it calls itself. A claim: the number is what proves which device
+    /// it is.
+    pub name: String,
+    pub kind: Option<String>,
+    pub fingerprint: Fingerprint,
+    /// Six digits the asking device shows too. Derived from both
+    /// certificates and the code, so another device that used the same code
+    /// shows a different number.
+    pub number: String,
+    /// Whether it asked for the key, as a device with none does.
+    pub wants_key: bool,
+}
+
+/// The six digits both screens show while a device asks to pair: from the
+/// fingerprint of the device showing the code, the fingerprint of the device
+/// asking, and the code's token. Spaced, `482 913`, for reading.
+///
+/// Both ends can compute it without trusting each other: the device showing
+/// the code knows its own fingerprint and has the other's from the TLS
+/// handshake; the asking device knows its own and has the other's from the
+/// code. A device that learned the code and used it first holds a different
+/// certificate, and so shows a different number from the one in the person's
+/// hand.
+pub fn pairing_number(host: &Fingerprint, joiner: &Fingerprint, token: &[u8; TOKEN_LEN]) -> String {
+    let mut hasher = blake3::Hasher::new_derive_key("qurb pairing number v1");
+    hasher.update(host.as_bytes());
+    hasher.update(joiner.as_bytes());
+    hasher.update(token);
+    let digest = hasher.finalize();
+    let n = u32::from_le_bytes(digest.as_bytes()[..4].try_into().expect("four bytes")) % 1_000_000;
+    format!("{:03} {:03}", n / 1000, n % 1000)
+}
+
+impl Invite {
+    /// The number a device joining with this code shows: see
+    /// [`pairing_number`].
+    pub fn number_for(&self, joiner: &Fingerprint) -> String {
+        pairing_number(&self.fingerprint, joiner, &self.token)
+    }
+}
+
+/// What two devices compare to know they share a key, without sending it.
+fn key_check(key: &qurb_keys::MasterKey) -> [u8; 32] {
+    key.derive(qurb_keys::Purpose::PairingCheck).to_bytes()
+}
+
+/// A kind a device claims, if it is one there is a use for.
+fn known_kind(kind: &str) -> Option<String> {
+    matches!(kind, "phone" | "computer" | "replica").then(|| kind.to_string())
 }
 
 impl PairingHost {
@@ -191,44 +257,23 @@ impl PairingHost {
 
     /// Wait for one device to pair, then stop listening.
     ///
-    /// Returns once a device presents the right token. A device presenting the
-    /// wrong one is refused and the host keeps waiting, so a wrong guess does
-    /// not burn the invite — but it also does not get a second chance at the
-    /// same connection. A device with no key asking for one is refused: see
-    /// [`wait_giving_key`](Self::wait_giving_key).
-    pub async fn wait(
+    /// A device must present the code's token, and then be approved by the
+    /// person here: `approve` is shown who is asking and the number it should
+    /// be showing, and says yes or no (decision 0053). A device with no key
+    /// is given this one's (decision 0052), once per code. A device with a
+    /// different key is refused. A wrong token, a refusal or a decline does
+    /// not burn the invite: the host goes on waiting for the right device.
+    pub async fn wait<A, F>(
         &self,
         store: Arc<Mutex<Store>>,
-        our_name: &str,
+        ours: &Ours<'_>,
         now: i64,
-    ) -> Result<Paired> {
-        self.wait_inner(store, our_name, now, None).await
-    }
-
-    /// The same, and a device with no key that presents the token is given
-    /// this one's, so that it becomes another of the same person's devices
-    /// without anybody typing 24 words (decision 0052).
-    ///
-    /// Given once per invite. The token, which in plain pairing only showed
-    /// that a device had seen the code, now guards the key; a second device
-    /// presenting it, on another connection, gets nothing.
-    pub async fn wait_giving_key(
-        &self,
-        store: Arc<Mutex<Store>>,
-        our_name: &str,
-        now: i64,
-        key: &qurb_keys::MasterKey,
-    ) -> Result<Paired> {
-        self.wait_inner(store, our_name, now, Some(key.for_another_device())).await
-    }
-
-    async fn wait_inner(
-        &self,
-        store: Arc<Mutex<Store>>,
-        our_name: &str,
-        now: i64,
-        key: Option<[u8; 32]>,
-    ) -> Result<Paired> {
+        approve: A,
+    ) -> Result<Paired>
+    where
+        A: Fn(Asking) -> F,
+        F: std::future::Future<Output = bool>,
+    {
         let our_device = { store.lock().expect("store mutex").device_id()? };
 
         // How long this invite has left, from the caller's clock.
@@ -244,19 +289,24 @@ impl PairingHost {
         }
         let deadline = Duration::from_secs(remaining as u64);
 
-        tokio::time::timeout(deadline, self.accept_one(store, our_name, our_device, key))
+        tokio::time::timeout(deadline, self.accept_one(store, ours, our_device, approve))
             .await
             .unwrap_or(Err(Error::InviteExpired))
     }
 
     /// The accept loop, run under the caller's deadline.
-    async fn accept_one(
+    async fn accept_one<A, F>(
         &self,
         store: Arc<Mutex<Store>>,
-        our_name: &str,
+        ours: &Ours<'_>,
         our_device: DeviceId,
-        key: Option<[u8; 32]>,
-    ) -> Result<Paired> {
+        approve: A,
+    ) -> Result<Paired>
+    where
+        A: Fn(Asking) -> F,
+        F: std::future::Future<Output = bool>,
+    {
+        let check = key_check(ours.key);
         // Once the key has gone to one device, no other gets it from this
         // invite, whatever it presents.
         let mut key_given = false;
@@ -268,76 +318,108 @@ impl PairingHost {
                 tracing::debug!("a device connected without a certificate");
                 continue;
             };
+            let number = pairing_number(&self.invite.fingerprint, &peer_fingerprint, &self.invite.token);
+            // Approved on this connection already, by its Join: its Pair,
+            // which follows on the same connection, is not asked about twice.
+            let mut approved = false;
 
-            let Ok((mut send, mut recv)) = connection.accept_bi().await else { continue };
-            let Ok(raw) = recv.read_to_end(MAX_MESSAGE).await else { continue };
+            loop {
+                let Ok((mut send, mut recv)) = connection.accept_bi().await else { break };
+                let Ok(raw) = recv.read_to_end(MAX_MESSAGE).await else { break };
 
-            // A device with no key asks for one first, sets itself up with it,
-            // and then pairs on the next stream of the same connection -- so
-            // the certificate the key went to is the one that gets trusted.
-            let (mut send, raw) = match Request::decode(&raw) {
-                Ok(Request::Join { token }) => {
-                    let allowed = constant_time_eq(&token, &self.invite.token);
-                    let (Some(key), true, false) = (key, allowed, key_given) else {
-                        if !allowed {
+                match Request::decode(&raw) {
+                    // A device with no key, asking for this one's.
+                    Ok(Request::Join { token, name, kind }) if !approved => {
+                        if !constant_time_eq(&token, &self.invite.token) {
                             tracing::warn!(peer = %peer_fingerprint.short(), "wrong pairing token");
+                            answer(&mut send, &Response::NotFound, &connection).await;
+                            break;
                         }
-                        refuse(&mut send, &connection).await;
-                        continue;
-                    };
-                    key_given = true;
-                    send.write_all(&Response::Key { key }.encode()).await?;
-                    send.finish()?;
+                        if key_given {
+                            answer(&mut send, &Response::NotFound, &connection).await;
+                            break;
+                        }
+                        let asking = Asking {
+                            name: sanitise(&name),
+                            kind: known_kind(&kind),
+                            fingerprint: peer_fingerprint,
+                            number: number.clone(),
+                            wants_key: true,
+                        };
+                        if !approve(asking).await {
+                            answer(&mut send, &Response::Declined, &connection).await;
+                            break;
+                        }
+                        key_given = true;
+                        approved = true;
+                        let key = ours.key.for_another_device();
+                        send.write_all(&Response::Key { key }.encode()).await?;
+                        send.finish()?;
+                        // Then its Pair, on the next stream, once it has set
+                        // itself up with the key.
+                    }
 
-                    let Ok((send, mut recv)) = connection.accept_bi().await else { continue };
-                    let Ok(raw) = recv.read_to_end(MAX_MESSAGE).await else { continue };
-                    (send, raw)
+                    Ok(Request::Pair { token, device_id, name, kind, key_check: theirs }) => {
+                        // Constant-time, because a token compared byte by byte
+                        // can be guessed one byte at a time by anyone who can
+                        // measure the reply.
+                        if !constant_time_eq(&token, &self.invite.token) {
+                            tracing::warn!(peer = %peer_fingerprint.short(), "wrong pairing token");
+                            answer(&mut send, &Response::NotFound, &connection).await;
+                            break;
+                        }
+                        if theirs != check {
+                            tracing::warn!(peer = %peer_fingerprint.short(), "a device with a different key tried to pair");
+                            answer(&mut send, &Response::Mismatch, &connection).await;
+                            break;
+                        }
+                        if !approved {
+                            let asking = Asking {
+                                name: sanitise(&name),
+                                kind: known_kind(&kind),
+                                fingerprint: peer_fingerprint,
+                                number: number.clone(),
+                                wants_key: false,
+                            };
+                            if !approve(asking).await {
+                                answer(&mut send, &Response::Declined, &connection).await;
+                                break;
+                            }
+                        }
+
+                        let peer = Paired {
+                            device_id: DeviceId::from_bytes(device_id),
+                            fingerprint: peer_fingerprint,
+                            name: sanitise(&name),
+                            kind: known_kind(&kind),
+                        };
+                        {
+                            let store = store.lock().expect("store mutex");
+                            store.db().trust_peer(&peer.device_id, peer.fingerprint.as_bytes(), &peer.name)?;
+                            if let Some(kind) = &peer.kind {
+                                store.learn_kind(&peer.device_id, kind)?;
+                            }
+                        }
+
+                        let reply = Response::Paired {
+                            device_id: *our_device.as_bytes(),
+                            name: ours.name.to_string(),
+                            kind: ours.kind.to_string(),
+                            key_check: check,
+                        };
+                        send.write_all(&reply.encode()).await?;
+                        send.finish()?;
+                        // Give the reply time to leave before the endpoint closes under it.
+                        connection.closed().await;
+                        return Ok(peer);
+                    }
+
+                    _ => {
+                        answer(&mut send, &Response::NotFound, &connection).await;
+                        break;
+                    }
                 }
-                _ => (send, raw),
-            };
-
-            let Ok(Request::Pair { token, device_id, name }) = Request::decode(&raw) else {
-                refuse(&mut send, &connection).await;
-                continue;
-            };
-
-            // No expiry check here: it used to compare against a `now` captured
-            // before the wait began, which meant it could never fire however
-            // long the wait lasted. The deadline in `wait` is the real one.
-            //
-            // Constant-time, because a token compared byte by byte can be
-            // guessed one byte at a time by anyone who can measure the reply.
-            if !constant_time_eq(&token, &self.invite.token) {
-                tracing::warn!(peer = %peer_fingerprint.short(), "wrong pairing token");
-                refuse(&mut send, &connection).await;
-                continue;
             }
-
-            let peer = Paired {
-                device_id: DeviceId::from_bytes(device_id),
-                fingerprint: peer_fingerprint,
-                name: sanitise(&name),
-            };
-
-            {
-                let store = store.lock().expect("store mutex");
-                store.db().trust_peer(
-                    &peer.device_id,
-                    peer.fingerprint.as_bytes(),
-                    &peer.name,
-                )?;
-            }
-
-            let reply = Response::Paired {
-                device_id: *our_device.as_bytes(),
-                name: our_name.to_string(),
-            };
-            send.write_all(&reply.encode()).await?;
-            send.finish()?;
-            // Give the reply time to leave before the endpoint closes under it.
-            connection.closed().await;
-
-            return Ok(peer);
         }
 
         Err(Error::PairingAbandoned)
@@ -348,12 +430,14 @@ impl PairingHost {
     }
 }
 
-/// Accept an invite: connect, prove we saw the code, exchange identities.
+/// Accept an invite as a device that has the key already: connect, prove we
+/// saw the code, show the person the number while they approve it at the
+/// other device, and exchange identities.
 pub async fn accept(
     invite: &Invite,
     identity: &Identity,
     store: Arc<Mutex<Store>>,
-    our_name: &str,
+    ours: &Ours<'_>,
     now: i64,
 ) -> Result<Paired> {
     if invite.is_expired(now) {
@@ -370,7 +454,7 @@ pub async fn accept(
     endpoint.set_default_client_config(tls::client_config(identity, invite.fingerprint)?);
 
     let connection = endpoint.connect(invite.address, "qurb-device")?.await?;
-    let host = pair_on(&connection, invite, store, our_name).await;
+    let host = pair_on(&connection, invite, store, ours.name, ours.kind, key_check(ours.key)).await;
     hang_up(&connection, &endpoint).await;
     host
 }
@@ -387,30 +471,33 @@ async fn hang_up(connection: &quinn::Connection, endpoint: &quinn::Endpoint) {
     let _ = tokio::time::timeout(Duration::from_secs(2), endpoint.wait_idle()).await;
 }
 
-/// Say no, and let the answer leave before the connection is dropped.
+/// Answer, and let the answer leave before the connection is dropped.
 ///
 /// Dropped straight after writing, the connection closed under the reply, and
 /// the device asking saw "connection lost" rather than a refusal. Waited for
 /// only briefly: a device that will not hang up must not hold the pairing
 /// listener open for the next one.
-async fn refuse(send: &mut quinn::SendStream, connection: &quinn::Connection) {
-    let _ = send.write_all(&Response::NotFound.encode()).await;
+async fn answer(send: &mut quinn::SendStream, response: &Response, connection: &quinn::Connection) {
+    let _ = send.write_all(&response.encode()).await;
     let _ = send.finish();
     let _ = tokio::time::timeout(Duration::from_secs(2), connection.closed()).await;
 }
 
 /// Join as a device with no key: connect to the device showing the code, get
-/// its key, set this device up with it through `set_up`, and pair.
+/// its key once the person there approves, set this device up with it through
+/// `set_up`, and pair.
 ///
 /// `identity` must already exist, since the connection presents it, and it is
-/// the certificate the other device then trusts. `set_up` installs the key and
-/// returns the store it opened; it is the caller's because how a key is kept
-/// differs by platform. Nothing is set up unless the key arrives from the
+/// the certificate the other device then trusts; [`Invite::number_for`] it is
+/// the number to show while the other device asks. `set_up` installs the key
+/// and returns the store it opened; it is the caller's because how a key is
+/// kept differs by platform. Nothing is set up unless the key arrives from the
 /// device whose fingerprint the code carries.
 pub async fn join<F>(
     invite: &Invite,
     identity: &Identity,
     our_name: &str,
+    our_kind: &str,
     now: i64,
     set_up: F,
 ) -> Result<Paired>
@@ -429,18 +516,21 @@ where
     let connection = endpoint.connect(invite.address, "qurb-device")?.await?;
 
     let (mut send, mut recv) = connection.open_bi().await?;
-    send.write_all(&Request::Join { token: invite.token }.encode()).await?;
+    let ask = Request::Join { token: invite.token, name: our_name.to_string(), kind: our_kind.to_string() };
+    send.write_all(&ask.encode()).await?;
     send.finish()?;
     let key = match Response::decode(&recv.read_to_end(MAX_MESSAGE).await?)? {
         Response::Key { key } => qurb_keys::MasterKey::from_bytes(key),
+        Response::Declined => return Err(Error::Declined),
         Response::NotFound => return Err(Error::NoKeyGiven),
         other => {
             return Err(Error::Protocol { detail: format!("expected a key, got {other:?}") })
         }
     };
 
+    let check = key_check(&key);
     let store = set_up(key).map_err(|detail| Error::SetUpFailed { detail })?;
-    let host = pair_on(&connection, invite, store, our_name).await;
+    let host = pair_on(&connection, invite, store, our_name, our_kind, check).await;
     hang_up(&connection, &endpoint).await;
     host
 }
@@ -452,6 +542,8 @@ async fn pair_on(
     invite: &Invite,
     store: Arc<Mutex<Store>>,
     our_name: &str,
+    our_kind: &str,
+    check: [u8; 32],
 ) -> Result<Paired> {
     let our_device = { store.lock().expect("store mutex").device_id()? };
     let (mut send, mut recv) = connection.open_bi().await?;
@@ -459,17 +551,25 @@ async fn pair_on(
         token: invite.token,
         device_id: *our_device.as_bytes(),
         name: our_name.to_string(),
+        kind: our_kind.to_string(),
+        key_check: check,
     };
     send.write_all(&request.encode()).await?;
     send.finish()?;
 
     let raw = recv.read_to_end(MAX_MESSAGE).await?;
     let host = match Response::decode(&raw)? {
-        Response::Paired { device_id, name } => Paired {
+        // Checked here as well as there: a device that answers "paired" to a
+        // device holding another key is not one to trust.
+        Response::Paired { key_check, .. } if key_check != check => return Err(Error::DifferentKey),
+        Response::Paired { device_id, name, kind, .. } => Paired {
             device_id: DeviceId::from_bytes(device_id),
             fingerprint: invite.fingerprint,
             name: sanitise(&name),
+            kind: known_kind(&kind),
         },
+        Response::Mismatch => return Err(Error::DifferentKey),
+        Response::Declined => return Err(Error::Declined),
         Response::NotFound => return Err(Error::PairingRefused),
         other => {
             return Err(Error::Protocol {
@@ -480,6 +580,9 @@ async fn pair_on(
 
     let store = store.lock().expect("store mutex");
     store.db().trust_peer(&host.device_id, host.fingerprint.as_bytes(), &host.name)?;
+    if let Some(kind) = &host.kind {
+        store.learn_kind(&host.device_id, kind)?;
+    }
     Ok(host)
 }
 

@@ -196,6 +196,11 @@ pub struct Settings {
     own_files_private: bool,
     /// The three notifications are on.
     notifications: bool,
+    /// The other devices holding this key, by name, and whether a phone is
+    /// among them: the phone is what can give a new computer the key, and
+    /// keeps it in its Google backup (decision 0053).
+    key_also_on: Vec<String>,
+    phone_holds_key: bool,
 }
 
 /// What screen the window should be on.
@@ -460,6 +465,16 @@ pub fn settings(hosted: Host<'_>) -> Answer<Settings> {
         .protection()
         .map(|p| p.as_str().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
+    // Every paired device holds this key: pairing checks it (decision 0053).
+    let (key_also_on, phone_holds_key) = hosted
+        .with_store(|store| {
+            let peers = store.db().trusted_peers()?;
+            let phone = peers.iter().any(|p| {
+                store.db().peer_kind(&p.device_id).ok().flatten().as_deref() == Some("phone")
+            });
+            Ok((peers.into_iter().map(|p| p.name).collect::<Vec<_>>(), phone))
+        })
+        .unwrap_or_default();
 
     Ok(Settings {
         name: config.name,
@@ -478,6 +493,8 @@ pub fn settings(hosted: Host<'_>) -> Answer<Settings> {
         version: qurb_cli::version().replacen("qurb ", &format!("window {} · engine ", env!("CARGO_PKG_VERSION")), 1),
         own_files_private: config.own_files_private,
         notifications: config.notifications,
+        key_also_on,
+        phone_holds_key,
     })
 }
 
@@ -642,11 +659,22 @@ pub struct Invitation {
 
 #[derive(Serialize)]
 pub struct PairingState {
-    /// "none", "waiting", "paired", "expired" or "failed".
+    /// "none", "waiting", "asking", "paired", "expired" or "failed".
     state: &'static str,
     name: Option<String>,
     fingerprint: Option<String>,
     message: Option<String>,
+    /// While "asking": the number the device asking should be showing, and
+    /// what it is (decision 0053).
+    number: Option<String>,
+    kind: Option<String>,
+    wants_key: bool,
+}
+
+impl PairingState {
+    fn of(state: &'static str) -> Self {
+        Self { state, name: None, fingerprint: None, message: None, number: None, kind: None, wants_key: false }
+    }
 }
 
 /// What a send did.
@@ -765,11 +793,19 @@ pub async fn start_pairing(hosted: Host<'_>) -> Answer<Invitation> {
 
     let attempt = hosted.begin_pairing(code.clone(), spoken.clone(), expires_at);
     let waiting = Arc::clone(&attempt);
+    let asker = Arc::clone(&attempt);
     let nudge = hosted.nudger();
     attempt.watch(tauri::async_runtime::spawn(async move {
         // A device with no key joining with this code is given this one's
-        // (decision 0052): adding a phone is scanning, not typing 24 words.
-        let outcome = match host.wait_giving_key(store, &name, now, &master).await {
+        // (decision 0052): adding a phone is scanning, not typing 24 words --
+        // once the person here approves it, comparing the number it shows
+        // (decision 0053). The window shows the request and answers.
+        let ours = qurb_peer::Ours { name: &name, kind: "computer", key: &master };
+        let approve = |asking: qurb_peer::Asking| {
+            let told = asker.ask(&asking);
+            async move { told.await.unwrap_or(false) }
+        };
+        let outcome = match host.wait(store, &ours, now, approve).await {
             Ok(peer) => {
                 // The daemon syncs with it now, not at its next check.
                 nudge.notify_one();
@@ -795,29 +831,52 @@ pub async fn start_pairing(hosted: Host<'_>) -> Answer<Invitation> {
 pub fn pairing_state(hosted: Host<'_>) -> Answer<PairingState> {
     use crate::session::Pairing;
     let Some(attempt) = hosted.attempt() else {
-        return Ok(PairingState { state: "none", name: None, fingerprint: None, message: None });
+        return Ok(PairingState::of("none"));
     };
 
     Ok(match attempt.state() {
-        Pairing::Waiting => {
-            PairingState { state: "waiting", name: None, fingerprint: None, message: None }
-        }
+        Pairing::Waiting => PairingState::of("waiting"),
+        Pairing::Asking { name, kind, number, wants_key } => PairingState {
+            name: Some(name),
+            number: Some(number),
+            kind,
+            wants_key,
+            ..PairingState::of("asking")
+        },
         Pairing::Paired { name, fingerprint } => PairingState {
-            state: "paired",
             name: Some(name),
             fingerprint: Some(fingerprint),
-            message: None,
+            ..PairingState::of("paired")
         },
-        Pairing::Expired => {
-            PairingState { state: "expired", name: None, fingerprint: None, message: None }
-        }
-        Pairing::Failed(message) => PairingState {
-            state: "failed",
-            name: None,
-            fingerprint: None,
-            message: Some(message),
-        },
+        Pairing::Expired => PairingState::of("expired"),
+        Pairing::Failed(message) => PairingState { message: Some(message), ..PairingState::of("failed") },
     })
+}
+
+/// The person's answer to the device asking to pair (decision 0053).
+#[tauri::command]
+pub fn answer_pairing(hosted: Host<'_>, approve: bool) -> Answer<()> {
+    match hosted.attempt() {
+        Some(attempt) if attempt.answer(approve) => Ok(()),
+        _ => Err("no device is asking any more".to_string()),
+    }
+}
+
+/// The number this computer will show while the device showing `code`
+/// approves it, before joining it (decision 0053).
+#[tauri::command]
+pub fn pairing_number(hosted: Host<'_>, code: String) -> Answer<String> {
+    let invite = qurb_peer::Invite::parse(code.trim())
+        .map_err(|_| "that is not a pairing code — check it was copied whole".to_string())?;
+    let (_, identity, _) = hosted.for_pairing().map_err(failed)?;
+    Ok(invite.number_for(&identity.fingerprint()))
+}
+
+/// The same, for a folder being set up by joining: its certificate is made
+/// now if it has none, and is the one joining then presents.
+#[tauri::command]
+pub fn setup_pairing_number(path: String, code: String) -> Answer<String> {
+    qurb_cli::setup::number_for(&expand(&path), &code).map_err(failed)
 }
 
 /// Stop showing a code, and stop answering it.
@@ -841,8 +900,12 @@ pub async fn join_device(hosted: Host<'_>, code: String) -> Answer<PairingState>
     let invite = qurb_peer::Invite::parse(code.trim())
         .map_err(|_| "that is not a pairing code — check it was copied whole".to_string())?;
     let (store, identity, name) = hosted.for_pairing().map_err(failed)?;
+    let master = hosted.master().map_err(failed)?;
 
-    let peer = qurb_peer::accept(&invite, &identity, store, &name, now())
+    // The other device asks its person to approve this one, comparing the
+    // number `pairing_number` gave this screen (decision 0053).
+    let ours = qurb_peer::Ours { name: &name, kind: "computer", key: &master };
+    let peer = qurb_peer::accept(&invite, &identity, store, &ours, now())
         .await
         .map_err(|e| match e {
             qurb_peer::Error::InviteExpired => {
@@ -853,10 +916,9 @@ pub async fn join_device(hosted: Host<'_>, code: String) -> Answer<PairingState>
     hosted.nudge();
 
     Ok(PairingState {
-        state: "paired",
         name: Some(peer.name),
         fingerprint: Some(peer.fingerprint.short()),
-        message: None,
+        ..PairingState::of("paired")
     })
 }
 

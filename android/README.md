@@ -325,10 +325,15 @@ replaced by uninstalling — which deletes the phone's key and index. See
   import, the long pass is refused by Android. It then runs as an ordinary
   one and leaves *Tap to finish sending*, which is built and not yet watched
   ([phase 5](../docs/phases/phase-5-mobile.md#through-the-app-with-bbr--and-a-phone-cleared)).
-- **Clear data loses what only the phone held.** The app's folder is in its
-  private storage. Android's *Clear data* took the S23's on 2026-10-05, with
-  18 files the laptop had freed because the phone kept them, and its Private
-  Vault.
+- **Clear data lost what only the phone held**, on 2026-10-05: 18 files the
+  laptop had freed because the phone kept them, and its Private Vault. Since
+  decision 0053 *Clear data* opens `ManageSpaceActivity`, which lists what
+  exists only here before anything goes; uninstalling asks to keep the data;
+  the laptop no longer frees what only a phone also has; and the phone's
+  vault is kept by its first computer. Not yet watched on the phone.
+- **Pairing is approved** (`Approval.kt`): the device showing the code asks
+  whether to let a device in, with the six digits it should be showing, and
+  the phone joining shows its digits meanwhile (decision 0053).
 - **No storage question during setup, by design.** Phones have no allowance;
   the question is the desktop's, and is built there
   ([decision 0038](../docs/decisions/0038-the-storage-question-during-setup.md)).

@@ -108,7 +108,9 @@ object ShowCode {
                 }
             }
 
-            val joined = withContext(Dispatchers.IO) { runCatching { offer.wait() } }
+            // A device that uses the code is let in only when the person here
+            // approves it, comparing the number it shows (decision 0053).
+            val joined = withContext(Dispatchers.IO) { runCatching { offer.wait(Approval.Asker(app)) } }
             countdown.cancel()
             joined.onSuccess { peer ->
                 dialog.dismiss()

@@ -137,7 +137,10 @@ in debugging output.
 Show a code — a QR to scan, the same code to type, and a spoken form to read
 down a telephone — or enter one from another device. The screen counts down to
 the code's expiry rather than saying "waiting" under a code that stopped
-working five minutes ago.
+working five minutes ago. A device that uses the code appears on the sheet with
+the six digits it should be showing, and is let in only on *Approve*
+(`answer_pairing`, [decision 0053](../../docs/decisions/0053-approval-same-key-and-safe-copies.md));
+entering a code shows this computer's digits while the other device decides.
 
 Two things worth knowing. The QR is drawn black on white whatever colour scheme
 the desktop is in, because a scanner finds a code by its finder patterns

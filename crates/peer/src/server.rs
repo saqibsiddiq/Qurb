@@ -347,6 +347,9 @@ async fn serve_request(
         | Response::Noted
         | Response::Paired { .. }
         | Response::Key { .. }
+        | Response::About { .. }
+        | Response::Mismatch
+        | Response::Declined
         | Response::Changed { .. } => 0,
     };
 
@@ -409,6 +412,14 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // a pairing request here is either a mistake or a probe.
         // And the key, above all, is never handed out here.
         Request::Pair { .. } | Request::Join { .. } => Response::NotFound,
+
+        // What kind of device this is, for a peer paired before devices said
+        // so (decision 0053). Not found until whatever opened the store has
+        // said.
+        Request::About => match store.db().local_kind()? {
+            Some(kind) => Response::About { kind },
+            None => Response::NotFound,
+        },
 
         // Handled before the store is locked, since it waits.
         Request::Changes { .. } => unreachable!("answered without locking the store"),

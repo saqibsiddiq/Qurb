@@ -40,7 +40,7 @@ is worth more than a tidy directory.
 | [0011](0011-peer-identity-pinning.md) | Peer identity is a pinned certificate fingerprint | Accepted, completed by 0014 |
 | [0012](0012-key-hierarchy-and-recovery.md) | One root secret, derived keys, 24-word phrase | Accepted — "the phrase is the only way to recover" superseded by 0052 |
 | [0013](0013-case-collisions.md) | Case collisions are refused, not resolved | Accepted |
-| [0014](0014-pairing.md) | Pairing transfers a full fingerprint out of band | Accepted — the token also guards the key since 0052 |
+| [0014](0014-pairing.md) | Pairing transfers a full fingerprint out of band | Accepted — the token also guards the key since 0052; a device is let in only on approval since 0053 |
 | [0015](0015-control-plane-in-rust.md) | Signalling and the relay are written in Rust | Accepted — billing open |
 | [0016](0016-what-signalling-learns.md) | What the signalling server is allowed to learn | Accepted |
 | [0017](0017-relay.md) | The relay carries datagrams, not messages | Accepted |
@@ -79,3 +79,4 @@ is worth more than a tidy directory.
 | [0050](0050-large-files-from-a-phone.md) | Large files from a phone: fetched in parallel, resumed, and served in the foreground | Accepted — amends 0020; built, and measured on the S23, where fetching in parallel gained little |
 | [0051](0051-bbr-not-cubic.md) | QUIC paces by measured bandwidth (BBR), not by loss (Cubic) | Accepted — built; 2.5× from the phone over Wi-Fi, measured with the spike |
 | [0052](0052-the-key-travels-with-the-code.md) | The key travels with the pairing code; nobody writes 24 words down | Accepted — built on the command line, the desktop and Android; the S23 rejoined the laptop with a code |
+| [0053](0053-approval-same-key-and-safe-copies.md) | Pairing is approved, checks the key, and a phone's copy is not a safe last one | Accepted — built and tested on all three; not yet watched on the phone |

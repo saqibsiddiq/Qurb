@@ -6,10 +6,18 @@
 //! These check the two things that makes necessary: a second store handle, and
 //! a port of its own.
 
-use qurb_peer::{Identity, PairingHost};
+use qurb_peer::{Identity, Ours, PairingHost};
 use qurb_storage::{ChunkKey, Store};
 use std::path::Path;
 use std::sync::{Arc, Mutex, Once};
+
+/// One person's key, held by every device here; the person approves at once.
+static KEY: std::sync::LazyLock<qurb_keys::MasterKey> =
+    std::sync::LazyLock::new(|| qurb_keys::MasterKey::from_bytes([42; 32]));
+
+fn ours(name: &'static str) -> Ours<'static> {
+    Ours { name, kind: "computer", key: &KEY }
+}
 
 fn isolated() {
     static ONCE: Once = Once::new();
@@ -83,10 +91,10 @@ async fn two_devices_pair_through_handles_of_their_own() {
     let code = listener.invite().encode();
 
     let host_store = Arc::clone(&host.store);
-    let waiting = tokio::spawn(async move { listener.wait(host_store, "laptop", now()).await });
+    let waiting = tokio::spawn(async move { listener.wait(host_store, &ours("laptop"), now(), |_| async { true }).await });
 
     let invite = qurb_peer::Invite::parse(&code).unwrap();
-    let joined = qurb_peer::accept(&invite, &guest.identity, Arc::clone(&guest.store), "phone", now())
+    let joined = qurb_peer::accept(&invite, &guest.identity, Arc::clone(&guest.store), &ours("phone"), now())
         .await
         .unwrap();
     let hosted = waiting.await.unwrap().unwrap();
@@ -114,14 +122,14 @@ async fn a_cancelled_code_stops_working() {
     // What cancelling does: the task holding the host is aborted, so the host
     // is dropped and the socket closes.
     let host_store = Arc::clone(&host.store);
-    let waiting = tokio::spawn(async move { listener.wait(host_store, "laptop", now()).await });
+    let waiting = tokio::spawn(async move { listener.wait(host_store, &ours("laptop"), now(), |_| async { true }).await });
     waiting.abort();
     let _ = waiting.await;
 
     let invite = qurb_peer::Invite::parse(&code).unwrap();
     let outcome = tokio::time::timeout(
         std::time::Duration::from_secs(5),
-        qurb_peer::accept(&invite, &guest.identity, Arc::clone(&guest.store), "phone", now()),
+        qurb_peer::accept(&invite, &guest.identity, Arc::clone(&guest.store), &ours("phone"), now()),
     )
     .await;
 
@@ -144,7 +152,7 @@ async fn an_expired_code_says_so() {
     let listener =
         PairingHost::open("127.0.0.1:0".parse().unwrap(), &host.identity, now() - 10_000).unwrap();
 
-    let outcome = listener.wait(Arc::clone(&host.store), "laptop", now()).await;
+    let outcome = listener.wait(Arc::clone(&host.store), &ours("laptop"), now(), |_| async { true }).await;
     assert!(
         matches!(outcome, Err(qurb_peer::Error::InviteExpired)),
         "expiry was reported as something else: {outcome:?}"

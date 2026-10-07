@@ -167,10 +167,17 @@ fn a_new_folder_joins_with_a_code_and_takes_the_key() {
         .args(["pair", root_a.to_str().unwrap()])
         .env("HOME", home_a)
         .env("XDG_CONFIG_HOME", home_a.join(".config"))
+        .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .spawn()
         .expect("running qurb pair");
+    // The person at this device approves the one that joins (decision 0053):
+    // the answer waits in the pipe until `qurb pair` asks for it.
+    {
+        use std::io::Write;
+        showing.stdin.take().unwrap().write_all(b"y\n").unwrap();
+    }
     // Read on a thread to the end, so the pipe stays open for what `pair`
     // prints once paired; the code is sent back as soon as it appears.
     let output = showing.stdout.take().unwrap();

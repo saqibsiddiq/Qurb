@@ -12,13 +12,28 @@
 //! anyone, it just stops a device that found the port from pairing with one
 //! that never saw the code.
 
-use qurb_peer::{accept, join, Error, Identity, Invite, PairingHost};
+use qurb_peer::{accept, join, Error, Identity, Invite, Ours, PairingHost};
 use qurb_storage::{ChunkKey, Store};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const NOW: i64 = 1_757_462_400;
+
+/// One person's key: every device in these tests holds it, unless a test says
+/// otherwise.
+static KEY: std::sync::LazyLock<qurb_keys::MasterKey> =
+    std::sync::LazyLock::new(|| qurb_keys::MasterKey::from_bytes([42; 32]));
+
+/// Leaked, so a future built from it may outlive the statement that made it.
+fn ours(name: &'static str) -> &'static Ours<'static> {
+    Box::leak(Box::new(Ours { name, kind: "computer", key: &KEY }))
+}
+
+/// The person at the device showing the code approves whoever asks.
+async fn approve_all(_: qurb_peer::Asking) -> bool {
+    true
+}
 const LOOPBACK: &str = "127.0.0.1:0";
 
 struct Device {
@@ -141,8 +156,8 @@ async fn pair(
     let invite = listener.invite().clone();
 
     let host_store = Arc::clone(&host.store);
-    let waiting = async move { listener.wait(host_store, "Desktop", now).await };
-    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), "Laptop", now);
+    let waiting = async move { listener.wait(host_store, ours("Desktop"), now, approve_all).await };
+    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), ours("Laptop"), now);
 
     tokio::join!(waiting, joining)
 }
@@ -207,7 +222,7 @@ async fn a_device_that_never_saw_the_code_cannot_pair() {
 
     let attempt = tokio::time::timeout(
         std::time::Duration::from_secs(3),
-        accept(&forged, &stranger.identity, Arc::clone(&stranger.store), "Attacker", NOW),
+        accept(&forged, &stranger.identity, Arc::clone(&stranger.store), ours("Attacker"), NOW),
     )
     .await;
 
@@ -229,7 +244,7 @@ async fn an_expired_invite_is_refused() {
     let long_after = invite.expires_at + 1;
 
     let result =
-        accept(&invite, &joiner.identity, Arc::clone(&joiner.store), "Laptop", long_after).await;
+        accept(&invite, &joiner.identity, Arc::clone(&joiner.store), ours("Laptop"), long_after).await;
     assert!(result.is_err(), "an expired code was accepted");
     assert!(joiner.trusted().is_empty());
     listener.close();
@@ -247,15 +262,15 @@ async fn an_invite_cannot_be_used_twice() {
     let invite = listener.invite().clone();
 
     let host_store = Arc::clone(&host.store);
-    let waiting = async move { listener.wait(host_store, "Desktop", NOW).await };
-    let joining = accept(&invite, &first.identity, Arc::clone(&first.store), "First", NOW);
+    let waiting = async move { listener.wait(host_store, ours("Desktop"), NOW, approve_all).await };
+    let joining = accept(&invite, &first.identity, Arc::clone(&first.store), ours("First"), NOW);
     let (host_saw, first_saw) = tokio::join!(waiting, joining);
     host_saw.expect("first pairing");
     first_saw.expect("first pairing");
 
     let replay = tokio::time::timeout(
         std::time::Duration::from_secs(3),
-        accept(&invite, &second.identity, Arc::clone(&second.store), "Second", NOW),
+        accept(&invite, &second.identity, Arc::clone(&second.store), ours("Second"), NOW),
     )
     .await;
     assert!(
@@ -280,7 +295,7 @@ async fn a_joiner_pinned_to_the_wrong_fingerprint_refuses_to_connect() {
 
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(5),
-        accept(&tampered, &joiner.identity, Arc::clone(&joiner.store), "Laptop", NOW),
+        accept(&tampered, &joiner.identity, Arc::clone(&joiner.store), ours("Laptop"), NOW),
     )
     .await;
 
@@ -300,9 +315,9 @@ async fn a_hostile_name_is_not_taken_literally() {
     let invite = listener.invite().clone();
 
     let host_store = Arc::clone(&host.store);
-    let waiting = async move { listener.wait(host_store, "Desktop", NOW).await };
+    let waiting = async move { listener.wait(host_store, ours("Desktop"), NOW, approve_all).await };
     let nasty = format!("evil\n\r\u{0}{}", "A".repeat(500));
-    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), &nasty, NOW);
+    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), Box::leak(Box::new(Ours { name: Box::leak(nasty.clone().into_boxed_str()), kind: "computer", key: &KEY })), NOW);
     let (host_saw, _) = tokio::join!(waiting, joining);
 
     let name = host_saw.expect("pairing").name;
@@ -456,7 +471,7 @@ async fn an_expired_invite_does_not_wait() {
     let later = pairing.invite().expires_at + 1;
 
     let started = std::time::Instant::now();
-    let outcome = pairing.wait(Arc::clone(&host.store), "host", later).await;
+    let outcome = pairing.wait(Arc::clone(&host.store), ours("host"), later, approve_all).await;
 
     assert!(matches!(outcome, Err(Error::InviteExpired)), "{outcome:?}");
     assert!(
@@ -477,7 +492,7 @@ async fn a_live_invite_stops_when_it_expires() {
     let nearly_up = pairing.invite().expires_at - 1;
 
     let started = std::time::Instant::now();
-    let outcome = pairing.wait(Arc::clone(&host.store), "host", nearly_up).await;
+    let outcome = pairing.wait(Arc::clone(&host.store), ours("host"), nearly_up, approve_all).await;
 
     assert!(matches!(outcome, Err(Error::InviteExpired)), "{outcome:?}");
     assert!(
@@ -527,8 +542,8 @@ async fn a_device_with_no_key_joins_with_the_code_and_gets_the_key() {
     let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
     let invite = listener.invite().clone();
     let host_store = Arc::clone(&host.store);
-    let waiting = async { listener.wait_giving_key(host_store, "Desktop", NOW, &key).await };
-    let joining = join(&invite, &fresh.identity, "Phone", NOW, fresh.set_up(Arc::clone(&got)));
+    let waiting = async { listener.wait(host_store, &Ours { name: "Desktop", kind: "computer", key: &key }, NOW, approve_all).await };
+    let joining = join(&invite, &fresh.identity, "Phone", "phone", NOW, fresh.set_up(Arc::clone(&got)));
     let (host_saw, joiner_saw) = tokio::join!(waiting, joining);
 
     assert_eq!(*got.lock().unwrap(), Some(key.for_another_device()), "the same key arrived");
@@ -554,8 +569,8 @@ async fn without_the_code_a_device_gets_no_key_and_sets_nothing_up() {
     let mut guessed = listener.invite().clone();
     guessed.token[0] ^= 1;
     let host_store = Arc::clone(&host.store);
-    let waiting = async { listener.wait_giving_key(host_store, "Desktop", now, &key).await };
-    let joining = join(&guessed, &fresh.identity, "Phone", now, fresh.set_up(Arc::clone(&got)));
+    let waiting = async { listener.wait(host_store, &Ours { name: "Desktop", kind: "computer", key: &key }, now, approve_all).await };
+    let joining = join(&guessed, &fresh.identity, "Phone", "phone", now, fresh.set_up(Arc::clone(&got)));
     let (host_saw, joiner_saw) = tokio::join!(waiting, joining);
 
     assert!(matches!(joiner_saw, Err(Error::NoKeyGiven)), "{joiner_saw:?}");
@@ -576,14 +591,14 @@ async fn the_key_goes_to_one_device_only() {
     let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
     let invite = listener.invite().clone();
     let host_store = Arc::clone(&host.store);
-    let waiting = async { listener.wait_giving_key(host_store, "Desktop", now, &key).await };
+    let waiting = async { listener.wait(host_store, &Ours { name: "Desktop", kind: "computer", key: &key }, now, approve_all).await };
     let joining = async {
         // The first device gets the key and then fails to set up, so it never
         // pairs; the invite is still open, and a second device presenting
         // the same code gets nothing.
-        let failed = join(&invite, &first.identity, "Phone", now, |_| Err("no room".to_string())).await;
+        let failed = join(&invite, &first.identity, "Phone", "phone", now, |_| Err("no room".to_string())).await;
         assert!(matches!(failed, Err(Error::SetUpFailed { .. })), "{failed:?}");
-        join(&invite, &second.identity, "Other", now, second.set_up(Arc::clone(&got))).await
+        join(&invite, &second.identity, "Other", "phone", now, second.set_up(Arc::clone(&got))).await
     };
     let (_, second_saw) = tokio::join!(waiting, joining);
 
@@ -592,7 +607,7 @@ async fn the_key_goes_to_one_device_only() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn plain_pairing_never_hands_out_the_key() {
+async fn a_declined_device_gets_no_key_and_sets_nothing_up() {
     let host = Device::new();
     let fresh = Fresh::new();
     let got = Arc::new(Mutex::new(None));
@@ -601,10 +616,104 @@ async fn plain_pairing_never_hands_out_the_key() {
     let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
     let invite = listener.invite().clone();
     let host_store = Arc::clone(&host.store);
-    let waiting = async { listener.wait(host_store, "Desktop", now).await };
-    let joining = join(&invite, &fresh.identity, "Phone", now, fresh.set_up(Arc::clone(&got)));
+    let waiting = listener.wait(host_store, ours("Desktop"), now, |_| async { false });
+    let joining = join(&invite, &fresh.identity, "Phone", "phone", now, fresh.set_up(Arc::clone(&got)));
     let (_, joiner_saw) = tokio::join!(waiting, joining);
 
-    assert!(matches!(joiner_saw, Err(Error::NoKeyGiven)), "{joiner_saw:?}");
+    assert!(matches!(joiner_saw, Err(Error::Declined)), "{joiner_saw:?}");
     assert!(got.lock().unwrap().is_none());
+    assert!(host.trusted().is_empty());
+}
+
+// -- approval, the same key, and kinds (decision 0053) ------------------------
+
+/// The person at the device showing the code is shown the number the asking
+/// device shows: the same six digits, from both certificates and the code.
+#[tokio::test(flavor = "multi_thread")]
+async fn both_screens_show_the_same_number() {
+    let host = Device::new();
+    let joiner = Device::new();
+    let shown = Arc::new(Mutex::new(None));
+
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let expected = invite.number_for(&joiner.identity.fingerprint());
+    let seen = Arc::clone(&shown);
+    let approve = move |asking: qurb_peer::Asking| {
+        *seen.lock().unwrap() = Some(asking.number.clone());
+        async { true }
+    };
+    let host_store = Arc::clone(&host.store);
+    let waiting = listener.wait(host_store, ours("Desktop"), NOW, approve);
+    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), ours("Laptop"), NOW);
+    let (a, b) = tokio::join!(waiting, joining);
+    a.unwrap();
+    b.unwrap();
+
+    assert_eq!(shown.lock().unwrap().as_deref(), Some(expected.as_str()));
+    assert_eq!(expected.len(), 7, "six digits and a space: {expected}");
+    // And another device using the same code would show a different one.
+    let other = Device::new();
+    assert_ne!(invite.number_for(&other.identity.fingerprint()), expected);
+}
+
+/// A device declined is not trusted, and the code stays open for the right
+/// one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_declined_device_is_not_trusted() {
+    let host = Device::new();
+    let joiner = Device::new();
+
+    let now = NOW + 300 - 2;
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let host_store = Arc::clone(&host.store);
+    let waiting = listener.wait(host_store, ours("Desktop"), now, |_| async { false });
+    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), ours("Laptop"), now);
+    let (host_saw, joiner_saw) = tokio::join!(waiting, joining);
+
+    assert!(matches!(joiner_saw, Err(Error::Declined)), "{joiner_saw:?}");
+    assert!(matches!(host_saw, Err(Error::InviteExpired)), "still waiting until it expired: {host_saw:?}");
+    assert!(host.trusted().is_empty() && joiner.trusted().is_empty());
+}
+
+/// Two devices holding different keys do not pair, and are told why.
+#[tokio::test(flavor = "multi_thread")]
+async fn devices_with_different_keys_do_not_pair() {
+    let host = Device::new();
+    let joiner = Device::new();
+    let other = qurb_keys::MasterKey::from_bytes([7; 32]);
+
+    let now = NOW + 300 - 2;
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let host_store = Arc::clone(&host.store);
+    let waiting = listener.wait(host_store, ours("Desktop"), now, approve_all);
+    let theirs = Ours { name: "Laptop", kind: "computer", key: &other };
+    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), &theirs, now);
+    let (_, joiner_saw) = tokio::join!(waiting, joining);
+
+    assert!(matches!(joiner_saw, Err(Error::DifferentKey)), "{joiner_saw:?}");
+    assert!(host.trusted().is_empty() && joiner.trusted().is_empty());
+}
+
+/// Each side records what the other is.
+#[tokio::test(flavor = "multi_thread")]
+async fn each_side_learns_what_kind_of_device_the_other_is() {
+    let host = Device::new();
+    let joiner = Device::new();
+
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let host_store = Arc::clone(&host.store);
+    let waiting = listener.wait(host_store, ours("Desktop"), NOW, approve_all);
+    let phone = Ours { name: "Phone", kind: "phone", key: &KEY };
+    let joining = accept(&invite, &joiner.identity, Arc::clone(&joiner.store), &phone, NOW);
+    let (a, b) = tokio::join!(waiting, joining);
+    assert_eq!(a.unwrap().kind.as_deref(), Some("phone"));
+    assert_eq!(b.unwrap().kind.as_deref(), Some("computer"));
+
+    let kind_of = |store: &Arc<Mutex<Store>>, device| store.lock().unwrap().db().peer_kind(&device).unwrap();
+    assert_eq!(kind_of(&host.store, joiner.device_id()).as_deref(), Some("phone"));
+    assert_eq!(kind_of(&joiner.store, host.device_id()).as_deref(), Some("computer"));
 }

@@ -105,7 +105,20 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
 
         kit.groupTitle(page, "Recovery")
         group = kit.group(page)
-        kit.item(group, "Recovery phrase", "The 24 words that are your key. Show them to write out a new copy.") {
+        // Where the key is safe, said plainly (decision 0053): Block Store
+        // backs it up end to end encrypted only when the phone has a screen
+        // lock, and a phone without one should know its key stays here.
+        val safe = kit.item(group, "Where your key is safe", "Checking…")
+        scope.launch {
+            safe.value.text = if (Backup.leavesThePhone(app)) {
+                "On this phone, and in your Google backup, end-to-end encrypted with your screen lock. " +
+                    "Any of your devices can also give it to a new one with a code."
+            } else {
+                "On this phone only: with no screen lock, it is not backed up. Set one, or keep your " +
+                    "computer paired: it can give the key to a new phone with a code."
+            }
+        }
+        kit.item(group, "Recovery phrase", "The 24 words that spell your key, if you want them. Nobody needs to write them down.") {
             warnThenShowPhrase()
         }
 

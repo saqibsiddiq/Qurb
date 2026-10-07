@@ -49,6 +49,9 @@ pub struct Running {
 pub enum Pairing {
     /// The code is on the screen and nobody has used it yet.
     Waiting,
+    /// A device presented the code and waits for the person here to approve
+    /// it, comparing the number it shows (decision 0053).
+    Asking { name: String, kind: Option<String>, number: String, wants_key: bool },
     /// A device presented the right token.
     Paired { name: String, fingerprint: String },
     /// Five minutes passed. The code is dead and a new one is needed.
@@ -67,9 +70,33 @@ pub struct Attempt {
     /// kills the code. A cancelled invite that still worked would be worse
     /// than no cancel button.
     task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    /// Where the person's answer goes while a device is asking.
+    answer: Mutex<Option<tokio::sync::oneshot::Sender<bool>>>,
 }
 
 impl Attempt {
+    /// Put a device's request on the screen, and wait for the answer.
+    pub fn ask(&self, asking: &qurb_peer::Asking) -> tokio::sync::oneshot::Receiver<bool> {
+        let (tell, told) = tokio::sync::oneshot::channel();
+        *self.answer.lock().expect("pairing answer") = Some(tell);
+        self.settle(Pairing::Asking {
+            name: asking.name.clone(),
+            kind: asking.kind.clone(),
+            number: asking.number.clone(),
+            wants_key: asking.wants_key,
+        });
+        told
+    }
+
+    /// The person's answer to the device asking. Back to waiting either way:
+    /// approved, the pairing finishes and says so; declined, the code stays
+    /// up for the right device. False if nothing was asking.
+    pub fn answer(&self, approve: bool) -> bool {
+        let Some(tell) = self.answer.lock().expect("pairing answer").take() else { return false };
+        self.settle(Pairing::Waiting);
+        tell.send(approve).is_ok()
+    }
+
     pub fn state(&self) -> Pairing {
         self.state.lock().expect("pairing state").clone()
     }
@@ -277,6 +304,7 @@ impl Hosted {
             expires_at,
             state: Mutex::new(Pairing::Waiting),
             task: Mutex::new(None),
+            answer: Mutex::new(None),
         });
         let mut slot = self.pairing.lock().expect("pairing");
         if let Some(previous) = slot.replace(Arc::clone(&attempt)) {

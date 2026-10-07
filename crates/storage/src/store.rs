@@ -1921,6 +1921,25 @@ impl Store {
     }
 
     /// This device's identity.
+    /// Record what kind of device a peer is, and -- on a phone, the first time
+    /// it learns of a computer -- let that computer keep this phone's own
+    /// vault (decision 0053). Returns whether it was made a holder.
+    ///
+    /// Once only, and only when the phone has no holder: a person who chooses
+    /// otherwise afterwards is not overruled. Before this, a phone's Private
+    /// Vault had no copy anywhere unless somebody went and asked for one, and
+    /// on 2026-10-05 a phone's cleared data took its vault with it.
+    pub fn learn_kind(&self, device: &DeviceId, kind: &str) -> Result<bool> {
+        self.db.set_peer_kind(device, kind)?;
+        let phone = self.db.local_kind()?.as_deref() == Some("phone");
+        if phone && kind == "computer" && !self.db.holders_defaulted()? && self.db.holders()?.is_empty() {
+            self.db.add_holder(device)?;
+            self.db.set_holders_defaulted()?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     pub fn device_id(&self) -> Result<DeviceId> {
         self.db.local_device()
     }
@@ -2032,10 +2051,14 @@ impl Store {
             return Err(Error::NotFound { path: logical_path.to_string() });
         };
 
-        if self.db.replica_count(&row.content_hash)? == 0 {
+        if self.db.safe_copies_elsewhere(&row.content_hash)? == 0 {
             return Err(Error::CannotEvict {
                 path: logical_path.to_string(),
-                why: "no other device is known to hold this content",
+                why: match self.db.replica_count(&row.content_hash)? {
+                    0 => "no other device is known to hold this content",
+                    // Decision 0053: one tap in a phone's settings erases it.
+                    _ => "only a phone holds another copy, and a phone's copy is not a safe one",
+                },
             });
         }
 
@@ -2081,6 +2104,11 @@ impl Store {
     /// See [`Db::undelivered`].
     pub fn undelivered(&self) -> Result<Vec<(String, u64)>> {
         self.db.undelivered()
+    }
+
+    /// What would be gone if this device were wiped: see [`Db::only_here`](db::Db::only_here).
+    pub fn only_here(&self) -> Result<Vec<(String, u64, bool)>> {
+        self.db.only_here()
     }
 
     /// Note that another device has taken delivery of this content, into the

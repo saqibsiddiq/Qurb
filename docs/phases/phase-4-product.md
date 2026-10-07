@@ -1160,6 +1160,18 @@ now waits up to two seconds for its close to leave. A refusal had the same
 fault in reverse: the device showing the code dropped the connection under its
 "no", and the asking device saw *connection lost*.
 
+## Pairing approved by number
+
+**2026-10-07**, [decision 0053](../decisions/0053-approval-same-key-and-safe-copies.md).
+The window's *Show a code* sheet now shows a device asking to join, with the
+six digits it should be showing and *Approve* / *Decline*. *Enter a code*, and
+setup's *I already use Qurb*, show this computer's digits while the other
+device decides. `qurb pair` asks in the terminal and treats anything but `y` as
+no, so an unattended one lets nobody in. Settings says where the key is safe,
+and warns when no other device holds it. The daemon's trust list re-reads the
+store when an unknown device connects, so a device paired from a terminal is
+accepted on its first try.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

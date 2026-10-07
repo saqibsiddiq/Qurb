@@ -150,10 +150,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("    cannot change what is printed on a screen, which is the whole");
         println!("    reason this step happens outside the network.");
 
+        // Both devices hold the same key, as one person's do; the person at A
+        // approves B at once.
+        let key = qurb_keys::MasterKey::from_bytes([42; 32]);
+        let a_ours = qurb_peer::Ours { name: "Device A", kind: "computer", key: &key };
+        let b_ours = qurb_peer::Ours { name: "Device B", kind: "computer", key: &key };
         let store = Arc::clone(&desktop.store);
-        let waiting = async move { host.wait(store, "Device A", NOW).await };
+        let waiting = host.wait(store, &a_ours, NOW, |_| async { true });
         let joining =
-            qurb_peer::accept(&invite, &laptop.identity, Arc::clone(&laptop.store), "Device B", NOW);
+            qurb_peer::accept(&invite, &laptop.identity, Arc::clone(&laptop.store), &b_ours, NOW);
         let (a, b) = tokio::join!(waiting, joining);
         let a = a?;
         let b = b?;

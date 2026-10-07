@@ -93,10 +93,14 @@ async fn pair(host: &Device, joiner: &Device) {
         PairingHost::open("127.0.0.1:0".parse().unwrap(), &host.identity, NOW).unwrap();
     let invite = listener.invite().clone();
 
+    // One person's two devices: one key. The person approves at once.
+    let key = qurb_keys::MasterKey::from_bytes([42; 32]);
+    let host_ours = qurb_peer::Ours { name: "Desktop", kind: "computer", key: &key };
+    let joiner_ours = qurb_peer::Ours { name: "Laptop", kind: "computer", key: &key };
     let host_store = Arc::clone(&host.store);
-    let waiting = async move { listener.wait(host_store, "Desktop", NOW).await };
+    let waiting = listener.wait(host_store, &host_ours, NOW, |_| async { true });
     let joining =
-        qurb_peer::accept(&invite, &joiner.identity, Arc::clone(&joiner.store), "Laptop", NOW);
+        qurb_peer::accept(&invite, &joiner.identity, Arc::clone(&joiner.store), &joiner_ours, NOW);
 
     let (a, b) = tokio::join!(waiting, joining);
     a.expect("host paired");

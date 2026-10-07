@@ -28,6 +28,12 @@ pub enum Error {
     #[error("setting this device up from the key failed: {detail}")]
     SetUpFailed { detail: String },
 
+    #[error("the other device said no")]
+    Declined,
+
+    #[error("these two devices have different keys: set this one up again by joining the other with its code")]
+    DifferentKey,
+
     #[error("no STUN server answered; UDP may be blocked outbound")]
     NoStunResponse,
 
