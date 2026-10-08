@@ -51,7 +51,7 @@ is worth more than a tidy directory.
 | [0022](0022-the-service-announces-arrivals.md) | The rendezvous service announces arrivals | Accepted |
 | [0023](0023-one-person-per-account.md) | One person per operating-system account | Accepted, default location amended by 0037 |
 | [0024](0024-the-file-is-the-payload-store.md) | The file in the folder is the payload store | Accepted |
-| [0025](0025-a-storage-cap-that-cannot-lose-data.md) | A storage cap that cannot lose data | Accepted |
+| [0025](0025-a-storage-cap-that-cannot-lose-data.md) | A storage cap that cannot lose data | Accepted — its rule for replicas confirmed by 0058 |
 | [0026](0026-sharing-while-the-other-device-is-off.md) | Sharing while the other device is off | Accepted |
 | [0027](0027-plaintext-stops-at-the-local-network.md) | Plaintext rendezvous stops at the local network | Accepted |
 | [0028](0028-waking-a-sleeping-device.md) | Waking a sleeping device, and what it costs | Accepted |
@@ -83,4 +83,5 @@ is worth more than a tidy directory.
 | [0054](0054-a-file-the-other-device-does-not-hold.md) | A file the other device does not hold is listed, not failed every sync | Accepted — built, tested, and watched on the S23; extended by 0055 |
 | [0055](0055-a-file-on-no-device-says-so.md) | A file on no device says so | Accepted — built on the desktop, the phone and the command line |
 | [0056](0056-dark-mode.md) | Dark mode, on the same tokens | Accepted — built on the desktop and Android |
-| [0057](0057-moving-a-file-into-or-out-of-private-vault.md) | Moving a file into or out of Private Vault | Accepted — built on the desktop, Android and the command line |
+| [0057](0057-moving-a-file-into-or-out-of-private-vault.md) | Moving a file into or out of Private Vault | Accepted — built on the desktop, Android and the command line; watched with the command line |
+| [0058](0058-a-full-replica-says-so.md) | A full replica keeps everything and says so | Accepted — the existing behaviour, decided |

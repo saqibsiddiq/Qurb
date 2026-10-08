@@ -1237,12 +1237,12 @@ Eight things are known-missing rather than merely unbuilt:
    second machine on a different network, and Phase 5's battery-and-survival
    test needs the phone left alone for a day. An emulator answers neither.
 
-5. **A replica cannot free space under a storage cap.** Eviction works by
-   deleting a file from a folder, and a replica has no folder — so a cap on one
-   reports the overrun rather than acting on it. Dropping chunk payloads is a
-   different operation and is not written. It matters for the small always-on
-   box a replica is most useful on. See
-   [decisions/0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md).
+5. **A replica over its storage cap drops nothing**, by decision: it keeps
+   everything and says it is over, since being the copy that can be relied on
+   is its whole job ([decisions/0058](decisions/0058-a-full-replica-says-so.md),
+   after [0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md)). On
+   the small always-on box a replica is most useful on, its disk has to hold
+   what it is given.
 
 6. **The newest features have not crossed between real devices.** Sharing a
    folder with chosen devices, keeping a folder only remotely and removing a

@@ -414,7 +414,8 @@ device", and choosing which devices share a folder is the general case.
    [0038](decisions/0038-the-storage-question-during-setup.md), amending 0033.
 6. ~~**What sharing means** (§23)~~ — decided 2026-09-28: chosen devices,
    [0044](decisions/0044-sharing-with-chosen-devices.md).
-7. **Replica eviction**, before any storage screen promises it for replicas.
+7. ~~**Replica eviction**~~ — decided 2026-10-08: a full replica keeps
+   everything and says so, [0058](decisions/0058-a-full-replica-says-so.md).
 8. ~~**Selective sync for ordinary devices**~~ — decided 2026-09-28: a
    folder kept remotely, listed and fetched on demand, not `PinSet` —
    [0045](decisions/0045-a-folder-kept-remotely.md).
@@ -716,7 +717,9 @@ then.*
   it, so a cleared phone joins with a code).
 
 **4. Release.**
-- [ ] Decided and recorded: how a replica frees space (§4.7). Recovery
+- [x] Decided and recorded: how a replica frees space (§4.7) — it does not:
+  it keeps everything and says it is full
+  ([0058](decisions/0058-a-full-replica-says-so.md)). Recovery
   beyond the 24 words was decided on 2026-10-05
   ([0052](decisions/0052-the-key-travels-with-the-code.md)): the key travels
   with the pairing code and a phone keeps it in Block Store; a computer has
