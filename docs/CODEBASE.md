@@ -1250,9 +1250,11 @@ Eight things are known-missing rather than merely unbuilt:
    desktop window; recently deleted and settling a conflict are verified
    between the Galaxy S23 and the laptop. On the phone, the share sheet's *send
    to a device* and the phone showing a pairing code have not been watched
-   (removing a device and sending are in its history), and the designed app,
-   walked on the S23 on 2026-10-03, has not been measured against
-   [decisions/0039](decisions/0039-a-light-android-app.md). See
+   (removing a device and sending are in its history). The designed app,
+   measured on the S23 on 2026-10-08, starts as fast as before and holds
+   about 13 MB more memory, mostly graphics, measured once rather than back to
+   back with the old build
+   ([decisions/0039](decisions/0039-a-light-android-app.md)). See
    [features.md](features.md) for which is which.
 
 7. **Transfer speed is measured on one home Wi-Fi only.** A large file left

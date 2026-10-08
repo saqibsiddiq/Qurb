@@ -82,7 +82,7 @@ divided by 1024.
   3.5 MB more in total. The code figure is the noisiest, and its two highest
   readings are both the new build's, so some of that is real.
 
-## The designed app, not yet measured
+## The designed app, measured
 
 On 2026-09-29 the five tabs were rebuilt to the design direction
 ([0048](0048-the-design-direction.md)) — still on the platform's views, with
@@ -92,9 +92,46 @@ dozen layer and shape drawables for the glass. Sheets blur what is behind them
 only where the window manager does it (Android 12 and later); every other
 surface is a translucent fill, which costs nothing to draw.
 
-None of the table above has been repeated for it: not the APK size, not cold
-start, not memory. Until it is, the figures here describe the five-tab app, and
-"light and snappy" for the designed one is a claim with no number behind it.
+Measured on 2026-10-08, with dark mode, moves, previews and notifications
+built as well. Same phone, Android 16, by the same method: cold start is
+`am start -W` TotalTime, 15 launches, force-stopped between, compiled to
+`verify`; memory is read 3 seconds after a cold launch onto Home, twice. The
+measuring script waited until the phone had sat on its home screen, awake and
+unlocked, across three checks 15 seconds apart, and stopped if anything else came to the front.
+The release build, re-signed with the debug key so that it installed over
+the app already there and kept its data: the phone paired with the laptop,
+its system in night mode, so the app drew dark.
+
+| | five tabs (above) | designed |
+|---|---|---|
+| APK | 10.8 MB | 11,599,911 bytes ¹ |
+| engine library, arm64 | 7.7 MB | 8,309,704 bytes |
+| app code, dex | 3.0 MB | 3,323,140 bytes |
+| cold start, median of 15 | 171 ms, 173 ms | 182 ms (164–244) |
+| Java heap (PSS) | 5.5–5.8 MB | 6.0, 6.0 MB |
+| code in memory (PSS) | 7.2–9.5 MB | 9.7, 9.7 MB |
+| graphics (PSS) | about 45 MB ² | 55.6, 55.6 MB |
+| total (PSS) | 74.1–78.0 MB | 90.8, 90.9 MB |
+
+¹ 11.6 MB counting a megabyte as a million bytes. The earlier rows do not
+record which megabyte they used, so the APK grew by between 0.3 and 0.8 MB;
+the fonts alone are 0.25 MB.
+² The figure given above for the window's buffers at this resolution, not a
+reading taken alongside the five-tab ones.
+
+What that says, plainly:
+
+- **Startup is where it was.** 182 ms is within the spread earlier runs
+  showed for one build from one run to the next.
+- **Memory grew, mostly in graphics.** About 13 MB more in total than the
+  five-tab app's highest reading, of which roughly 10 MB is graphics. The
+  glass draws translucent layers over one another, which plausibly accounts
+  for it, but it was not measured apart.
+- **Not back to back.** Unlike the comparison above, the old build was not
+  installed alternately with this one, so battery, temperature and
+  background load were not held equal, and the app's data was not the same
+  as on 2026-09-27. The memory difference is larger than the noise seen
+  before; the startup difference is not.
 
 ## Measured and rejected
 

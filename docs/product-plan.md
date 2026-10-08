@@ -637,7 +637,9 @@ it is started.
   ([0043](decisions/0043-settling-a-conflict.md)). The window's looked at
   against the fixtures in both themes; the phone's not yet seen on a real
   conflict.
-- [ ] The designed app measured against [0039](decisions/0039-a-light-android-app.md).
+- [x] The designed app measured against [0039](decisions/0039-a-light-android-app.md),
+  on the S23 on 2026-10-08: a cold start of 182 ms, as before; about 91 MB in
+  memory, 13 MB more than the five-tab app, mostly graphics; an APK of 11.6 MB.
 
 **2. Syncing from anywhere, through the owner's own server.** *Later, by the
 owner's choice on 2026-10-03: the laptop and Tailscale Funnel stay until

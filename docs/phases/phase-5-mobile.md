@@ -1298,8 +1298,9 @@ tests passed on the laptop. The app was built: a debug APK on the laptop is
 dated 2026-09-29, a little under two hours before the commit. **Nothing records it running**
 — not on the S23, not on the emulator — and no screen of it has been looked
 at in this record. (It had run: the phone's own history, read on 2026-10-03,
-says so — [below](#the-designed-app-on-the-s23).) Nor has it been measured against decision 0039's table, so
-whether it is still light and snappy is, for now, unknown.
+says so — [below](#the-designed-app-on-the-s23).) Nor had it been measured against decision 0039's table. (It was on
+2026-10-08: the same startup and about 13 MB more memory, in
+[0039](../decisions/0039-a-light-android-app.md#the-designed-app-measured).)
 
 **Found while writing this up**, 2026-10-03, from the code:
 
@@ -1387,7 +1388,8 @@ Two things true of the owner's files, recorded rather than changed:
   it should, and pairing again does not restore it.
 
 Not done here: measuring the designed app against
-[decision 0039](../decisions/0039-a-light-android-app.md); the share sheet
+[decision 0039](../decisions/0039-a-light-android-app.md) (done on
+2026-10-08); the share sheet
 actually saving or sending; pairing by the phone's own code, watched; and the
 owner's review.
 

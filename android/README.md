@@ -18,7 +18,8 @@ The measurements and what they do and do not show are in
 [decision 0039](../docs/decisions/0039-a-light-android-app.md), which also
 measures the five-tab app against the one-list app it replaced: the same
 startup, and a few megabytes more memory. The designed app that replaced the
-five tabs on 2026-09-29 has not been measured yet. A release build takes
+five tabs on 2026-09-29, measured on 2026-10-08, starts as fast and holds
+about 13 MB more, mostly in graphics. A release build takes
 longer, because link-time optimisation does; the debug build stays quick.
 
 ## What it does
@@ -375,9 +376,10 @@ replaced by uninstalling — which deletes the phone's key and index. See
   the device that sent them still has them. Builds before then did not record
   where a received file came from, and a phone cannot learn it afterwards
   without asking; it errs the safe way, never offering to free such a file.
-- **Measured, and reviewed, in its designed form.** Every place was walked on
-  the S23 on 2026-10-03; decision 0039's measurements have not been repeated
-  for it, and the owner has not reviewed it. See
+- **Reviewed in its designed form.** Every place was walked on the S23 on
+  2026-10-03 and the app measured there on 2026-10-08 (decision 0039: the
+  same startup, about 13 MB more memory, mostly graphics); the owner has not
+  reviewed it. See
   [phases/phase-5-mobile.md](../docs/phases/phase-5-mobile.md#the-designed-app-on-the-s23).
 - **Not yet tried on the phone**, though built and run on the emulator:
   removing a device, the share sheet sending to a device, showing a pairing
