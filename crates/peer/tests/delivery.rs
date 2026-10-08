@@ -486,3 +486,58 @@ async fn a_device_paired_again_has_its_copies_counted_again() {
     assert_eq!((asked, again), (1, 0));
     assert_eq!(availability(&laptop), Availability::Here);
 }
+
+/// A file made by a device that is no longer paired: the phone's own, made
+/// before it was set up again with a new identity. Nobody is left to report
+/// holding it -- reports go to a file's maker -- so the phone called a photo
+/// the laptop also had the only copy (2026-10-08). Asked once, each copy
+/// counts or does not.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_whose_maker_is_gone_is_asked_about_once() {
+    use qurb_storage::db::Availability;
+    let mut maker = Device::new();
+    let mut laptop = Device::new();
+    let mut phone = Device::new();
+    introduce(&maker, &laptop);
+    introduce(&laptop, &phone);
+    let laptop_id = laptop.engine.store().device_id().unwrap();
+
+    maker.write("photo.jpg", b"on the laptop and the phone");
+    maker.write("gone.bin", b"the laptop freed this later");
+
+    // Each device takes both from the one before it.
+    async fn take_all(from: &Device, to: &mut Device) {
+        let (addr, fingerprint) = serve(from, &[to.identity.fingerprint()]);
+        let client = PeerClient::connect(addr, &to.identity, fingerprint).await.unwrap();
+        let reader = Store::open(&to.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+            .unwrap()
+            .in_tree(&to.root);
+        let tree = client.tree().await.unwrap();
+        let plan = to.engine.plan_against(&tree).unwrap();
+        to.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+        client.close();
+    }
+    take_all(&maker, &mut laptop).await;
+    take_all(&laptop, &mut phone).await;
+
+    // The laptop frees one, on the strength of the maker.
+    let mut laptop_store = Store::open(&laptop.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&laptop.root);
+    laptop_store.free_local("gone.bin").unwrap();
+
+    let availability = |d: &Device, path: &str| {
+        d.engine.store().db().folder_entry(path).unwrap().unwrap().availability
+    };
+    assert_eq!(availability(&phone, "photo.jpg"), Availability::OnlyHere, "setup");
+
+    let (addr, fingerprint) = serve(&laptop, &[phone.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    let asked = qurb_peer::check_holders(&client, phone.engine.store(), &laptop_id, 16).await;
+    let again = qurb_peer::check_holders(&client, phone.engine.store(), &laptop_id, 16).await;
+    client.close();
+
+    assert_eq!((asked, again), (2, 0), "asked again about what was settled");
+    assert_eq!(availability(&phone, "photo.jpg"), Availability::Here);
+    assert_eq!(availability(&phone, "gone.bin"), Availability::OnlyHere);
+}

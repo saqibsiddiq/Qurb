@@ -30,16 +30,16 @@ record](../roadmap.md).
 | syncing from mobile data | ✅ directly, through a rendezvous service on the laptop |
 | recently deleted, and settling a conflict | ✅ verified between the S23 and the laptop |
 | files by folder, search, rename, move | ✅ on the emulator; ◻ not yet on the phone |
-| showing a pairing code on the phone | ✅ on the emulator; ◻ not yet paired that way |
-| the share sheet sending to one device | ◻ built, not yet tried |
+| showing a pairing code on the phone | ✅ on the S23, 2026-10-08: joined by its code, approved with the matching number ([below](#the-rest-of-the-phone-watched)) |
+| the share sheet sending to one device | ✅ on the S23, 2026-10-08: at the laptop two seconds later |
 | which devices have each folder, and keeping one only remotely | ✅ on the emulator; ◻ not yet between real devices |
-| removing a device | ✅ on the S23 on 2026-09-29, from its history: the laptop removed, then paired again |
+| removing a device | ✅ on the S23 on 2026-09-29, from its history: the laptop removed, then paired again; watched on 2026-10-08 |
 | designed to the owner's direction: four tabs, Private Vault inside Files | ✅ on the S23, every place walked, 2026-10-03 ([below](#the-designed-app-on-the-s23)) |
 | adding a file into the area on screen | 🧪 in the FFI's tests ([0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)) |
 | a large file collected from the phone | ◻ fetched eight chunks at a time, resumed, served in the foreground — built and tested, not yet measured on the phone ([below](#an-800-mb-video-and-what-stopped-it)) |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-777 tests pass in 90 test binaries on Linux (2026-10-07, debug build, the
+794 tests pass in 90 test binaries on Linux (2026-10-08, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -1960,6 +1960,70 @@ then goes each way, and a send from the second is collected by the first and
 confirmed back. On the Android 14 x86_64 emulator, with
 `scripts/android-test.sh`, it passed with the rest: 678 tests in 63 binaries,
 none failing. The two apps on two devices wait for a second phone.
+
+### The rest of the phone, watched
+
+On the S23 and the laptop, 2026-10-08, driven over wireless ADB while the
+phone was free.
+
+**Pairing by the phone's own code.** *Add a device* → *Show a code on this
+phone*. A throwaway second device on the laptop joined with the code read off
+the sheet (`qurb join <scratch dir> <code>`, never run, so it held nothing).
+The phone asked *saqib wants to join, and take this phone's key* with the
+number the laptop printed, 531 189. Approved, the new device took the same
+key, and the laptop's own entry stayed the one keeping the vault's backup.
+`qurb join` into a new directory also made it the folder the laptop opens
+first (`~/.config/qurb/folders`). That is right for a person adding a
+folder, but it had to be put back by hand after a test.
+
+**Removing a device, on the phone.** The device sheet → *Remove this
+device…* → *Remove device*. The phone's history recorded *paired* and
+*removed*, a minute apart, and its list was back to the laptop alone. Both
+devices were called *saqib*, which the list cannot tell apart; the identity
+at the foot of each sheet can.
+
+**The share sheet's *Send to a device*.** A small file in the phone's
+Download folder, shared through Android's own share sheet, where qurb is
+listed as *Save to qurb* → *Just once* → *Send to saqib*. It reached the
+laptop's `~/Downloads/qurb` two seconds later, the same bytes.
+
+**The phone's own *Move* buttons.** *Move to Files, on all your devices*,
+from Private Vault: the file was in the laptop's folder within about a
+second. *Move to Private Vault…*: the question named the laptop as the
+vault's backup, and the laptop's copy was in its Recently deleted six
+seconds later, held again as part of the phone's vault (decision 0036).
+
+**A folder kept remotely.** Settings → *Who has each folder* → a test
+folder → *Free local space: download files when opened*. Both files left
+the phone, and the folder was listed *downloaded when opened*, the files
+*Available elsewhere*. *Keep on this phone* fetched one. *Keep this folder
+on this phone* brought the other back.
+
+**A folder shared with chosen devices.** Turning the laptop off for the test
+folder on the phone reached the laptop about two minutes later:
+`qurb share` listed the folder as on `SM-S911B` only.
+
+**Found, and fixed the same day:**
+
+- **Three files the laptop had were *Only copy here* on the phone.** They
+  were made by the phone's old identity, and a device reports holding a file
+  only to its maker, so nothing ever told the phone. A sync now asks once
+  about such files ([decision 0055](../decisions/0055-a-file-on-no-device-says-so.md)).
+  With that build on the phone, one sync asked about all 14 of the old
+  identity's files. The 3 the laptop holds became *On this phone*, and the
+  11 nobody holds stayed *On no device*.
+- **A fetched file was dated when it arrived.** A file fetched from the
+  laptop read *changed just now*, eight minutes after the laptop made it. A
+  fetched file now carries the version's change time on disk. Files fetched
+  before keep their arrival time.
+- **A file added to a shared folder went into Private Vault.** It was added
+  just after the app started, while a sync was scanning. The copy into the
+  folder came before the engine was asked to store it in the chosen area,
+  and the scan stored it first, under *Keep new files private*
+  ([decision 0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)).
+- ***Recently deleted* promised a vault file back on every device.**
+  Restoring puts a file back in the area it came from, and the phone and
+  the window now say *Private Vault* for one deleted from there.
 
 Still not watched: a new phone restored from a Google backup, which needs a
 second phone.

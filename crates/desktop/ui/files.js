@@ -422,7 +422,7 @@ async function drawDeleted() {
       iconName: KIND_ICON[kindOf(d.path)],
       name: base(d.path),
       sub: [
-        `Deleted ${when(d.at)}${d.by ? ` on ${d.by}` : ""}`,
+        `${d.private ? "Private Vault · " : ""}Deleted ${when(d.at)}${d.by ? ` on ${d.by}` : ""}`,
         days === 0 ? "Expires today" : `Expires in ${count(days, "day")}`,
       ],
       trail: [forget, restore],
@@ -432,9 +432,11 @@ async function drawDeleted() {
       restore.disabled = true;
       try {
         const at = await invoke("restore_deleted", { id: d.id });
-        toast(at === d.path
-          ? `${base(at)} is back, on all your devices.`
-          : `Restored as ${base(at)}: something else is at ${base(d.path)} now.`);
+        toast(at !== d.path
+          ? `Restored as ${base(at)}: something else is at ${base(d.path)} now.`
+          : d.private
+            ? `${base(at)} is back in Private Vault.`
+            : `${base(at)} is back, on all your devices.`);
         drawDeleted();
         drawDeletedLink();
       } catch (e) {

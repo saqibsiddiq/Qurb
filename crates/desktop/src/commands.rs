@@ -1580,6 +1580,8 @@ pub struct Deleted {
     /// "this computer", or the name of the device whose deletion it was.
     by: Option<String>,
     why: Option<String>,
+    /// From this computer's Private Vault, where restoring puts it back.
+    private: bool,
 }
 
 #[tauri::command]
@@ -1601,6 +1603,7 @@ pub fn recently_deleted(hosted: Host<'_>) -> Answer<Vec<Deleted>> {
                         false => names.get(&id).cloned().unwrap_or_else(|| id.short()),
                     }),
                     why: entry.why,
+                    private: entry.scope == Some(me),
                 })
                 .collect())
         })

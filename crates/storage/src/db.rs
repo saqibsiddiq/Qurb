@@ -861,8 +861,8 @@ impl Db {
         Ok(n as usize)
     }
 
-    /// Content `device` is recorded about and has not been asked about: what
-    /// a sync with it asks, a few at a time (decision 0055). Two kinds:
+    /// Content to ask `device` about, not asked about before: what a sync
+    /// with it asks, a few at a time (decision 0055). Three kinds:
     ///
     /// - files freed here that it is recorded as holding, on the word of
     ///   whoever made them -- which nothing withdrew when that device freed
@@ -870,19 +870,35 @@ impl Db {
     /// - files whose copy there is marked out of reach. Removing a device
     ///   marks all of them, and pairing it again restored none: on
     ///   2026-10-08 a laptop called three files the only copy, minutes after
-    ///   the phone it had removed and paired again had synced them.
+    ///   the phone it had removed and paired again had synced them;
+    /// - shared files made by a device no longer paired, with nothing
+    ///   recorded about `device`. Holdings are reported to a file's maker, so
+    ///   with the maker gone nobody reports them: the same day a phone set up
+    ///   again called three of its old photos the only copy, which the laptop
+    ///   also had.
     pub fn unconfirmed_holdings(&self, device: &DeviceId, limit: usize) -> Result<Vec<blake3::Hash>> {
         let mut stmt = self.conn.prepare(
             "SELECT DISTINCT f.content_hash
                FROM files f
-               JOIN replicas r ON r.content_hash = f.content_hash
               WHERE f.deleted_at IS NULL
                 AND (f.scope IS NULL OR f.scope = (SELECT device_id FROM local WHERE id = 1))
-                AND r.device_id = ?1
-                AND ((f.materialised = 0 AND r.private = 0) OR r.private = 1)
                 AND NOT EXISTS (
                       SELECT 1 FROM confirmed c
                        WHERE c.device_id = ?1 AND c.content_hash = f.content_hash
+                    )
+                AND (
+                      EXISTS (
+                        SELECT 1 FROM replicas r
+                         WHERE r.content_hash = f.content_hash AND r.device_id = ?1
+                           AND ((f.materialised = 0 AND r.private = 0) OR r.private = 1)
+                      )
+                   OR (f.scope IS NULL
+                       AND f.modified_by != (SELECT device_id FROM local WHERE id = 1)
+                       AND NOT EXISTS (SELECT 1 FROM peers p WHERE p.device_id = f.modified_by)
+                       AND NOT EXISTS (
+                             SELECT 1 FROM replicas r
+                              WHERE r.content_hash = f.content_hash AND r.device_id = ?1
+                           ))
                     )
               LIMIT ?2",
         )?;
@@ -894,12 +910,14 @@ impl Db {
     }
 
     /// `device`, asked, said it holds this content: a copy this device can ask
-    /// for, whatever its record said before.
+    /// for, whatever its record said before, and recorded if there was none.
     pub fn note_held(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {
         let id = device.as_bytes().as_slice();
         let content = content.as_bytes().as_slice();
         self.conn.execute(
-            "UPDATE replicas SET private = 0 WHERE device_id = ?1 AND content_hash = ?2",
+            "INSERT INTO replicas (content_hash, device_id, at, private)
+             VALUES (?2, ?1, unixepoch(), 0)
+             ON CONFLICT (content_hash, device_id) DO UPDATE SET private = 0",
             params![id, content],
         )?;
         self.note_asked(id, content)

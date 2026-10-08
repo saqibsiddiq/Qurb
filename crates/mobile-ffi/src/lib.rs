@@ -1439,6 +1439,7 @@ impl Qurb {
                     false => names.get(&id).cloned().unwrap_or_else(|| id.short()),
                 }),
                 why: entry.why,
+                private: entry.scope == Some(me),
             })
             .collect())
     }
@@ -1588,12 +1589,31 @@ impl Qurb {
                 .map_err(|e| QurbError::Storage { detail: e.to_string() })?;
         }
 
-        if !same_file(Path::new(&source), &destination) {
-            std::fs::copy(&source, &destination)
-                .map_err(|e| QurbError::Storage { detail: format!("{source}: {e}") })?;
-        }
+        // Copied in beside its destination, under a name the scan ignores,
+        // and moved into place only with the engine held. Copied straight in,
+        // a sync scanning the folder before the store below stored it first,
+        // under *Keep new files private*: on 2026-10-08 a file added in a
+        // shared folder on the S23 went into Private Vault.
+        let staged = match same_file(Path::new(&source), &destination) {
+            true => None,
+            false => {
+                let name = destination.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                let staging = destination.with_file_name(format!(".{name}.adding.incoming"));
+                if let Err(e) = std::fs::copy(&source, &staging) {
+                    let _ = std::fs::remove_file(&staging);
+                    return Err(QurbError::Storage { detail: format!("{source}: {e}") });
+                }
+                Some(staging)
+            }
+        };
 
         let mut engine = self.engine()?;
+        if let Some(staging) = staged {
+            if let Err(e) = std::fs::rename(&staging, &destination) {
+                let _ = std::fs::remove_file(&staging);
+                return Err(QurbError::Storage { detail: format!("{}: {e}", destination.display()) });
+            }
+        }
         let store = engine.store_mut();
         let was = store.new_files_private();
         if let Some(private) = private {
@@ -2344,6 +2364,9 @@ pub struct DeletedFile {
     pub deleted_by: Option<String>,
     /// Why, where "deleted" is not the whole story.
     pub why: Option<String>,
+    /// Deleted from this phone's Private Vault, which is where restoring puts
+    /// it back: on this phone, not on every device.
+    pub private: bool,
 }
 
 /// What removing a device would do. See [`Qurb::removal_plan`].

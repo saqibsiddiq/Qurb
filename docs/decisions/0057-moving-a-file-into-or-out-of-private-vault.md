@@ -1,7 +1,8 @@
 # 0057 — Moving a file into or out of Private Vault
 
 **Status:** Accepted — built on the desktop, Android and the command line;
-watched between the laptop and the S23 with the command line
+watched between the laptop and the S23, from the command line and the
+phone's own buttons
 **Date:** 2026-10-08
 
 ## What was asked
@@ -87,5 +88,10 @@ records it as *moved*.
 
   The test file was then deleted on the laptop and deleted for good on the
   phone.
-- **Not yet watched**: the window's or the phone's own *Move* buttons on
-  hardware.
+- **The phone's own buttons, 2026-10-08.** *Move to Files, on all your
+  devices*, on a file in the phone's vault: in the laptop's folder about a
+  second later. *Move to Private Vault…*: the question named the laptop as
+  the vault's backup; the laptop's copy went to its Recently deleted six
+  seconds later, and the laptop held the file again as part of the phone's
+  vault. See [phase 5](../phases/phase-5-mobile.md#the-rest-of-the-phone-watched).
+- **Not yet watched**: the window's own *Move* buttons on hardware.

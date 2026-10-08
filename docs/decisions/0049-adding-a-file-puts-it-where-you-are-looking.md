@@ -65,6 +65,17 @@ that a person who has chosen, by where they are standing, gets what they chose.
 - `import_into(source, path, private)` — `import_file` with the area given. It
   sets the store's new-files-private flag for the one write and restores it,
   under the same engine lock, so nothing else writes in between.
+
+  That lock did not cover the copy into the folder, which came first. A scan
+  between the copy and the store, from a sync that happened to be running,
+  found the file and stored it under the setting. The store that followed
+  kept the area it found. On 2026-10-08 a file added to a shared folder on the
+  S23, just after the app started, went into Private Vault. Since then the
+  copy goes beside the destination as `.<name>.adding.incoming`, which the
+  scan ignores, and is moved into place under the lock (amended 2026-10-08).
+  Test: `a_file_added_during_a_scan_goes_where_it_was_added`, 40 files added
+  into the shared area while another thread scans. Before the change, 11 of
+  the 40 went into the vault.
 - `browse_in(dir, private)` and `search_in(text, limit, private)` — `browse`
   and `search` filtered to one area. `search_in` asks the index for four times
   the limit before filtering, so a page is usually full even when most matches

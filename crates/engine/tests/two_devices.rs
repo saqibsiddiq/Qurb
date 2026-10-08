@@ -190,6 +190,35 @@ fn a_file_reaches_the_other_device() {
     assert_converged(&a, &b);
 }
 
+/// A file arrives with the time it was changed, not the time it arrived. On
+/// 2026-10-08 the phone listed a file fetched from the laptop as changed
+/// "just now", eight minutes after the laptop made it, and anything else on
+/// the phone reading the file would have said the same.
+#[test]
+fn a_file_arrives_with_the_time_it_was_changed() {
+    let (mut a, mut b) = (Device::new(), Device::new());
+    a.write("notes.txt", "written on A");
+
+    // Changed in September 2020, as the version says.
+    let changed = 1_600_000_000;
+    let mut tree = a.engine.tree().unwrap();
+    for version in &mut tree {
+        version.modified_at = changed;
+    }
+    let plan = b.engine.plan_against(&tree).unwrap();
+    let mut source = StoreSource::new(a.engine.store());
+    assert!(b.engine.apply_plan(&plan, &mut source).unwrap().is_clean());
+
+    let on_disk = fs::metadata(b.root.join("notes.txt")).unwrap().modified().unwrap();
+    let on_disk = on_disk.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    assert_eq!(on_disk, changed as u64);
+    // And recorded as it is on disk, so the next scan does not read it again.
+    let entry = b.engine.store().db().folder_entry("notes.txt").unwrap().unwrap();
+    assert_eq!(entry.mtime_ns / 1_000_000_000, changed);
+    let rescan = b.engine.reconcile().unwrap();
+    assert_eq!((rescan.stored, rescan.unchanged), (0, 1), "the file was read again");
+}
+
 #[test]
 fn an_edit_propagates() {
     let (mut a, mut b) = (Device::new(), Device::new());

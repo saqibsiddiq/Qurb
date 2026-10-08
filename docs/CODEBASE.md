@@ -162,7 +162,9 @@ once. See [decisions/0054](decisions/0054-a-file-the-other-device-does-not-hold.
 What another device is recorded as holding is a claim, made by the device that
 made a file or by a report. A copy counts as one to ask for only on a paired
 device, and each sync asks the other device about up to 16 of its claims on
-files freed here, each once (`check_holders`, the `confirmed` table). A file
+files freed here, each once (`check_holders`, the `confirmed` table). It also
+asks, once, about shared files made by a device no longer paired, which
+nobody else would report on, since holdings are reported to a file's maker. A file
 not here that no device this one can ask holds reads as *On no device*. See
 [decisions/0055](decisions/0055-a-file-on-no-device-says-so.md).
 
@@ -844,6 +846,7 @@ Dark mode is built on both ([decisions/0056](decisions/0056-dark-mode.md)). The 
 | Local changes stamped | a counter per device, advanced only on real change |
 | Comparing with a peer | `tree`, `plan_against`, `apply_plan` |
 | Content fetched by hash | renames and copies cost a lookup, not a transfer |
+| A fetched file's date | the version's change time, set on disk before it is moved into place (2026-10-08; files fetched before keep their arrival time) |
 | Two directories converging | including conflicts, deletions, resurrections |
 
 Those four crates were the first to be joined together; the counts below are
@@ -877,7 +880,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-791 tests in 90 test binaries on Linux, all passing (2026-10-08, debug build,
+794 tests in 90 test binaries on Linux, all passing (2026-10-08, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. On Android the engine's crates run by `scripts/android-test.sh`:

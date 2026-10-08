@@ -61,6 +61,17 @@ though the phone had just synced them. Removing a device also forgets what
 it was asked, so pairing it again starts the asking afresh. Test:
 `a_device_paired_again_has_its_copies_counted_again`.
 
+**So is a shared file made by a device no longer paired**, once, when
+nothing is recorded about the device being asked (amended 2026-10-08, later
+the same day). A device reports holding a file only to the device that made
+it (`unreported_to`), and learns of other copies only from a file's maker
+and from asking. With the maker gone, nothing reports. A phone is always the
+connecting side, and a report travels only that way, so the laptop's copies
+were never told to the phone. The S23, set up again, showed one of its old
+identity's photos as *Only copy here*. The laptop had it, and two others the
+phone called the same. A held answer records the copy if none was recorded
+(`note_held`). Test: `a_file_whose_maker_is_gone_is_asked_about_once`.
+
 ## Why this, and not something else
 
 - **Leaving them *Available elsewhere*.** It is what the screen said, and it
@@ -85,6 +96,10 @@ it was asked, so pairing it again starts the asking afresh. Test:
 - **A confirmation can go stale.** A device confirmed as holding a file may
   free it later. Opening the file then asks, is answered "not held", and the
   file is shown on no device from then on.
+- **So can a denial, for a file whose maker is gone.** Asked once and told
+  "not held", this device does not learn of it if the other takes the file
+  later from somewhere else. It errs towards *only copy here*, the safe
+  side for freeing.
 - **Freeing still counts a copy on a device never paired.** The display is
   the stricter of the two. A copy recorded for an unpaired device can still
   let this device free its own (`SAFE_ELSEWHERE` is unchanged). Such a copy
@@ -98,7 +113,7 @@ it was asked, so pairing it again starts the asking afresh. Test:
   `a_copy_on_a_device_never_paired_is_not_counted`, and the earlier view
   tests, now pairing the device that holds the copy.
 - `crates/peer/tests/delivery.rs`: `a_copy_recorded_for_a_peer_is_asked_about_once`,
-  and `a_file_the_peer_does_not_hold_is_listed_not_failed_every_sync`, now
+  `a_file_whose_maker_is_gone_is_asked_about_once`, and `a_file_the_peer_does_not_hold_is_listed_not_failed_every_sync`, now
   checking the file reads as on no device.
 - `crates/peer/tests/holding.rs`: a phone's own file freed while a desktop
   keeps it (decision 0036) is confirmed when asked, and still reads as
@@ -114,4 +129,8 @@ it was asked, so pairing it again starts the asking afresh. Test:
   the reason, and only *Delete*.
 - The window's row, menu and details panel for such a file, against its
   fixtures: *Details* and *Delete* only, the reason, "On: No device".
+- On the S23, 2026-10-08, with the build that asks about files whose maker
+  is gone: one sync asked about the 14 the old identity made. The 3 the
+  laptop holds read *On this phone* instead of *Only copy here*; the 11
+  nobody holds stayed *On no device*.
 - **Not watched**: the real window showing one; a confirmation going stale.

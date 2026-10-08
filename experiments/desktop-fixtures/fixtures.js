@@ -357,10 +357,11 @@ const ANSWERS = {
   set_sharing: () => null,
 
   recently_deleted: () => [
-    { id: 2, path: "Photos/IMG_0007.jpg", size: "2311043", at: now - 7200, by: "Galaxy S23", why: null },
+    { id: 3, path: "Tax 2025.pdf", size: "184220", at: now - 3600, by: "this computer", why: null, private: true },
+    { id: 2, path: "Photos/IMG_0007.jpg", size: "2311043", at: now - 7200, by: "Galaxy S23", why: null, private: false },
     {
       id: 1, path: "Notes.md", size: "3977", at: now - 90000 * 3, by: "this computer",
-      why: "the version not kept when a conflict was settled",
+      why: "the version not kept when a conflict was settled", private: false,
     },
   ],
   restore_deleted: () => "Photos/IMG_0007.jpg",

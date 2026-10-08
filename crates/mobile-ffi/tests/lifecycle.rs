@@ -680,3 +680,44 @@ fn each_area_lists_its_own_and_adds_into_itself() {
     // Everything, as before, for whatever asks without an area.
     assert_eq!(qurb.browse(String::new()).unwrap().folders, ["Tax", "Trips"]);
 }
+
+/// Adding into Files while a sync scans the folder. The file used to be
+/// copied in under its own name before the engine was asked to store it, and
+/// a scan in between stored it first, under *Keep new files private*: on
+/// 2026-10-08 a file added in a shared folder on the S23 went into Private
+/// Vault. It is copied in under a name the scan ignores now, and moved into
+/// place when it is stored.
+#[test]
+fn a_file_added_during_a_scan_goes_where_it_was_added() {
+    let dir = scratch();
+    let staging = scratch();
+    let root = dir.path().display().to_string();
+    create(root.clone()).unwrap();
+    let private = qurb_mobile::Settings { own_files_private: true, ..Default::default() };
+    let qurb = std::sync::Arc::new(Qurb::open_with(root, None, private).unwrap());
+
+    let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let scanner = {
+        let (qurb, done) = (qurb.clone(), done.clone());
+        std::thread::spawn(move || {
+            while !done.load(std::sync::atomic::Ordering::Relaxed) {
+                qurb.scan().unwrap();
+                // Let the adding side have the lock in between, as a real
+                // sync does: scanning back to back starves it.
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        })
+    };
+    let source = staging.path().join("source");
+    std::fs::write(&source, vec![7u8; 256 * 1024]).unwrap();
+    for n in 0..40 {
+        qurb.import_into(source.display().to_string(), format!("Shared/{n}.bin"), false).unwrap();
+    }
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    scanner.join().unwrap();
+
+    let shared = qurb.browse_in("Shared".into(), false).unwrap();
+    assert_eq!(shared.files.len(), 40, "some went into Private Vault");
+    let leftovers = std::fs::read_dir(dir.path().join("Shared")).unwrap().count();
+    assert_eq!(leftovers, 40, "a staged copy was left behind");
+}

@@ -10,8 +10,9 @@ import uniffi.qurb_mobile.DeletedFile
 /**
  * Recently deleted (decision 0042, direction §22): files deleted on this
  * phone or on another device, kept here for thirty days. Restoring one puts
- * it back on every device, the way any change travels. Reached from Files and
- * from Settings.
+ * it back where it was: a shared file on every device, the way any change
+ * travels, and a Private Vault file in the vault. Reached from Files and from
+ * Settings.
  */
 class DeletedScreen(app: MainActivity) : Screen(app) {
 
@@ -24,7 +25,7 @@ class DeletedScreen(app: MainActivity) : Screen(app) {
         views.back.text = "Back"
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         views.title.text = "Recently deleted"
-        views.subtitle.text = "Files deleted on any of your devices are kept for 30 days. Restoring one puts it back everywhere."
+        views.subtitle.text = "Files deleted on any of your devices are kept for 30 days. Restoring one puts it back where it was."
         views.subtitle.visibility = View.VISIBLE
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
@@ -40,12 +41,13 @@ class DeletedScreen(app: MainActivity) : Screen(app) {
                 for (d in deleted) {
                     val days = (RETENTION_DAYS - (System.currentTimeMillis() / 1000 - d.deletedAt) / 86400).coerceAtLeast(0)
                     val by = d.deletedBy?.let { " on $it" } ?: ""
+                    val vault = if (d.private) "Private Vault  ·  " else ""
                     // Short enough for two lines beside Restore. "Deleted" is
                     // what the screen is called, and the days left is the fact
                     // a person came for -- it was the part cut off.
                     kit.row(
                         page, States.icon(d.path), d.path.substringAfterLast('/'),
-                        "${Words.ago(d.deletedAt)}$by  ·  " +
+                        "$vault${Words.ago(d.deletedAt)}$by  ·  " +
                             if (days == 0L) "last day" else "$days day${if (days == 1L) "" else "s"} left",
                         trail = kit.button("Restore", Kit.Style.SECONDARY, R.drawable.ic_rotate_ccw, small = true) {
                             restore(d)
@@ -63,7 +65,8 @@ class DeletedScreen(app: MainActivity) : Screen(app) {
     private fun choose(d: DeletedFile) {
         kit.sheet()
             .header(States.icon(d.path), d.path.substringAfterLast('/'), "${Words.size(d.size)}  ·  deleted ${Words.ago(d.deletedAt)}")
-            .text("Restoring puts it back in Qurb, and it returns on your other devices at their next sync." +
+            .text((if (d.private) "Restoring puts it back in your Private Vault."
+                else "Restoring puts it back in Qurb, and it returns on your other devices at their next sync.") +
                 (d.why?.let { "\n\n${it.replaceFirstChar(Char::uppercase)}." } ?: ""))
             .action(R.drawable.ic_rotate_ccw, "Restore") { restore(d) }
             .action(R.drawable.ic_trash_2, "Delete for good", danger = true) { forget(d) }
@@ -74,7 +77,11 @@ class DeletedScreen(app: MainActivity) : Screen(app) {
         scope.launch {
             try {
                 val at = withContext(Dispatchers.IO) { engine().restoreDeleted(d.id) }
-                app.say(if (at == d.path) "Restored, on all your devices" else "Restored as ${at.substringAfterLast('/')}")
+                app.say(when {
+                    at != d.path -> "Restored as ${at.substringAfterLast('/')}"
+                    d.private -> "Restored to your Private Vault"
+                    else -> "Restored, on all your devices"
+                })
                 SyncWorker.runNow(app)
             } catch (e: Exception) {
                 app.fail("Could not restore it", e)

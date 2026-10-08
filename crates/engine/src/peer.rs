@@ -756,6 +756,19 @@ impl Engine {
                     Err(e) => return Err(e),
                 }
 
+                // Dated when it was changed, not when it arrived. Otherwise
+                // every file fetched reads as changed "just now", in this
+                // device's listing and in any other app here. Best effort: a
+                // filesystem that refuses keeps the arrival time.
+                if version.modified_at > 0 {
+                    let changed = std::time::UNIX_EPOCH
+                        + std::time::Duration::from_secs(version.modified_at as u64);
+                    let _ = std::fs::File::options()
+                        .write(true)
+                        .open(&staging)
+                        .and_then(|file| file.set_modified(changed));
+                }
+
                 std::fs::rename(&staging, &path).map_err(|e| {
                     let _ = std::fs::remove_file(&staging);
                     Error::Io { path: path.clone(), source: e }
