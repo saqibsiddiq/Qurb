@@ -8,7 +8,7 @@ goes deeper on one topic; this file is the map.
 It is a **living document**. Anything that changes how the system fits together
 should be reflected here in the same piece of work that changes it.
 
-**Last verified against the code:** 2026-10-03 — the whole file checked against
+**Last verified against the code:** 2026-10-08 — the whole file checked against
 the source, not just the sections that changed. Phases 0–2 are complete.
 Phase 3 is built and its kill criterion is unmeasured, for want of a second
 *network*. Phase 4 has a daemon, a desktop window that does everything the
@@ -397,8 +397,11 @@ available where, what happened, what is still on its way.
 Those queries are `qurb_cli::View`, and the terminal uses the same ones
 (`qurb ls`, `qurb find`, `qurb activity`). See
 [decisions/0032](decisions/0032-the-interface-hosts-the-daemon.md) — including
-why a file's availability has three values rather than two, which is the
-difference between "free up space" and "delete my only copy".
+why a file's availability has more than two values, which is the difference
+between "free up space" and "delete my only copy". There are four: *here*,
+*elsewhere*, *only here*, and since
+[decisions/0055](decisions/0055-a-file-on-no-device-says-so.md) *on no device*,
+for a file known about that no device this one can ask still holds.
 
 ### 2.9 Encryption happens before anything leaves the device
 
@@ -605,8 +608,9 @@ qurb/
 │   │   └── src/source.rs    plugs the client into the engine
 │   │
 │   ├── mobile-ffi/        The engine, as a phone can call it.
-│   │   └── src/lib.rs       UniFFI surface: files and where they are, pairing,
-│   │                        bounded sync, holding, freeing, sending, history
+│   │   ├── src/lib.rs       UniFFI surface: files and where they are, pairing,
+│   │   │                    bounded sync, holding, freeing, sending, history
+│   │   └── src/bin/         uniffi-bindgen, which mobile-bindings.sh runs
 │   │
 │   ├── keys/              The root secret and the way back to it.
 │   │   ├── src/master.rs    HKDF derivation, one key per purpose
@@ -635,11 +639,11 @@ qurb/
 │   │   ├── src/lib.rs       the daemon, as a library, so an interface can
 │   │   │                    run the same one the terminal does
 │   │   ├── src/main.rs      init, enrol, pair, join, run, replica, status,
-│   │   │                    verify, reclaim, fetch, free, send, cancel,
-│   │   │                    holders, remove-device, conflicts, share,
-│   │   │                    keep, deleted, restore, activity, ls, find,
-│   │   │                    config, protect, version, signal, relay,
-│   │   │                    netcheck
+│   │   │                    verify, reclaim, fetch, free, private,
+│   │   │                    unprivate, send, cancel, holders,
+│   │   │                    remove-device, conflicts, share, keep, deleted,
+│   │   │                    restore, forget, activity, ls, find, config,
+│   │   │                    protect, version, signal, relay, netcheck
 │   │   ├── src/daemon.rs    watch, apply, sync, collect, stay under the limit;
 │   │   │                    stop if the folder is moved or deleted
 │   │   ├── src/lock.rs      one daemon per folder, enforced not assumed
@@ -661,6 +665,7 @@ qurb/
 │   │   ├── src/autostart.rs starting at login, hidden
 │   │   ├── src/instance.rs  one qurb per person; a second launch shows the first
 │   │   └── ui/              the window: index.html, app.css (the design),
+│   │                        theme.js (light or dark, before anything draws),
 │   │                        a script per place (core, setup, home, files,
 │   │                        devices, settings, app), icons.js (generated),
 │   │                        fonts/ (Inter, bundled)
@@ -698,6 +703,8 @@ qurb/
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
 │       │                                      change your mind
 │       │                  ShowCode.kt         this phone showing a pairing code
+│       │                  Approval.kt         a device asking to join, approved by
+│       │                                      the six digits both screens show
 │       │                  Words.kt            how the app says things, in one place
 │       │                  SetupActivity.kt    set up, or join by scanning a code
 │       │                  Backup.kt           the key, kept in Block Store
@@ -709,6 +716,15 @@ qurb/
 │       │                                      a long pass in the foreground
 │       │                  Transfers.kt        the notification a long transfer
 │       │                                      runs under, and its progress
+│       │                  Notices.kt          the desktop's three notifications:
+│       │                                      sent to you, collected, failed
+│       │                  Previews.kt         an image or a text's start, for a
+│       │                                      conflict's two versions
+│       │                  SentCopies.kt       copies of sent files, let go of by name
+│       │                  Appearance.kt       light, dark, or as the system is set
+│       │                  ManageSpaceActivity.kt
+│       │                                      what Android's Clear data opens: what
+│       │                                      only this phone has, before it goes
 │       │                  QurbDocumentsProvider.kt
 │       │                                      the files, in the system picker,
 │       │                                      from the index; freed ones download
@@ -782,7 +798,8 @@ complete system and a good deal of it is still unbuilt. The engine is real, and
 so, on Linux and Android, is a product around it that does what the brief asks
 of the features, designed to the owner's direction; what it does not have yet
 is the owner's review of that design, a relay on a server, and a release.
-Dark mode is built on both ([decisions/0056](decisions/0056-dark-mode.md)). The unbuilt parts are listed at the end of this section.
+Dark mode is built on both ([decisions/0056](decisions/0056-dark-mode.md)).
+The unbuilt parts are listed at the end of this section.
 
 ### Built and tested (`crates/storage`, Phase 1)
 
@@ -865,7 +882,7 @@ for the workspace as it stands.
 | QUIC transport | one bidirectional stream per request |
 | Mutual authentication | pinned fingerprints, handshake signature verified |
 | Wire format | length-bounded; decoder has no panicking path |
-| Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s, barely faster than one at a time ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)) |
+| Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s under Cubic, barely faster than one at a time ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)); the next row is what changed that |
 | Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
@@ -1003,7 +1020,7 @@ The same, but over a real QUIC connection, reporting what crossed the wire.
 Device A creates a key and B enrols with its recovery phrase:
 
 ```bash
-cargo run --release --example transfer -- /tmp/dev-a /tmp/dev-b
+cargo run --release -p qurb-peer --example transfer -- /tmp/dev-a /tmp/dev-b
 ```
 
 What enrolling a device looks like on its own:
@@ -1068,8 +1085,10 @@ share sheet's confirmation says where what was just shared will go.
 
 **It runs on a phone.** `./scripts/android-test.sh` pushes the test binaries
 with `adb` and runs them: on a Samsung Galaxy S23 (Android 16, arm64-v8a) all 35
-pass — 426 tests, including the real QUIC handshakes and hole punching.
-Receiving a 512 MiB file over the network there grows the heap by 6 MiB.
+binaries passed on 2026-09-17 — 426 tests, including the real QUIC handshakes
+and hole punching. The suite has grown since and has been run on the
+emulator, not on the phone again. Receiving a 512 MiB file over the network
+there grows the heap by 6 MiB.
 
 Three problems mobile exposed were fixed in the core, because all three were
 core problems that a desktop merely tolerates:
@@ -1087,9 +1106,11 @@ core problems that a desktop merely tolerates:
   instead; it broke two devices on a network with no route to the internet.
 
 **The release build is the light one**: arm64 only, the code shrunk by R8, and
-the engine built with the `mobile` profile, link-time optimised. 10.7 MB
-installed on a Galaxy S23 against 46.7 MB for the debug build, with a cold start
-of about 175 ms — see [decisions/0039](decisions/0039-a-light-android-app.md).
+the engine built with the `mobile` profile, link-time optimised. The designed
+app's is an 11.6 MB APK, measured on a Galaxy S23 on 2026-10-08 at a median cold
+start of 182 ms and about 91 MB in memory, most of it graphics. The first
+release build was 10.7 MB installed against 46.7 MB for the debug build, at
+about 175 ms — see [decisions/0039](decisions/0039-a-light-android-app.md).
 
 **There is an Android app** — [`android/`](../android/) — which installs, sets up
 an identity, keeps the key in the Android Keystore, pairs and syncs. Since
@@ -1099,11 +1120,17 @@ everything is synced and offers one action, *Send to device*, with conflicts to
 settle as attention. Files is browsed by folder and searched, says where each
 file's bytes are, and opens, frees, fetches, renames, moves, sends, saves out or
 deletes each from a sheet; Private Vault, the phone's own files, is a step
-inside it, in the same browser. Devices pairs — scanning a code or showing one
-— chooses who keeps the phone's own files, and removes a device. Settings has
-who has each folder (sharing, and keeping it only remotely), Recently deleted,
-space, syncing and the version. Activity is reached from Home, and Transfers is
-a bar that appears only while something moves. Before the design the same
+inside it, in the same browser, and a file moves between the two with *Move
+to Private Vault* or *Move to Files*. Devices pairs — scanning a code or
+showing one, a device asking to join approved by the six digits both screens
+show — chooses who keeps the phone's own files, and removes a device. Settings
+has who has each folder (sharing, and keeping it only remotely), Recently
+deleted, space, copies of sent files, notifications, the theme, syncing and the
+version. Activity is reached from Home, and Transfers is a bar that appears
+only while something moves. A conflict's sheet previews each version that is on
+the phone. The desktop's three notifications are raised from the history after
+each sync. Android's *Clear data* opens qurb's own screen, which says what
+exists only on this phone before anything goes. Before the design the same
 features were five tabs — Home, Vault, Devices, Transfers, Settings — and it is
 through those that most of the hardware checks below were made. The designed
 screens were walked on the S23 on 2026-10-03 — see
@@ -1168,21 +1195,21 @@ network. iOS needs Xcode, which needs a Mac. See
 | A window | Tauri 2, no framework and no build step; designed from the owner's direction ([design/direction.md](design/direction.md)): a translucent sidebar — Home, Files, Devices, Storage, Private Vault set apart, Settings — glass materials over a quiet environment, Inter, Lucide icons, motion that shows what moved |
 | It hosts the daemon | the same one `qurb run` starts, on its own threads |
 | Home | one state — synced, syncing, devices away, add your first device, needs attention — one action, *Send to device*, attention only when something needs a decision, and Recent |
-| Files | a file browser from the index: search, breadcrumbs, folders apart from files, and where each file's bytes are — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](decisions/0055-a-file-on-no-device-says-so.md)); keep a file here, free its local space, send it, delete it; a details panel naming the devices that hold it |
-| Private Vault | this computer's own files, browsed the same way; moving a file in or out is not built |
+| Files | a file browser from the index: search, breadcrumbs, folders apart from files, and where each file's bytes are — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](decisions/0055-a-file-on-no-device-says-so.md)); keep a file here, free its local space, send it, move it into Private Vault, delete it; a details panel naming the devices that hold it |
+| Private Vault | this computer's own files, browsed the same way; *Move to shared* takes one back out ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md)) |
 | Devices | who is paired, whether each is connected now and whether directly or through the relay, when each was last reached; removing one, with what that will and will not do said first |
 | Activity | reached from Home: what this device did, paged, with the reason where there is one |
 | Storage | how much can be freed without losing anything, the largest files that would free it, and the allowance |
-| Settings | grouped lists: this device and its key, devices and pairings, where files sent here go, keep new files private, notifications, the 24 words, appearance, and the advanced settings — rendezvous, relay, port, start at login, version, Quit |
-| Setting a device up | make a new one or join an existing, with the phrase shown and confirmed and the storage question asked |
+| Settings | grouped lists: this device and its key, devices and pairings, where files sent here go, keep new files private, notifications, the 24 words, appearance — system, light or dark ([0056](decisions/0056-dark-mode.md)) — and the advanced settings — rendezvous, relay, port, start at login, version, Quit |
+| Setting a device up | make a new one, with nothing to write down, or join with another device's code, which brings the key ([0052](decisions/0052-the-key-travels-with-the-code.md)); the storage question asked; the 24 words a fallback |
 | Locked | a key protected by a passphrase is unlocked in the window; at login the window shows itself to ask |
-| Pairing | show a code — QR, typed or spoken — or enter one, with a countdown |
+| Pairing | show a code — QR, typed or spoken — or enter one, with a countdown; a device asking is approved by the six digits both screens show ([0053](decisions/0053-approval-same-key-and-safe-copies.md)) |
 | Sending | a sheet — what, to which device, then the file travelling there and landing — from Home, a file, a device, or files dropped anywhere on the window |
 | Notifications | three things only: a file sent to you, one collected, one that failed |
 | Transfer progress | a panel that appears while something moves or waits: both directions, live, with the time left |
 | Cancelling a send | before it is collected, from the window or `qurb cancel`; never after |
-| Conflicts | attention on Home and Files, reviewed in a sheet: both versions, who made each and when; keep one, the other, or both |
-| Recently deleted | from Files: thirty days, restore or delete for good |
+| Conflicts | attention on Home and Files, reviewed in a sheet: both versions, who made each and when, previewed when here (an image, or a text's start); keep one, the other, or both |
+| Recently deleted | from Files: thirty days, restore — back in the area it was deleted from — or delete for good |
 | Who has each folder | a folder's options, from its menu in Files: share it with chosen devices; free its space here or keep it on this computer |
 | Security | in Settings: how the key is kept and changing it, under This device; pairings and removals, under Devices; this device's identity, under Advanced |
 | One qurb per person | closing the window keeps it syncing; launching again shows the running one |
@@ -1330,8 +1357,12 @@ cargo build --release
 ```
 
 **The program itself.** Two devices, start to finish — `init` on the first,
-`enrol` on the second with the phrase it printed, then `pair` and `join` to
-introduce them, then `run` on both:
+then `pair` there, which shows a code, and `join` with that code on the
+second, which brings the first device's key with it
+([decisions/0052](decisions/0052-the-key-travels-with-the-code.md)); the first
+asks to approve the second by a six-digit number both print. Then `run` on
+both. `enrol` with the 24 words is the way in without the other device to
+hand:
 
 ```bash
 ./target/release/qurb init ~/Sync
