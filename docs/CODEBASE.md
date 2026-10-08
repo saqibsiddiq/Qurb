@@ -1230,11 +1230,18 @@ Eight things are known-missing rather than merely unbuilt:
    still exists. See
    [decisions/0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md).
 
-2. **Key recovery.** Zero-knowledge means a lost key is lost data. Every
-   consumer product in this space eventually adds some escape hatch — social
-   recovery, an escrowed key, a printed kit — and each trades away part of the
-   promise. Choosing which compromise to make is better done on paper now than
-   under pressure from an upset user later. Still undecided.
+2. **Key recovery, for the last device.** Zero-knowledge means a lost key is
+   lost data. Since [decisions/0052](decisions/0052-the-key-travels-with-the-code.md)
+   nobody writes 24 words down: a new device takes the key from one it pairs
+   with, and a phone also keeps its key in Block Store, end-to-end encrypted
+   with its screen lock. That survived a reinstall on the S23, and did not
+   survive *Clear data*; a restore onto a new phone, which Google's backup
+   is for, has not been watched. What is left is the person whose every device
+   is gone. A computer has nothing that leaves the machine, so a person with
+   only computers, who did not keep the words, has no way back. Every
+   consumer product in this space adds some escape hatch for that — social
+   recovery, an escrowed key, a printed kit — and each trades away part of
+   the promise. Which to add, if any, is undecided.
 
 3. **Nobody has watched a phone sync for a day.** The background worker is
    scheduled and runs when asked; what Android actually grants it over a day,
@@ -1253,13 +1260,16 @@ Eight things are known-missing rather than merely unbuilt:
    the small always-on box a replica is most useful on, its disk has to hold
    what it is given.
 
-6. **The newest features have not crossed between real devices.** Sharing a
-   folder with chosen devices, keeping a folder only remotely and removing a
-   device are tested with several devices in one test process and in the
-   desktop window; recently deleted and settling a conflict are verified
-   between the Galaxy S23 and the laptop. On the phone, the share sheet's *send
-   to a device* and the phone showing a pairing code have not been watched
-   (removing a device and sending are in its history). The designed app,
+6. **Some features have not crossed between real devices.** Since
+   2026-10-08 the phone's side of nearly everything has been watched with the
+   laptop: sharing a folder with chosen devices, keeping one only remotely,
+   removing a device, the share sheet's *send to a device*, the phone showing
+   a pairing code, moving files into and out of Private Vault. Still not: most
+   of the desktop window's own buttons with a real phone on the other end —
+   its pairing was, approved by number on 2026-10-08, and the rest is driven
+   by its smoke test against a second device on the same machine — the
+   phone's search and rename, a conflict previewed on the
+   phone, two phones, and a new phone restored from a Google backup. The designed app,
    measured on the S23 on 2026-10-08, starts as fast as before and holds
    about 13 MB more memory, mostly graphics, measured once rather than back to
    back with the old build

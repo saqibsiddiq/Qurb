@@ -247,6 +247,11 @@ consumer product in this space adds some escape hatch — social recovery, an
 escrowed key, a printed kit. Decide which compromise to make now, on paper,
 rather than under pressure.
 
+Partly answered on 2026-10-05 ([0052](decisions/0052-the-key-travels-with-the-code.md)):
+a new device takes the key from one it pairs with, and a phone keeps it in
+Block Store, inside the phone's end-to-end encrypted Google backup. Still open: the
+person whose every device is gone, with no phone backup and no words kept.
+
 ---
 
 ## Recommendation
