@@ -877,12 +877,14 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-790 tests in 90 test binaries on Linux, all passing (2026-10-08, debug build,
+791 tests in 90 test binaries on Linux, all passing (2026-10-08, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
-is clean. The last run on a Galaxy S23 was 426 of them, on 2026-09-17, and has
-not been repeated since — see
-[phases/phase-5-mobile.md](phases/phase-5-mobile.md).
+is clean. On Android the engine's crates run by `scripts/android-test.sh`:
+678 tests in 63 binaries passed on the Android 14 x86_64 emulator on
+2026-10-08, including two phones pairing and syncing. The last run on a
+Galaxy S23 was 426 of them, on 2026-09-17. See
+[phases/phase-5-mobile.md](phases/phase-5-mobile.md#finishing-what-was-left).
 
 **The wire protocol is `qurb/2`.** It was `qurb/0` until tree entries gained a
 flag saying "this belongs in your vault", which is not a byte an older build can

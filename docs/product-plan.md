@@ -652,7 +652,12 @@ then.*
   2026-10-05 (the duplicate identity, [phase 4](phases/phase-4-product.md#a-folder-deleted-while-qurb-ran)).
   The rest is still to watch.
 - [ ] Android↔Android — on the emulator until the owner can borrow a second
-  phone, then on two real ones.
+  phone, then on two real ones. *On the emulator, 2026-10-08:* two phone
+  engines pairing by code (one taking the other's key), a shared file each
+  way and a send collected and confirmed
+  (`two_phones_pair_share_both_ways_and_send`), with the rest of the
+  engine's 678 tests, on Android 14. The two apps, on two devices, wait for a
+  second phone.
 - [ ] A phone left alone for a day: battery and survival (Phase 5's kill
   criterion).
 - [x] A folder deleted while qurb runs: the daemon notices and stops, and no

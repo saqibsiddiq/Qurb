@@ -975,3 +975,94 @@ fn a_phone_removes_a_device_that_kept_its_files() {
     let last = phone.history(1, None).unwrap().remove(0);
     assert_eq!((last.kind.as_str(), last.device.as_deref()), ("removed", Some("desktop")));
 }
+
+/// Keep `device` syncing, as a phone left open would, until `done` is set.
+fn keep_syncing(device: Arc<Qurb>, done: Arc<std::sync::atomic::AtomicBool>) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        while !done.load(std::sync::atomic::Ordering::Relaxed) {
+            let _ = device.sync_within(5);
+        }
+    })
+}
+
+/// Android to Android: two phones, one joining the other with its code and
+/// taking its key, then a shared file each way and a file sent from one to
+/// the other, collected and confirmed. Both are phone engines; run on an
+/// emulator by `scripts/android-test.sh`, this is the engine as two Android
+/// devices run it, on Android's own libc and filesystem.
+#[test]
+fn two_phones_pair_share_both_ways_and_send() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
+    logging();
+    let (_runtime, signal) = signalling();
+
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
+    let first_root = first_dir.path().display().to_string();
+    let second_root = second_dir.path().display().to_string();
+
+    create(first_root.clone()).unwrap();
+    let first = Qurb::open_with(first_root, None, settings("first phone", &signal)).unwrap();
+    let offer = first.offer_pairing().unwrap();
+    let code = offer.code();
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
+    join_new(second_root.clone(), code, "second phone".into(), None).unwrap();
+    waiting.join().unwrap().unwrap();
+    let second = Arc::new(Qurb::open_with(second_root, None, settings("second phone", &signal)).unwrap());
+    let first = Arc::new(first);
+    assert_eq!(second.recovery_phrase(), first.recovery_phrase(), "one key, on both");
+
+    // The first phone's file, to the second.
+    std::fs::write(first_dir.path().join("from-the-first.txt"), b"made on the first phone").unwrap();
+    first.scan().unwrap();
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let serving = keep_syncing(Arc::clone(&first), Arc::clone(&done));
+    let outcome = until_reached(&second, std::time::Duration::from_secs(60));
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    serving.join().unwrap();
+    assert_eq!(outcome.reached, 1, "the second phone did not reach the first");
+    assert_eq!(
+        std::fs::read(second_dir.path().join("from-the-first.txt")).unwrap(),
+        b"made on the first phone"
+    );
+
+    // The second phone's file, and a file sent to the first alone.
+    std::fs::write(second_dir.path().join("from-the-second.txt"), b"made on the second phone").unwrap();
+    second.scan().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let sent = outside.path().join("for-the-first.txt");
+    std::fs::write(&sent, b"sent to the first phone only").unwrap();
+    let to_first = second.peers().unwrap()[0].fingerprint.clone();
+    second.send_file(sent.display().to_string(), "for-the-first.txt".into(), to_first).unwrap();
+    assert_eq!(second.waiting().unwrap().len(), 1);
+
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let serving = keep_syncing(Arc::clone(&second), Arc::clone(&done));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    while std::time::Instant::now() < deadline
+        && !(first_dir.path().join("from-the-second.txt").exists()
+            && first_dir.path().join("for-the-first.txt").exists())
+    {
+        let _ = first.sync_within(5);
+    }
+    // The second phone records the delivery when the first says it has it,
+    // on a connection the first made: give that a pass to land.
+    let confirmed = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while std::time::Instant::now() < confirmed && !second.waiting().unwrap().is_empty() {
+        let _ = first.sync_within(5);
+    }
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    serving.join().unwrap();
+
+    assert_eq!(
+        std::fs::read(first_dir.path().join("from-the-second.txt")).unwrap(),
+        b"made on the second phone"
+    );
+    assert_eq!(
+        std::fs::read(first_dir.path().join("for-the-first.txt")).unwrap(),
+        b"sent to the first phone only"
+    );
+    assert!(second.waiting().unwrap().is_empty(), "the send is still waiting: {:?}", second.waiting());
+    // Sent to one phone, so not to anybody else: it stays out of the shared area.
+    assert!(!first.list().unwrap().iter().any(|f| f.path == "for-the-first.txt" && !f.private));
+}

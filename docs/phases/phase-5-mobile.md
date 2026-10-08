@@ -1941,6 +1941,16 @@ a sync, and what it holds counts again ([decision 0055](../decisions/0055-a-file
 With that build on the laptop, the phone's next sync came at 01:41, and
 `qurb ls` read the three as `here` again, the 18 still `nowhere`.
 
+**Android to Android, on the emulator.** Two emulators could not reach each
+other directly here: each sees itself as `10.0.2.15`, so a pairing code from
+one points the other at itself. So the two phones are two phone engines in
+one test, run on Android. `two_phones_pair_share_both_ways_and_send` has one
+phone set up and the other join with its code, taking its key. A shared file
+then goes each way, and a send from the second is collected by the first and
+confirmed back. On the Android 14 x86_64 emulator, with
+`scripts/android-test.sh`, it passed with the rest: 678 tests in 63 binaries,
+none failing. The two apps on two devices wait for a second phone.
+
 Still not watched: a new phone restored from a Google backup, which needs a
 second phone.
 
