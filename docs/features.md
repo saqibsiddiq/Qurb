@@ -126,7 +126,7 @@ was walked through on the emulator.
 | **Devices** | this phone and each paired device as cards, with when each was last seen; *Add* — scan a code, **show a code on this phone**, or type one | ✅ scan · ◻ show |
 | | a device's sheet: *Keep a backup of my Private Vault* — a device that keeps a copy of the phone's own files, so the phone can free space | ✅ |
 | | send files to it; remove it, saying first what that does ([0041](decisions/0041-removing-a-device.md)) | ✅ both in the S23's history, 2026-09-29 |
-| **Settings** | grouped lists: this phone (name, key protection); devices; storage — space used, who has each folder (choose devices, keep on this phone or download when opened), Recently deleted, *free unused space*; privacy — *Keep new files private*; notifications (none on the phone yet); the recovery phrase; appearance — theme: as the phone is set, light or dark ([0056](decisions/0056-dark-mode.md)); advanced — background sync, rendezvous, relay, version | 🧪 |
+| **Settings** | grouped lists: this phone (name, key protection); devices; storage — space used, who has each folder (choose devices, keep on this phone or download when opened), Recently deleted, *free unused space*; privacy — *Keep new files private*; notifications — the desktop's three: sent to you, delivered, failed (`Notices.kt`); the recovery phrase; appearance — theme: as the phone is set, light or dark ([0056](decisions/0056-dark-mode.md)); advanced — background sync, rendezvous, relay, version | 🧪 |
 | **Activity** | from Home: what happened, newest first, sixty at a time | ✅ |
 | **Recently deleted** | from Files and Settings: thirty days, when each expires; restore — on every device — or delete for good ([0042](decisions/0042-recently-deleted.md)) | ✅ |
 | **Transfers** | a bar above the tabs while the phone syncs or has a send not yet collected; its sheet shows what is waiting, with *Stop*, and what finished | 🧪 stop sending |
@@ -241,7 +241,6 @@ Stated plainly so that a design does not assume it:
 - **The relay on a server.** Next, after design and UX. Until then a phone on a
   network that blocks a direct path cannot sync.
 - **The owner's review of the design**, on both.
-- **Notifications on the phone.** Settings says so.
 - **A formal release** — after the relay.
 - **iOS, macOS and Windows.** Linux and Android first.
 - **Placeholders on Linux.** A freed file is absent from the folder, not shown

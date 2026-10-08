@@ -234,10 +234,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        Notices.onScreen = true
         if (!::views.isInitialized) return
         current?.refresh()
         updateDock()
         catchUp()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Notices.onScreen = false
     }
 
     private fun screenFor(tab: Int): Screen = screens.getOrPut(tab) {
@@ -506,7 +512,7 @@ class MainActivity : AppCompatActivity() {
      * at install -- a permission asked for before it means anything is a
      * permission refused. The transfer runs either way.
      */
-    private fun askToNotify() {
+    fun askToNotify() {
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -566,6 +572,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 result = outcome
                 if (outcome.reached > 0u) Engine.noteSynced(this@MainActivity)
+                // On screen, so nothing is raised; what was shown here is
+                // marked as seen, and not announced later.
+                withContext(Dispatchers.IO) { Notices.tell(this@MainActivity, engine) }
                 if (!quiet) say(
                     when {
                         outcome.reached == 0u && outcome.unreachable == 0u && outcome.timedOut ->

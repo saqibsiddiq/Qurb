@@ -108,8 +108,20 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
 
         kit.groupTitle(page, "Notifications")
         group = kit.group(page)
-        kit.item(group, "On this phone",
-            "Qurb doesn't raise notifications here yet. What was sent to you is in Activity, from Home.")
+        // The desktop's three (Notices.kt): sent to you, delivered, failed.
+        val notifying = Notices.enabled(app) && Notices.permitted(app)
+        kit.toggle(group, "On this phone",
+            when {
+                !Notices.enabled(app) -> "Off. What happens is still in Activity, from Home."
+                !Notices.permitted(app) -> "Android isn't letting Qurb notify yet: turn this on to allow it."
+                else -> "When somebody sends you a file, a device collects one you sent, or something fails. " +
+                    "Nothing else."
+            },
+            notifying) { on ->
+            Notices.setEnabled(app, on)
+            if (on && !Notices.permitted(app)) app.askToNotify()
+            refresh()
+        }
 
         kit.groupTitle(page, "Recovery")
         group = kit.group(page)

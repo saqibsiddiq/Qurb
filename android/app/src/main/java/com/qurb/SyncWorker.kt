@@ -121,6 +121,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // Refused the foreground with a large collection waiting, while a
             // device was there for it -- reached, or collecting on its own
             // connection: say so, with the way to carry on.
+            // What is worth telling the person, now nobody is looking.
+            Notices.tell(applicationContext, engine)
+
             if (long || forOthers < LONG_PASS_BYTES) {
                 Transfers.clearPaused(applicationContext)
             } else {

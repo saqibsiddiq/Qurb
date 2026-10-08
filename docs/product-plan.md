@@ -624,7 +624,10 @@ it is started.
 - [x] Moving a file into and out of Private Vault, on both — built
   2026-10-08 ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md));
   watched on hardware: see there.
-- [ ] The three notifications on the phone.
+- [x] The three notifications on the phone — built 2026-10-08
+  (`Notices.kt`): somebody sent you a file, a device collected one you sent,
+  something failed, read from the history after each sync; nothing while the
+  app is on screen; a switch in Settings. Watched on hardware: see phase 5.
 - [ ] A preview when comparing a conflict's two versions.
 - [ ] The designed app measured against [0039](decisions/0039-a-light-android-app.md).
 

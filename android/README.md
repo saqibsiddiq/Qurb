@@ -358,6 +358,12 @@ replaced by uninstalling — which deletes the phone's key and index. See
   (`SentCopies.kt`). The storage screen's line, the Settings row ("1.6 GB,
   kept here after they arrived") and its warning were watched, the warning
   closed with *Keep*; letting go was not tapped.
+- **Notifications** (`Notices.kt`), the desktop's three and nothing else:
+  somebody sent you a file, a device collected one you sent, something
+  failed. Read from the history after each sync, at most three at once,
+  never while the app is on screen, and never about history from before the
+  build that brought them. Settings → Notifications turns them off, or asks
+  Android to allow them.
 - **Pairing is approved** (`Approval.kt`): the device showing the code asks
   whether to let a device in, with the six digits it should be showing, and
   the phone joining shows its digits meanwhile (decision 0053). Watched both
@@ -373,7 +379,6 @@ replaced by uninstalling — which deletes the phone's key and index. See
   the S23 on 2026-10-03; decision 0039's measurements have not been repeated
   for it, and the owner has not reviewed it. See
   [phases/phase-5-mobile.md](../docs/phases/phase-5-mobile.md#the-designed-app-on-the-s23).
-- **Notifications.** The phone raises none; Settings says so.
 - **Not yet tried on the phone**, though built and run on the emulator:
   removing a device, the share sheet sending to a device, showing a pairing
   code to another device, and sharing a folder with chosen devices between
