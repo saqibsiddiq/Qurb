@@ -628,7 +628,10 @@ it is started.
 - [x] The three notifications on the phone — built 2026-10-08
   (`Notices.kt`): somebody sent you a file, a device collected one you sent,
   something failed, read from the history after each sync; nothing while the
-  app is on screen; a switch in Settings. Watched on hardware: see phase 5.
+  app is on screen; a switch in Settings. Watched on the S23 the same day:
+  a file sent from the laptop's `qurb send`, collected by the phone's
+  background sync with the app off screen, raised *saqib sent you a file —
+  qurb-notice-test.txt*.
 - [x] A preview when comparing a conflict's two versions — 2026-10-08, on
   both: images and the start of a text, for the versions that are here
   ([0043](decisions/0043-settling-a-conflict.md)). The window's looked at

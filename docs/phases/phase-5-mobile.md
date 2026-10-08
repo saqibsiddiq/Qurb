@@ -1941,6 +1941,14 @@ a sync, and what it holds counts again ([decision 0055](../decisions/0055-a-file
 With that build on the laptop, the phone's next sync came at 01:41, and
 `qurb ls` read the three as `here` again, the 18 still `nowhere`.
 
+**The phone's notifications** (`Notices.kt`), the desktop's three. With
+qurb off screen, `qurb send` on the laptop sent the phone a small test file.
+The phone's background sync collected it. That waited on Android for some
+minutes, which held the job until the Wi-Fi counted as validated. At 10:49
+the notification read *saqib sent you a file — qurb-notice-test.txt*.
+*Delivered* and *something failed* were not seen on the phone; they come
+from the same history entries the desktop's tests cover.
+
 **Android to Android, on the emulator.** Two emulators could not reach each
 other directly here: each sees itself as `10.0.2.15`, so a pairing code from
 one points the other at itself. So the two phones are two phone engines in
