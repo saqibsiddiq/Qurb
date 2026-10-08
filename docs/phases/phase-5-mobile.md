@@ -29,7 +29,7 @@ record](../roadmap.md).
 | **a phone syncing with a laptop, both ways** | ✅ verified on hardware |
 | syncing from mobile data | ✅ directly, through a rendezvous service on the laptop |
 | recently deleted, and settling a conflict | ✅ verified between the S23 and the laptop |
-| files by folder, search, rename, move | ✅ on the emulator; the *Move* buttons on the S23, 2026-10-08; ◻ search and rename not yet on the phone |
+| files by folder, search, rename, move | ✅ on the S23, 2026-10-08: the *Move* buttons, search in each area, and a rename followed by the laptop |
 | showing a pairing code on the phone | ✅ on the S23, 2026-10-08: joined by its code, approved with the matching number ([below](#the-rest-of-the-phone-watched)) |
 | the share sheet sending to one device | ✅ on the S23, 2026-10-08: at the laptop two seconds later |
 | which devices have each folder, and keeping one only remotely | ✅ between the S23 and the laptop, 2026-10-08 ([below](#the-rest-of-the-phone-watched)) |
@@ -2047,6 +2047,69 @@ one restored from Private Vault goes back there.
 
 Still not watched: a new phone restored from a Google backup, which needs a
 second phone.
+
+### The last of the phone, and a setting lost three days before
+
+Later on 2026-10-08, on the S23 and the laptop, the phone free.
+
+**Search and rename.** In Private Vault, the test file left there by the
+fault above was renamed from its sheet (*Rename…*). After a sync the laptop,
+which keeps the vault's backup, held it under the new name, the old one
+marked deleted. Searching Private Vault for part of the new name found it
+inside its folder. Searching Files for the same text found nothing, and for a
+shared file's name found that file. Then it was deleted, and deleted for good
+from Recently deleted.
+
+**The share sheet saving into an area.** A small file in Downloads, shared
+through Android's own picker → *Save to qurb* → *Save to Files, on all your
+devices*. The phone said *Saved to Qurb*, and the file was in the laptop's
+folder four seconds later, the same bytes.
+
+**A conflict, previewed on the phone.** That file was then changed on both
+devices at once: written in the phone's folder, and on the laptop a second
+later. At the phone's next sync the laptop's version became
+`….conflict-4b671fcc-….txt`, and Home said *1 thing needs attention*. The
+sheet showed both versions' text side by side, with who made each, when and
+how big. *Keep this version* settled it on both devices, the laptop's
+version going to Recently deleted.
+
+**Found, and fixed:**
+
+- **Files listed a folder that held only Private Vault's files**, as empty.
+  The shared browser adds folders it finds on disk, so that a folder just
+  made shows before anything is in it. Both areas share the disk, so it also
+  showed the folder holding the vault's test file. A folder on disk holding
+  vault files is no longer listed in Files (`FilesScreen.kt`).
+- **Settings said "Last background sync 1 minutes ago".** It now uses the
+  app's one way of saying times, which the rest of the app already did.
+
+**Found, and put right by hand, not yet in the product: the phone had had
+no rendezvous service since 2026-10-05.** Settings showed
+`ws://10.0.2.2:9000`, which is the emulator's address for its host and
+reaches nothing from a real phone. *Clear data* on 2026-10-05 emptied the
+setting with everything else, joining again by code did not bring it back,
+and the app's default is the emulator's. Nothing said so, because on the
+home Wi-Fi the phone finds the laptop directly. So for three days the phone
+could not be woken by push, nor sync from mobile data. That was also why
+the background schedule had fallen back to every fifteen minutes. The
+setting was put back to the Funnel address it had before
+(`wss://saqib.tail86283c.ts.net`). With the phone on its home screen, a file
+written on the laptop at 16:16:49.4 had the phone checking in 2.1 seconds
+later, woken by push, and the schedule went back to hourly. What the product
+still lacks: a real phone should not fall back to the emulator's address,
+and Settings should say when no rendezvous is set and what that costs. The
+laptop's own setting cannot simply be copied when a phone joins, since the
+laptop reaches its service at `localhost`.
+
+**Seen, and not changed:**
+
+- The phone's version in the conflict read *just now* though it was written
+  four minutes earlier: a file changed outside the app is dated when the
+  phone's next scan records it, which is the next sync.
+- The push-woken pass took nothing, correctly. The laptop's folder is set to
+  `own-files = private`, so the test file went into the laptop's own vault.
+  That setting means nothing new on the laptop reaches the phone unless it is
+  moved to the shared area. Whether it is wanted is the owner's call.
 
 ## Deliberately left undone
 

@@ -133,8 +133,11 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                         val listing = engine.browseIn(dir, private)
                         // With the folders on disk that hold nothing yet: the
                         // index knows files, and a folder just made is empty.
+                        // Not one holding Private Vault's files: both areas
+                        // share the disk, and that folder is the vault's.
+                        val vaults = if (private) emptySet() else engine.browseIn(dir, true).folders.toSet()
                         val made = if (private) emptyList() else java.io.File(Engine.root(app), dir).listFiles()
-                            ?.filter { it.isDirectory && !it.name.startsWith(".") }
+                            ?.filter { it.isDirectory && !it.name.startsWith(".") && it.name !in vaults }
                             ?.map { it.name }
                             .orEmpty()
                         (listing.folders + made).distinct().sorted() to listing.files

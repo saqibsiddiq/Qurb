@@ -1294,9 +1294,8 @@ Eight things are known-missing rather than merely unbuilt:
    a pairing code, moving files into and out of Private Vault. Still not: most
    of the desktop window's own buttons with a real phone on the other end —
    its pairing was, approved by number on 2026-10-08, and the rest is driven
-   by its smoke test against a second device on the same machine — the
-   phone's search and rename, a conflict previewed on the
-   phone, two phones, and a new phone restored from a Google backup. The designed app,
+   by its smoke test against a second device on the same machine — two
+   phones, and a new phone restored from a Google backup. The designed app,
    measured on the S23 on 2026-10-08, starts as fast as before and holds
    about 13 MB more memory, mostly graphics, measured once rather than back to
    back with the old build
@@ -1322,6 +1321,12 @@ Eight things are known-missing rather than merely unbuilt:
    prevent: a phone lost or broken before it has synced. The 18 files lost
    that day stay listed on both devices, as *On no device*
    ([decisions/0055](decisions/0055-a-file-on-no-device-says-so.md)).
+   *Clear data* also emptied the phone's rendezvous setting, and the app fell
+   back to the emulator's address without saying so: for three days the
+   phone could be neither woken nor reached off the home Wi-Fi, until it was
+   noticed on 2026-10-08 and set again by hand. The product does not yet
+   prevent that
+   ([phase 5](phases/phase-5-mobile.md#the-last-of-the-phone-and-a-setting-lost-three-days-before)).
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:

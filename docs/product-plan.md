@@ -635,8 +635,8 @@ it is started.
 - [x] A preview when comparing a conflict's two versions — 2026-10-08, on
   both: images and the start of a text, for the versions that are here
   ([0043](decisions/0043-settling-a-conflict.md)). The window's looked at
-  against the fixtures in both themes; the phone's not yet seen on a real
-  conflict.
+  against the fixtures in both themes; the phone's seen on a real conflict
+  between the S23 and the laptop, 2026-10-08.
 - [x] The designed app measured against [0039](decisions/0039-a-light-android-app.md),
   on the S23 on 2026-10-08: a cold start of 182 ms, as before; about 91 MB in
   memory, 13 MB more than the five-tab app, mostly graphics; an APK of 11.6 MB.

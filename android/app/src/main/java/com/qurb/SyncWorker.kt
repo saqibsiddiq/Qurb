@@ -257,14 +257,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             val result = prefs.getString(LAST_RESULT, null) ?: return null
             val at = prefs.getLong(LAST_AT, 0)
 
-            val ago = System.currentTimeMillis() - at
-            val when_ = when {
-                ago < 60_000 -> "just now"
-                ago < 3_600_000 -> "${ago / 60_000} minutes ago"
-                ago < 86_400_000 -> "${ago / 3_600_000} hours ago"
-                else -> "${ago / 86_400_000} days ago"
-            }
-            return "Last background sync $when_: $result."
+            // The app's one way of saying it, which says "1 minute", not
+            // "1 minutes", as this line once did on the S23.
+            return "Last background sync ${Words.ago(at / 1000)}: $result."
         }
 
         /**
