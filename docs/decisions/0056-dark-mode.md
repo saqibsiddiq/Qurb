@@ -1,7 +1,8 @@
 # 0056 — Dark mode, on the same tokens
 
 **Status:** Accepted — built on the desktop and Android; the desktop looked at
-against its fixtures; watched on the S23
+against its fixtures and the real window seen following the desktop's
+preference; watched on the S23
 **Date:** 2026-10-08
 
 ## What was asked
@@ -115,8 +116,23 @@ Android's drawables likewise name colour roles now (`nav_glass`, `tile_fill`,
     system was in night mode. It was not seen again in four launches, cold
     and after reinstalling, with and without a saved choice, and is not
     explained.
-- **Not yet watched**: the real window following the desktop's dark
-  preference.
+- **The real window following the desktop's preference**, 2026-10-08,
+  with `SMOKE_MODE=theme ./scripts/desktop-smoke.sh`. *System* needs nothing
+  of qurb's own here. Tauri's toolkit, tao, reads the desktop's settings
+  portal (`org.freedesktop.appearance color-scheme`) as the window opens. It
+  sets GTK's dark preference from it, which WebKit reports as
+  `prefers-color-scheme`, and it listens for the portal's `SettingChanged`.
+  The smoke test runs the real application on a display and a bus of its
+  own, with a stand-in portal (`scripts/smoke_portal.py`) starting at dark.
+  The page's background was `#121311` when the window opened and `#F7F7F4`
+  when the stand-in switched to light, and dark again when it switched
+  back. *Light* chosen in Settings held while the desktop changed under it,
+  and *System* followed it again. On the development laptop (GNOME, set to
+  dark), the real portal answers `1`, which is *prefer dark*. Not watched:
+  the window on the laptop's own screen, which is the same path with the
+  real portal in place of the stand-in. Also not watched: a desktop with no
+  settings portal, where tao has nothing to read and WebKit goes by the GTK
+  theme's name.
 
 ## Reversing it
 

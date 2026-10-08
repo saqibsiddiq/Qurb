@@ -1213,6 +1213,34 @@ window showed the number to approve at, `qurb pair` asked about the same
 number (199 134), a yes gave the window its key, and every place opened. The
 full run passed again after the change.
 
+## The window following the desktop's dark preference
+
+**2026-10-08.** Dark mode ([decision 0056](../decisions/0056-dark-mode.md))
+had been looked at against the fixtures, where the page is told which theme
+to draw, and in a browser. Not yet in the real window, whose *System*
+setting depends on what WebKitGTK reports as `prefers-color-scheme`. Nothing
+of qurb's sets that. Tauri's toolkit, tao, reads the desktop's settings
+portal as the window opens, sets GTK's dark preference from it, and follows
+the portal's change signal.
+
+The smoke test cannot use the real portal, which lives on the person's
+session bus, where the window would also find their keyring and
+notifications. So `SMOKE_MODE=theme` gives the window a bus of its own, with
+no services it could start, and a stand-in portal answering the one setting
+(`scripts/smoke_portal.py`):
+
+| step | the page's background |
+|---|---|
+| opened with the desktop dark | `rgb(18, 19, 17)` — `#121311`, dark |
+| the desktop switched to light | `rgb(247, 247, 244)` — `#F7F7F4`, light |
+| and back to dark | `rgb(18, 19, 17)` |
+| *Light* chosen in Settings, the desktop dark, then switched twice | light throughout |
+| *System* chosen again | `rgb(18, 19, 17)` |
+
+On the laptop, which runs GNOME set to dark, the real portal answers `1`
+(*prefer dark*) to the same call. The one link not watched is the window on
+the laptop's own screen.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

@@ -21,6 +21,12 @@ another device's code (decision 0052): the command line shows the code and
 asks y/N, and says yes only when the number the window shows is the number it
 asks about (decision 0053). Then it opens every place.
 
+With SMOKE_MODE=theme it sets a device up and checks that the window follows
+the desktop's dark preference (decision 0056): dark when the desktop is dark
+as the window opens, light and dark again as the desktop's style is switched,
+and the person's own choice in Settings over either. The preference comes
+from a stand-in for the desktop's settings portal (scripts/smoke_portal.py).
+
 It fails if any command the window calls returns an error, whichever step
 called it, or if a step does not reach the state it should. It checks that
 the window works, not how it looks: the Broadway display reports a nonsense
@@ -163,6 +169,44 @@ def join_by_code(window):
     rest, _ = host.communicate(timeout=60)
     assert "Paired with" in rest, f"qurb pair did not pair: {said}{rest}"
     return shown
+
+
+def portal(scheme):
+    """Switch the desktop's style, as the stand-in portal has it: 1 dark, 2 light."""
+    subprocess.run(["gdbus", "call", "--session", "--dest", "org.freedesktop.portal.Desktop",
+                    "--object-path", "/org/freedesktop/portal/desktop",
+                    "--method", "org.qurb.SmokePortal.Set", str(scheme)],
+                   check=True, capture_output=True)
+
+
+def follows_the_desktop(window):
+    """The window's theme, as the desktop's style changes and as chosen."""
+    drawn = ("return [document.documentElement.dataset.theme,"
+             " getComputedStyle(document.body).backgroundColor]")
+
+    def drawn_as(theme, what):
+        window.until(what, "return document.documentElement.dataset.theme === arguments[0]", theme)
+        return window.js(drawn)[1]
+
+    seen = {"dark at start": drawn_as("dark", "dark, as the desktop was when it opened")}
+    portal(2)
+    seen["the desktop switched to light"] = drawn_as("light", "light, when the desktop turned light")
+    portal(1)
+    seen["and to dark"] = drawn_as("dark", "dark, when the desktop turned dark again")
+    if seen["dark at start"] == seen["the desktop switched to light"]:
+        raise AssertionError(f"the theme changed and the page did not: {seen}")
+
+    go(window, "settings")
+    window.js("document.querySelector('#theme-choice [data-theme=light]').click()")
+    seen["Light chosen, the desktop dark"] = drawn_as("light", "light, when chosen")
+    portal(2)
+    portal(1)
+    time.sleep(0.5)
+    if window.js(drawn)[0] != "light":
+        raise AssertionError("the desktop's style overrode the choice made in Settings")
+    window.js("document.querySelector('#theme-choice [data-theme=system]').click()")
+    seen["System chosen again"] = drawn_as("dark", "the desktop's again")
+    return seen
 
 
 def go(window, place):
@@ -321,6 +365,10 @@ def main():
             number = join_by_code(window)
             print(f"set up by joining another device's code, approved there at {number}")
             print("opened", ", ".join(every_tab(window)))
+        elif os.environ.get("SMOKE_MODE") == "theme":
+            set_up(window)
+            for step, background in follows_the_desktop(window).items():
+                print(f"{step}: the page drawn on {background}")
         else:
             window = run_through(window)
         ok = True

@@ -118,7 +118,12 @@ protects the key with a passphrase and unlocks it again. `SMOKE_THINK=90` waits
 that many seconds before approving, as a person comparing numbers might.
 `SMOKE_MODE=join` instead sets the window up by joining another device's code,
 the way a computer joins a phone: the command line shows the code and says
-yes only when the window's number is the one it asks about. It fails if any command the
+yes only when the window's number is the one it asks about. `SMOKE_MODE=theme`
+sets a device up and checks the window follows the desktop's dark preference,
+which Tauri's toolkit reads from the desktop's settings portal: the smoke test
+gives the window a bus of its own with a stand-in portal on it
+(`scripts/smoke_portal.py`), opens the window dark, switches the desktop light
+and dark again, and checks a choice made in Settings holds over either. It fails if any command the
 page calls returns an error — the page keeps the last fifty as
 `window.qurbFailures` for that, and for reading from the web inspector.
 

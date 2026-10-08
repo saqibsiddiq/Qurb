@@ -59,6 +59,37 @@ export WEBKIT_DISABLE_COMPOSITING_MODE=1 TAURI_WEBVIEW_AUTOMATION=true
 # or notifications; and no accessibility bridge to look for on it.
 export DBUS_SESSION_BUS_ADDRESS=disabled: NO_AT_BRIDGE=1
 
+# SMOKE_MODE=theme needs a bus, for the desktop's dark preference: a bus of
+# its own, with nothing on it but a stand-in for the settings portal
+# (scripts/smoke_portal.py), and no services it could start by being asked.
+if [[ ${SMOKE_MODE:-} == theme ]]; then
+    cat >"$WORK/bus.conf" <<EOF
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:path=$WORK/run/bus</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+EOF
+    dbus-daemon --config-file="$WORK/bus.conf" --nofork >"$WORK/bus.log" 2>&1 & pids+=($!)
+    export DBUS_SESSION_BUS_ADDRESS=unix:path=$WORK/run/bus
+    for _ in $(seq 50); do [[ -S $WORK/run/bus ]] && break; sleep 0.1; done
+    python3 "$ROOT/scripts/smoke_portal.py" 1 >"$WORK/portal.log" 2>&1 & pids+=($!)
+    for _ in $(seq 50); do
+        gdbus call --session --dest org.freedesktop.portal.Desktop \
+            --object-path /org/freedesktop/portal/desktop \
+            --method org.freedesktop.portal.Settings.Read \
+            org.freedesktop.appearance color-scheme >/dev/null 2>&1 && break
+        sleep 0.1
+    done
+fi
+
 broadwayd ":$display" >"$WORK/broadway.log" 2>&1 & pids+=($!)
 WebKitWebDriver --port="$port" >"$WORK/webdriver.log" 2>&1 & pids+=($!)
 sleep 1

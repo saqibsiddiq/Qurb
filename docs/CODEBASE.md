@@ -740,6 +740,8 @@ qurb/
 │   ├── desktop-icons.py   the Lucide icons the window uses, as a sprite
 │   ├── desktop-smoke.sh   drive the real desktop window end to end, on a
 │   │                      display of its own (with desktop_smoke.py)
+│   ├── smoke_portal.py    a stand-in desktop settings portal, for the
+│   │                      smoke test's dark-preference check
 │   └── mobile-bindings.sh generate the Kotlin and Swift bindings
 │
 ├── experiments/
@@ -1477,6 +1479,9 @@ cargo build --release -p qurb-desktop
 # next start -- on a display of its own, failing on any command that errs.
 # Needs broadwayd and WebKitWebDriver.
 ./scripts/desktop-smoke.sh
+# The window following the desktop's dark preference, from a stand-in
+# settings portal on a bus of its own. Also needs dbus-daemon and PyGObject.
+SMOKE_MODE=theme ./scripts/desktop-smoke.sh
 ```
 
 ```bash

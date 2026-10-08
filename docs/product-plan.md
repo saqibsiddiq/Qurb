@@ -603,8 +603,8 @@ The design direction is chosen and built ([0048](decisions/0048-the-design-direc
 what it needs now is the owner's review at the checkpoints in
 [design/brief.md §5](design/brief.md#5-the-work). After that, the relay on a
 server and a formal release need no further decision except where to host the
-relay. §4.7 is still open, and is needed before any storage screen promises
-anything for replicas.
+relay. §4.7 was settled on 2026-10-08: a replica keeps everything and says
+when it is full ([0058](decisions/0058-a-full-replica-says-so.md)).
 
 ## 13. Completing it
 
@@ -651,12 +651,12 @@ then.*
   direct-connection rate measured ([measuring-connectivity.md](measuring-connectivity.md)).
 
 **3. Every pair verified on hardware.**
-- [ ] On the S23: removing a device, the share sheet sending to a device,
+- [x] On the S23: removing a device, the share sheet sending to a device,
   pairing by the phone's own code, a folder shared with chosen devices, a
-  folder kept remotely. Removing the laptop, pairing again and sending to it
-  are in the phone's history for 2026-09-29. Removing a device was watched on
-  2026-10-05 (the duplicate identity, [phase 4](phases/phase-4-product.md#a-folder-deleted-while-qurb-ran)).
-  The rest is still to watch.
+  folder kept remotely — all watched on 2026-10-08, with the laptop
+  ([phase 5](phases/phase-5-mobile.md#the-rest-of-the-phone-watched)). Five
+  faults found there were fixed the same day, the last a sharing rule kept
+  in the laptop's Recently deleted.
 - [ ] Android↔Android — on the emulator until the owner can borrow a second
   phone, then on two real ones. *On the emulator, 2026-10-08:* two phone
   engines pairing by code (one taking the other's key), a shared file each
@@ -713,7 +713,7 @@ then.*
   last of a video, so it was not let go.
   (Setup's lack of a way back from a new key is answered by 0052: an
   unfinished setup can join instead.)
-- [ ] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):
+- [x] Watched on hardware ([0052](decisions/0052-the-key-travels-with-the-code.md)):
   ~~the S23 joining the laptop with a code~~ (typed, 2026-10-05); ~~scanning
   it~~ (the window's code, by the owner, 2026-10-08);
   ~~a computer joining with the phone's code and taking its key~~ (the command
