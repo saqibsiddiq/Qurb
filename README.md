@@ -108,7 +108,7 @@ cargo run --release -p qurb-peer --example demo -- /tmp/device-a /tmp/device-b
 
 ```bash
 cargo build --release
-cargo test --workspace         # 777 tests in 90 binaries (2026-10-07)
+cargo test --workspace         # 790 tests in 90 binaries (2026-10-08)
 ./scripts/desktop-smoke.sh     # the real window, driven end to end
 ```
 
@@ -117,3 +117,8 @@ classification — are in [experiments/phase0-spike](experiments/phase0-spike/)
 and [docs/phases/phase-0-spike.md](docs/phases/phase-0-spike.md). `quictest
 stun` there contacts public STUN servers, revealing your public IP to them as
 any video-call client does.
+
+## Licence
+
+Either of [Apache-2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option,
+as `Cargo.toml` declares.

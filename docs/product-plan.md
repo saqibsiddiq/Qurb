@@ -716,7 +716,9 @@ then.*
   ([0052](decisions/0052-the-key-travels-with-the-code.md)): the key travels
   with the pairing code and a phone keeps it in Block Store; a computer has
   nothing that leaves the machine yet.
-- [ ] Licence files for the licence `Cargo.toml` declares.
+- [x] Licence files for the licence `Cargo.toml` declares — 2026-10-08:
+  `LICENSE-APACHE` and `LICENSE-MIT` at the root, the standard texts, the
+  copyright held by "the Qurb authors".
 - [ ] A signed release APK on the S23 (leaving the debug build means
   uninstalling and joining again with a code from the laptop), the Arch package
   installed, a GitHub Release, and the website's Download page pointing at it.
