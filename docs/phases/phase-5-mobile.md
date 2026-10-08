@@ -1981,5 +1981,7 @@ second phone.
   that opens a sheet and settles it — keep this version, the other, or both
   ([decision 0043](../decisions/0043-settling-a-conflict.md)); settling was
   verified on the S23, before the design. The sheet says who made each version,
-  when and how big, and whether the other is on the phone yet. The preview for
-  images and text the brief designs (§2) is not built.
+  when and how big, and whether the other is on the phone yet. Since
+  2026-10-08 it also previews each version that is here, an image or a
+  text's start (`Previews.kt`). A version not on the phone is not fetched to
+  be previewed.

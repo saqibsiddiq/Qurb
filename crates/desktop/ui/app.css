@@ -558,6 +558,11 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 .says { margin-top: var(--s3); font-size: 13.5px; color: var(--text-2); }
 .says.warn, .warn { color: var(--error); }
 
+/* A version of a file with two, as it looks (brief §2). */
+.preview { margin-top: var(--s3); height: 150px; border-radius: 10px; overflow: hidden; background: rgba(var(--ink), 0.04); border: 1px solid var(--hairline); }
+.preview img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.preview pre { margin: 0; padding: var(--s2) var(--s3); height: 100%; overflow: hidden; font: 12px/17px var(--mono); color: var(--text-2); white-space: pre-wrap; word-break: break-word; }
+
 /* A choice of a few, applied at once: the theme. */
 .segmented { display: inline-flex; gap: 2px; padding: 3px; border-radius: 11px; background: rgba(var(--ink), 0.06); flex: none; }
 .segmented button {

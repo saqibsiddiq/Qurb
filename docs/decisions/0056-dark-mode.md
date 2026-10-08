@@ -1,7 +1,7 @@
 # 0056 — Dark mode, on the same tokens
 
 **Status:** Accepted — built on the desktop and Android; the desktop looked at
-against its fixtures; the S23 see *Checked, and not*
+against its fixtures; watched on the S23
 **Date:** 2026-10-08
 
 ## What was asked
@@ -104,8 +104,19 @@ Android's drawables likewise name colour roles now (`nav_glass`, `tile_fill`,
   light, a darkening overlay converted as a light one, which was fixed.
 - The window's smoke test (`scripts/desktop-smoke.sh`), in the real
   application.
-- **Not yet watched**: the S23 in dark (installed; the phone was locked when
-  it went on); the real window following the desktop's dark preference.
+- **The S23, 2026-10-08.** Its system is in night mode. Home, Files,
+  Devices and Settings drew dark, the status bar's icons light. Choosing
+  *Dark*, then *As your phone is set*, switched at once. It also found two
+  faults:
+  - The settings read cut short by the screen being rebuilt was shown as
+    an error, "Job was cancelled". A cancelled task is no longer reported
+    (`Words.fail`).
+  - The first launch after installing drew light, once, although the
+    system was in night mode. It was not seen again in four launches, cold
+    and after reinstalling, with and without a saved choice, and is not
+    explained.
+- **Not yet watched**: the real window following the desktop's dark
+  preference.
 
 ## Reversing it
 

@@ -1,7 +1,7 @@
 # 0057 — Moving a file into or out of Private Vault
 
 **Status:** Accepted — built on the desktop, Android and the command line;
-see *Checked, and not*
+watched between the laptop and the S23 with the command line
 **Date:** 2026-10-08
 
 ## What was asked
@@ -77,4 +77,15 @@ records it as *moved*.
   `a_file_moved_into_the_vault_is_kept_by_the_device_holding_it`. The
   desktop keeping the phone's vault holds the moved file, as the phone's.
 - The window's confirmation against its fixtures, in both themes.
-- **Not yet watched**: either app moving a file on hardware.
+- **On hardware, 2026-10-08**, the laptop's command line and the S23. The
+  laptop keeps new files private (`own-files = private`), so a test file
+  began in its vault, and the phone never saw it.
+  - `qurb unprivate`: the phone had the file, shared, at its next sync.
+  - `qurb private`: the laptop said nothing keeps its vault, so this was
+    now the only copy, and the phone's next sync took the file off it, into
+    its Recently deleted.
+
+  The test file was then deleted on the laptop and deleted for good on the
+  phone.
+- **Not yet watched**: the window's or the phone's own *Move* buttons on
+  hardware.

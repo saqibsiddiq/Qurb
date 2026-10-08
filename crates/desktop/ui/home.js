@@ -201,13 +201,32 @@ async function openConflicts() {
   for (const c of found) box.append(conflictCard(c));
 }
 
+/** What a version looks like (brief §2): an image, or a text's start, read
+ *  from the file here. Nothing for anything else. */
+function preview(path) {
+  const box = el("div", "preview");
+  invoke("preview", { path }).then((p) => {
+    if (p.kind === "image") {
+      const img = el("img");
+      img.alt = `${base(path)}, this version`;
+      img.src = p.data;
+      box.append(img);
+    } else if (p.kind === "text") {
+      box.append(el("pre", null, p.data));
+    } else {
+      box.remove();
+    }
+  }, () => box.remove());
+  return box;
+}
+
 function conflictCard(c) {
   const card = el("div", "card glass-frosted");
   card.style.marginTop = "16px";
   const head = el("div");
   head.style.cssText = "display:flex;align-items:center;gap:12px";
   const tile = el("span", "tile");
-  tile.style.cssText = "display:grid;place-items:center;width:40px;height:40px;border-radius:11px;background:rgba(255,255,255,.8);border:1px solid var(--hairline);color:var(--text-2)";
+  tile.style.cssText = "display:grid;place-items:center;width:40px;height:40px;border-radius:11px;background:rgba(var(--paper),.8);border:1px solid var(--hairline);color:var(--text-2)";
   tile.append(icon(KIND_ICON[kindOf(c.path)]));
   const names = el("div");
   names.append(el("strong", null, base(c.path)), el("p", "meta", folderOf(c.path) || "Qurb"));
@@ -218,7 +237,7 @@ function conflictCard(c) {
   versions.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px";
   const side = (label, v) => {
     const col = el("div");
-    col.style.cssText = "padding:14px;border-radius:14px;background:rgba(255,255,255,.66);border:1px solid var(--hairline)";
+    col.style.cssText = "padding:14px;border-radius:14px;background:rgba(var(--paper),.66);border:1px solid var(--hairline)";
     col.append(el("p", "meta", label));
     if (!v) {
       col.append(el("p", "quiet", "Since deleted or renamed"));
@@ -229,6 +248,7 @@ function conflictCard(c) {
     who.append(icon(deviceIcon(v.by), "small"), el("span", null, v.by));
     col.append(who);
     col.append(el("p", "quiet num", `${when(v.at)} · ${size(v.size)}`));
+    if (v.here) col.append(preview(v.path));
     if (!v.here) {
       const away = el("p", "state elsewhere");
       away.style.marginTop = "6px";
@@ -250,8 +270,8 @@ function conflictCard(c) {
       try {
         const kept = await invoke("settle_conflict", { other: c.other.path, keep });
         const done = el("div", "attention");
-        done.style.background = "rgba(232,243,236,.8)";
-        done.style.borderColor = "rgba(40,112,82,.16)";
+        done.style.background = "var(--healthy-bg)";
+        done.style.borderColor = "rgba(var(--healthy-ch),.16)";
         const t = el("span", "tile");
         t.style.color = "var(--healthy)";
         t.append(icon("circle-check"));

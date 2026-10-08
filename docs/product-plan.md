@@ -628,7 +628,11 @@ it is started.
   (`Notices.kt`): somebody sent you a file, a device collected one you sent,
   something failed, read from the history after each sync; nothing while the
   app is on screen; a switch in Settings. Watched on hardware: see phase 5.
-- [ ] A preview when comparing a conflict's two versions.
+- [x] A preview when comparing a conflict's two versions — 2026-10-08, on
+  both: images and the start of a text, for the versions that are here
+  ([0043](decisions/0043-settling-a-conflict.md)). The window's looked at
+  against the fixtures in both themes; the phone's not yet seen on a real
+  conflict.
 - [ ] The designed app measured against [0039](decisions/0039-a-light-android-app.md).
 
 **2. Syncing from anywhere, through the owner's own server.** *Later, by the

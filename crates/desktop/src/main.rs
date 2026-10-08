@@ -160,6 +160,7 @@ fn run() -> Result<()> {
             commands::details,
             commands::free_file,
             commands::move_file_area,
+            commands::preview,
             commands::vault_keepers,
             commands::freeable,
             commands::delete_file,

@@ -125,6 +125,11 @@ object Words {
 
     /** Say a failure, in words a person can act on. */
     fun fail(context: Context, title: String, e: Throwable) {
+        // A coroutine cancelled because its screen went away -- recreated for
+        // a theme change, or left -- is not a failure to tell anybody about.
+        // It was: "Could not read the settings: Job was cancelled", on choosing
+        // a theme (2026-10-08).
+        if (e is kotlinx.coroutines.CancellationException) return
         MaterialAlertDialogBuilder(context)
             .setTitle(title)
             // `readable()` rather than `e.message`: UniFFI generates

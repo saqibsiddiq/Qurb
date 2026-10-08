@@ -1,6 +1,6 @@
 # 0043 — Settling a conflict
 
-**Status:** Accepted
+**Status:** Accepted — each version previewed since 2026-10-08
 **Date:** 2026-09-28
 
 ## Decision
@@ -55,6 +55,19 @@ would have to go on recognising both.
 the other device, so path separators and control characters are removed from
 it first; a test settles a conflict labelled `../../evil\n` and checks the
 result stays beside the original.
+
+## Seen before choosing
+
+Since 2026-10-08 each version that is on this device is shown, side by side:
+
+- an image, as itself;
+- a text, by its start;
+- anything else, by who made it, when and its size, as before.
+
+The window's `preview` command reads the file from the folder and gives the
+page an image as a data URL (under 6 MiB) or up to 2 KiB of text that is
+UTF-8. The phone's `Previews.kt` does the same in the app. Nothing is shown
+for a version not here: fetching one to look at it is not built.
 
 ## Not done
 

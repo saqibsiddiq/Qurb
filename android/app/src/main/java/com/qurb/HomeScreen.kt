@@ -247,6 +247,30 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         kit.item(group, "This version", describe(c.`this`))
         kit.item(group, "The other version", describe(c.other))
         sheet.view(versions, top = 16)
+        // What each looks like, side by side, where it can be shown (§2).
+        val looks = android.widget.LinearLayout(app).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            visibility = android.view.View.GONE
+        }
+        sheet.view(looks, top = 12)
+        scope.launch {
+            val sides = listOf(c.`this`, c.other).map { side ->
+                if (side == null || !side.here) null
+                else withContext(Dispatchers.IO) { runCatching { Previews.of(app, side.path) }.getOrNull() }
+            }
+            if (sides.all { it == null }) return@launch
+            sides.forEachIndexed { i, look ->
+                val frame = android.widget.FrameLayout(app).apply {
+                    background = androidx.core.content.ContextCompat.getDrawable(app, R.drawable.tile)
+                    clipToOutline = true
+                    if (look != null) addView(Previews.view(app, look))
+                }
+                looks.addView(frame, android.widget.LinearLayout.LayoutParams(0, kit.dp(130), 1f).apply {
+                    if (i == 0) marginEnd = kit.dp(6) else marginStart = kit.dp(6)
+                })
+            }
+            looks.visibility = android.view.View.VISIBLE
+        }
         sheet.text("Whichever you don't keep goes to Recently deleted for 30 days.")
         sheet.action(R.drawable.ic_check, "Keep this version") { settle(c, "this") }
         // Keeping the other one, or both, needs its bytes here.

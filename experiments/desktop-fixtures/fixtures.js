@@ -309,7 +309,38 @@ const ANSWERS = {
         size: "2380000", here: true, by: "Galaxy S23", at: now - 3500,
       },
     },
+    {
+      path: "Notes.md",
+      this: { path: "Notes.md", size: "1840", here: true, by: "Saqib's laptop", at: now - 900 },
+      other: { path: "Notes.conflict-a1b2c3d4-2026-10-08-091200.md", size: "1902", here: true, by: "Galaxy S23", at: now - 840 },
+    },
+    {
+      path: "Photos/Holiday/beach.jpg",
+      this: { path: "Photos/Holiday/beach.jpg", size: "900000", here: true, by: "Saqib's laptop", at: now - 7200 },
+      other: { path: "Photos/Holiday/beach.conflict-a1b2c3d4-2026-10-08-071500.jpg", size: "880000", here: true, by: "Galaxy S23", at: now - 7000 },
+    },
   ],
+  // What each version looks like: a note's text, and for a photo a picture
+  // drawn here, since a fixture has no files.
+  preview: ({ path }) => {
+    if (path.endsWith(".md")) {
+      return { kind: "text", data: path.includes("conflict")
+        ? "# Groceries\n\n- oat milk\n- lemons\n- coffee beans\n- bread (the seeded one)\n"
+        : "# Groceries\n\n- oat milk\n- lemons\n- coffee\n- eggs\n- bread\n" };
+    }
+    if (path.endsWith(".jpg")) {
+      const c = document.createElement("canvas");
+      c.width = 320; c.height = 200;
+      const g = c.getContext("2d");
+      const sky = g.createLinearGradient(0, 0, 0, 200);
+      sky.addColorStop(0, path.includes("conflict") ? "#f2b880" : "#8fc1e3");
+      sky.addColorStop(1, "#f7e9c8");
+      g.fillStyle = sky; g.fillRect(0, 0, 320, 200);
+      g.fillStyle = "#2f6b57"; g.fillRect(0, 150, 320, 50);
+      return { kind: "image", data: c.toDataURL("image/png") };
+    }
+    return { kind: "none", data: "" };
+  },
   settle_conflict: ({ keep }) => (keep === "both" ? "Project Plan (Galaxy S23).pdf" : "Project Plan.pdf"),
 
   sharing: () => ({

@@ -1182,6 +1182,82 @@ fn on_disk(hosted: &Hosted, path: &str) -> Answer<std::path::PathBuf> {
     Ok(hosted.root().join(path))
 }
 
+/// A look at one version of a file with two (brief §2): an image, or the
+/// start of a text, read from the folder. `kind` is "image" (`data` a data
+/// URL, which the window's content policy allows), "text", or "none" -- for a
+/// version not here, an image too large to carry over, or neither.
+#[derive(Serialize)]
+pub struct Preview {
+    kind: &'static str,
+    data: String,
+}
+
+/// Past this an image is not previewed: it would cross to the page as a
+/// string a third larger than the file.
+const PREVIEW_IMAGE_MAX: u64 = 6 << 20;
+/// What of a text is shown: the start, which is where two versions of a note
+/// or a list usually differ enough to tell them apart.
+const PREVIEW_TEXT_BYTES: usize = 2048;
+
+#[tauri::command]
+pub fn preview(hosted: Host<'_>, path: String) -> Answer<Preview> {
+    let none = Preview { kind: "none", data: String::new() };
+    let Ok(file) = on_disk(&hosted, &path) else { return Ok(none) };
+    let ext = path.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    let image = match ext.as_str() {
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        "bmp" => Some("image/bmp"),
+        _ => None,
+    };
+    if let Some(mime) = image {
+        let small = std::fs::metadata(&file).map(|m| m.len() <= PREVIEW_IMAGE_MAX).unwrap_or(false);
+        return Ok(match small.then(|| std::fs::read(&file).ok()).flatten() {
+            Some(bytes) => Preview { kind: "image", data: format!("data:{mime};base64,{}", base64(&bytes)) },
+            None => none,
+        });
+    }
+    use std::io::Read as _;
+    let mut start = Vec::with_capacity(PREVIEW_TEXT_BYTES);
+    let read = std::fs::File::open(&file)
+        .and_then(|f| f.take(PREVIEW_TEXT_BYTES as u64).read_to_end(&mut start));
+    if read.is_err() || start.contains(&0) {
+        return Ok(none);
+    }
+    // Text if it is UTF-8, allowing a character cut off at the end.
+    let text = match std::str::from_utf8(&start) {
+        Ok(text) => text,
+        Err(e) if e.error_len().is_none() => std::str::from_utf8(&start[..e.valid_up_to()]).unwrap_or(""),
+        Err(_) => return Ok(none),
+    };
+    Ok(Preview { kind: "text", data: text.to_string() })
+}
+
+/// Standard base64, for a data URL: small enough to keep here rather than
+/// take a dependency for.
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = match *chunk {
+            [a, b, c] => (a as u32) << 16 | (b as u32) << 8 | c as u32,
+            [a, b] => (a as u32) << 16 | (b as u32) << 8,
+            [a] => (a as u32) << 16,
+            _ => unreachable!("chunks of at most three"),
+        };
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 /// Open a file with the program the desktop uses for it.
 #[tauri::command]
 pub fn open_file(hosted: Host<'_>, path: String) -> Answer<()> {
@@ -1637,6 +1713,18 @@ fn unix(at: std::time::SystemTime) -> Option<i64> {
 mod tests {
     use super::*;
     use std::fs;
+
+    /// The RFC 4648 test vectors: every padding case.
+    #[test]
+    fn base64_matches_the_standard() {
+        for (plain, encoded) in [
+            ("", ""), ("f", "Zg=="), ("fo", "Zm8="), ("foo", "Zm9v"),
+            ("foob", "Zm9vYg=="), ("fooba", "Zm9vYmE="), ("foobar", "Zm9vYmFy"),
+        ] {
+            assert_eq!(base64(plain.as_bytes()), encoded, "{plain:?}");
+        }
+        assert_eq!(base64(&[0xff, 0xfe, 0xfd]), "//79");
+    }
 
     fn detail(path: &std::path::Path) -> String {
         format!("sent to this device; saved to {}", path.display())
