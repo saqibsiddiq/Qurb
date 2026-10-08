@@ -364,7 +364,7 @@ const ANSWERS = {
       why: "the version not kept when a conflict was settled", private: false,
     },
   ],
-  restore_deleted: () => "Photos/IMG_0007.jpg",
+  restore_deleted: ({ id }) => ({ 1: "Notes.md", 2: "Photos/IMG_0007.jpg", 3: "Tax 2025.pdf" })[id],
   forget_deleted: () => null,
   open_downloads: () => null,
   show_received: () => null,
