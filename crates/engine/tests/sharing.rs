@@ -213,6 +213,50 @@ fn the_rules_are_not_listed_as_files() {
     assert!(db.evictable().unwrap().iter().all(|(p, _, _)| !p.starts_with(".qurb-sharing")));
 }
 
+/// A rule another device removed is gone, not kept: in Recently deleted it
+/// would be listed as a file, and restoring it would take a device back out
+/// of the folder. Seen on the laptop when the S23 shared a folder with every
+/// device again.
+#[test]
+fn a_rule_removed_elsewhere_is_not_kept_in_recently_deleted() {
+    let (mut laptop, mut phone, mut tablet) = (Device::new(), Device::phone(), Device::new());
+    laptop.write("Family/beach.jpg", "the beach");
+    everyone(&mut laptop, &mut phone, &mut tablet);
+    let (l, p) = (laptop.id(), phone.id());
+    phone.share("Family", &[&l, &p]);
+    everyone(&mut laptop, &mut phone, &mut tablet);
+    let rule = qurb_sync::sharing::rule_path("Family");
+    assert!(laptop.read(&rule).is_some());
+
+    phone.engine.store_mut().clear_sharing("Family").unwrap();
+    everyone(&mut laptop, &mut phone, &mut tablet);
+
+    assert_eq!(laptop.read(&rule), None, "the rule left the folder");
+    assert!(laptop.engine.store().recently_deleted().unwrap().is_empty());
+    assert!(laptop.engine.store().db().trash().unwrap().is_empty(), "and was not kept");
+    assert_eq!(tablet.read("Family/beach.jpg").as_deref(), Some("the beach"));
+}
+
+/// One kept by an earlier build is not listed, and cannot be put back.
+#[test]
+fn a_rule_kept_by_an_earlier_build_is_not_listed_or_restored() {
+    let mut laptop = Device::new();
+    let l = laptop.id();
+    laptop.write("Family/beach.jpg", "the beach");
+    laptop.share("Family", &[&l]);
+    let rule = qurb_sync::sharing::rule_path("Family");
+    let disk = laptop.root.join(&rule);
+    let store = laptop.engine.store_mut();
+    let hash = store.db().folder_row(&rule).unwrap().unwrap().0.content_hash;
+    let entry = qurb_storage::db::NewTrash {
+        path: &rule, scope: None, content: &hash, size: 0, by: None, why: None,
+    };
+    let id = store.move_to_trash(&disk, &entry).unwrap().unwrap();
+
+    assert!(store.recently_deleted().unwrap().is_empty());
+    assert!(store.restore_from_trash(id).is_err());
+    assert_eq!(store.empty_trash(std::time::Duration::ZERO).unwrap().0, 1, "it still expires");
+}
 
 /// Made on a phone, which files new things privately: the rule file is still
 /// the shared area's, or no other device would ever see it. Found on the

@@ -137,8 +137,8 @@ folder by a deletion — made here, or arriving from another device — is
 therefore *moved* into `trash/` in the store directory, and a row in `trash`
 remembers its path, size, who deleted it and when
 ([decision 0042](../../docs/decisions/0042-recently-deleted.md)).
-`restore_from_trash` puts it back as a new version, which every device then
-takes; after `TRASH_RETENTION` (thirty days) `empty_trash` removes it. Over a
+`restore_from_trash` puts it back as a new version in the area it was deleted
+from, which every device that area reaches then takes; after `TRASH_RETENTION` (thirty days) `empty_trash` removes it. Over a
 storage cap the order is: released held content, then the trash, then
 eviction. Settling a conflict (`settle_conflict`) sends the version not kept
 here too.

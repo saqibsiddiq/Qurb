@@ -73,12 +73,23 @@ re-added photo or restored copy would have hit it. `any_file_with_content` now
 only answers from a row whose chunks add up to its size; the regression test is
 `content_deleted_here_can_arrive_again`.
 
+## Not a person's files
+
+**2026-10-08.** A sharing rule (decision 0044) is a file in the shared area, so
+a rule deleted on another device arrived like any deletion and was kept here.
+Recently deleted then listed `.qurb-sharing/<folder>` as a deleted file, and
+restoring it would have put back a rule somebody had removed — on the device
+it had let back into the folder, leaving that device out again. A rule deleted
+elsewhere is now removed, not kept. One kept by an earlier build is not
+listed, cannot be restored, and still expires.
+
 ## Not done
 
 - A deletion made with a file manager is not in *that* device's Recently deleted
   (see above).
 - A replica has no folder, so no Recently deleted; its tombstone retention is
   what it has.
-- Restoring into a phone's own vault files the file wherever a new file on that
-  phone goes; restoring a file that was somebody's delivery does not make it a
-  delivery again.
+- Restoring a file that was somebody's delivery does not make it a delivery
+  again. (Restoring puts a file back in the area it was deleted from, shared or
+  Private Vault, since 2026-09-28; before that, a phone filed it wherever a new
+  file there went.)

@@ -29,17 +29,17 @@ record](../roadmap.md).
 | **a phone syncing with a laptop, both ways** | ✅ verified on hardware |
 | syncing from mobile data | ✅ directly, through a rendezvous service on the laptop |
 | recently deleted, and settling a conflict | ✅ verified between the S23 and the laptop |
-| files by folder, search, rename, move | ✅ on the emulator; ◻ not yet on the phone |
+| files by folder, search, rename, move | ✅ on the emulator; the *Move* buttons on the S23, 2026-10-08; ◻ search and rename not yet on the phone |
 | showing a pairing code on the phone | ✅ on the S23, 2026-10-08: joined by its code, approved with the matching number ([below](#the-rest-of-the-phone-watched)) |
 | the share sheet sending to one device | ✅ on the S23, 2026-10-08: at the laptop two seconds later |
-| which devices have each folder, and keeping one only remotely | ✅ on the emulator; ◻ not yet between real devices |
+| which devices have each folder, and keeping one only remotely | ✅ between the S23 and the laptop, 2026-10-08 ([below](#the-rest-of-the-phone-watched)) |
 | removing a device | ✅ on the S23 on 2026-09-29, from its history: the laptop removed, then paired again; watched on 2026-10-08 |
 | designed to the owner's direction: four tabs, Private Vault inside Files | ✅ on the S23, every place walked, 2026-10-03 ([below](#the-designed-app-on-the-s23)) |
-| adding a file into the area on screen | 🧪 in the FFI's tests ([0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)) |
-| a large file collected from the phone | ◻ fetched eight chunks at a time, resumed, served in the foreground — built and tested, not yet measured on the phone ([below](#an-800-mb-video-and-what-stopped-it)) |
+| adding a file into the area on screen | ✅ on the S23, 2026-10-08, into a shared folder while a sync was scanning ([0049](../decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)) |
+| a large file collected from the phone | ✅ on the S23: 10.6–12.1 MB/s through the app with BBR, served on after the app was left ([below](#through-the-app-with-bbr--and-a-phone-cleared)); 300 MB at 14.0 MB/s on 2026-10-08 |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-794 tests pass in 90 test binaries on Linux (2026-10-08, debug build, the
+796 tests pass in 90 test binaries on Linux (2026-10-08, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.
@@ -2024,6 +2024,26 @@ folder on the phone reached the laptop about two minutes later:
 - ***Recently deleted* promised a vault file back on every device.**
   Restoring puts a file back in the area it came from, and the phone and
   the window now say *Private Vault* for one deleted from there.
+
+**The added file, watched again with the fix.** At 13:00 the phone's *Add
+files* put a small file into the test folder, which the laptop had been left
+out of. It went into the folder, not the vault, as *Only copy here*, and a
+sync brought nothing to the laptop. Turning the laptop back on for the folder
+on the phone, saved at 13:01:45, had the file in the laptop's folder by
+13:01:51, carrying the time it was added on the phone. That run also found
+one more fault, below.
+
+**A sharing rule in Recently deleted.** Turning the laptop back on deletes
+the folder's rule file, since a folder shared with every device needs none.
+The laptop received that deletion like any other, kept the 143-byte rule in
+its trash, and `qurb deleted` listed `.qurb-sharing/qurb-folder-test` as a
+file deleted on the phone. Restoring it would have put back the rule that left
+the laptop out. A rule deleted elsewhere is now removed rather than kept, one
+an earlier build kept is not listed and cannot be restored, and it still
+expires with the rest (`a_rule_removed_elsewhere_is_not_kept_in_recently_deleted`,
+`a_rule_kept_by_an_earlier_build_is_not_listed_or_restored`). The command
+line's `qurb restore` also stopped promising a file back *on every device*:
+one restored from Private Vault goes back there.
 
 Still not watched: a new phone restored from a Google backup, which needs a
 second phone.

@@ -28,7 +28,7 @@ qurb share [dir] [<folder> with <dev>,... | <folder> with everyone]
 qurb keep [dir] <folder> here|remote
                                  keep a folder here, or only list it here
 qurb deleted [dir]               recently deleted, restorable for 30 days
-qurb restore [dir] <#n or path>  put one back, on every device
+qurb restore [dir] <#n or path>  put one back where it was
 qurb forget [dir] <#n or path>   delete one for good, here only
 qurb remove-device [dir] <dev> [--delete-kept] [--yes]
                                  stop trusting a device; says what that does

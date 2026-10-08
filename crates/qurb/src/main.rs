@@ -46,7 +46,7 @@ qurb — private cloud storage
                                       keep a folder here, or only list it here
                                         and fetch each file when asked for
   qurb deleted [dir]                  recently deleted files, restorable for 30 days
-  qurb restore [dir] <#n or path>     put a recently deleted file back, everywhere
+  qurb restore [dir] <#n or path>     put a recently deleted file back where it was
   qurb forget [dir] <#n or path>      delete a recently deleted file for good, here
   qurb holders [dir] [add|remove <device>]
                                       the devices that keep this one's own files
@@ -1050,7 +1050,7 @@ fn deleted(root: &Path) -> Result<()> {
             entry.path
         );
     }
-    println!("\n`qurb restore #n` puts one back, on every device. Kept for 30 days.");
+    println!("\n`qurb restore #n` puts one back where it was. Kept for 30 days.");
     Ok(())
 }
 

@@ -1750,8 +1750,14 @@ impl Store {
     }
 
     /// What is in the trash, most recently deleted first.
+    ///
+    /// Not the sharing rules an earlier build kept there when another device
+    /// removed one: they are not anybody's files, and they leave with the
+    /// rest when their time is up.
     pub fn recently_deleted(&self) -> Result<Vec<db::Trashed>> {
-        self.db.trash()
+        let mut entries = self.db.trash()?;
+        entries.retain(|e| !qurb_sync::sharing::is_rule_path(&e.path));
+        Ok(entries)
     }
 
     /// Put a file from the trash back in the folder, as a change made here:
@@ -1765,6 +1771,9 @@ impl Store {
             return Err(Error::NotFound { path: format!("trash/{id} (a replica has no folder)") });
         };
         let entry = self.db.trash_entry(id)?.ok_or_else(|| Error::NotFound { path: format!("trash/{id}") })?;
+        if qurb_sync::sharing::is_rule_path(&entry.path) {
+            return Err(Error::Sharing { why: "a sharing rule is not put back from Recently deleted".into() });
+        }
         let target = self.free_path_near(&root, &entry.path)?;
         let to = root.join(&target);
         if let Some(parent) = to.parent() {

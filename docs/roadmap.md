@@ -3,15 +3,17 @@
 Six phases. Each has an explicit **kill criterion**: the result that means stop
 and reconsider rather than push on.
 
-**Where it stands, 2026-10-03:** Phases 0–2 complete; Phase 3 built with its
+**Where it stands, 2026-10-08:** Phases 0–2 complete; Phase 3 built with its
 kill criterion unmeasured; Phases 4 and 5 working on Linux and Android. What
 comes next was set by the project owner on 2026-09-28, in this order:
 
 1. **Design and UX** of the desktop window and the Android app. Every feature
    the product brief asks for is built — [features.md](features.md) lists them.
-   Both apps were rebuilt to the owner's design direction on 2026-09-29, in
-   light only ([0048](decisions/0048-the-design-direction.md)); what remains
-   is the owner's review, then dark mode.
+   Both apps were rebuilt to the owner's design direction on 2026-09-29
+   ([0048](decisions/0048-the-design-direction.md)), and have had a dark mode
+   since 2026-10-08 ([0056](decisions/0056-dark-mode.md)). What has and has
+   not been watched between the Galaxy S23 and the laptop is marked row by
+   row in features.md. What remains is the owner's review.
 2. **The relay on a server of the owner's own**, so the phone and the laptop
    reach each other from any network, not only where a direct path exists.
 3. **A formal release for Linux and Android.**

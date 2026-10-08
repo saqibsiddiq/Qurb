@@ -17,8 +17,9 @@ sharing folders with chosen devices, the passphrase — and an Arch package; no
 automatic updater, by decision. Phase 5 has an Android app on a real phone that
 syncs with a laptop in both directions, shares into qurb from anywhere on the
 phone, and is woken by push; iOS is untouched. Both apps were rebuilt to the
-owner's design direction on 2026-09-29, in light only; the Android app's
-were walked on a Galaxy S23 on 2026-10-03. What comes
+owner's design direction on 2026-09-29, and given a dark mode on 2026-10-08
+([0056](decisions/0056-dark-mode.md)); the Android app's places were walked on
+a Galaxy S23 on 2026-10-03. What comes
 next, in the owner's order: the owner's review of the design, then the relay on
 a server of the owner's own, then a formal release for Linux and Android.
 [features.md](features.md) lists everything that exists, by where a person
@@ -134,8 +135,11 @@ user's files on every other device. See
 Deleting a file — here, or on another device and synced — moves the file out
 of the folder into `.qurb/trash/` rather than unlinking it, and the `trash`
 table remembers where it came from. For thirty days it can be restored, which
-writes it back as a *new version*, so it returns on every device, not only
-this one. After that it goes, and a device over its storage limit empties the
+writes it back as a *new version* in the area it was deleted from, so a shared
+file returns on every device, not only this one, and a vault file returns to
+the vault. A sharing rule deleted elsewhere is the exception: it is removed,
+not kept, since restoring it would undo somebody's change to who has a
+folder. After that it goes, and a device over its storage limit empties the
 trash before it evicts anything. The same place receives the version a person
 did not keep when settling a conflict. See
 [decisions/0042](decisions/0042-recently-deleted.md).
@@ -789,7 +793,7 @@ Dark mode is built on both ([decisions/0056](decisions/0056-dark-mode.md)). The 
 | Deduplication | within a file, across files, across versions |
 | Single-copy storage | a materialised file *is* its own payload store |
 | Deletion, tombstones, restore | content survives a retention window |
-| Recently deleted | a file taken out of the folder by a deletion goes to `trash/` in the store for 30 days; restoring writes it back as a new version, so it returns everywhere — [0042](decisions/0042-recently-deleted.md) |
+| Recently deleted | a file taken out of the folder by a deletion goes to `trash/` in the store for 30 days; restoring writes it back as a new version in the area it came from, so a shared file returns everywhere; sharing rules are not kept — [0042](decisions/0042-recently-deleted.md) |
 | Sharing with chosen devices | a folder's devices are a rule file under `.qurb-sharing/` that syncs like any other; each device derives `shares` tables and filters what peers are shown and what it takes by them — [0044](decisions/0044-sharing-with-chosen-devices.md) |
 | A folder kept remotely | this device's choice (`remote_folders`, never synced): files listed, new versions recorded without their bytes, local copies freed where another device has them — [0045](decisions/0045-a-folder-kept-remotely.md) |
 | Conflicts settled | found by name (`qurb_sync::conflict_origin`), settled as ordinary changes; the version not kept goes to Recently deleted — [0043](decisions/0043-settling-a-conflict.md) |
@@ -880,7 +884,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-794 tests in 90 test binaries on Linux, all passing (2026-10-08, debug build,
+796 tests in 90 test binaries on Linux, all passing (2026-10-08, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. On Android the engine's crates run by `scripts/android-test.sh`:
@@ -1381,7 +1385,7 @@ introduce them, then `run` on both:
 ```
 
 ```bash
-# Recently deleted: thirty days to put a file back, on every device.
+# Recently deleted: thirty days to put a file back where it was.
 ./target/release/qurb deleted ~/Sync
 ./target/release/qurb restore ~/Sync '#1'
 ```

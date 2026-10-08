@@ -581,7 +581,17 @@ impl Engine {
                 // private namesake: another device deleting its `notes.txt` is
                 // not a reason to delete the `notes.txt` somebody sent here.
                 let removes = !self.role().is_replica() && !private_here;
-                if removes {
+                // A sharing rule is bookkeeping, not somebody's file: kept, it
+                // would be listed in Recently deleted, and restoring it would
+                // put back a rule that somebody had taken away.
+                let rule = qurb_sync::sharing::is_rule_path(&version.path);
+                if removes && rule {
+                    match std::fs::remove_file(&path) {
+                        Ok(()) => {}
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => return Err(Error::Io { path: path.clone(), source: e }),
+                    }
+                } else if removes {
                     // Into Recently deleted rather than unlinked. The file in
                     // the folder is the only copy of its bytes here, and the
                     // deletion is somebody else's: if it was a mistake, this
