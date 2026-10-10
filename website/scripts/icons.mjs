@@ -15,6 +15,7 @@ const NAMES = `
   file-video cloud cloud-off download git-compare trash-2 rotate-ccw shield-check
   key-round chevron-right arrow-right circle-check clock triangle-alert
   refresh-cw history upload external-link plus qr-code bell search wifi-off info
+  fingerprint users user-plus eye-off x
 `.split(/\s+/).filter(Boolean)
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url))

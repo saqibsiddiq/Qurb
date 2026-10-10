@@ -219,8 +219,6 @@ svg.i {
 }
 .text-link:hover { gap: 9px; }
 /* In running text, the arrow stays with the last word. */
-.section-head .text-link { display: inline; }
-.section-head .text-link svg { display: inline-block; margin-left: 4px; vertical-align: -0.15em; }
 
 /* ------------------------------------------------------ the app's parts */
 
@@ -352,9 +350,8 @@ svg.i {
 .icon-link:hover { background: rgba(255, 255, 255, 0.6); color: var(--text); }
 @media (max-width: 860px) { .site-nav { display: none; } }
 
-/* ------------------------------------------------------------------ hero */
+/* ----------------------------------------------- the hero's parts, shared */
 
-.hero { padding: clamp(56px, 9vw, 104px) 0 0; text-align: center; }
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -367,16 +364,6 @@ svg.i {
   color: var(--text-2);
 }
 .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--healthy); box-shadow: 0 0 0 3px rgba(40, 112, 82, 0.14); }
-.display {
-  margin: 22px 0 0;
-  font-size: clamp(42px, 7.2vw, 76px);
-  line-height: 1.02;
-  font-weight: 600;
-  letter-spacing: -0.04em;
-}
-.display span { display: block; }
-.display span:last-child { color: var(--green); }
-.lead { margin: 22px auto 0; max-width: 36rem; color: var(--text-2); font-size: clamp(17px, 2vw, 19px); line-height: 1.6; }
 .hero-buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
 
 /* --------------------------------------------------- the product, shown */
@@ -483,128 +470,11 @@ svg.i {
   .showcase { padding-bottom: 0; }
   .phone { position: relative; right: auto; margin: 0 auto; }
 }
-
-/* -------------------------------------------------------------- sections */
-
-.section { padding: clamp(80px, 11vw, 136px) 0 0; }
-.section-head { max-width: 44rem; }
-.section-head.center { margin: 0 auto; text-align: center; }
-.eyebrow { color: var(--green); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
-.section h2 { text-wrap: balance; margin: 12px 0 0; font-size: clamp(30px, 4.4vw, 46px); line-height: 1.1; font-weight: 600; letter-spacing: -0.03em; }
-.section-head p { text-wrap: pretty; margin: 16px 0 0; color: var(--text-2); font-size: 17.5px; line-height: 1.65; }
-.section-head.center p { margin-inline: auto; max-width: 38rem; }
-
-/* How it works: two devices and the light between them, with the
-   introduction -- all a server does -- above the line and off it, joined to
-   it only by a dashed thread. Two rows, so the thread's length is fixed: the
-   row gap, then the line's offset (half a device tile). */
-.journey {
-  display: grid;
-  grid-template-columns: auto minmax(90px, 1fr) auto;
-  align-items: start;
-  gap: 18px 20px;
-  max-width: 880px;
-  margin: 56px auto 0;
-  padding: 36px clamp(20px, 5vw, 56px) 44px;
-  border-radius: 28px;
-}
-.device { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
-.device .tile { width: 64px; height: 64px; border-radius: 18px; background: rgba(255, 255, 255, 0.85); }
-.device strong { font-size: 15px; font-weight: 600; }
-.lane { position: relative; height: 4px; margin-top: 30px; }
-.lane .beam { position: absolute; inset: 0; border-radius: 2px; background: rgba(47, 107, 87, 0.18); }
-.lane .tag { position: absolute; left: 50%; top: 16px; transform: translateX(-50%); white-space: nowrap; color: var(--text-2); font-size: 13px; font-weight: 500; }
-.introducer {
-  position: relative;
-  grid-column: 1 / -1;
-  justify-self: center;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 8px;
-  border-radius: 14px;
-  color: var(--text-3);
-  font-size: 13px;
-}
-.introducer .tile { width: 32px; height: 32px; border-radius: 9px; border-style: dashed; border-color: var(--border-strong); background: rgba(255, 255, 255, 0.5); color: var(--text-3); }
-.introducer::after { content: ''; position: absolute; left: 50%; top: 100%; height: 48px; border-left: 1.5px dashed var(--border-strong); }
-@media (max-width: 760px) {
-  .journey { grid-template-columns: 1fr; justify-items: center; gap: 16px; padding: 36px 20px; }
-  .lane { width: 4px; height: 56px; margin-top: 0; }
-  .lane .beam.flowing::after { background: linear-gradient(180deg, transparent, rgba(186, 236, 216, 0.95), transparent); background-size: 100% 40%; animation-name: flow-down; }
-  .lane .tag, .introducer::after { display: none; }
-  .introducer { order: 1; margin-top: 8px; white-space: normal; text-align: left; }
-}
-@keyframes flow-down { from { background-position: 0 -40%; } to { background-position: 0 140%; } }
-
-.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(20px, 3vw, 36px); max-width: 1000px; margin: 48px auto 0; padding: 0; list-style: none; }
-.steps li { display: flex; flex-direction: column; gap: 8px; }
-.steps .n { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--green-soft); color: var(--green); font-size: 13.5px; font-weight: 600; }
-.steps h3 { margin: 6px 0 0; font-size: 18px; line-height: 1.35; font-weight: 600; letter-spacing: -0.01em; }
-.steps p { margin: 0; color: var(--text-2); font-size: 15.5px; }
-@media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
-
-/* Where every file is: the Files list beside what it means. */
-.split { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; gap: clamp(32px, 6vw, 80px); margin-top: 56px; }
-.split.reverse > :first-child { order: 2; }
-@media (max-width: 900px) { .split, .split.reverse { grid-template-columns: 1fr; } .split.reverse > :first-child { order: 0; } }
 .panel { padding: 22px; border-radius: 24px; }
 .panel .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 8px 14px; }
 .panel .panel-head strong { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
 .panel .crumbs { display: flex; align-items: center; gap: 4px; color: var(--text-3); font-size: 13.5px; }
 .panel .crumbs b { color: var(--text); font-weight: 600; }
-
-.points { display: flex; flex-direction: column; gap: 26px; margin: 0; padding: 0; list-style: none; }
-.points li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; }
-.points .tile { width: 44px; height: 44px; border-radius: 13px; color: var(--green); }
-.points h3 { margin: 0; font-size: 17.5px; line-height: 1.4; font-weight: 600; letter-spacing: -0.01em; }
-.points p { margin: 4px 0 0; color: var(--text-2); font-size: 15.5px; }
-
-/* Everyday things: rows in one frosted panel rather than a wall of cards
-   (§43). */
-.features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 28px; margin: 56px 0 0; padding: 18px; border-radius: 28px; list-style: none; }
-.features li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 16px; padding: 18px 14px; border-radius: var(--r-m); transition: background var(--t-small) var(--ease-smooth); }
-.features li:hover { background: rgba(255, 255, 255, 0.55); }
-.features .tile { width: 44px; height: 44px; border-radius: 13px; color: var(--green); }
-.features h3 { margin: 0; font-size: 16.5px; line-height: 1.4; font-weight: 600; }
-.features p { margin: 4px 0 0; color: var(--text-2); font-size: 15px; line-height: 1.6; }
-@media (max-width: 760px) { .features { grid-template-columns: 1fr; padding: 8px; } }
-
-/* The 24 words, as the apps lay them out: numbered, three to a row (§47).
-   Never real words here. */
-.phrase { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
-.phrase span { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.72); border: 1px solid var(--hairline); color: var(--text-3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.phrase span i { flex: 1; height: 8px; border-radius: 4px; background: rgba(23, 24, 22, 0.08); }
-.phrase-note { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding: 12px 14px; border-radius: var(--r-m); background: rgba(247, 240, 221, 0.72); border: 1px solid rgba(148, 106, 36, 0.14); color: var(--text-2); font-size: 14px; line-height: 1.5; }
-.phrase-note svg { color: var(--attention); }
-
-/* Today: what works, and what does not yet. */
-.today { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 48px; }
-.today .panel { padding: 26px 28px; }
-.today h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; font-size: 17px; font-weight: 600; }
-.today ul { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
-.today li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 12px; color: var(--text-2); font-size: 15.5px; line-height: 1.5; }
-.today li svg { margin-top: 2px; }
-.today li b { color: var(--text); font-weight: 500; }
-.today .works svg { color: var(--healthy); }
-.today .later svg { color: var(--text-3); }
-@media (max-width: 760px) { .today { grid-template-columns: 1fr; } }
-
-.cta {
-  position: relative;
-  overflow: hidden;
-  margin-top: clamp(80px, 11vw, 136px);
-  padding: clamp(40px, 6vw, 64px) clamp(24px, 5vw, 64px);
-  border-radius: 32px;
-  text-align: center;
-}
-.cta.glass-frosted {
-  /* The Qurb light, faint, from above (§28) -- over the frosted fill. */
-  background: radial-gradient(70% 90% at 50% -10%, rgba(var(--glow), 0.2), transparent 70%), var(--frosted);
-}
-.cta > svg { margin: 0 auto; }
-.cta h2 { text-wrap: balance; margin: 18px 0 0; font-size: clamp(28px, 4vw, 40px); line-height: 1.15; font-weight: 600; letter-spacing: -0.03em; }
-.cta p { margin: 14px auto 0; max-width: 36rem; color: var(--text-2); font-size: 17px; }
 
 /* ---------------------------------------------------------------- footer */
 

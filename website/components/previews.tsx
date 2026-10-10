@@ -9,9 +9,9 @@ import type { IconName } from './icon-paths'
 import { Icon } from './icon'
 import { Mark } from './mark'
 
-type Row = { icon: IconName; name: string; sub: string[]; state?: { cls: string; icon: IconName; words: string }; arriving?: boolean }
+export type Row = { icon: IconName; name: string; sub: string[]; state?: { cls: string; icon: IconName; words: string }; arriving?: boolean }
 
-function Rows({ rows, lit }: { rows: Row[]; lit?: number }) {
+export function Rows({ rows, lit }: { rows: Row[]; lit?: number }) {
   return (
     <ul className="rows">
       {rows.map((row, i) => (
@@ -206,49 +206,6 @@ export function FilesPreview() {
           { icon: 'file-image', name: 'IMG_2041.jpg', sub: ['4.7 MB'], state: { cls: 'moving', icon: 'download', words: 'Downloading' }, arriving: true }
         ]}
       />
-    </div>
-  )
-}
-
-/** Two devices and the light between them, with the introduction off the
- *  line (§28). */
-export function Journey() {
-  return (
-    <div
-      className="journey glass-frosted"
-      role="img"
-      aria-label="A laptop and a phone with a line of light between them: files go encrypted, directly from one to the other. A service off to one side only introduces them."
-    >
-      <span className="introducer glass-frosted">
-        <span className="tile">
-          <Icon name="monitor" size={16} />
-        </span>
-        Introductions only — never your files
-      </span>
-      <span className="device">
-        <span className="tile">
-          <Icon name="laptop" size={28} />
-        </span>
-        <strong>Laptop</strong>
-        <span className="presence on">
-          <span className="dot" />
-          Connected
-        </span>
-      </span>
-      <span className="lane">
-        <span className="beam flowing" />
-        <span className="tag">Encrypted, directly between them</span>
-      </span>
-      <span className="device">
-        <span className="tile">
-          <Icon name="smartphone" size={28} />
-        </span>
-        <strong>Phone</strong>
-        <span className="presence on">
-          <span className="dot" />
-          Connected
-        </span>
-      </span>
     </div>
   )
 }

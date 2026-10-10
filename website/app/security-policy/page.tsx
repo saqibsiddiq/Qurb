@@ -22,8 +22,35 @@ export default function SecurityPage() {
       </p>
       <p>
         On a computer you choose how it’s kept: in a file only you can read, in the system keystore, or behind a
-        passphrase. On Android it’s kept in the Android Keystore, where only Qurb on that phone can use it.
+        passphrase. On Android it’s kept in the Android Keystore, where only Qurb on that phone can use it, and backed
+        up through Google’s Block Store, end-to-end encrypted when the phone has a screen lock. Nothing asks you to
+        write the 24 words down; they are there if you want them.
       </p>
+
+      <h2>A folder on another person’s computer</h2>
+      <p>
+        A guest’s phone can keep its folder on a computer it visits. Everything it shows that computer is sealed first,
+        with a key derived for that computer alone: the names and the contents, so the computer — and whoever uses it —
+        can open neither. To open the folder there, the computer asks the phone, and the phone’s owner approves behind
+        their fingerprint, face or screen lock; the key is accepted only if it opens the folder, and held in memory
+        until the folder is locked, or for ten minutes unused. This is new, and checked in tests and on a laptop, not
+        yet between two people’s phones.
+      </p>
+      <p>Its limits, plainly:</p>
+      <ul>
+        <li>
+          <strong>Open is open.</strong> While the folder is open at the computer, anyone at that login can read it,
+          and someone with administrator rights on it could capture the key.
+        </li>
+        <li>
+          <strong>The computer’s owner can delete it</strong>, though not read it, and when the computer is off, the
+          folder can’t be reached.
+        </li>
+        <li>
+          <strong>The approval guards the folder, not the phone.</strong> Software able to read Qurb’s private storage
+          on the phone could derive the key without the prompt.
+        </li>
+      </ul>
 
       <h2>Your files</h2>
       <ul>

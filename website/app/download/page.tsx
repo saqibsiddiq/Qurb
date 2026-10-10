@@ -38,7 +38,8 @@ cd packaging/arch && makepkg -si`}
       </pre>
       <p>
         Then open <strong>Qurb</strong> from your applications menu. It asks where your files should live and how much
-        of the disk it may use, then shows the 24 words that are your key and asks you to type three of them back.
+        of the disk it may use, and starts. There’s nothing to write down: your other devices get the key from the code
+        you add them with.
       </p>
 
       <h2>On Android</h2>
@@ -48,8 +49,9 @@ cd packaging/arch && makepkg -si`}
       </p>
       <pre>{`./scripts/android-app.sh install`}</pre>
       <p>
-        On first launch it offers to set up a new key or to use the 24 words from your computer. The key is kept in the
-        Android Keystore.
+        On first launch it sets up a new key, or joins your computer by scanning the code it shows. The key is kept in the
+        Android Keystore, and backed up through Google’s Block Store — end-to-end encrypted when the phone has a screen
+        lock — so a reinstalled app finds it. The 24 words are a fallback, if you have them.
       </p>
 
       <h2>Adding your phone</h2>

@@ -28,7 +28,8 @@ ICONS = """
     circle-alert x chevron-right chevron-down laptop smartphone monitor upload
     external-link folder-search key-round bell palette sliders-horizontal
     shield qr-code keyboard power refresh-cw wifi-off pencil copy arrow-right
-    circle-check info plus shield-check history user-plus
+    circle-check info plus shield-check history user-plus fingerprint users
+    eye-off
 """.split()
 
 OUT = Path(__file__).resolve().parent.parent / "crates/desktop/ui/icons.js"

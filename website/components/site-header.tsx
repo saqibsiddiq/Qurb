@@ -5,6 +5,8 @@ import { Mark } from './mark'
 
 const places = [
   ['How it works', '/#how'],
+  ['Sending', '/#send'],
+  ['People', '/#people'],
   ['Privacy', '/#privacy'],
   ['Today', '/#today'],
   ['Docs', '/docs']

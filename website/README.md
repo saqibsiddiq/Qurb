@@ -57,10 +57,34 @@ parts, the same words.
 - **The mark** is `components/mark.tsx`, and `app/icon.svg` is
   `packaging/qurb.svg`.
 - **The product on the landing page is drawn, not screenshotted**
-  (`components/previews.tsx`): the window's sidebar, stage, rows and status
-  mark, and the phone's Home under its tab bar, with the apps' own words and
-  made-up files. A screenshot would go stale with the first change to an app;
-  these change only when the design does, and in one place.
+  (`components/previews.tsx`, `components/scenes.tsx`): the window's sidebar,
+  stage, rows and status mark; the phone's Home under its tab bar; a send
+  crossing from a phone to a laptop; a guest's folder, sealed on the computer
+  and opened from the guest's phone — with the apps' own words and made-up
+  files. A screenshot would go stale with the first change to an app; these
+  change only when the design does, and in one place.
+
+## The landing page
+
+Redesigned on 2026-10-11, at the owner's asking (item 6 of his list), after
+Antigravity's product pages and the way luxury brands present things: one idea
+to a screen, very large type, a great deal of room, and slow motion that shows
+something rather than decorates — in qurb's own green, glass and Inter.
+
+In order: what Qurb is, in one line; the one idea, as a sentence whose words
+light as it scrolls past; how it works, in three steps; sending, and keeping no
+copy; one computer for several people, in the page's one dark room; where every
+file is; what it makes possible; privacy, in three figures; where Qurb is
+today, in three columns — *works*, *being tested*, *not yet*; and the way to
+try it.
+
+- **The styles** are `app/landing.css`, the landing page's own; the tokens and
+  parts are still `globals.css`'s.
+- **The motion** is CSS for the hero, and `components/motion.tsx` — one small
+  client script — for sections rising as they scroll in and the sentence
+  lighting. The page is complete HTML without it: nothing is hidden until the
+  script has marked what is already on screen, and with reduced motion asked
+  for, nothing moves at all.
 - `app/opengraph-image.png`, the image a shared link shows, was rendered once
   in Chromium from the same font and mark. Redraw it if the headline changes.
 
@@ -105,9 +129,13 @@ warned.
 
 ## Not done
 
-- **Light only**, like the apps, until their dark mode is designed.
+- **Light only.** The apps have had a dark mode since 2026-10-08
+  ([decision 0056](../docs/decisions/0056-dark-mode.md)); the site has one dark
+  section, and no dark mode of its own yet.
 - **Checked in Chromium only**, at 1440 and 390 pixels wide, from screenshots
-  of the production build on 2026-10-03. Not looked at in Firefox or Safari,
-  or by the owner.
+  of the production build — the landing page on 2026-10-11, the rest on
+  2026-10-03. Not looked at in Firefox or Safari. The redesigned landing page
+  waits on a branch, `website-redesign`, for the owner's look at its Vercel
+  preview before it goes to `main` and so to qurb.cloud.
 - **A blog.** Notes points at the repository's phase and decision records
   instead.

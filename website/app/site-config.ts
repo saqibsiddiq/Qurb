@@ -11,7 +11,7 @@ export const repoUrl = 'https://github.com/saqibsiddiq/Qurb'
 export const repoDoc = (path: string) => `${repoUrl}/blob/main/${path}`
 
 const description =
-  'Qurb keeps your files on the devices you own and moves them directly between them, encrypted. No cloud drive in the middle holds a copy.'
+  'Qurb keeps your files on the devices you own and moves them directly between them, encrypted. No cloud drive in the middle holds a copy — not even of what you send.'
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
