@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A hairline between items in a group, inset from the start. -->
-<inset xmlns:android="http://schemas.android.com/apk/res/android" android:insetLeft="16dp">
-    <shape android:shape="rectangle">
-        <solid android:color="@color/hairline" />
-        <size android:height="1dp" />
-    </shape>
-</inset>
+<!-- A hairline between items in a group, edge to edge, as the desktop draws
+     it: an inset at one end only read as lopsided. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/hairline" />
+    <size android:height="1dp" />
+</shape>

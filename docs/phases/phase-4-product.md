@@ -1329,6 +1329,18 @@ a file refused under another path) and the sheet's three states against the
 fixtures. **Not watched with a phone**: no second person's phone has played
 the guest yet. That is step 6.
 
+## A consistency pass
+
+**2026-10-11**, item 6 of the owner's list, first half. Every screen of
+the window measured for where its parts sit, against its neighbours and against
+the other platform's. Twenty inconsistencies were found and fixed: section labels, breadcrumbs
+and row tiles off the page's left edge by 2 to 9 units, text buttons short of
+the right edge, a card with uneven padding, two heading styles for the same
+kind of section, a page without a subtitle, a back link reading *Back*, and
+more. The rules they now follow, every finding with its measurement, and
+what is not checked yet — sheets, onboarding, the phone in dark mode — are in
+[design/consistency.md](../design/consistency.md).
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

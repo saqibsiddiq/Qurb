@@ -95,9 +95,12 @@
                     android:textAppearance="@style/Text.Body" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <!-- Pulled back by a crumb's padding, so its words start at the
+                 gutter like the title's; the back link does the same. -->
             <HorizontalScrollView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="-6dp"
                 android:layout_marginTop="10dp"
                 android:scrollbars="none">
 
@@ -122,7 +125,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingHorizontal="14dp"
+            android:paddingHorizontal="12dp"
             android:paddingBottom="170dp" />
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 

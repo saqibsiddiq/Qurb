@@ -478,7 +478,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                 FOLDER -> FolderHolder(ItemFolderBinding.inflate(inflater, parent, false))
                 LABEL -> object : RecyclerView.ViewHolder(TextView(app).apply {
                     setTextAppearance(R.style.Text_Label)
-                    setPadding(kit.dp(8), kit.dp(18), kit.dp(8), kit.dp(6))
+                    setPadding(kit.dp(8), kit.dp(18), kit.dp(8), kit.dp(6))  // 12 + 8: the gutter
                 }) {}
                 else -> RowHolder(RowItemBinding.inflate(inflater, parent, false))
             }

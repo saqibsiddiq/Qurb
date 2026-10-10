@@ -17,7 +17,9 @@ Two sources, in this order of authority:
    resolved (§2), and where every existing feature lives (§3).
 
 [features.md](../features.md) is the list of what exists; every feature must
-have a place on a screen.
+have a place on a screen. [consistency.md](consistency.md) is how the parts
+line up — edges, section titles, subtitles, back links — on both apps, with
+what was measured and fixed on 2026-10-11 and what is not checked yet.
 
 ---
 

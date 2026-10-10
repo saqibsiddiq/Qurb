@@ -659,7 +659,11 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 
 /* ----------------------------------------------------------------- rows §18 */
 
-.rows { display: flex; flex-direction: column; gap: 2px; }
+/* A row's tile and its trailing action sit on the column's edges, like every
+   title, label and field above them; its padding and border -- what its hover
+   lights -- reach out into the gutter instead. The phone does the same. */
+.rows { display: flex; flex-direction: column; gap: 2px; margin-inline: -9px -13px; }
+.rows > .list-label, .rows > .empty { margin-inline: 9px 13px; }
 
 .row {
   display: grid;
@@ -946,7 +950,8 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 .toolbar { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s4); }
 .toolbar .search { flex: 1; }
 
-.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: var(--s4) 0 var(--s3); font-size: 14px; }
+/* Pulled back by a crumb's padding, so its words start where the title's do. */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin: var(--s4) 0 var(--s3) -6px; font-size: 14px; }
 .crumbs button { border: 0; padding: 3px 6px; border-radius: 7px; background: none; color: var(--text-2); }
 .crumbs button:hover { background: rgba(var(--paper), 0.6); color: var(--text); }
 .crumbs button:last-child { color: var(--text); font-weight: 600; }
@@ -954,6 +959,7 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 
 /* Folders stand apart from files (§18): tiles above the list. */
 .folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: var(--s2); margin-bottom: var(--s4); }
+.folders > .list-label { grid-column: 1 / -1; margin-bottom: 0; }
 .folder {
   display: flex;
   align-items: center;
@@ -1120,6 +1126,10 @@ button.device:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(
 
 .transfers-chip { position: relative; overflow: hidden; gap: 6px; }
 .transfers-chip .n { color: var(--green); font-weight: 600; }
+/* The light travelling across it passes behind the words, not over them:
+   over them, it washed the count out, in dark most of all. */
+.transfers-chip > * { position: relative; z-index: 1; }
+.transfers-chip.flowing::after { opacity: 0.35; }
 .panel.transfers { width: min(400px, calc(100% - 24px)); bottom: auto; max-height: calc(100% - 24px); }
 
 /* ---------------------------------------------------------------- storage §20 */
@@ -1136,7 +1146,7 @@ button.device:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(
 .legend .free i { background: rgba(var(--ink), 0.1); }
 
 .big-number { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.02em; }
-.recommend { display: flex; align-items: center; gap: var(--s4); margin-top: var(--s5); }
+.recommend { display: flex; align-items: center; gap: var(--s4); }
 .recommend .text { flex: 1; }
 
 input[type="range"] { width: 100%; accent-color: var(--green); }
@@ -1145,7 +1155,7 @@ input[type="range"] { width: 100%; accent-color: var(--green); }
 
 /* Grouped lists, quieter than the rest (§23): one frosted group per
    category, rows inside, no cards. */
-.group-title { margin: var(--s6) 0 var(--s2) var(--s1); color: var(--text-3); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.group-title { margin: var(--s6) 0 var(--s2); color: var(--text-3); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .group { border-radius: var(--r-m); overflow: hidden; }
 .group .item {
   display: flex;
@@ -1199,8 +1209,6 @@ input[type="range"] { width: 100%; accent-color: var(--green); }
 
 /* -------------------------------------------------------------------- vault */
 
-.vault-intro { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s5); padding: var(--s3) var(--s4); border-radius: var(--r-m); background: rgba(var(--paper), 0.5); border: 1px solid rgba(var(--edge), calc(0.85 * var(--edge-k))); color: var(--text-2); font-size: 13.5px; }
-.vault-intro svg.i { color: var(--text-2); }
 
 /* ------------------------------------------------------ reduced motion §42 */
 

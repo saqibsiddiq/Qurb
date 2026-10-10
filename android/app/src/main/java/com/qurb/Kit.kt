@@ -168,7 +168,7 @@ class Kit(private val app: MainActivity) {
         parent.addView(TextView(app).apply {
             this.text = text
             setTextAppearance(R.style.Text_Label)
-            setPadding(dp(4), dp(24), dp(4), dp(8))
+            setPadding(0, dp(24), 0, dp(8))
         })
     }
 
@@ -184,7 +184,12 @@ class Kit(private val app: MainActivity) {
             setTextAppearance(R.style.Text_Section)
             isAccessibilityHeading = true
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (action != null && onAction != null) row.addView(button(action, Style.TEXT, onTap = onAction))
+        // A text button's words end at the gutter, as Home's *See all* does.
+        if (action != null && onAction != null) row.addView(
+            button(action, Style.TEXT, onTap = onAction).apply { minWidth = 0; minimumWidth = 0 },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { marginEnd = -dp(12) },
+        )
         parent.addView(row)
     }
 

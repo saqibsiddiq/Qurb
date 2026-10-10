@@ -27,6 +27,7 @@ function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
         $(crumbs).replaceChildren(el("span", "quiet", `${count(found.length, "result")} for “${b.searching}”`));
         $(folders).replaceChildren();
         out.replaceChildren();
+        if (!isPrivate) drawDeletedLink();
         if (found.length === 0) out.append(empty("search", "Nothing matches that name."));
         for (const f of found) out.append(fileRow(f, b, true));
         return;
@@ -34,10 +35,13 @@ function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
       const d = await invoke("browse", { dir: b.dir, private: isPrivate });
       drawCrumbs();
       $(folders).replaceChildren();
+      // Each kind labelled whenever it is there, as on the phone.
+      if (d.folders.length > 0) $(folders).append(el("div", "list-label", "Folders"));
       for (const name of d.folders) $(folders).append(folderTile(name));
       out.replaceChildren();
-      if (d.files.length > 0 && d.folders.length > 0) out.append(el("div", "list-label", "Files"));
+      if (d.files.length > 0) out.append(el("div", "list-label", "Files"));
       for (const f of d.files) out.append(fileRow(f, b, false));
+      if (!isPrivate) drawDeletedLink();
       if (d.files.length === 0 && d.folders.length === 0) {
         out.append(isPrivate
           ? empty("lock-keyhole", b.dir ? "This folder is empty."
@@ -448,17 +452,20 @@ async function drawDeleted() {
   }
 }
 
-/** A quiet way to Recently deleted, under the file list, when there is any. */
+/** A quiet way to Recently deleted, under the file list: always there, as
+ *  on the phone, so it is where you expect it before you need it. */
 async function drawDeletedLink() {
   const box = $("deleted-link");
   try {
     const entries = await invoke("recently_deleted");
     box.replaceChildren();
-    if (entries.length === 0) return;
+    // At the top of Files only, as on the phone: not inside a folder, and
+    // not among a search's results.
+    if (filesBrowser.dir || filesBrowser.searching) return;
     const li = row({
       iconName: "trash-2",
       name: "Recently deleted",
-      sub: [`${count(entries.length, "file")} · kept for 30 days`],
+      sub: [entries.length ? `${count(entries.length, "file")} · kept for 30 days` : "Kept for 30 days"],
       trail: [icon("chevron-right")],
       onClick: () => showScreen("deleted"),
     });

@@ -32,7 +32,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
 
     init {
         views.title.text = "Devices"
-        views.subtitle.text = "Your devices, and when each was last here."
+        views.subtitle.text = "Your devices, and whether each is reachable."
         views.subtitle.visibility = View.VISIBLE
         views.action.text = "Add"
         views.action.setIconResource(R.drawable.ic_plus)

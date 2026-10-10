@@ -37,7 +37,9 @@ async function drawDevices() {
   const t = el("span", "tile");
   t.append(icon("laptop"));
   const words = el("div");
-  words.append(el("strong", null, me.name), el("span", "presence on", "This computer"));
+  const here = el("span", "presence on");
+  here.append(el("span", "dot"), el("span", null, "This computer"));
+  words.append(el("strong", null, me.name), here);
   self.append(t, words);
   grid.append(self);
 

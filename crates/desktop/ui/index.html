@@ -200,19 +200,15 @@
           <nav class="crumbs" id="crumbs"></nav>
           <div class="folders" id="folders"></div>
           <ul class="rows" id="file-list"></ul>
-          <div id="deleted-link"></div>
+          <div id="deleted-link" class="rows"></div>
         </section>
 
         <section id="vault" class="screen">
           <div class="page-head">
             <div class="titles">
               <h1>Private Vault</h1>
-              <p>Private to this computer.</p>
+              <p>Private to this computer. Only this computer can see these files; a device you choose can keep a backup.</p>
             </div>
-          </div>
-          <div class="vault-intro">
-            <svg class="i"><use href="#i-lock-keyhole"/></svg>
-            <span>Only this computer can see these files. A device you choose can keep a backup of them.</span>
           </div>
           <div class="toolbar">
             <label class="search">
@@ -256,10 +252,10 @@
               <div class="legend num" id="legend"></div>
             </div>
           </div>
-          <h2 class="section">Files you can free</h2>
+          <div class="list-label">Files you can free</div>
           <ul class="rows" id="freeable-list"></ul>
 
-          <h2 class="section">Storage limit</h2>
+          <div class="group-title">Storage limit</div>
           <div class="group glass-frosted">
             <div class="item">
               <div class="label">
@@ -285,7 +281,10 @@
         <!-- Grouped lists, quieter than the rest (§23). -->
         <section id="settings" class="screen">
           <div class="page-head">
-            <div class="titles"><h1>Settings</h1></div>
+            <div class="titles">
+              <h1>Settings</h1>
+              <p>How Qurb works on this computer.</p>
+            </div>
           </div>
 
           <div class="group-title">This device</div>

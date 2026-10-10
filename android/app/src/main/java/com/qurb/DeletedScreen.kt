@@ -14,15 +14,16 @@ import uniffi.qurb_mobile.DeletedFile
  * travels, and a Private Vault file in the vault. Reached from Files and from
  * Settings.
  */
-class DeletedScreen(app: MainActivity) : Screen(app) {
+class DeletedScreen(app: MainActivity, fromSettings: Boolean = false) : Screen(app) {
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
     override val view: View get() = views.root
-    override val tab = R.id.tab_files
+    override val tab = if (fromSettings) R.id.tab_settings else R.id.tab_files
 
     init {
         views.back.visibility = View.VISIBLE
-        views.back.text = "Back"
+        // Named for where it goes back to, as every other page's is.
+        views.back.text = if (fromSettings) "Settings" else "Files"
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         views.title.text = "Recently deleted"
         views.subtitle.text = "Files deleted on any of your devices are kept for 30 days. Restoring one puts it back where it was."

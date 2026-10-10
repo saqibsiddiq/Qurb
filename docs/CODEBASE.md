@@ -611,7 +611,8 @@ qurb/
 │   │                      how to measure the direct-connection rate
 │   ├── design/            The design pass: direction.md, the owner's
 │   │                      direction word for word; brief.md, how it meets
-│   │                      the product and where each feature goes
+│   │                      the product and where each feature goes;
+│   │                      consistency.md, how the parts line up on both apps
 │   ├── decisions/         Why each choice was made (one file per decision)
 │   └── phases/            What each phase produced, with measurements
 │

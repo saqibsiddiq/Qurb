@@ -27,6 +27,9 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
 
     init {
         views.title.text = "Settings"
+        // Every page says in a line what it is for; this one did not.
+        views.subtitle.text = "How Qurb works on this phone."
+        views.subtitle.visibility = View.VISIBLE
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
     }
@@ -88,7 +91,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.item(group, "Recently deleted",
             if (state.deleted.isEmpty()) "Nothing. Files deleted on any device are kept 30 days"
             else "${Words.files(state.deleted.size)}, ${Words.size(state.deleted.sumOf { it.size })} — restorable for 30 days") {
-            app.push(DeletedScreen(app))
+            app.push(DeletedScreen(app, fromSettings = true))
         }
         kit.item(group, "Free unused space", "Clears what nothing needs any more", chevron = false) { tidy() }
         // Its own line, never part of the one above: the devices sent to have

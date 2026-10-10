@@ -42,7 +42,7 @@
     <color name="scrim">#33171816</color>
 
     <!-- What the drawables are painted with. -->
-    <color name="nav_glass">#F2FBFBF9</color>
+    <color name="nav_glass">#FAFBFBF9</color>
     <color name="tile_fill">#CCFFFFFF</color>
     <color name="mark_fill">#E6FFFFFF</color>
     <color name="mark_ring">#2E287052</color>
