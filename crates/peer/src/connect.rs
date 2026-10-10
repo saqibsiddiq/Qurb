@@ -120,12 +120,30 @@ pub struct Connector {
     /// running for the life of the process -- and the reconnect loop held the
     /// QUIC endpoint, so its socket stayed open too.
     background: Vec<tokio::task::AbortHandle>,
+    /// Where the rendezvous service is, for meetings started later.
+    signal_url: String,
+    /// Devices of other people this one meets under a secret of their own
+    /// (decision 0060): a guest of this computer, or a computer this device
+    /// visits. Each has its own rendezvous session.
+    meetings: std::sync::Mutex<std::collections::HashMap<Fingerprint, Meeting>>,
+}
+
+/// A rendezvous session with one device of another person.
+struct Meeting {
+    secret: [u8; 32],
+    signal: mpsc::UnboundedSender<Command>,
+    running: tokio::task::AbortHandle,
 }
 
 impl Drop for Connector {
     fn drop(&mut self) {
         for running in &self.background {
             running.abort();
+        }
+        if let Ok(meetings) = self.meetings.lock() {
+            for meeting in meetings.values() {
+                meeting.running.abort();
+            }
         }
         if let Some(beacons) = &self.beacons {
             beacons.stop();
@@ -393,9 +411,10 @@ impl Connector {
         // it simply stopped being reachable and stopped being able to say it
         // had news. Found by restarting the service during a test.
         let reconnect = Reconnect {
-            url: signal_url,
+            url: signal_url.clone(),
             group: GroupId::derive(&master),
             member: MemberId::derive(&master, identity.fingerprint().as_bytes()),
+            straight_away: false,
         };
         let mut background = vec![tokio::spawn(stay_signalled(
             client,
@@ -448,7 +467,61 @@ impl Connector {
             neighbours,
             beacons,
             background,
+            signal_url,
+            meetings: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
+    }
+
+    /// Meet a device of another person under the secret the two were given
+    /// when one welcomed the other as a guest (decision 0060): announce in a
+    /// group of their own at the rendezvous service, so that each can reach
+    /// the other and tell it there is news. Once per device; asking again
+    /// changes nothing.
+    pub fn meet(&self, peer: Fingerprint, secret: [u8; 32]) {
+        let Ok(mut meetings) = self.meetings.lock() else { return };
+        if meetings.contains_key(&peer) {
+            return;
+        }
+        let (signal, commands) = mpsc::unbounded_channel();
+        let reconnect = Reconnect {
+            url: self.signal_url.clone(),
+            group: GroupId::for_meeting(&secret),
+            member: MemberId::for_meeting(&secret, self.identity.fingerprint().as_bytes()),
+            straight_away: true,
+        };
+        let running = tokio::spawn(stay_signalled(
+            None,
+            reconnect,
+            commands,
+            self.endpoints.clone(),
+            self.endpoint.clone(),
+            self.identity.clone(),
+            self.arrivals.clone(),
+        ))
+        .abort_handle();
+        meetings.insert(peer, Meeting { secret, signal, running });
+    }
+
+    /// The identifier `peer` announces under, where this device would look
+    /// for it: in a meeting for another person's device, by this person's key
+    /// for one of their own.
+    pub fn member_of(&self, peer: &Fingerprint) -> MemberId {
+        match self.meetings.lock().ok().and_then(|m| m.get(peer).map(|m| m.secret)) {
+            Some(secret) => MemberId::for_meeting(&secret, peer.as_bytes()),
+            None => MemberId::derive(&self.master, peer.as_bytes()),
+        }
+    }
+
+    /// The rendezvous session `peer` is reached through, and what it is
+    /// called there.
+    fn session_for(&self, peer: &Fingerprint) -> (mpsc::UnboundedSender<Command>, MemberId, bool) {
+        if let Some(meeting) = self.meetings.lock().ok().and_then(|m| {
+            m.get(peer).map(|m| (m.signal.clone(), m.secret))
+        }) {
+            let (signal, secret) = meeting;
+            return (signal, MemberId::for_meeting(&secret, peer.as_bytes()), true);
+        }
+        (self.signal.clone(), MemberId::derive(&self.master, peer.as_bytes()), false)
     }
 
     /// Listen for peers announcing themselves to the rendezvous service.
@@ -529,8 +602,8 @@ impl Connector {
     }
 
     pub fn tell_waiting(&self, peer: Fingerprint) -> Result<()> {
-        let to = MemberId::derive(&self.master, peer.as_bytes());
-        self.signal
+        let (signal, to, _) = self.session_for(&peer);
+        signal
             .send(Command::Waiting { to })
             .map_err(|_| Error::Signalling { detail: "signalling has stopped".into() })
     }
@@ -586,7 +659,23 @@ impl Connector {
     /// Asks the rendezvous service to introduce them, waits to be told to punch,
     /// then races every address the peer offered.
     pub async fn reach(&self, peer: Fingerprint) -> Result<PeerClient> {
-        let target = MemberId::derive(&self.master, peer.as_bytes());
+        let (signal, target, meeting) = self.session_for(&peer);
+        if meeting {
+            // Another person's device, met under a secret of their own: not
+            // in this person's beacons, nor at the relay, which are keyed to
+            // this person's key (decision 0060). The rendezvous service
+            // carries its local addresses as well as its public ones.
+            let (reply, answer) = oneshot::channel();
+            signal
+                .send(Command::Introduce { to: target, reply })
+                .map_err(|_| Error::Signalling { detail: "signalling has stopped".into() })?;
+            let endpoints = match tokio::time::timeout(RENDEZVOUS_TIMEOUT, answer).await {
+                Ok(Ok(result)) => result?,
+                Ok(Err(_)) => return Err(Error::Signalling { detail: "signalling has stopped".into() }),
+                Err(_) => return Err(Error::PeerDidNotAnswer),
+            };
+            return self.race(peer, &endpoints).await;
+        }
 
         // Somebody who beaconed from this network moments ago is both the
         // likeliest to answer and the cheapest to try, and reaching them
@@ -759,6 +848,9 @@ struct Reconnect {
     url: String,
     group: GroupId,
     member: MemberId,
+    /// Connect at once the first time, rather than after the backoff: a
+    /// meeting started later has had no attempt yet (decision 0060).
+    straight_away: bool,
 }
 
 /// How long to wait before trying the rendezvous service again.
@@ -796,13 +888,16 @@ async fn stay_signalled(
 ) {
     let mut client = first;
     let mut wait = RECONNECT_FLOOR;
+    let mut straight_away = reconnect.straight_away;
 
     loop {
         let connected = match client.take() {
             Some(connected) => connected,
             None => {
-                tokio::time::sleep(wait).await;
-                wait = (wait * 2).min(RECONNECT_CEILING);
+                if !std::mem::take(&mut straight_away) {
+                    tokio::time::sleep(wait).await;
+                    wait = (wait * 2).min(RECONNECT_CEILING);
+                }
                 match SignalClient::connect(
                     &reconnect.url,
                     reconnect.group,

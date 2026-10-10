@@ -59,6 +59,7 @@ not yet looked at by the owner.
 | | conflicts: both versions, who made each and when; keep this one, the other, or both ([0043](decisions/0043-settling-a-conflict.md)) | 🧪 |
 | | Recently deleted: thirty days, when each expires; restore — back where it was: everywhere for a shared file, in Private Vault for one of the vault's — or delete for good ([0042](decisions/0042-recently-deleted.md)) | 🧪 |
 | **Devices** | this computer and each paired device, whether each is connected now (directly or through the relay) or when it was last seen | 🧪 |
+| | *Add a person*: a guest code for someone else's phone, which keeps its own key and sees only what is sent to it; guests listed apart; the approval says *as a guest* ([0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md)) | 🧪 against the fixtures; guests themselves watched between two folders on the laptop |
 | | *Add a device*: show a code (QR, typed or read aloud, with a countdown) or enter one; the new device materialises | 🧪 |
 | | a device's details: what is waiting for it, send it files, remove it — saying first what that will and will not do ([0041](decisions/0041-removing-a-device.md)) | 🧪 |
 | **Storage** | how much can be freed without losing anything, the largest files that would free it, *Free local space* for one or all; the storage limit ([0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md)) | 🧪 |
@@ -125,6 +126,7 @@ was walked through on the emulator.
 | | *Add files* into the folder on screen; new folder; save everything here to the phone at once | ✅ *Add files* on the S23, 2026-10-05, and into a shared folder while a sync scanned, 2026-10-08 ([0049](decisions/0049-adding-a-file-puts-it-where-you-are-looking.md)); the rest 🧪 |
 | **Private Vault** | from Files: the phone's own files, in the same browser; *Add files* here adds privately, whatever the setting says | 🧪 in the FFI's tests |
 | **Devices** | this phone and each paired device as cards, with when each was last seen; *Add* — scan a code, **show a code on this phone**, or type one | ✅ scan and show, on the S23, 2026-10-08 |
+| | *Visit someone's computer*: join another person's computer as a guest with its guest code, keeping this phone's key; *Computers you visit* listed apart, with no Private Vault backup offered ([0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md)) | ◻ built; not yet tried on a phone |
 | | a device's sheet: *Keep a backup of my Private Vault* — a device that keeps a copy of the phone's own files, so the phone can free space | ✅ |
 | | send files to it; remove it, saying first what that does ([0041](decisions/0041-removing-a-device.md)) | ✅ both in the S23's history, 2026-09-29; removing watched, 2026-10-08 |
 | **Settings** | grouped lists: this phone (name, key protection); devices; storage — space used, who has each folder (choose devices, keep on this phone or download when opened), Recently deleted, *free unused space*; privacy — *Keep new files private*; notifications — the desktop's three: sent to you, delivered, failed (`Notices.kt`); the recovery phrase; appearance — theme: as the phone is set, light or dark ([0056](decisions/0056-dark-mode.md)); advanced — background sync, rendezvous, relay, version | 🧪 · on the S23, 2026-10-08: who has each folder, the laptop turned off and on again; the *sent to you* notification; dark |
@@ -157,6 +159,7 @@ set up, so most commands need no path.
 | `init [dir]` | set up a device with a new key; nothing to write down |
 | `join [dir] <code>` | a folder not set up takes the key of the device showing the code, and pairs with it; prints the number the other device should show |
 | `pair [dir]` | shows a code; asks in the terminal to approve each device that uses it, by the number it shows ([0053](decisions/0053-approval-same-key-and-safe-copies.md)) |
+| `pair [dir] --guest` / `visit [dir] <code>` | a guest code for another person's device / visit another person's computer as a guest, keeping this device's key ([0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md)) — watched between two folders on the laptop |
 | `enrol <dir> "<24 words>"` | set up a device with an existing key |
 | `pair` / `join <code>` | show a pairing code (QR in the terminal) / join one |
 | `run` | the daemon, without a window |

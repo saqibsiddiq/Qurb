@@ -19,7 +19,9 @@ qurb — private cloud storage
   qurb init [dir]                     set up a device and create a key
                                     (defaults to ~/qurb)
   qurb enrol <dir> \"<24 words>\"       set up a device with an existing key
-  qurb pair [dir]                     show a code and wait for a device to join
+  qurb pair [dir] [--guest]           show a code and wait for a device to join;
+                                        --guest: another person's, keeping its key
+  qurb visit [dir] <code>             visit another person's computer as a guest
   qurb join [dir] <code>              join a device showing a code; a folder not
                                         set up yet takes that device's key
   qurb run [dir]                      watch, sync, and keep running
@@ -110,7 +112,23 @@ fn run() -> Result<()> {
             let phrase = args.get(2).context("give the 24 words, in quotes")?;
             enrol(&new_directory(&args)?, phrase)
         }
-        "pair" => block_on(pair(directory(&args)?)),
+        "pair" => {
+            // `--guest` anywhere: a code for another person's device to visit
+            // this computer, keeping its own key (decision 0060).
+            let guest = args.iter().any(|a| a == "--guest");
+            let rest: Vec<String> = args.iter().filter(|a| *a != "--guest").cloned().collect();
+            block_on(pair(directory(&rest)?, guest))
+        }
+        "visit" => {
+            // `qurb visit <code>`, or with the folder first: this device, with
+            // its own key, visiting another person's computer as a guest.
+            let (root, code) = match &args[1..] {
+                [code] => (qurb_cli::profiles::current().context("set up a folder first: qurb init")?, code.clone()),
+                [dir, code, ..] => (PathBuf::from(dir), code.clone()),
+                [] => bail!("give the guest code the other computer is showing"),
+            };
+            block_on(visit(root, code))
+        }
         "join" => {
             // Two words are a folder and a code, whether or not the folder is
             // set up yet: joining is how a new one gets its key (decision
@@ -486,15 +504,15 @@ fn enrol(root: &Path, phrase: &str) -> Result<()> {
     Ok(())
 }
 
-async fn pair(root: PathBuf) -> Result<()> {
+async fn pair(root: PathBuf, guest: bool) -> Result<()> {
     let (master, identity, store, config) = open(&root)?;
     let store = Arc::new(Mutex::new(store));
 
-    let host = PairingHost::open(
-        format!("0.0.0.0:{}", config.port).parse()?,
-        &identity,
-        now(),
-    )?;
+    let bind = format!("0.0.0.0:{}", config.port).parse()?;
+    let host = match guest {
+        true => PairingHost::open_for_guest(bind, &identity, now())?,
+        false => PairingHost::open(bind, &identity, now())?,
+    };
 
     let code = host.invite().encode();
 
@@ -513,8 +531,15 @@ async fn pair(root: PathBuf) -> Result<()> {
         }
     }
 
-    println!("Or on another computer:\n");
-    println!("  qurb join <dir> {code}\n");
+    if guest {
+        println!("This is a guest code: for another person's device to visit this computer.");
+        println!("It keeps its own key, and sees only what is sent to it.\n");
+        println!("Or on their computer:\n");
+        println!("  qurb visit {code}\n");
+    } else {
+        println!("Or on another computer:\n");
+        println!("  qurb join <dir> {code}\n");
+    }
     println!("Or read this out:\n");
     println!("  {}\n", host.invite().for_humans());
     println!("The code carries this device's full identity, which is why it has to");
@@ -528,6 +553,11 @@ async fn pair(root: PathBuf) -> Result<()> {
     let kind = kind_of(&store);
     let ours = qurb_peer::Ours { name: &config.name, kind: &kind, key: &master };
     match host.wait(Arc::clone(&store), &ours, now(), approve_in_terminal).await {
+        Ok(peer) if guest => {
+            println!("\n{} ({}) is a guest of this computer now.", peer.name, peer.fingerprint.short());
+            println!("Send them files with `qurb send <file> to {}`.", peer.name);
+            Ok(())
+        }
         Ok(peer) => {
             println!("\nPaired with {} ({})", peer.name, peer.fingerprint.short());
             Ok(())
@@ -543,11 +573,41 @@ async fn pair(root: PathBuf) -> Result<()> {
     }
 }
 
+/// Visit another person's computer as a guest, with the guest code it showed
+/// (decision 0060): this device keeps its key, shows the number while the
+/// person there approves, and from then on can send that computer files and
+/// be sent them.
+async fn visit(root: PathBuf, code: String) -> Result<()> {
+    let invite = qurb_peer::Invite::parse(&code)?;
+    if !invite.guest {
+        bail!("that code adds one of your own devices; use `qurb join` for that");
+    }
+    let (_, identity, store, config) = open(&root)?;
+    let store = Arc::new(Mutex::new(store));
+    let kind = kind_of(&store);
+    println!("Visiting as {}: check that the other computer shows {}.", config.name, invite.number_for(&identity.fingerprint()));
+    match qurb_peer::visit(&invite, &identity, store, &config.name, &kind, now()).await {
+        Ok(host) => {
+            println!("A guest of {} ({}) now.", host.name, host.fingerprint.short());
+            println!("Send it files with `qurb send <file> to {}`.", host.name);
+            Ok(())
+        }
+        Err(qurb_peer::Error::Declined) => bail!("the other computer said no"),
+        Err(e) => Err(e.into()),
+    }
+}
+
 /// Asked in the terminal: who wants to pair, the number it should be showing,
 /// and yes or no (decision 0053). Anything but yes is no, including a closed
 /// input, so an unattended `qurb pair` lets nobody in.
 async fn approve_in_terminal(asking: qurb_peer::Asking) -> bool {
-    let what = if asking.wants_key { "join, and take this device's key" } else { "pair" };
+    let what = if asking.guest {
+        "visit this computer as a guest, with its own key"
+    } else if asking.wants_key {
+        "join, and take this device's key"
+    } else {
+        "pair"
+    };
     let kind = asking.kind.as_deref().map(|k| format!(", a {k}")).unwrap_or_default();
     println!("\n{} ({}{kind}) wants to {what}.", asking.name, asking.fingerprint.short());
     println!("It should be showing {}. If it is not, someone else has this code.", asking.number);

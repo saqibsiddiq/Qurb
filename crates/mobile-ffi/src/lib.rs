@@ -758,6 +758,7 @@ pub fn join_new(
         name: paired.name,
         paired_at: now(),
         last_seen: None,
+        relation: "own".into(),
     })
 }
 
@@ -787,6 +788,9 @@ pub struct PairingRequest {
     pub number: String,
     /// Whether it asked for this phone's key, as a device with none does.
     pub wants_key: bool,
+    /// Whether it is another person's device, asking to visit as a guest
+    /// (decision 0060).
+    pub guest: bool,
 }
 
 /// Asked, while this phone shows a code, whether to let a device in
@@ -1059,6 +1063,7 @@ impl Qurb {
                     name: p.name,
                     paired_at: p.paired_at,
                     last_seen: p.last_seen,
+                    relation: p.relation.as_str().into(),
                 }
             })
             .collect())
@@ -1105,6 +1110,34 @@ impl Qurb {
         }))
     }
 
+    /// Visit another person's computer as a guest, with the guest code it
+    /// shows (decision 0060): this phone keeps its own key, shows the number
+    /// from [`pairing_number`] while the person there approves, and from then
+    /// on can send that computer files and be sent them.
+    pub fn visit_computer(&self, code: String) -> Result<PeerInfo, QurbError> {
+        let invite = qurb_peer::Invite::parse(&code)
+            .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
+        if !invite.guest {
+            return Err(QurbError::BadCode {
+                detail: "that code adds one of your own devices, not a visit as a guest".into(),
+            });
+        }
+        let identity = self.identity()?;
+        let store = self.shared_store()?;
+        let runtime = self.runtime()?;
+        let host = runtime
+            .block_on(qurb_peer::visit(&invite, &identity, store, &self.device_name, "phone", now()))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        Ok(PeerInfo {
+            fingerprint: hex(host.fingerprint.as_bytes()),
+            short: host.fingerprint.short(),
+            name: host.name,
+            paired_at: now(),
+            last_seen: None,
+            relation: "host".into(),
+        })
+    }
+
     /// Accept an invitation offered by another device.
     ///
     /// The usual direction for a phone: the desktop shows a QR code and the
@@ -1130,6 +1163,7 @@ impl Qurb {
             name: paired.name,
             paired_at: now(),
             last_seen: None,
+            relation: "own".into(),
         })
     }
 
@@ -1926,6 +1960,15 @@ impl Qurb {
                 return Ok(outcome);
             }
         };
+        // Computers this phone visits as a guest, met under a secret of their
+        // own, since the rendezvous service matches this person's devices by
+        // their key and another person's do not hold it (decision 0060).
+        if let Ok(meetings) = self.engine()?.store().db().meetings() {
+            let _guard = runtime.enter();
+            for (peer, secret) in meetings {
+                connector.meet(qurb_peer::Fingerprint::from_bytes(peer.fingerprint), secret);
+            }
+        }
 
         // Say how this device can be woken, so the service can poke it when
         // another device has something and this one is asleep. Registered on
@@ -2361,6 +2404,10 @@ pub struct PeerInfo {
     /// Unix seconds.
     pub paired_at: i64,
     pub last_seen: Option<i64>,
+    /// "own", one of this person's devices; "guest", another person's
+    /// visiting this one; or "host", another person's computer this phone
+    /// visits (decision 0060).
+    pub relation: String,
 }
 
 /// A pairing code as a QR code: `width` modules a side, row by row, `true`
@@ -2572,6 +2619,7 @@ impl Pairing {
                     kind: asking.kind,
                     number: asking.number,
                     wants_key: asking.wants_key,
+                    guest: asking.guest,
                 };
                 tokio::task::spawn_blocking(move || approver.approve(request)).await.unwrap_or(false)
             }
@@ -2594,6 +2642,7 @@ impl Pairing {
             name: paired.name,
             paired_at: now(),
             last_seen: None,
+            relation: "own".into(),
         })
     }
 

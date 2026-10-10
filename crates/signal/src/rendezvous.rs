@@ -39,6 +39,14 @@ impl GroupId {
         Self(derive(master, b"qurb/rendezvous-group/v1", None))
     }
 
+    /// The group two devices of different people meet in: a guest and the
+    /// computer it visits, from the secret given when the guest was welcomed
+    /// (decision 0060). Only those two hold it, so neither's other devices,
+    /// nor another guest, ever see the other's addresses.
+    pub fn for_meeting(secret: &[u8; 32]) -> Self {
+        Self(meeting(secret, b"qurb/meeting-group/v1", None))
+    }
+
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
@@ -52,6 +60,12 @@ impl MemberId {
     /// The identifier under which the device with this fingerprint announces.
     pub fn derive(master: &MasterKey, fingerprint: &[u8; 32]) -> Self {
         Self(derive(master, b"qurb/rendezvous-member/v1", Some(fingerprint)))
+    }
+
+    /// The identifier the device with this fingerprint announces under in a
+    /// meeting (see [`GroupId::for_meeting`]).
+    pub fn for_meeting(secret: &[u8; 32], fingerprint: &[u8; 32]) -> Self {
+        Self(meeting(secret, b"qurb/meeting-member/v1", Some(fingerprint)))
     }
 
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
@@ -70,6 +84,17 @@ fn derive(master: &MasterKey, label: &'static [u8], extra: Option<&[u8; 32]>) ->
     let base = master.derive(qurb_keys::Purpose::MetadataAuth);
 
     let mut hasher = blake3::Hasher::new_keyed(base.as_bytes());
+    hasher.update(label);
+    if let Some(extra) = extra {
+        hasher.update(extra);
+    }
+    *hasher.finalize().as_bytes()
+}
+
+/// The same shape as [`derive`], keyed by a meeting secret rather than by
+/// one person's key.
+fn meeting(secret: &[u8; 32], label: &'static [u8], extra: Option<&[u8; 32]>) -> [u8; 32] {
+    let mut hasher = blake3::Hasher::new_keyed(secret);
     hasher.update(label);
     if let Some(extra) = extra {
         hasher.update(extra);

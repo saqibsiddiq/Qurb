@@ -47,6 +47,9 @@ pub struct Device {
     pub fingerprint: String,
     pub paired_at: i64,
     pub last_seen: Option<i64>,
+    /// Who it is to this device: one of the same person's, a guest of this
+    /// computer, or a computer this device visits (decision 0060).
+    pub relation: qurb_storage::db::Relation,
 }
 
 /// Where a file's bytes are. Decided in the storage crate, so that the phone,
@@ -148,6 +151,7 @@ impl<'a> View<'a> {
                 fingerprint: p.fingerprint[..4].iter().map(|b| format!("{b:02x}")).collect(),
                 paired_at: p.paired_at,
                 last_seen: p.last_seen,
+                relation: p.relation,
             })
             .collect())
     }

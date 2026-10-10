@@ -69,15 +69,40 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
         val cards = mutableListOf<View>()
         cards += card(page, R.drawable.ic_smartphone, android.os.Build.MODEL ?: "This phone",
             "This phone", on = true, extra = null, onTap = null)
-        for (peer in peers) {
-            val seen = peer.lastSeen?.let { "Last seen ${Words.ago(it)}" } ?: "Not seen yet"
-            val card = card(page, States.device(peer.name), peer.name, seen, on = false,
-                extra = if (peer.fingerprint in holders) "Keeps a backup of your Private Vault" else null) {
-                open(peer, peer.fingerprint in holders)
-            }
-            if (peer.fingerprint in arrived && !Kit.calm()) materialise(card)
-            cards += card
+        // This person's own devices, then other people's computers this phone
+        // visits as a guest (decision 0060).
+        val (own, visited) = peers.partition { it.relation == "own" }
+        for (peer in own) cards += deviceCard(page, peer, holders)
+        layOut(page, cards)
+        if (visited.isNotEmpty()) {
+            kit.section(page, "Computers you visit")
+            layOut(page, visited.map { deviceCard(page, it, holders) })
         }
+
+        if (peers.isEmpty()) {
+            kit.empty(page, R.drawable.ic_monitor_smartphone,
+                "Add your computer or another phone, and your files move between them. On a computer, " +
+                    "open Qurb, go to Devices and choose Add a device.",
+                "Add a device") { app.pair() }
+        }
+    }
+
+    private fun deviceCard(page: LinearLayout, peer: PeerInfo, holders: Set<String>): View {
+        val seen = peer.lastSeen?.let { "Last seen ${Words.ago(it)}" } ?: "Not seen yet"
+        val extra = when {
+            peer.relation == "host" -> "You visit as a guest"
+            peer.fingerprint in holders -> "Keeps a backup of your Private Vault"
+            else -> null
+        }
+        val card = card(page, States.device(peer.name), peer.name, seen, on = false, extra = extra) {
+            open(peer, peer.fingerprint in holders)
+        }
+        if (peer.fingerprint in arrived && !Kit.calm()) materialise(card)
+        return card
+    }
+
+    /** Two to a row. */
+    private fun layOut(page: LinearLayout, cards: List<View>) {
         for (pair in cards.chunked(2)) {
             val row = LinearLayout(app).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -88,13 +113,6 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
             page.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { marginStart = -kit.dp(5); marginEnd = -kit.dp(5) })
-        }
-
-        if (peers.isEmpty()) {
-            kit.empty(page, R.drawable.ic_monitor_smartphone,
-                "Add your computer or another phone, and your files move between them. On a computer, " +
-                    "open Qurb, go to Devices and choose Add a device.",
-                "Add a device") { app.pair() }
         }
     }
 
@@ -136,6 +154,18 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
         val sheet = kit.sheet().header(States.device(peer.name), peer.name, seen)
         val facts = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
         val group = kit.group(facts)
+        if (peer.relation == "host") {
+            // Another person's computer: it is sent what this phone sends it,
+            // and keeps nothing else of this phone's (decision 0060).
+            kit.item(group, "Who", "Someone else's computer, which this phone visits as a guest. It sees only what you send it.")
+            kit.item(group, "Added", Words.ago(peer.pairedAt))
+            sheet.view(facts, top = 16)
+            sheet.action(R.drawable.ic_send, "Send files…") { app.pickFilesToSend(peer) }
+            sheet.action(R.drawable.ic_x, "Stop visiting…", danger = true) { askToRemove(peer) }
+            sheet.text("Identity ${peer.short}", R.style.Text_Meta)
+            sheet.show()
+            return
+        }
         kit.toggle(group, "Keep a backup of my Private Vault",
             if (keeps) "${peer.name} keeps a copy of what this phone keeps private, where nobody using it sees it."
             else "Choose this, and this phone can free its own copies of private files without losing them.",

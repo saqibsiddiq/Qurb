@@ -51,7 +51,7 @@ pub enum Pairing {
     Waiting,
     /// A device presented the code and waits for the person here to approve
     /// it, comparing the number it shows (decision 0053).
-    Asking { name: String, kind: Option<String>, number: String, wants_key: bool },
+    Asking { name: String, kind: Option<String>, number: String, wants_key: bool, guest: bool },
     /// A device presented the right token.
     Paired { name: String, fingerprint: String },
     /// Five minutes passed. The code is dead and a new one is needed.
@@ -84,6 +84,7 @@ impl Attempt {
             kind: asking.kind.clone(),
             number: asking.number.clone(),
             wants_key: asking.wants_key,
+            guest: asking.guest,
         });
         told
     }

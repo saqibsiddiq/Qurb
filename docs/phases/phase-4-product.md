@@ -1276,6 +1276,23 @@ the history and the window's notification say why. `qurb send` now says
 *read from where it is when Laptop collects it*, not how much it stored.
 Decision 0060 has the detail and what is left.
 
+## Guests
+
+**2026-10-10**, step 2 of [decision 0060](../decisions/0060-a-computer-keeps-private-folders-for-several-people.md).
+Another person's device can now visit a computer as a guest, keeping its
+own key. *Add a person* in the window, or `qurb pair --guest`, shows a guest
+code; the guest's device visits with it, and the person at the computer
+approves by number, as with any pairing. The two are given a secret to meet
+under at the rendezvous service, since the service matches one person's
+devices by their key. Each shows the other only what was sent to it,
+decided by the server on every request.
+
+Watched on the laptop with two scratch folders, each with its own key and a
+rendezvous service of its own on a spare port. The guest got the file the
+computer sent it, and not the computer's shared file; the computer got the
+guest's file in Downloads. The two found each other through their meeting
+in about a second. Not yet between two people's real devices.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

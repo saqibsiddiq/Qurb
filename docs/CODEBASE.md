@@ -389,6 +389,26 @@ to have them. Keeping it locally again fetches everything back. This is the
 *choosing* half of selective sync; the storage limit is the other half. See
 [decisions/0045](decisions/0045-a-folder-kept-remotely.md).
 
+**Another person's device can visit a computer as a guest.** Everything
+above is one person's devices, holding one key. A guest is another person's
+device, with its own key ([decisions/0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md)).
+The computer shows a guest code (`qurbg1-…`, *Add a person* in the window,
+`qurb pair --guest`). The guest's device visits with it (`Request::Visit`,
+*Visit someone's computer* on the phone, `qurb visit`). The computer's person
+approves by number, and nothing of the computer's key is given. Each side
+records the other in `peer_relations` (*guest*, or *host* on the guest's
+side), and both are given a **meeting secret** (`meetings`). The rendezvous
+service matches one person's devices by a group derived from their key, so
+the two announce under a group and member derived from the meeting secret
+instead: one more rendezvous session per meeting (`Connector::meet`). From
+then on each shows the other only what was sent to it. That is the `Guest`
+audience, chosen by the server from the relation on every request: no shared
+area, no vault kept for anyone, and manifests and chunks refused for
+anything else. The engine takes only deliveries from another person's device
+whatever it is offered. A guest's copy never counts as one to ask for.
+Guests are step 2 of 0060. Their private folders on the computer are step 3
+and not built yet.
+
 ### 2.7 The index remembers what happened, not just what is
 
 Everything above describes the index as a picture of the present: these paths,
@@ -655,7 +675,7 @@ qurb/
 │   ├── qurb/              The program a person runs.
 │   │   ├── src/lib.rs       the daemon, as a library, so an interface can
 │   │   │                    run the same one the terminal does
-│   │   ├── src/main.rs      init, enrol, pair, join, run, replica, status,
+│   │   ├── src/main.rs      init, enrol, pair, join, visit, run, replica, status,
 │   │   │                    verify, reclaim, fetch, free, private,
 │   │   │                    unprivate, send, cancel, holders,
 │   │   │                    remove-device, conflicts, share, keep, deleted,
@@ -901,6 +921,7 @@ for the workspace as it stands.
 | Wire format | length-bounded; decoder has no panicking path |
 | Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s under Cubic, barely faster than one at a time ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)); the next row is what changed that |
 | Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md) |
+| Guests | another person's device visits with a guest code, keeping its own key; the two meet at the rendezvous service under a secret of their own and are shown each other only what was sent to them (the `Guest` audience) — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |

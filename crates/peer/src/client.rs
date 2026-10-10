@@ -445,6 +445,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::NotFound => "not-found",
         Response::Noted => "acknowledgement",
         Response::Paired { .. } => "pairing reply",
+        Response::Welcome { .. } => "guest welcome",
         Response::Key { .. } => "key",
         Response::About { .. } => "description",
         Response::Mismatch => "key mismatch",

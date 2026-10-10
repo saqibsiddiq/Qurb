@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -540,13 +540,37 @@ CREATE TABLE IF NOT EXISTS send_sources (
 ) STRICT;
 "#;
 
+const V20: &str = r#"
+-- Who a peer is to this device (decision 0060), for a device of another
+-- person: 'guest', visiting this computer, or 'host', a computer this device
+-- visits. No row is one of the same person's devices, as every peer was
+-- before. A guest or a host holds a different key, and is shown only what is
+-- addressed to it. A table of its own, like `peer_kinds`, rather than a
+-- column, so that the migration can run again safely.
+CREATE TABLE IF NOT EXISTS peer_relations (
+    device_id BLOB PRIMARY KEY,
+    relation  TEXT NOT NULL
+) STRICT;
+
+-- The secret a guest and the computer it visits meet under: what both
+-- announce with at the rendezvous service, which matches the devices of one
+-- person by a group derived from their key, and a guest does not have it.
+CREATE TABLE IF NOT EXISTS meetings (
+    device_id BLOB PRIMARY KEY,
+    secret    BLOB NOT NULL
+) STRICT;
+"#;
+
 /// A copy this device could ask for: on a device it is paired with, and not
 /// known to be out of reach (decision 0055). For a query over `replicas r`.
 ///
 /// What a person is shown as "on another device". A copy recorded for a device
 /// never paired with this one -- the device that made a file, reached through
 /// another -- or for one since removed is a copy this device cannot get back.
-const ASKABLE: &str = "r.private = 0 AND EXISTS (SELECT 1 FROM peers p WHERE p.device_id = r.device_id)";
+///
+/// Only one of this person's own devices: a guest's copy, or a host's, is
+/// another person's, and nothing here can ask for it back (decision 0060).
+const ASKABLE: &str = "r.private = 0 AND EXISTS (SELECT 1 FROM peers p WHERE p.device_id = r.device_id) AND NOT EXISTS (SELECT 1 FROM peer_relations pr WHERE pr.device_id = r.device_id)";
 
 /// A copy held by a device not known to be a phone (decision 0053): the other
 /// copy that lets this device free its own. For a query over `replicas r`.
@@ -1059,10 +1083,14 @@ impl Db {
     ///   again called three of its old photos the only copy, which the laptop
     ///   also had.
     pub fn unconfirmed_holdings(&self, device: &DeviceId, limit: usize) -> Result<Vec<blake3::Hash>> {
+        // Not another person's device: what it holds is in its own vault,
+        // which its server rightly shows nobody, and is never a copy this
+        // device could ask for (decision 0060). Asking would only learn no.
         let mut stmt = self.conn.prepare(
             "SELECT DISTINCT f.content_hash
                FROM files f
               WHERE f.deleted_at IS NULL
+                AND NOT EXISTS (SELECT 1 FROM peer_relations pr WHERE pr.device_id = ?1)
                 AND (f.scope IS NULL OR f.scope = (SELECT device_id FROM local WHERE id = 1))
                 AND NOT EXISTS (
                       SELECT 1 FROM confirmed c
@@ -1656,6 +1684,15 @@ impl Db {
                 ))?;
                 let rows = stmt.query_map([], file_row)?;
                 rows.map(|row| Ok(row_to_version(&row?))).collect()
+            }
+            Audience::Guest(asker) => {
+                // Only what is addressed to it: sends into its vault. Never the
+                // shared area, never anything kept for anyone (decision 0060).
+                let mut stmt = self.conn.prepare(&format!(
+                    "SELECT {FILE_COLUMNS} FROM files WHERE scope = ?1 AND held = 0 ORDER BY path"
+                ))?;
+                let rows = stmt.query_map(params![asker.as_bytes().as_slice()], file_row)?;
+                rows.map(|row| Ok(row_to_version(&row?).in_area(qurb_sync::Area::Sent))).collect()
             }
             Audience::Device(asker) => {
                 // Two queries rather than one, so that each version is marked
@@ -2385,6 +2422,20 @@ impl Db {
         if matches!(audience, Audience::Ourselves) {
             return Ok(true);
         }
+        if let Audience::Guest(guest) = audience {
+            // What was sent to it, and nothing else, however the bytes are
+            // shared with anything here.
+            let visible: Option<i64> = self
+                .conn
+                .query_row(
+                    "SELECT 1 FROM file_chunks fc JOIN files f ON f.id = fc.file_id
+                      WHERE fc.chunk_hash = ?1 AND f.scope = ?2 AND f.held = 0 LIMIT 1",
+                    params![hash.as_bytes().as_slice(), guest.as_bytes().as_slice()],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            return Ok(visible.is_some());
+        }
         let owner = audience.device().map(|d| d.as_bytes().to_vec());
         let visible: Option<i64> = self
             .conn
@@ -2416,6 +2467,17 @@ impl Db {
     ) -> Result<bool> {
         if matches!(audience, Audience::Ourselves) {
             return Ok(true);
+        }
+        if let Audience::Guest(guest) = audience {
+            let visible: Option<i64> = self
+                .conn
+                .query_row(
+                    "SELECT 1 FROM files WHERE content_hash = ?1 AND scope = ?2 AND held = 0 LIMIT 1",
+                    params![content.as_bytes().as_slice(), guest.as_bytes().as_slice()],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            return Ok(visible.is_some());
         }
         let owner = audience.device().map(|d| d.as_bytes().to_vec());
         let visible: Option<i64> = self
@@ -2702,8 +2764,9 @@ impl Db {
 
     pub fn trusted_peers(&self) -> Result<Vec<TrustedPeer>> {
         let mut stmt = self.conn.prepare(
-            "SELECT device_id, fingerprint, name, paired_at, last_seen
-               FROM peers ORDER BY name",
+            "SELECT p.device_id, p.fingerprint, p.name, p.paired_at, p.last_seen, pr.relation
+               FROM peers p LEFT JOIN peer_relations pr ON pr.device_id = p.device_id
+              ORDER BY p.name",
         )?;
         let rows = stmt.query_map([], peer_row)?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
@@ -2717,8 +2780,9 @@ impl Db {
     pub fn peer_by_fingerprint(&self, fingerprint: &[u8; 32]) -> Result<Option<TrustedPeer>> {
         self.conn
             .query_row(
-                "SELECT device_id, fingerprint, name, paired_at, last_seen
-                   FROM peers WHERE fingerprint = ?1",
+                "SELECT p.device_id, p.fingerprint, p.name, p.paired_at, p.last_seen, pr.relation
+                   FROM peers p LEFT JOIN peer_relations pr ON pr.device_id = p.device_id
+                  WHERE p.fingerprint = ?1",
                 params![fingerprint.as_slice()],
                 peer_row,
             )
@@ -2753,8 +2817,73 @@ impl Db {
         tx.execute("UPDATE replicas SET private = 1 WHERE device_id = ?1", params![id])?;
         tx.execute("DELETE FROM reported WHERE device_id = ?1", params![id])?;
         tx.execute("DELETE FROM confirmed WHERE device_id = ?1", params![id])?;
+        tx.execute("DELETE FROM meetings WHERE device_id = ?1", params![id])?;
+        tx.execute("DELETE FROM peer_relations WHERE device_id = ?1", params![id])?;
         tx.commit()?;
         Ok(n > 0)
+    }
+
+    /// Record another person's device, with the secret the two meet under
+    /// (decision 0060): a guest of this computer, or a computer this device
+    /// visits.
+    pub fn trust_visitor(
+        &self,
+        device: &DeviceId,
+        fingerprint: &[u8; 32],
+        name: &str,
+        relation: Relation,
+        secret: &[u8; 32],
+    ) -> Result<()> {
+        self.trust_peer(device, fingerprint, name)?;
+        self.conn.execute(
+            "INSERT INTO peer_relations (device_id, relation) VALUES (?1, ?2)
+             ON CONFLICT (device_id) DO UPDATE SET relation = excluded.relation",
+            params![device.as_bytes().as_slice(), relation.as_str()],
+        )?;
+        self.conn.execute(
+            "INSERT INTO meetings (device_id, secret) VALUES (?1, ?2)
+             ON CONFLICT (device_id) DO UPDATE SET secret = excluded.secret",
+            params![device.as_bytes().as_slice(), secret.as_slice()],
+        )?;
+        Ok(())
+    }
+
+    /// Who `device` is to this one, if it is paired.
+    pub fn relation_of(&self, device: &DeviceId) -> Result<Option<Relation>> {
+        self.conn
+            .query_row(
+                "SELECT pr.relation FROM peers p
+                   LEFT JOIN peer_relations pr ON pr.device_id = p.device_id
+                  WHERE p.device_id = ?1",
+                params![device.as_bytes().as_slice()],
+                |r| r.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map(|found| found.map(|word| word.map_or(Relation::Own, |w| Relation::parse(&w))))
+            .map_err(Into::into)
+    }
+
+    /// Every device of another person, with the secret this device meets it
+    /// under.
+    pub fn meetings(&self) -> Result<Vec<(TrustedPeer, [u8; 32])>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT p.device_id, p.fingerprint, p.name, p.paired_at, p.last_seen, pr.relation, m.secret
+               FROM peers p JOIN meetings m ON m.device_id = p.device_id
+               LEFT JOIN peer_relations pr ON pr.device_id = p.device_id
+              ORDER BY p.name",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let secret: Vec<u8> = r.get(6)?;
+            Ok((peer_row(r)?, secret))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (peer, secret) = row?;
+            if let Ok(secret) = <[u8; 32]>::try_from(secret) {
+                out.push((peer, secret));
+            }
+        }
+        Ok(out)
     }
 
         /// A stamp of the rule files as the index has them: changes whenever any
@@ -3148,6 +3277,44 @@ pub struct TrustedPeer {
     pub name: String,
     pub paired_at: i64,
     pub last_seen: Option<i64>,
+    /// Who it is to this device (decision 0060).
+    pub relation: Relation,
+}
+
+/// Who a paired device is to this one (decision 0060).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Relation {
+    /// One of the same person's devices, holding the same key.
+    Own,
+    /// Another person's device, visiting this computer.
+    Guest,
+    /// A computer this device visits, of another person.
+    Host,
+}
+
+impl Relation {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Relation::Own => "own",
+            Relation::Guest => "guest",
+            Relation::Host => "host",
+        }
+    }
+
+    /// Unknown words read as `Own`'s opposite: a peer whose relation this
+    /// build cannot read is shown no more than a guest is.
+    pub fn parse(word: &str) -> Self {
+        match word {
+            "own" => Relation::Own,
+            "host" => Relation::Host,
+            _ => Relation::Guest,
+        }
+    }
+
+    /// Whether it is another person's device.
+    pub fn is_other_person(self) -> bool {
+        self != Relation::Own
+    }
 }
 
 fn peer_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrustedPeer> {
@@ -3159,6 +3326,7 @@ fn peer_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrustedPeer> {
         name: r.get(2)?,
         paired_at: r.get(3)?,
         last_seen: r.get(4)?,
+        relation: r.get::<_, Option<String>>(5)?.map_or(Relation::Own, |w| Relation::parse(&w)),
     })
 }
 
@@ -3543,6 +3711,10 @@ pub enum Audience<'a> {
     /// A peer whose device this store recognises. Sees the shared area and
     /// that device's own vault, and never anybody else's.
     Device(&'a DeviceId),
+    /// A device of another person: a guest of this computer, or a computer
+    /// this device visits (decision 0060). Sees only what was sent to it --
+    /// never the shared area, never a vault kept for anyone.
+    Guest(&'a DeviceId),
     /// A peer that authenticated but whose device is not recorded here. Sees
     /// the shared area only.
     ///
@@ -3557,7 +3729,7 @@ pub enum Audience<'a> {
 impl<'a> Audience<'a> {
     fn device(&self) -> Option<&'a DeviceId> {
         match self {
-            Audience::Device(device) => Some(device),
+            Audience::Device(device) | Audience::Guest(device) => Some(device),
             _ => None,
         }
     }

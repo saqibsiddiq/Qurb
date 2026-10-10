@@ -95,6 +95,12 @@ pub enum Request {
     /// What kind of device this is. Asked of a peer paired before devices
     /// said so when pairing.
     About,
+
+    /// Ask to visit as a guest: another person's device, with its own key,
+    /// presenting a guest invite's token (decision 0060). Answered with
+    /// [`Response::Welcome`] once the person at the computer approves; no key
+    /// is asked for or given.
+    Visit { token: [u8; 16], device_id: [u8; 32], name: String, kind: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,6 +132,11 @@ pub enum Response {
     /// Acknowledgement of [`Request::Got`]. Carries nothing.
     Noted,
 
+    /// A guest welcomed, answering [`Request::Visit`]: the computer's own
+    /// identity and kind, and the secret the two devices meet under at the
+    /// rendezvous service (decision 0060).
+    Welcome { device_id: [u8; 32], name: String, kind: String, meeting: [u8; 32] },
+
     /// Where the peer's state has got to.
     ///
     /// Returned both when something changed and when the wait timed out, since
@@ -141,6 +152,7 @@ const TAG_CHANGES: u8 = 5;
 const TAG_GOT: u8 = 6;
 const TAG_JOIN: u8 = 7;
 const TAG_ABOUT: u8 = 8;
+const TAG_VISIT: u8 = 9;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
@@ -153,6 +165,7 @@ const STATUS_KEY: u8 = 8;
 const STATUS_ABOUT: u8 = 9;
 const STATUS_MISMATCH: u8 = 10;
 const STATUS_DECLINED: u8 = 11;
+const STATUS_WELCOME: u8 = 12;
 
 impl Request {
     pub fn encode(&self) -> Vec<u8> {
@@ -182,6 +195,13 @@ impl Request {
                 put_name(&mut out, name);
                 put_name(&mut out, kind);
                 out.extend_from_slice(key_check);
+            }
+            Request::Visit { token, device_id, name, kind } => {
+                out.push(TAG_VISIT);
+                out.extend_from_slice(token);
+                out.extend_from_slice(device_id);
+                put_name(&mut out, name);
+                put_name(&mut out, kind);
             }
             Request::Join { token, name, kind } => {
                 out.push(TAG_JOIN);
@@ -219,6 +239,11 @@ impl Request {
                 Request::Join { token, name: r.name()?, kind: r.name()? }
             }
             TAG_ABOUT => Request::About,
+            TAG_VISIT => {
+                let mut token = [0u8; 16];
+                token.copy_from_slice(r.take(16)?);
+                Request::Visit { token, device_id: r.hash()?, name: r.name()?, kind: r.name()? }
+            }
             tag => return Err(Error::Protocol { detail: format!("unknown request tag {tag}") }),
         };
         r.finished()?;
@@ -246,6 +271,13 @@ impl Response {
             Response::About { kind } => {
                 out.push(STATUS_ABOUT);
                 put_name(&mut out, kind);
+            }
+            Response::Welcome { device_id, name, kind, meeting } => {
+                out.push(STATUS_WELCOME);
+                out.extend_from_slice(device_id);
+                put_name(&mut out, name);
+                put_name(&mut out, kind);
+                out.extend_from_slice(meeting);
             }
             Response::Mismatch => out.push(STATUS_MISMATCH),
             Response::Declined => out.push(STATUS_DECLINED),
@@ -289,6 +321,12 @@ impl Response {
                 key_check: r.hash()?,
             },
             STATUS_ABOUT => Response::About { kind: r.name()? },
+            STATUS_WELCOME => Response::Welcome {
+                device_id: r.hash()?,
+                name: r.name()?,
+                kind: r.name()?,
+                meeting: r.hash()?,
+            },
             STATUS_MISMATCH => Response::Mismatch,
             STATUS_DECLINED => Response::Declined,
             STATUS_KEY => Response::Key { key: r.hash()? },
@@ -507,6 +545,7 @@ mod tests {
                 kind: "computer".into(),
                 key_check: [7; 32],
             },
+            Request::Visit { token: [8; 16], device_id: [9; 32], name: "Ammi's phone".into(), kind: "phone".into() },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -526,6 +565,7 @@ mod tests {
             Response::Mismatch,
             Response::Declined,
             Response::Paired { device_id: [1; 32], name: "Phone".into(), kind: "phone".into(), key_check: [2; 32] },
+            Response::Welcome { device_id: [3; 32], name: "Laptop".into(), kind: "computer".into(), meeting: [4; 32] },
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);

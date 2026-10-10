@@ -92,6 +92,11 @@ Kotlin and Swift from the Rust — `crates/mobile-ffi`.
 out of band, in the code or QR, and every later connection is checked against
 it — *pinned*, so no certificate authority can vouch for an impostor.
 
+**Guest** — Another person's device visiting a computer, with its own key
+(decision 0060). It joins with a *guest code* and is shown only what is sent
+to it; on its side the computer is its *host*. The two find each other under
+a *meeting* secret of their own.
+
 **Holder** — A device that keeps a copy of another device's private files,
 in its store and never in its folder, so the owner — usually a phone — can
 free its own copies. A holder lets a file go only on the owner's deletion. See
@@ -149,6 +154,11 @@ Noise later is open — see
 rendezvous service forwards it to peers that are connected and keeps it for
 peers that are not, so a device that was asleep when a change happened learns of
 it on waking rather than at its next poll.
+
+**Meeting** — The secret a *guest* and the computer it visits are given when
+the guest is welcomed, from which both derive the group and identifiers they
+announce under at the rendezvous service. A guest does not hold the
+computer's person's key, so it cannot use theirs (decision 0060).
 
 **Pairing** — Introducing two devices so each trusts the other: one shows a
 code — a QR code, or words to type or read aloud — and the other enters it.

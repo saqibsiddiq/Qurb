@@ -502,6 +502,7 @@ impl Daemon {
             relay = ?relay,
             "listening"
         );
+        self.meet_visitors(&connector);
 
         // How far this device's own state has got. Peers hold a request open
         // against it, so they hear about a change within a round trip rather
@@ -642,7 +643,7 @@ impl Daemon {
                     if !here.still(&self.store_dir) {
                         return Err(self.folder_gone());
                     }
-                    self.refresh_trust(&trust, &mut peers);
+                    self.refresh_trust(&trust, &mut peers, &connector);
                     self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                 }
 
@@ -660,7 +661,7 @@ impl Daemon {
                         None => std::future::pending().await,
                     }
                 } => {
-                    if self.refresh_trust(&trust, &mut peers) {
+                    if self.refresh_trust(&trust, &mut peers, &connector) {
                         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
                     self.announce_deliveries(&engine, &connector, &peers);
@@ -683,7 +684,7 @@ impl Daemon {
                     if !here.still(&self.store_dir) {
                         return Err(self.folder_gone());
                     }
-                    if self.refresh_trust(&trust, &mut peers) {
+                    if self.refresh_trust(&trust, &mut peers, &connector) {
                         // Newly paired, so try it immediately: the person who
                         // just scanned the code is waiting to see their files.
                         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
@@ -737,7 +738,7 @@ impl Daemon {
                     }
                     let arrived: std::collections::BTreeSet<Fingerprint> = arrived
                         .into_iter()
-                        .filter_map(|member| peers.member(&self.master, member))
+                        .filter_map(|member| peers.member(&connector, member))
                         .collect();
                     for peer in &arrived {
                         tracing::info!(peer = %peer.short(), "a peer is reachable and has news; syncing now");
@@ -757,7 +758,13 @@ impl Daemon {
     /// devices, and this runs once a sweep rather than per connection.
     ///
     /// Returns whether anything was newly trusted, so the caller can act on it.
-    fn refresh_trust(&self, trust: &qurb_peer::tls::TrustList, peers: &mut Peers) -> bool {
+    fn refresh_trust(
+        &self,
+        trust: &qurb_peer::tls::TrustList,
+        peers: &mut Peers,
+        connector: &Connector,
+    ) -> bool {
+        self.meet_visitors(connector);
         let Ok(store) = self.open_store() else { return false };
         let Ok(current) = qurb_peer::trusted_fingerprints(&store) else { return false };
 
@@ -787,6 +794,22 @@ impl Daemon {
         let gained = !added.is_empty();
         trust.replace(current);
         gained
+    }
+
+    /// Meet every device of another person under its secret (decision 0060):
+    /// a guest of this computer, or a computer this device visits. Meeting
+    /// one already met changes nothing, so this runs with every look at the
+    /// trust store, and a guest welcomed meanwhile is met within it.
+    fn meet_visitors(&self, connector: &Connector) {
+        let Ok(store) = self.open_store() else { return };
+        match store.db().meetings() {
+            Ok(meetings) => {
+                for (peer, secret) in meetings {
+                    connector.meet(Fingerprint::from_bytes(peer.fingerprint), secret);
+                }
+            }
+            Err(e) => tracing::debug!(error = %e, "could not read who this device meets"),
+        }
     }
 
     /// Count what the store holds, for a status summary.
@@ -1220,11 +1243,10 @@ impl Peers {
     /// re-deriving the identifier for each peer we trust and looking for a
     /// match. That is a handful of hashes against a list of a person's own
     /// devices, not a search.
-    fn member(&self, master: &MasterKey, id: qurb_signal::MemberId) -> Option<Fingerprint> {
-        self.known
-            .iter()
-            .copied()
-            .find(|f| *qurb_signal::MemberId::derive(master, f.as_bytes()).as_bytes() == *id.as_bytes())
+    /// Through the connector, which knows which of them it meets under a
+    /// secret of their own (decision 0060).
+    fn member(&self, connector: &Connector, id: qurb_signal::MemberId) -> Option<Fingerprint> {
+        self.known.iter().copied().find(|f| *connector.member_of(f).as_bytes() == *id.as_bytes())
     }
 
     /// Whether this peer is already known.

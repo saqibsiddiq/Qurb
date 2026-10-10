@@ -1,7 +1,7 @@
 # 0060 — A computer keeps private folders for several people, and qurb keeps no copy of what it sends
 
-**Status:** Accepted, 2026-10-10, with the owner's answers at the end — step
-1 built (no copies kept), steps 2–6 not yet; supersedes [0023](0023-one-person-per-account.md) for people who
+**Status:** Accepted, 2026-10-10, with the owner's answers at the end — steps
+1 (no copies kept) and 2 (guests) built, steps 3–6 not yet; supersedes [0023](0023-one-person-per-account.md) for people who
 are not the computer's owner, and amends
 [0030](0030-sending-a-file-to-one-device.md) rules 1 and 4.
 **Date:** 2026-10-10
@@ -251,3 +251,93 @@ asserted the old rule were rewritten.
 - **Not watched on hardware**: the picker's document read in place on the
   S23 after the app was closed and opened again, and a send from the phone
   called off when its file was deleted.
+
+### Step 2, guests — the design, 2026-10-10
+
+**A guest is a peer of another person.** The peers table gains who a peer
+is to this device: one of the same person's devices, as every peer has been;
+a **guest**, another person visiting this computer; or a **host**, a computer
+this device visits. A guest holds its own key, so pairing as a guest skips
+0053's same-key check on purpose. Telling the two apart is what everything
+below rests on.
+
+**Pairing as a guest.** The computer shows a code for *Add a person*, marked
+as a guest invite. The guest's device, set up with its own key, joins with
+it (`Request::Visit`). The computer's person approves by the same six digits
+as any pairing (0053). Nothing about the computer's key is sent. The
+computer answers with a **meeting secret**, 32 random bytes over the
+authenticated connection, which only those two devices hold.
+
+**Finding each other.** The rendezvous service matches devices by a group
+derived from the shared key, which a guest does not have. So both devices
+also announce under a group and member derived from the meeting secret: one
+more rendezvous connection per guest. The service needs no change. That
+leaks nothing between people. Two guests of one computer are in different
+meetings and never see each other's addresses, and the service still sees
+only opaque values. Local beacons and the relay stay keyed to one person in
+this step: a guest reaches a computer through the rendezvous service, which
+carries its local addresses too.
+
+**What each shows the other.** A new audience, `Guest`, sees only what is
+addressed to it: sends into its vault, and in step 3 its folder. Never the
+shared area, never this device's own vault, never anything held. Manifests
+and chunks are refused for anything else, however asked. The audience is
+chosen from the peer's relation on every request, not trusted from the
+connection. And a device syncing with a peer of another person takes only
+deliveries from it. A shared-area version from another person is never
+adopted, even if one were offered.
+
+**Sending.** A guest sends into the computer's Downloads the way any device
+sends today: the computer collects from the guest. The computer can send to
+a guest the same way.
+
+**Protocol.** Two new messages, `Visit` and `Welcome`. A build without them
+refuses a guest invite, which is safe, so the protocol stays `qurb/2` for
+this step. Step 3's hidden-name folders are what change the meaning of
+existing messages and move it to `qurb/3`.
+
+### Step 2, guests — built 2026-10-10
+
+As designed above, with two changes found while building it:
+
+- **Relations are a table, `peer_relations`, not a column.** A test of the
+  upgrade path runs the newest migration again, and SQLite cannot add a
+  column twice. No row is one of the person's own devices.
+- **Asking a guest what it holds is skipped.** A device asks its peers about
+  copies recorded for them (0055). A guest's copies are deliveries in its own
+  vault, which its server rightly shows nobody. Asking would only learn
+  "no", and a "yes" would have marked the copy as one to ask for.
+
+Built on all three: `qurb pair --guest` and `qurb visit`; *Add a person* in
+the window's *Add a device*, guests listed apart, and the approval saying
+*wants to visit this computer as a guest*; on the phone, *Visit someone's
+computer*, any guest code scanned or typed treated as a visit, and
+*Computers you visit* listed apart, offering no Private Vault backup.
+
+Tests (`crates/peer/tests/guests.rs`): a guest invite round-trips and says
+so; a guest visits without the key, both sides holding the same meeting
+secret; a guest invite gives no key and pairs nobody as one's own; an
+ordinary invite refuses a visit; over a real connection a guest is shown
+only what was sent to it and refused a shared file's manifest; a guest takes
+only deliveries even when offered more; a guest's copy never counts as one
+to ask for. With the line choosing the guest audience disabled, the
+visibility test fails, showing the guest the computer's shared file.
+
+**Watched**: on the laptop, two scratch folders with different keys and a
+rendezvous service of their own on a spare port. One was welcomed as the
+other's guest from the command line, approved at the matching number
+(151 739). Both daemons ran, found each other through their meeting, and
+synced one file each way. The guest got what it was sent and not the
+computer's shared file; the computer got the guest's send in Downloads. The
+window's guest screens were looked at against its fixtures, and the smoke
+test passed.
+
+**Not done in step 2:**
+
+- Local beacons, the relay and push stay keyed to one person. A guest finds
+  a computer only through the rendezvous service, which carries its local
+  addresses too. A guest phone is not woken by push when the computer has
+  something for it; it collects at its next sync.
+- A phone cannot welcome guests; only computers show guest codes.
+- **Not watched on hardware.** A second person's phone is needed; until one
+  is borrowed, the emulator can play the guest.

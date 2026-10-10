@@ -346,6 +346,7 @@ async fn serve_request(
         Response::NotFound
         | Response::Noted
         | Response::Paired { .. }
+        | Response::Welcome { .. }
         | Response::Key { .. }
         | Response::About { .. }
         | Response::Mismatch
@@ -374,15 +375,16 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
     // trusted, and being stricter would break a paired device whose
     // bookkeeping is incomplete while buying nothing — vaults stay invisible
     // to it either way.
-    let owner = asker.and_then(|fingerprint| {
-        store
-            .db()
-            .peer_by_fingerprint(fingerprint.as_bytes())
-            .ok()
-            .flatten()
-            .map(|peer| peer.device_id)
+    let known = asker.and_then(|fingerprint| {
+        store.db().peer_by_fingerprint(fingerprint.as_bytes()).ok().flatten()
     });
+    let owner = known.as_ref().map(|peer| peer.device_id);
+    // Another person's device -- a guest of this computer, or a computer this
+    // device visits -- is shown only what was sent to it, decided here on
+    // every request from what the store says it is (decision 0060).
+    let other_person = known.as_ref().is_some_and(|peer| peer.relation.is_other_person());
     let audience = match &owner {
+        Some(device) if other_person => qurb_storage::db::Audience::Guest(device),
         Some(device) => qurb_storage::db::Audience::Device(device),
         None => qurb_storage::db::Audience::Unplaced,
     };
@@ -414,7 +416,7 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // certificates. This one only ever talks to devices already trusted, so
         // a pairing request here is either a mistake or a probe.
         // And the key, above all, is never handed out here.
-        Request::Pair { .. } | Request::Join { .. } => Response::NotFound,
+        Request::Pair { .. } | Request::Join { .. } | Request::Visit { .. } => Response::NotFound,
 
         // What kind of device this is, for a peer paired before devices said
         // so (decision 0053). Not found until whatever opened the store has
@@ -455,7 +457,10 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
                     let held = store.db().holds_for(&content, device).unwrap_or(false);
                     let recorded = if held {
                         store.note_replica_in_vault(&content, device)
-                    } else if vault_only {
+                    } else if vault_only || other_person {
+                        // Another person's copy is one nothing here can ask
+                        // for back, wherever else the bytes are (decision
+                        // 0060): never an ordinary replica.
                         // The sender's side of a completed delivery, and the
                         // only moment it can be observed: after this the copy
                         // here is releasable and may simply vanish.

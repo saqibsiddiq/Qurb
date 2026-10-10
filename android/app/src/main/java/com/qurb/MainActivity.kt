@@ -670,6 +670,11 @@ class MainActivity : AppCompatActivity() {
             }
             .action(R.drawable.ic_smartphone, "Show a code on this phone") { ShowCode.show(this) }
             .action(R.drawable.ic_keyboard, "Type a code") { typeCode() }
+            // Another person's computer, as a guest (decision 0060). Its code
+            // says so, so scanning it from here or above does the same.
+            .action(R.drawable.ic_laptop, "Visit someone's computer") {
+                scanner.launch(Intent(this, ScanActivity::class.java))
+            }
             .show()
     }
 
@@ -699,12 +704,18 @@ class MainActivity : AppCompatActivity() {
                     pairingNumber(Engine.root(this@MainActivity).absolutePath, code)
                 }
                 val showing = Approval.showWhileJoining(this@MainActivity, number)
+                // A guest code: another person's computer, which this phone
+                // visits keeping its own key (decision 0060).
+                val guest = code.trim().lowercase().startsWith("qurbg1-")
                 val peer = try {
-                    withContext(Dispatchers.IO) { Engine.open(this@MainActivity).joinPairing(code) }
+                    withContext(Dispatchers.IO) {
+                        val engine = Engine.open(this@MainActivity)
+                        if (guest) engine.visitComputer(code) else engine.joinPairing(code)
+                    }
                 } finally {
                     showing.dismiss()
                 }
-                say("Connected to ${peer.name}")
+                say(if (guest) "You visit ${peer.name} as a guest now" else "Connected to ${peer.name}")
                 madeChange()
             } catch (e: Exception) {
                 fail("Could not connect", e)

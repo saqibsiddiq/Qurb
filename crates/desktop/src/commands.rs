@@ -125,6 +125,8 @@ pub struct Device {
     route: Option<&'static str>,
     /// The address at the other end of that connection, for the details.
     address: Option<String>,
+    /// "own", "guest" or "host" (decision 0060).
+    relation: &'static str,
 }
 
 #[derive(Serialize)]
@@ -669,11 +671,22 @@ pub struct PairingState {
     number: Option<String>,
     kind: Option<String>,
     wants_key: bool,
+    /// Another person's device, asking to visit as a guest (decision 0060).
+    guest: bool,
 }
 
 impl PairingState {
     fn of(state: &'static str) -> Self {
-        Self { state, name: None, fingerprint: None, message: None, number: None, kind: None, wants_key: false }
+        Self {
+            state,
+            name: None,
+            fingerprint: None,
+            message: None,
+            number: None,
+            kind: None,
+            wants_key: false,
+            guest: false,
+        }
     }
 }
 
@@ -812,8 +825,12 @@ pub fn send_files(
 /// socket with. Tauri runs a synchronous command on the main thread, outside
 /// the runtime; this one was synchronous until 2026-09-28 and failed every
 /// time with "no async runtime found", which the fixture page could not show.
+///
+/// With `guest`, the code is for another person's device to visit this
+/// computer as a guest, keeping its own key (decision 0060).
 #[tauri::command]
-pub async fn start_pairing(hosted: Host<'_>) -> Answer<Invitation> {
+pub async fn start_pairing(hosted: Host<'_>, guest: Option<bool>) -> Answer<Invitation> {
+    let guest = guest.unwrap_or(false);
     let (store, identity, name) = hosted.for_pairing().map_err(failed)?;
     let master = hosted.master().map_err(failed)?;
     let now = now();
@@ -823,8 +840,12 @@ pub async fn start_pairing(hosted: Host<'_>) -> Answer<Invitation> {
     // pairing screen that could not open while syncing was working — which is
     // every time somebody would use it. The invite carries whatever port this
     // gets, so the far end dials the right one either way.
-    let host = qurb_peer::PairingHost::open("0.0.0.0:0".parse().unwrap(), &identity, now)
-        .map_err(failed)?;
+    let bind = "0.0.0.0:0".parse().unwrap();
+    let host = match guest {
+        true => qurb_peer::PairingHost::open_for_guest(bind, &identity, now),
+        false => qurb_peer::PairingHost::open(bind, &identity, now),
+    }
+    .map_err(failed)?;
 
     let code = host.invite().encode();
     let spoken = host.invite().for_humans();
@@ -879,11 +900,12 @@ pub fn pairing_state(hosted: Host<'_>) -> Answer<PairingState> {
 
     Ok(match attempt.state() {
         Pairing::Waiting => PairingState::of("waiting"),
-        Pairing::Asking { name, kind, number, wants_key } => PairingState {
+        Pairing::Asking { name, kind, number, wants_key, guest } => PairingState {
             name: Some(name),
             number: Some(number),
             kind,
             wants_key,
+            guest,
             ..PairingState::of("asking")
         },
         Pairing::Paired { name, fingerprint } => PairingState {
@@ -1359,6 +1381,7 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
                 fingerprint: d.fingerprint,
                 paired_at: d.paired_at,
                 last_seen: d.last_seen,
+                relation: d.relation.as_str(),
             }
         })
         .collect())

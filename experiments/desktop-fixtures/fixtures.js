@@ -41,6 +41,8 @@ const WORDS = [
 let startedPairingAt = 0;
 // The person's answer to a device asking to join: null until given.
 let pairingAnswer = null;
+// Whether the code on screen is a guest code (decision 0060).
+let pairingGuest = false;
 
 /** One directory, as `browse` answers it. */
 function browse({ dir, private: priv }) {
@@ -140,8 +142,8 @@ const ANSWERS = {
   // Pairing. The code is the shape of a real one and is not a real one; the
   // QR is generated here rather than by the Rust renderer, so it encodes the
   // fixture string and nothing else.
-  start_pairing: () => ({
-    code: "qurb1-" + "k7fq".repeat(25),
+  start_pairing: ({ guest } = {}) => ({
+    code: (guest ? "qurbg1-" : "qurb1-") + "k7fq".repeat(25),
     spoken: "kilo seven foxtrot quebec · romeo two delta · sierra nine whiskey",
     expires_at: now + 300,
     // None, unless a script has put a real one from the Rust renderer in
@@ -158,7 +160,9 @@ const ANSWERS = {
     const waiting = { state: "waiting", name: null, fingerprint: null, message: null };
     if (since < 4 || pairingAnswer === false) return waiting;
     if (pairingAnswer === true) return { state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null };
-    return { ...waiting, state: "asking", name: "Pixel 8", number: "232 760", kind: "phone", wants_key: false };
+    // A guest code is answered by somebody else's phone (decision 0060).
+    if (pairingGuest) return { ...waiting, state: "asking", name: "Ammi's phone", number: "418 205", kind: "phone", wants_key: false, guest: true };
+    return { ...waiting, state: "asking", name: "Pixel 8", number: "232 760", kind: "phone", wants_key: false, guest: false };
   },
 
   // A file called tickets.pdf went to the device three days ago, so the
@@ -266,7 +270,10 @@ const ANSWERS = {
     { id: "4cef0d89", name: "Galaxy S23", fingerprint: "a1b2c3d4", paired_at: now - 900000, last_seen: now - 300,
       route: STATE === "away" ? null : "direct", address: "192.168.1.2:57199" },
     { id: "77b10e2a", name: "Study desktop", fingerprint: "e5f60718", paired_at: now - 3600, last_seen: now - 7200,
-      route: STATE === "synced" ? "relay" : null, address: null },
+      route: STATE === "synced" ? "relay" : null, address: null, relation: "own" },
+    // Another person, visiting this computer (decision 0060).
+    { id: "9d01c3aa", name: "Ammi's phone", fingerprint: "c0ffee12", paired_at: now - 86400, last_seen: now - 600,
+      route: null, address: null, relation: "guest" },
   ],
 
   activity: ({ before }) => {
@@ -399,7 +406,7 @@ window.__TAURI__ = {
 
   core: {
     invoke: async (name, args = {}) => {
-      if (name === "start_pairing") { startedPairingAt = Math.floor(Date.now() / 1000); pairingAnswer = null; }
+      if (name === "start_pairing") { startedPairingAt = Math.floor(Date.now() / 1000); pairingAnswer = null; pairingGuest = !!args?.guest; }
       const answer = ANSWERS[name];
       if (!answer) throw new Error(`no fixture for ${name}`);
       // A promise, like the real thing, so anything that depends on the call

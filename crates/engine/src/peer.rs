@@ -265,6 +265,18 @@ impl Engine {
     /// calls this too, never added it: asking for a freed shared file back on
     /// a phone did nothing, pass after pass. One planning function for both.
     pub fn plan_with(&self, remote: &[FileVersion], peer: Option<&DeviceId>) -> Result<Vec<Action>> {
+        // Another person's device -- a guest of this computer, or a computer
+        // this device visits -- is a source of deliveries and of nothing else
+        // (decision 0060). Its server shows it nothing more; this device takes
+        // nothing more either, so that a shared file of another person's is
+        // never adopted into this person's folder, whatever is offered.
+        if let Some(p) = peer {
+            if self.store().db().relation_of(p)?.is_some_and(|r| r.is_other_person()) {
+                let sent: Vec<FileVersion> =
+                    remote.iter().filter(|v| v.area == Area::Sent).cloned().collect();
+                return self.plan_against(&sent);
+            }
+        }
         let remote = self.shared_with(remote, peer)?;
         let remote = remote.as_slice();
         let mut actions = self.plan_against(remote)?;

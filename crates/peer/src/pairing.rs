@@ -46,6 +46,10 @@ use std::sync::{Arc, Mutex};
 pub const INVITE_LIFETIME_SECS: i64 = 300;
 
 const PREFIX: &str = "qurb1-";
+/// A guest invite: another person's device visiting a computer (decision
+/// 0060). Its own prefix, so that a build that knows nothing of guests refuses
+/// it as not a code, rather than pairing as one of this person's devices.
+const GUEST_PREFIX: &str = "qurbg1-";
 const TOKEN_LEN: usize = 16;
 
 /// What crosses the out-of-band channel.
@@ -58,6 +62,9 @@ pub struct Invite {
     /// port rather than the code.
     pub token: [u8; TOKEN_LEN],
     pub expires_at: i64,
+    /// For another person's device, visiting as a guest (decision 0060),
+    /// rather than for one of this person's own.
+    pub guest: bool,
 }
 
 impl Invite {
@@ -65,7 +72,11 @@ impl Invite {
         use rand::RngCore;
         let mut token = [0u8; TOKEN_LEN];
         rand::rngs::OsRng.fill_bytes(&mut token);
-        Self { fingerprint, address, token, expires_at: now + INVITE_LIFETIME_SECS }
+        Self { fingerprint, address, token, expires_at: now + INVITE_LIFETIME_SECS, guest: false }
+    }
+
+    fn prefix(&self) -> &'static str {
+        if self.guest { GUEST_PREFIX } else { PREFIX }
     }
 
     pub fn is_expired(&self, now: i64) -> bool {
@@ -90,15 +101,21 @@ impl Invite {
         }
         payload.extend_from_slice(&self.address.port().to_le_bytes());
 
-        format!("{PREFIX}{}", base32::encode(&payload))
+        format!("{}{}", self.prefix(), base32::encode(&payload))
     }
 
     pub fn parse(text: &str) -> Result<Self> {
         let trimmed = text.trim();
-        let body = trimmed
-            .strip_prefix(PREFIX)
-            .or_else(|| trimmed.strip_prefix(&PREFIX.to_uppercase()))
-            .ok_or_else(|| Error::BadInvite { detail: "not a pairing code".into() })?;
+        let strip = |prefix: &str| {
+            trimmed.strip_prefix(prefix).or_else(|| trimmed.strip_prefix(&prefix.to_uppercase()))
+        };
+        let (body, guest) = match strip(GUEST_PREFIX) {
+            Some(body) => (body, true),
+            None => (
+                strip(PREFIX).ok_or_else(|| Error::BadInvite { detail: "not a pairing code".into() })?,
+                false,
+            ),
+        };
 
         let payload = base32::decode(body)
             .ok_or_else(|| Error::BadInvite { detail: "code contains invalid characters".into() })?;
@@ -135,16 +152,17 @@ impl Invite {
             address: SocketAddr::new(ip, port),
             token,
             expires_at: i64::from_le_bytes(expiry),
+            guest,
         })
     }
 
     /// Grouped into fives, for someone reading it out.
     pub fn for_humans(&self) -> String {
         let encoded = self.encode();
-        let body = encoded.strip_prefix(PREFIX).unwrap_or(&encoded);
+        let body = encoded.strip_prefix(self.prefix()).unwrap_or(&encoded);
         let grouped: Vec<String> =
             body.as_bytes().chunks(5).map(|c| String::from_utf8_lossy(c).to_string()).collect();
-        format!("{PREFIX}{}", grouped.join("-"))
+        format!("{}{}", self.prefix(), grouped.join("-"))
     }
 }
 
@@ -188,6 +206,9 @@ pub struct Asking {
     pub number: String,
     /// Whether it asked for the key, as a device with none does.
     pub wants_key: bool,
+    /// Whether it is another person's device asking to visit as a guest
+    /// (decision 0060).
+    pub guest: bool,
 }
 
 /// The six digits both screens show while a device asks to pair: from the
@@ -249,6 +270,15 @@ impl PairingHost {
         let address = crate::nat::dialable(bound);
 
         Ok(Self { invite: Invite::new(identity.fingerprint(), address, now), endpoint })
+    }
+
+    /// The same, for another person's device to visit as a guest (decision
+    /// 0060): it keeps its own key, is shown only what is sent to it, and
+    /// meets this device under a secret of their own.
+    pub fn open_for_guest(bind: SocketAddr, identity: &Identity, now: i64) -> Result<Self> {
+        let mut host = Self::open(bind, identity, now)?;
+        host.invite.guest = true;
+        Ok(host)
     }
 
     pub fn invite(&self) -> &Invite {
@@ -328,6 +358,72 @@ impl PairingHost {
                 let Ok(raw) = recv.read_to_end(MAX_MESSAGE).await else { break };
 
                 match Request::decode(&raw) {
+                    // Another person's device, visiting as a guest, on a guest
+                    // invite and nothing else (decision 0060).
+                    Ok(Request::Visit { token, device_id, name, kind }) if self.invite.guest => {
+                        if !constant_time_eq(&token, &self.invite.token) {
+                            tracing::warn!(peer = %peer_fingerprint.short(), "wrong pairing token");
+                            answer(&mut send, &Response::NotFound, &connection).await;
+                            break;
+                        }
+                        let asking = Asking {
+                            name: sanitise(&name),
+                            kind: known_kind(&kind),
+                            fingerprint: peer_fingerprint,
+                            number: number.clone(),
+                            wants_key: false,
+                            guest: true,
+                        };
+                        if !approve(asking).await {
+                            answer(&mut send, &Response::Declined, &connection).await;
+                            break;
+                        }
+                        let meeting = {
+                            use rand::RngCore;
+                            let mut secret = [0u8; 32];
+                            rand::rngs::OsRng.fill_bytes(&mut secret);
+                            secret
+                        };
+                        let guest = Paired {
+                            device_id: DeviceId::from_bytes(device_id),
+                            fingerprint: peer_fingerprint,
+                            name: sanitise(&name),
+                            kind: known_kind(&kind),
+                        };
+                        {
+                            let store = store.lock().expect("store mutex");
+                            store.db().trust_visitor(
+                                &guest.device_id,
+                                guest.fingerprint.as_bytes(),
+                                &guest.name,
+                                qurb_storage::db::Relation::Guest,
+                                &meeting,
+                            )?;
+                            if let Some(kind) = &guest.kind {
+                                store.learn_kind(&guest.device_id, kind)?;
+                            }
+                        }
+                        let reply = Response::Welcome {
+                            device_id: *our_device.as_bytes(),
+                            name: ours.name.to_string(),
+                            kind: ours.kind.to_string(),
+                            meeting,
+                        };
+                        send.write_all(&reply.encode()).await?;
+                        send.finish()?;
+                        connection.closed().await;
+                        return Ok(guest);
+                    }
+
+                    // A guest invite is for guests: it never gives this
+                    // device's key, nor pairs a device as one of this
+                    // person's own.
+                    Ok(Request::Join { .. } | Request::Pair { .. }) if self.invite.guest => {
+                        tracing::warn!(peer = %peer_fingerprint.short(), "a guest invite used to pair as one's own device");
+                        answer(&mut send, &Response::NotFound, &connection).await;
+                        break;
+                    }
+
                     // A device with no key, asking for this one's.
                     Ok(Request::Join { token, name, kind }) if !approved => {
                         if !constant_time_eq(&token, &self.invite.token) {
@@ -345,6 +441,7 @@ impl PairingHost {
                             fingerprint: peer_fingerprint,
                             number: number.clone(),
                             wants_key: true,
+                            guest: false,
                         };
                         if !approve(asking).await {
                             answer(&mut send, &Response::Declined, &connection).await;
@@ -380,6 +477,7 @@ impl PairingHost {
                                 fingerprint: peer_fingerprint,
                                 number: number.clone(),
                                 wants_key: false,
+                                guest: false,
                             };
                             if !approve(asking).await {
                                 answer(&mut send, &Response::Declined, &connection).await;
@@ -539,6 +637,85 @@ where
     let host = pair_on(&connection, invite, store, our_name, our_kind, check, now).await;
     hang_up(&connection, &endpoint).await;
     host
+}
+
+/// Visit a computer as a guest, with a guest invite it showed (decision
+/// 0060): this device keeps its own key, shows the number while the person
+/// there approves, and is given the secret the two will meet under. It is
+/// recorded here as a host -- another person's computer, shown only what is
+/// sent to it.
+pub async fn visit(
+    invite: &Invite,
+    identity: &Identity,
+    store: Arc<Mutex<Store>>,
+    our_name: &str,
+    our_kind: &str,
+    now: i64,
+) -> Result<Paired> {
+    if !invite.guest {
+        return Err(Error::BadInvite {
+            detail: "that code adds one of your own devices, not a visit as a guest".into(),
+        });
+    }
+    if invite.is_expired(now) {
+        return Err(Error::InviteExpired);
+    }
+
+    let bind: SocketAddr =
+        if invite.address.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }.parse().expect("literal");
+    let mut endpoint = quinn::Endpoint::client(bind)
+        .map_err(|e| Error::Io { path: bind.to_string().into(), source: e })?;
+    endpoint.set_default_client_config(tls::client_config(identity, invite.fingerprint)?);
+    let connection = endpoint.connect(invite.address, "qurb-device")?.await?;
+
+    let our_device = { store.lock().expect("store mutex").device_id()? };
+    let outcome = async {
+        let (mut send, mut recv) = connection.open_bi().await?;
+        let ask = Request::Visit {
+            token: invite.token,
+            device_id: *our_device.as_bytes(),
+            name: our_name.to_string(),
+            kind: our_kind.to_string(),
+        };
+        send.write_all(&ask.encode()).await?;
+        send.finish()?;
+        let waiting = std::time::Instant::now();
+        let raw = recv
+            .read_to_end(MAX_MESSAGE)
+            .await
+            .map_err(|e| while_waiting(e.into(), invite, now, waiting))?;
+        let (host, meeting) = match Response::decode(&raw)? {
+            Response::Welcome { device_id, name, kind, meeting } => (
+                Paired {
+                    device_id: DeviceId::from_bytes(device_id),
+                    fingerprint: invite.fingerprint,
+                    name: sanitise(&name),
+                    kind: known_kind(&kind),
+                },
+                meeting,
+            ),
+            Response::Declined => return Err(Error::Declined),
+            Response::NotFound => return Err(Error::PairingRefused),
+            other => {
+                return Err(Error::Protocol { detail: format!("expected a welcome, got {other:?}") })
+            }
+        };
+        let store = store.lock().expect("store mutex");
+        store.db().trust_visitor(
+            &host.device_id,
+            host.fingerprint.as_bytes(),
+            &host.name,
+            qurb_storage::db::Relation::Host,
+            &meeting,
+        )?;
+        if let Some(kind) = &host.kind {
+            store.learn_kind(&host.device_id, kind)?;
+        }
+        Ok(host)
+    }
+    .await;
+    hang_up(&connection, &endpoint).await;
+    outcome
 }
 
 /// What to say when the connection drops while the person at the other

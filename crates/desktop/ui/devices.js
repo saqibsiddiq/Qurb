@@ -41,7 +41,25 @@ async function drawDevices() {
   self.append(t, words);
   grid.append(self);
 
-  for (const d of devices) {
+  // This person's own devices first, then other people's (decision 0060):
+  // guests of this computer, and computers it visits.
+  const groups = [
+    ["own", null],
+    ["guest", "Guests"],
+    ["host", "Computers you visit as a guest"],
+  ];
+  for (const [relation, label] of groups) {
+    const these = devices.filter((d) => (d.relation ?? "own") === relation);
+    if (these.length === 0) continue;
+    if (label) {
+      const heading = el("div", "list-label", label);
+      heading.style.gridColumn = "1 / -1";
+      grid.append(heading);
+    }
+    for (const d of these) drawCard(d);
+  }
+
+  function drawCard(d) {
     const card = el("button", "device glass-frosted");
     const tile = el("span", "tile");
     tile.append(icon(deviceIcon(d.name)));
@@ -88,9 +106,14 @@ async function openDevice(d) {
   const body = el("div", "panel-body");
   const facts = el("dl", "facts");
   const p = presence(d);
+  const who = {
+    guest: "A guest: another person's device, with its own key. It sees only what you send it.",
+    host: "Another person's computer, which you visit as a guest. It sees only what you send it.",
+  }[d.relation];
   for (const [term, value] of [
     ["Status", p.words],
     ["Paired", when(d.paired_at)],
+    ...(who ? [["Who", who]] : []),
   ]) facts.append(el("dt", null, term), el("dd", null, value));
   body.append(facts);
 
@@ -112,7 +135,7 @@ async function openDevice(d) {
   // Removing it, from here rather than anywhere more prominent: it is rare,
   // and it is the one thing on this screen that cannot be undone without the
   // other device in hand.
-  const remove = button("Remove this device…", "btn ghost quiet-danger", "x");
+  const remove = button(d.relation === "guest" ? "Remove this guest…" : "Remove this device…", "btn ghost quiet-danger", "x");
   remove.style.justifyContent = "flex-start";
   remove.addEventListener("click", () => askToRemove(d, body));
   actions.append(send, remove);
@@ -253,18 +276,21 @@ function openAddDevice() {
       c.addEventListener("click", act);
       choices.append(c);
     };
-    option("pair-show", "qr-code", "Show a code", "Scan it with your phone, or type it on another computer.", show);
+    option("pair-show", "qr-code", "Show a code", "Scan it with your phone, or type it on another computer.", () => show(false));
     option("pair-enter", "keyboard", "Enter a code", "From a device that is showing one.", enter);
+    // Another person, as a guest of this computer (decision 0060).
+    option("pair-guest", "user-plus", "Add a person", "Someone else's phone, as a guest. It keeps its own key and sees only what you send it.", () => show(true));
     body.append(choices);
   }
 
-  async function show() {
-    body.replaceChildren(el("h2", null, "Scan this on the other device"));
+  async function show(guest) {
+    body.replaceChildren(el("h2", null, guest ? "Scan this on their phone" : "Scan this on the other device"));
+    if (guest) body.append(el("p", "lead", "In Qurb on their phone: Devices → Add → Visit a computer."));
     const says = el("p", "countdown", "Opening a port…");
     body.append(says);
     let invitation;
     try {
-      invitation = await invoke("start_pairing");
+      invitation = await invoke("start_pairing", { guest });
     } catch (e) {
       body.replaceChildren(el("h2", null, "Couldn't show a code"), el("p", "says warn", String(e)));
       const back = button("Back", "btn");
@@ -283,8 +309,8 @@ function openAddDevice() {
     body.insertBefore(qr, says);
     const code = el("details");
     code.append(el("summary", "meta", "Type it or read it out instead"));
-    code.append(el("p", "meta", "On another computer:"));
-    const typed = el("pre", "code", `qurb join <folder> ${invitation.code}`);
+    code.append(el("p", "meta", guest ? "On their computer:" : "On another computer:"));
+    const typed = el("pre", "code", guest ? `qurb visit ${invitation.code}` : `qurb join <folder> ${invitation.code}`);
     typed.id = "pair-code";
     code.append(typed, el("p", "meta", "Or read this out:"));
     const spoken = el("pre", "code", invitation.spoken);
@@ -315,7 +341,9 @@ function openAddDevice() {
       const key = `${state.name}|${state.number}`;
       if (asked === key) return;
       asked = key;
-      const what = state.wants_key ? "wants to join and take this computer's key" : "wants to pair";
+      const what = state.guest
+        ? "wants to visit this computer as a guest, with their own key, seeing only what you send them"
+        : state.wants_key ? "wants to join and take this computer's key" : "wants to pair";
       const number = el("p", "number", state.number);
       number.id = "pair-number";
       number.style.cssText = "font-size: 32px; font-weight: 600; letter-spacing: 2px; margin: 8px 0; font-variant-numeric: tabular-nums";
@@ -352,7 +380,7 @@ function openAddDevice() {
         return;
       }
       if (state.state === "asking") {
-        says.textContent = "A device is asking to join.";
+        says.textContent = state.guest ? "Someone is asking to visit." : "A device is asking to join.";
         ask(state);
         return;
       }
