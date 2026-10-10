@@ -121,6 +121,7 @@ fn run() -> Result<()> {
         .invoke_handler(tauri::generate_handler![
             commands::situation,
             commands::send_files,
+            commands::sent_before,
             commands::cancel_send,
             commands::removal_plan,
             commands::unlock,

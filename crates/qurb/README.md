@@ -14,8 +14,9 @@ qurb status [dir]                what this device holds and trusts
 qurb verify [dir] [--deep]       check the store against itself
 qurb reclaim [dir]               free space the folder itself already holds
 qurb fetch [dir] <path>          ask for a dropped file's contents back
-qurb send [dir] <file|folder>... to <dev>
-                                 send files and folders to one device, privately
+qurb send [dir] <file|folder>... to <dev> [--again]
+                                 send files and folders to one device, privately;
+                                 asks before sending what went there before
 qurb cancel [dir] <name> to <dev>
                                  take back a send not yet collected
 qurb free [dir] <path>           free a file's local copy another device keeps

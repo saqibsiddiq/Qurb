@@ -183,11 +183,19 @@ each only once. Without that, anything delivered before this existed would be
 counted as delivered nowhere for ever, since a file both devices already have
 is never transferred again. See
 [decisions/0026](decisions/0026-sharing-while-the-other-device-is-off.md).
-The same report covers a send of content the device has already taken,
-offered again by another device or by the same one set up afresh. It is
-skipped, since a delivery is taken once, and acknowledged once
-(`report_holdings` is given the peer's tree). Before 2026-10-07 the sender was
-never told, and held the send as waiting indefinitely.
+The same report tells a sender about each send this device took, once, in
+case the word sent as it took it was lost (`report_holdings` is given the
+peer's tree).
+
+**A send is not its bytes.** A delivery is taken once, and the record of it
+is keyed by who sent it, under what name, and which version of that name
+(the `deliveries` table). A send offered again whenever its sender reappears
+is the same send, so a file the person deleted stays deleted. The same file
+sent again is a new version, and arrives again. Before sending, a device
+says which files it sent to that device before and asks
+(`Store::sent_before`). Until 2026-10-10 the record was keyed by content, and
+the same file sent twice was dropped without a word. See
+[decisions/0059](decisions/0059-a-send-is-not-its-bytes.md).
 
 #### Nobody waits for a poll to find out
 
@@ -825,7 +833,7 @@ The unbuilt parts are listed at the end of this section.
 | A history of what happened | one table, pruned by age and count; `qurb activity` reads it |
 | Sending to one device | `qurb send <files and folders> to <device>`; held until collected, released first afterwards |
 | Receiving on a desktop | saved to `Downloads/qurb` as an ordinary file; overlap with the folder refused |
-| Deliveries remembered | a `taken` record per delivery, never expired, so nothing is taken twice |
+| Deliveries remembered | a `deliveries` record per send -- sender, name, version -- never expired, so a send is taken once and the same file sent again arrives again — [0059](decisions/0059-a-send-is-not-its-bytes.md) |
 | Removing a device | `Store::remove_device`: trust ends here, waiting sends cancelled, its copies stop counting as copies, what is kept for it stays unless asked; trust asked per request, not only at the handshake — [0041](decisions/0041-removing-a-device.md) |
 
 ### Built and tested (`crates/watcher`, Phase 1)
@@ -903,7 +911,7 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-796 tests in 90 test binaries on Linux, all passing (2026-10-08, debug build,
+801 tests in 90 test binaries on Linux, all passing (2026-10-10, debug build,
 the development laptop, on a network that carries multicast — seven tests find
 devices on the local network that way, and fail on one that does not). Clippy
 is clean. On Android the engine's crates run by `scripts/android-test.sh`:

@@ -86,12 +86,21 @@ struct Placement<'a> {
     vault: Option<&'a DeviceId>,
     /// Kept for the vault's owner rather than sent to it. See [`Store::hold_file`].
     held: bool,
+    /// A new version even when the bytes are what the row already holds: a
+    /// send made again is a new send (decision 0059).
+    fresh: bool,
 }
 
 impl<'a> Placement<'a> {
     /// A change made on this device, in the shared area.
     fn local() -> Self {
-        Self { stamp: Stamp::Local, payloads: Payloads::TrustIndex, vault: None, held: false }
+        Self {
+            stamp: Stamp::Local,
+            payloads: Payloads::TrustIndex,
+            vault: None,
+            held: false,
+            fresh: false,
+        }
     }
 
     /// A version decided elsewhere, in the shared area.
@@ -101,6 +110,7 @@ impl<'a> Placement<'a> {
             payloads: Payloads::TrustIndex,
             vault: None,
             held: false,
+            fresh: false,
         }
     }
 
@@ -116,11 +126,38 @@ impl<'a> Placement<'a> {
         self
     }
 
+    /// A new version, however unchanged the bytes.
+    fn fresh(mut self) -> Self {
+        self.fresh = true;
+        self
+    }
+
     /// Write every payload, whatever the index believes. Repair only.
     fn rewriting(mut self) -> Self {
         self.payloads = Payloads::Rewrite;
         self
     }
+}
+
+/// A file this device has sent to a device before (decision 0059).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SentBefore {
+    /// The file picked now.
+    pub file: PathBuf,
+    /// The name it went under then.
+    pub sent_as: String,
+    /// When, in unix seconds.
+    pub at: i64,
+}
+
+/// A file's content hash as the index records it -- BLAKE3 over all of its
+/// bytes in order, which is what [`chunker::chunk_bytes`] computes -- read in
+/// pieces rather than held.
+fn hash_file(path: &Path) -> Result<blake3::Hash> {
+    let mut file = std::fs::File::open(path).map_err(|e| Error::io(path, e))?;
+    let mut hasher = blake3::Hasher::new();
+    std::io::copy(&mut file, &mut hasher).map_err(|e| Error::io(path, e))?;
+    Ok(hasher.finalize())
 }
 
 /// What a write actually cost.
@@ -350,13 +387,7 @@ impl Store {
     ) -> Result<PutStats> {
         let me = self.db.local_device()?;
         let stats = self.adopt_file_scoped(version, source, mtime_ns, Some(&me))?;
-        if let Some(hash) = version.content.hash() {
-            self.db.note_taken(
-                &blake3::Hash::from(*hash),
-                Some(&version.modified_by),
-                &version.path,
-            )?;
-        }
+        self.db.note_taken(version, &version.path)?;
         Ok(stats)
     }
 
@@ -426,7 +457,7 @@ impl Store {
         mtime_ns: i64,
         placement: Placement<'_>,
     ) -> Result<PutStats> {
-        let Placement { stamp, payloads, vault, held } = placement;
+        let Placement { stamp, payloads, vault, held, fresh } = placement;
         let mut stats = PutStats { chunks_total: manifest.chunks.len(), ..Default::default() };
 
         // A path that is already this device's own private content stays
@@ -476,7 +507,7 @@ impl Store {
         // sent from the folder under its own name has the same path and the same
         // bytes as the sender's own copy; comparing against that made every such
         // send look like an unchanged file, and nothing was ever sent.
-        if payloads == Payloads::TrustIndex {
+        if payloads == Payloads::TrustIndex && !fresh {
             if let Some(existing) = self.db.live_row_in(logical_path, vault)? {
                 if existing.content_hash == manifest.file_hash {
                     // Unchanged content can still be a change in whether this
@@ -1131,12 +1162,16 @@ impl Store {
         };
         let data: &[u8] = mapped.as_deref().unwrap_or(&[]);
         let manifest = chunker::chunk_bytes(data);
+        // A send, every time: the same file sent again -- the person asked
+        // first, by whatever sends it -- is a new version the recipient takes,
+        // and not collected until it has (decision 0059).
+        self.db.sending_again(&manifest.file_hash, recipient)?;
         let stats = self.put_manifest(
             logical_path,
             &manifest,
             data,
             mtime_ns,
-            Placement::local().in_vault(Some(recipient)),
+            Placement::local().in_vault(Some(recipient)).fresh(),
         )?;
         let _ = self.db.record(
             db::Event::Sent,
@@ -2242,22 +2277,46 @@ impl Store {
         self.db.pending_deliveries()
     }
 
-    /// Whether this device has already taken delivery of these bytes into its
-    /// own vault. Tombstones count -- see
-    /// [`Db::vault_knows`](crate::db::Db::vault_knows).
-    pub fn vault_knows(&self, content: &blake3::Hash) -> Result<bool> {
-        self.db.vault_knows(content)
+    /// Whether this device has already taken this send. See
+    /// [`Db::delivery_taken`](crate::db::Db::delivery_taken).
+    pub fn delivery_taken(&self, version: &FileVersion) -> Result<bool> {
+        self.db.delivery_taken(version)
     }
 
-    /// Record a delivery taken somewhere other than the folder. See
+    /// Record a send taken, wherever it was filed. See
     /// [`Db::note_taken`](crate::db::Db::note_taken).
-    pub fn note_taken(
+    pub fn note_taken(&self, version: &FileVersion, filed_as: &str) -> Result<()> {
+        self.db.note_taken(version, filed_as)
+    }
+
+    /// Which of `files` this device has sent to `device` before, with the name
+    /// each went under and when (decision 0059): what to ask about before
+    /// sending them again.
+    ///
+    /// Only a file the size of something already sent there is read, since a
+    /// file of any other size cannot hold the same bytes. One that cannot be
+    /// read is left out here; sending it says why.
+    pub fn sent_before(
         &self,
-        content: &blake3::Hash,
-        sender: Option<&DeviceId>,
-        filed_as: &str,
-    ) -> Result<()> {
-        self.db.note_taken(content, sender, filed_as)
+        files: &[std::path::PathBuf],
+        device: &DeviceId,
+    ) -> Result<Vec<SentBefore>> {
+        let sizes = self.db.sizes_sent_to(device)?;
+        if sizes.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut found = Vec::new();
+        for file in files {
+            let Ok(meta) = std::fs::metadata(file) else { continue };
+            if !meta.is_file() || !sizes.contains(&meta.len()) {
+                continue;
+            }
+            let Ok(content) = hash_file(file) else { continue };
+            if let Some((sent_as, at)) = self.db.sent_before(&content, device)? {
+                found.push(SentBefore { file: file.clone(), sent_as, at });
+            }
+        }
+        Ok(found)
     }
 
     /// Files whose bytes could be dropped, coldest first. See [`Db::evictable`].

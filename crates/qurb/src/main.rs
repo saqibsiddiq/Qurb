@@ -28,8 +28,9 @@ qurb — private cloud storage
   qurb verify [dir] [--deep]          check the store against itself
   qurb reclaim [dir]                  free space the folder itself already holds
   qurb fetch [dir] <path>             ask for a dropped file's contents back
-  qurb send [dir] <file or folder>... to <device>
-                                      send files to one device, privately
+  qurb send [dir] <file or folder>... to <device> [--again]
+                                      send files to one device, privately;
+                                        --again: ones sent there before too
   qurb cancel [dir] <name> to <device>
                                       take back a send not yet collected
   qurb free [dir] <path>              free the local copy of a file another
@@ -160,8 +161,11 @@ fn run() -> Result<()> {
             // the first of them is the folder only if it has a store in it --
             // counting arguments could not tell `qurb send a.pdf to x` from
             // `qurb send ~/qurb a.pdf to x`, and used to open `a.pdf` as the
-            // folder.
-            let rest = &args[1..];
+            // folder. `--again` anywhere sends what went to that device before
+            // without asking (decision 0059).
+            let again = args.iter().any(|a| a == "--again");
+            let rest: Vec<String> = args[1..].iter().filter(|a| *a != "--again").cloned().collect();
+            let rest = &rest[..];
             let at = rest
                 .iter()
                 .position(|a| a == "to")
@@ -186,7 +190,7 @@ fn run() -> Result<()> {
                 bail!("give a file or folder to send");
             }
             let picked: Vec<PathBuf> = picked.iter().map(PathBuf::from).collect();
-            send(&root, &picked, recipient)
+            send(&root, &picked, recipient, again)
         }
         "conflicts" => {
             let (root, rest) = folder_first(&args)?;
@@ -806,7 +810,7 @@ fn fetch(root: &Path, logical: &str) -> Result<()> {
 /// still be told apart; both the fingerprint shown by `qurb status` and the
 /// device id work, because a person reading either should not have to know
 /// which one they are looking at.
-fn send(root: &Path, picked: &[PathBuf], recipient: &str) -> Result<()> {
+fn send(root: &Path, picked: &[PathBuf], recipient: &str, again: bool) -> Result<()> {
     let (_, _, mut store, _) = open(root)?;
 
     let peer = match qurb_cli::View::new(&store, 0).device_named(recipient)? {
@@ -825,12 +829,43 @@ fn send(root: &Path, picked: &[PathBuf], recipient: &str) -> Result<()> {
         }
     };
 
-    let plan = qurb_cli::send::plan(picked);
+    let mut plan = qurb_cli::send::plan(picked);
     for (path, why) in &plan.skipped {
         eprintln!("  not sending {}: {why}", path.display());
     }
     if plan.files.is_empty() {
         bail!("nothing to send");
+    }
+
+    // Sent there before: said, and sent again only when that is what the
+    // person wants (decision 0059). A send is never dropped quietly.
+    let sources: Vec<PathBuf> = plan.files.iter().map(|(_, source)| source.clone()).collect();
+    let before = store.sent_before(&sources, &peer.id)?;
+    if !before.is_empty() {
+        println!("sent to {} before:", peer.name);
+        for earlier in &before {
+            println!("  {} — as {}, {}", earlier.file.display(), earlier.sent_as, ago(earlier.at));
+        }
+        let yes = again || {
+            use std::io::IsTerminal;
+            if std::io::stdin().is_terminal() {
+                print!("Send {} again? [y/N] ", if before.len() == 1 { "it" } else { "them" });
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+                let mut line = String::new();
+                std::io::stdin().read_line(&mut line).ok();
+                matches!(line.trim().to_lowercase().as_str(), "y" | "yes")
+            } else {
+                false
+            }
+        };
+        if !yes {
+            let skip: std::collections::HashSet<&PathBuf> = before.iter().map(|b| &b.file).collect();
+            plan.files.retain(|(_, source)| !skip.contains(source));
+            println!("  left out; `--again` sends them anyway");
+            if plan.files.is_empty() {
+                return Ok(());
+            }
+        }
     }
 
     println!("sending to {} ({})", peer.name, peer.fingerprint);

@@ -277,3 +277,74 @@ fn a_served_chunk_is_traced_to_the_send_it_belongs_to() {
     let shared_chunk = fixture.store.db().chunk_hashes_for(theirs.id).unwrap()[0];
     assert_eq!(fixture.store.db().sent_file_holding(&shared_chunk, &recipient()).unwrap(), None);
 }
+
+/// What a device took before sends were told apart was recorded by its bytes.
+/// That old send, offered again, is still not taken twice; the same bytes
+/// sent since are (decision 0059).
+#[test]
+fn a_delivery_taken_before_the_upgrade_is_not_taken_twice() {
+    let f = Fixture::new();
+    let sender = recipient();
+    let content = blake3::hash(b"taken before");
+    f.store
+        .db()
+        .conn()
+        .execute(
+            "INSERT INTO taken (content_hash, sender, taken_at, filed_as) VALUES (?1, ?2, 1000, 'x')",
+            rusqlite::params![content.as_bytes().as_slice(), sender.as_bytes().as_slice()],
+        )
+        .unwrap();
+    let send = |at: i64| {
+        let mut vector = qurb_sync::VersionVector::new();
+        vector.increment(sender);
+        let mut version =
+            qurb_sync::FileVersion::file("old.txt", *content.as_bytes(), 12, vector, sender, at);
+        version.area = qurb_sync::Area::Sent;
+        version
+    };
+    assert!(f.store.delivery_taken(&send(900)).unwrap(), "the old send came back");
+    assert!(!f.store.delivery_taken(&send(2000)).unwrap(), "a send made since was refused");
+}
+
+/// Sending the same file to the same device again is a new send: a new
+/// version for the recipient to take, waiting until it has (decision 0059).
+#[test]
+fn the_same_file_sent_again_is_a_new_send() {
+    let mut f = Fixture::new();
+    let to = recipient();
+    let outgoing = f.root.parent().unwrap().join("again.bin");
+    std::fs::write(&outgoing, noisy(5_000)).unwrap();
+
+    f.store.send_to_vault("again.bin", &outgoing, &to).unwrap();
+    let first = f.store.db().all_versions().unwrap().into_iter().find(|v| v.path == "again.bin").unwrap();
+    f.store.db().note_replica_in_vault(&blake3::hash(&noisy(5_000)), &to).unwrap();
+    assert!(f.store.pending_deliveries().unwrap().is_empty(), "setup");
+
+    let before = f.store.sent_before(std::slice::from_ref(&outgoing), &to).unwrap();
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].sent_as, "again.bin");
+
+    f.store.send_to_vault("again.bin", &outgoing, &to).unwrap();
+    let second = f.store.db().all_versions().unwrap().into_iter().find(|v| v.path == "again.bin").unwrap();
+    assert_ne!(first.vector, second.vector, "sent again, and nothing new to take");
+    assert_eq!(f.store.pending_deliveries().unwrap().len(), 1, "counted as collected already");
+}
+
+/// Only a file the size of something sent there before is read at all.
+#[test]
+fn a_file_never_sent_there_is_not_mentioned() {
+    let mut f = Fixture::new();
+    let to = recipient();
+    let sent = f.root.parent().unwrap().join("sent.bin");
+    let other = f.root.parent().unwrap().join("other.bin");
+    let same_size = f.root.parent().unwrap().join("same-size.bin");
+    std::fs::write(&sent, noisy(4_000)).unwrap();
+    std::fs::write(&other, noisy(3_000)).unwrap();
+    std::fs::write(&same_size, vec![1u8; 4_000]).unwrap();
+    f.store.send_to_vault("sent.bin", &sent, &to).unwrap();
+
+    let found = f.store.sent_before(&[sent.clone(), other, same_size], &to).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].file, sent);
+    assert!(f.store.sent_before(&[sent], &DeviceId::from_bytes([3; 32])).unwrap().is_empty());
+}

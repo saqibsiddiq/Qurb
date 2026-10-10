@@ -366,17 +366,17 @@ object Engine {
         withContext(Dispatchers.IO) { open(context).setOwnFilesPrivate(private) }
     }
 
+    /** Something picked from anywhere on the phone, where the engine can read it. */
+    class Staged(val file: File, val name: String)
+
     /**
-     * Send something picked from anywhere on the phone to one device.
-     *
-     * Staged through the cache for the same reason as [importUri]: the engine
-     * takes a path, and a `content://` URI is not one. The staged copy is
-     * deleted whether or not the send works; the engine has already stored what
-     * it needs. Returns the name the other device will see.
+     * Copy something picked from anywhere on the phone into the cache, to be
+     * sent under the name it had. Staged for the same reason as [importUri]:
+     * the engine takes a path, and a `content://` URI is not one. The caller
+     * deletes it when done, whether or not anything was sent.
      */
-    suspend fun sendUri(context: Context, uri: android.net.Uri, to: String): String =
+    suspend fun stage(context: Context, uri: android.net.Uri): Staged =
         withContext(Dispatchers.IO) {
-            val name = safeName(displayName(context, uri))
             val staging = File(context.cacheDir, "send-${System.nanoTime()}")
             try {
                 context.contentResolver.openInputStream(uri).use { input ->
@@ -384,10 +384,21 @@ object Engine {
                         requireNotNull(input) { "could not read that file" }.copyTo(output)
                     }
                 }
-                open(context).sendFile(staging.absolutePath, name, to)
-                name
-            } finally {
+            } catch (e: Exception) {
                 staging.delete()
+                throw e
             }
+            Staged(staging, safeName(displayName(context, uri)))
         }
+
+    /** Send a staged file to one device. Returns the name it will see. */
+    suspend fun send(context: Context, staged: Staged, to: String): String =
+        withContext(Dispatchers.IO) {
+            open(context).sendFile(staged.file.absolutePath, staged.name, to)
+            staged.name
+        }
+
+    /** Which of these files went to `to` before, and when (decision 0059). */
+    suspend fun sentBefore(context: Context, files: List<File>, to: String): List<uniffi.qurb_mobile.EarlierSend> =
+        withContext(Dispatchers.IO) { open(context).sentBefore(files.map { it.absolutePath }, to) }
 }

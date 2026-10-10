@@ -161,8 +161,13 @@ const ANSWERS = {
     return { ...waiting, state: "asking", name: "Pixel 8", number: "232 760", kind: "phone", wants_key: false };
   },
 
-  send_files: ({ paths }) => ({
-    sent: paths.length,
+  // A file called tickets.pdf went to the device three days ago, so the
+  // question about sending it again can be looked at (decision 0059).
+  sent_before: ({ paths }) => paths
+    .filter((p) => p.endsWith("tickets.pdf"))
+    .map((p) => ({ path: p, sent_as: "tickets.pdf", at: now - 3 * 86400 })),
+  send_files: ({ paths, leaveOut = [] }) => ({
+    sent: paths.filter((p) => !leaveOut.includes(p)).length,
     bytes: "5242880",
     only: paths.length === 1 ? paths[0].split("/").pop() : null,
     skipped: [],

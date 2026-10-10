@@ -39,8 +39,10 @@ by the scan at all.
 
 ## What qurb still remembers
 
-- **That it took the delivery**, keyed by content, so it is not taken twice
-  (0030 rule 2). The record survives the file being deleted from Downloads;
+- **That it took the delivery**, keyed by the send -- sender, name and
+  version -- so that a send offered again is not taken twice (0030 rule 2;
+  by content until [0059](0059-a-send-is-not-its-bytes.md), which kept the
+  same file sent again from ever arriving). The record survives the file being deleted from Downloads;
   rule 2 counts tombstones for exactly this reason.
 - **That the sender was told, and only once it was true.** The file is written
   under a temporary name in the same directory, synced to disk, and renamed into

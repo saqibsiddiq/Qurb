@@ -696,6 +696,46 @@ pub struct Skipped {
     why: String,
 }
 
+/// The paired device a name or fingerprint refers to: the same lookup
+/// `qurb send` uses, so the two cannot disagree about which device is meant.
+fn recipient(hosted: &Host<'_>, to: &str) -> Result<qurb_cli::Device, String> {
+    match hosted.with_store(|store| Ok(View::new(store, 0).device_named(to)?)).map_err(failed)? {
+        qurb_cli::Recipient::One(device) => Ok(device),
+        qurb_cli::Recipient::Unknown { .. } => Err(format!("no paired device {to}")),
+        qurb_cli::Recipient::Several(_) => Err(format!("more than one device is called {to}")),
+    }
+}
+
+/// A file picked to send that went to that device before (decision 0059).
+#[derive(Serialize)]
+pub struct Earlier {
+    /// Where it is on this disk, which is how `send_files` is told to leave
+    /// it out.
+    path: String,
+    /// The name it went under then.
+    sent_as: String,
+    /// When, in unix seconds.
+    at: i64,
+}
+
+/// Which of the files picked went to `to` before: asked before sending, so
+/// that the window can say so and let the person choose (decision 0059).
+/// Folders are looked inside, as sending them would.
+#[tauri::command]
+pub fn sent_before(hosted: Host<'_>, paths: Vec<String>, to: String) -> Answer<Vec<Earlier>> {
+    let device = recipient(&hosted, &to)?;
+    let picked: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
+    let sources: Vec<std::path::PathBuf> =
+        qurb_cli::send::plan(&picked).files.into_iter().map(|(_, source)| source).collect();
+    let found = hosted
+        .with_store(|store| Ok(store.sent_before(&sources, &device.id)?))
+        .map_err(failed)?;
+    Ok(found
+        .into_iter()
+        .map(|e| Earlier { path: e.file.display().to_string(), sent_as: e.sent_as, at: e.at })
+        .collect())
+}
+
 /// Send files and folders to one device, and to nobody else.
 ///
 /// A folder is sent whole, under its own name. Each file is stored separately
@@ -707,23 +747,23 @@ pub struct Skipped {
 /// The recipient is named by its short fingerprint, which is what the devices
 /// screen shows — a device id would be the right key and the wrong thing to put
 /// in front of somebody.
+///
+/// `leave_out` names files the person chose not to send again, having been
+/// told by [`sent_before`] that they went there before.
 #[tauri::command]
-pub fn send_files(hosted: Host<'_>, paths: Vec<String>, to: String) -> Answer<SendReport> {
-    // The same lookup `qurb send` uses, so the two cannot disagree about which
-    // device a name refers to.
-    let device = match hosted
-        .with_store(|store| Ok(View::new(store, 0).device_named(&to)?))
-        .map_err(failed)?
-    {
-        qurb_cli::Recipient::One(device) => device,
-        qurb_cli::Recipient::Unknown { .. } => return Err(format!("no paired device {to}")),
-        qurb_cli::Recipient::Several(_) => {
-            return Err(format!("more than one device is called {to}"))
-        }
-    };
-
+pub fn send_files(
+    hosted: Host<'_>,
+    paths: Vec<String>,
+    to: String,
+    leave_out: Option<Vec<String>>,
+) -> Answer<SendReport> {
+    let device = recipient(&hosted, &to)?;
     let picked: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
     let plan = qurb_cli::send::plan(&picked);
+    // Files sent there before that the person chose not to send again
+    // (decision 0059), by where they are on this disk.
+    let leave_out: std::collections::HashSet<std::path::PathBuf> =
+        leave_out.unwrap_or_default().into_iter().map(std::path::PathBuf::from).collect();
 
     let mut skipped: Vec<Skipped> = plan
         .skipped
@@ -731,7 +771,7 @@ pub fn send_files(hosted: Host<'_>, paths: Vec<String>, to: String) -> Answer<Se
         .map(|(path, why)| Skipped { path: path.display().to_string(), why })
         .collect();
     let (mut sent, mut bytes) = (Vec::new(), 0u64);
-    for (name, source) in plan.files {
+    for (name, source) in plan.files.into_iter().filter(|(_, source)| !leave_out.contains(source)) {
         let size = std::fs::metadata(&source).map(|m| m.len()).unwrap_or(0);
         match hosted.with_store_mut(|store| Ok(store.send_to_vault(&name, &source, &device.id)?)) {
             Ok(_) => {

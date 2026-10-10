@@ -39,7 +39,7 @@ record](../roadmap.md).
 | a large file collected from the phone | ✅ on the S23: 10.6–12.1 MB/s through the app with BBR, served on after the app was left ([below](#through-the-app-with-bbr--and-a-phone-cleared)); 300 MB at 14.0 MB/s on 2026-10-08 |
 | iOS, at all | ⬜ blocked: needs Xcode, which needs a Mac |
 
-796 tests pass in 90 test binaries on Linux (2026-10-08, debug build, the
+801 tests pass in 90 test binaries on Linux (2026-10-10, debug build, the
 development laptop); the last run on a Galaxy S23 was 426 of them, on
 2026-09-17 — the suite has grown since and has not been run there again.
 Clippy is clean.

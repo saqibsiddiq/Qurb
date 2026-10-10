@@ -368,20 +368,19 @@ impl Engine {
         Ok(out)
     }
 
-    /// Content waiting in this device's vault that it has not taken yet.
+    /// Sends waiting in this device's vault that it has not taken yet.
     ///
-    /// Keyed by content rather than by path, and counting tombstones, so that a
-    /// delivery is taken exactly once. Keyed by path it would arrive again
-    /// under a new name every time the sender reappeared; ignoring tombstones,
-    /// deleting something somebody sent you would be impossible.
+    /// Each send is taken once, and remembered for good, so that one offered
+    /// again whenever its sender reappears does not bring back a file the
+    /// person deleted. A file sent again is a new send, and is taken even when
+    /// the bytes are ones that arrived before (decision 0059).
     fn deliveries(&self, offered: &[FileVersion]) -> Result<Vec<Action>> {
         let mut out = Vec::new();
         for version in offered {
             // A tombstone in a vault is the sender tidying up their side. What
             // the recipient does with content it has already taken is the
             // recipient's business.
-            let Some(hash) = version.content.hash() else { continue };
-            if self.store().vault_knows(&blake3::Hash::from(*hash))? {
+            if version.content.is_deleted() || self.store().delivery_taken(version)? {
                 continue;
             }
             out.push(Action::Adopt { remote: version.clone() });
@@ -945,7 +944,7 @@ impl Engine {
     ) -> Result<()> {
         let Content::File { hash, size } = &version.content else { return Ok(()) };
         let where_ = path.display().to_string();
-        self.store().note_taken(&blake3::Hash::from(*hash), Some(&version.modified_by), &where_)?;
+        self.store().note_taken(version, &where_)?;
         crate::note(
             self.store(),
             db::Event::Received,

@@ -104,14 +104,35 @@ class ShareActivity : AppCompatActivity() {
         lifecycleScope.launch {
             var sent = 0
             var failed = 0
-            for (uri in uris) {
-                try {
-                    Engine.sendUri(this@ShareActivity, uri, to.fingerprint)
-                    sent++
-                } catch (e: Exception) {
-                    android.util.Log.w("qurb", "could not send a shared file", e)
-                    failed++
+            val staged = mutableListOf<Engine.Staged>()
+            try {
+                for (uri in uris) {
+                    try {
+                        staged += Engine.stage(this@ShareActivity, uri)
+                    } catch (e: Exception) {
+                        android.util.Log.w("qurb", "could not read a shared file", e)
+                        failed++
+                    }
                 }
+                val earlier = runCatching {
+                    Engine.sentBefore(this@ShareActivity, staged.map { it.file }, to.fingerprint)
+                }.getOrDefault(emptyList())
+                val leaveOut = askAgain(to, earlier, staged)
+                if (leaveOut == null) {
+                    finish()
+                    return@launch
+                }
+                for (file in staged.filter { it.file.absolutePath !in leaveOut }) {
+                    try {
+                        Engine.send(this@ShareActivity, file, to.fingerprint)
+                        sent++
+                    } catch (e: Exception) {
+                        android.util.Log.w("qurb", "could not send a shared file", e)
+                        failed++
+                    }
+                }
+            } finally {
+                staged.forEach { it.file.delete() }
             }
             if (sent == 0) {
                 refuse("Could not send that", "Qurb could not read the file it was handed.")
@@ -125,6 +146,44 @@ class ShareActivity : AppCompatActivity() {
                 " the next time it is switched on and reachable. Your other devices never see " +
                 (if (sent == 1) "it." else "them.") +
                 if (failed > 0) "\n\n$failed could not be read and were not sent." else ""
+        }
+    }
+
+    /**
+     * Files that went to `to` before, and whether to send them again
+     * (decision 0059). The files to leave out -- none, to send them all again
+     * -- or null to send nothing.
+     */
+    private suspend fun askAgain(
+        to: PeerInfo,
+        earlier: List<uniffi.qurb_mobile.EarlierSend>,
+        staged: List<Engine.Staged>,
+    ): Set<String>? {
+        if (earlier.isEmpty()) return emptySet()
+        val names = staged.associate { it.file.absolutePath to it.name }
+        val one = earlier.size == 1
+        val everything = earlier.size == staged.size
+        val lines = earlier.joinToString("\n") { "${names[it.source] ?: it.source} — as ${it.sentAs}, ${Words.ago(it.at)}" }
+        return kotlinx.coroutines.suspendCancellableCoroutine { answer ->
+            var answered = false
+            fun say(leaveOut: Set<String>?) {
+                if (!answered) {
+                    answered = true
+                    answer.resumeWith(Result.success(leaveOut))
+                }
+            }
+            MaterialAlertDialogBuilder(this@ShareActivity)
+                .setTitle("Sent to ${to.name} before")
+                .setMessage(
+                    "$lines\n\n" + if (one) "${to.name} may still have it. Sending it again puts another copy there."
+                    else "${to.name} may still have them. Sending them again puts another copy there."
+                )
+                .setPositiveButton(if (one) "Send it again" else "Send them again") { _, _ -> say(emptySet()) }
+                .setNegativeButton(if (everything) "Don't send" else if (one) "Leave it out" else "Leave them out") { _, _ ->
+                    say(if (everything) null else earlier.map { it.source }.toSet())
+                }
+                .setOnCancelListener { say(null) }
+                .show()
         }
     }
 

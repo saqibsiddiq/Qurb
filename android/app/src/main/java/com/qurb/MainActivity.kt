@@ -770,14 +770,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendPicked(uris: List<Uri>, to: PeerInfo) {
         lifecycleScope.launch {
+            val staged = mutableListOf<Engine.Staged>()
             val sent = mutableListOf<String>()
             try {
-                for (uri in uris) {
-                    sent += Engine.sendUri(this@MainActivity, uri, to.fingerprint)
+                for (uri in uris) staged += Engine.stage(this@MainActivity, uri)
+                val earlier = Engine.sentBefore(this@MainActivity, staged.map { it.file }, to.fingerprint)
+                val names = staged.associate { it.file.absolutePath to it.name }
+                val leaveOut = askAgain(to, earlier, everything = earlier.size == staged.size) { names[it] ?: it }
+                    ?: return@launch
+                for (file in staged.filter { it.file.absolutePath !in leaveOut }) {
+                    sent += Engine.send(this@MainActivity, file, to.fingerprint)
                 }
             } catch (e: Exception) {
                 fail(if (sent.isEmpty()) "Could not send that" else "Sent ${sent.size}, then stopped", e)
             } finally {
+                // The engine has stored what it needs of each one sent.
+                staged.forEach { it.file.delete() }
                 changed()
                 if (sent.isNotEmpty()) sendGoes(to, sent)
             }
@@ -792,9 +800,11 @@ class MainActivity : AppCompatActivity() {
     fun send(entry: FileEntry, to: PeerInfo) {
         lifecycleScope.launch {
             val name = entry.path.substringAfterLast('/')
+            val source = File(Engine.root(this@MainActivity), entry.path)
             try {
+                val earlier = Engine.sentBefore(this@MainActivity, listOf(source), to.fingerprint)
+                askAgain(to, earlier, everything = true) { name } ?: return@launch
                 withContext(Dispatchers.IO) {
-                    val source = File(Engine.root(this@MainActivity), entry.path)
                     Engine.open(this@MainActivity).sendFile(source.absolutePath, name, to.fingerprint)
                 }
                 changed()
@@ -803,6 +813,47 @@ class MainActivity : AppCompatActivity() {
                 fail("Could not send that", e)
                 changed()
             }
+        }
+    }
+
+    /**
+     * Files that went to `to` before, and whether to send them again
+     * (decision 0059): rather than send a second copy unasked, or drop it
+     * without a word, which is what used to happen.
+     *
+     * Returns the files to leave out -- none, to send them all again -- or
+     * null to send nothing. `everything` is whether every file being sent is
+     * one of them, when leaving them out leaves nothing to send.
+     */
+    private suspend fun askAgain(
+        to: PeerInfo,
+        earlier: List<uniffi.qurb_mobile.EarlierSend>,
+        everything: Boolean,
+        nameOf: (String) -> String,
+    ): Set<String>? {
+        if (earlier.isEmpty()) return emptySet()
+        return kotlinx.coroutines.suspendCancellableCoroutine { answer ->
+            var answered = false
+            fun say(leaveOut: Set<String>?) {
+                if (!answered) {
+                    answered = true
+                    answer.resumeWith(Result.success(leaveOut))
+                }
+            }
+            val one = earlier.size == 1
+            val sheet = kit.sheet().header(R.drawable.ic_send, "Sent to ${to.name} before")
+            for (e in earlier) sheet.text("${nameOf(e.source)} — as ${e.sentAs}, ${Words.ago(e.at)}", R.style.Text_Body)
+            sheet.text(
+                if (one) "${to.name} may still have it. Sending it again puts another copy there."
+                else "${to.name} may still have them. Sending them again puts another copy there."
+            )
+            sheet.buttons(
+                primary = if (one) "Send it again" else "Send them again",
+                secondary = if (everything) "Don't send" else if (one) "Leave it out" else "Leave them out",
+                onSecondary = { say(if (everything) null else earlier.map { it.source }.toSet()) },
+            ) { say(emptySet()) }
+            sheet.onDismiss { say(null) }
+            sheet.show()
         }
     }
 

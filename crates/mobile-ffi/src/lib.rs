@@ -197,6 +197,17 @@ pub struct Waiting {
     pub to_fingerprint: String,
 }
 
+/// A file about to be sent that went to that device before (decision 0059).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct EarlierSend {
+    /// The file on this phone, as it was handed to `sent_before`.
+    pub source: String,
+    /// The name it went under then.
+    pub sent_as: String,
+    /// When, in unix seconds.
+    pub at: i64,
+}
+
 /// One word of the recovery phrase, as somebody typed it back from paper.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct PhraseAnswer {
@@ -1501,6 +1512,20 @@ impl Qurb {
         }
         let stats = self.engine()?.store_mut().send_to_vault(&name, Path::new(&source), &device)?;
         Ok(stats.bytes_written)
+    }
+
+    /// Which of `sources` this phone has sent to `to` before, with the name
+    /// each went under and when: asked before sending, so that the app can say
+    /// so and the person choose (decision 0059). A send of the same file
+    /// again is a new send, which the other device takes.
+    pub fn sent_before(&self, sources: Vec<String>, to: String) -> Result<Vec<EarlierSend>, QurbError> {
+        let device = self.device_of(&to)?;
+        let files: Vec<std::path::PathBuf> = sources.iter().map(std::path::PathBuf::from).collect();
+        let found = self.engine()?.store().sent_before(&files, &device)?;
+        Ok(found
+            .into_iter()
+            .map(|e| EarlierSend { source: e.file.display().to_string(), sent_as: e.sent_as, at: e.at })
+            .collect())
     }
 
     /// What this phone has sent that has not been collected yet.

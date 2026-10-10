@@ -1,6 +1,6 @@
 # 0030 — Sending a file to one device
 
-**Status:** Accepted — rule 3 amended by [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md) on devices with a downloads directory; extended by [0036](0036-a-phone-keeps-its-own-files.md); rule 2 completed and rule 4 given a phone's form on 2026-10-07
+**Status:** Accepted — rule 3 amended by [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md) on devices with a downloads directory; extended by [0036](0036-a-phone-keeps-its-own-files.md); rule 2 completed and rule 4 given a phone's form on 2026-10-07; rule 2 amended by [0059](0059-a-send-is-not-its-bytes.md): a send, not its bytes, is taken once
 **Date:** 2026-09-23
 
 ## Decision
@@ -21,7 +21,11 @@ Four rules, which together are the whole feature:
    it once, through the same holdings report
    ([0026](0026-sharing-while-the-other-device-is-off.md)) that covers content
    delivered before reports existed: `report_holdings` is given the peer's
-   tree.)*
+   tree.)* *(2026-10-10, [0059](0059-a-send-is-not-its-bytes.md): keyed by
+   the send -- sender, name and version -- not by content. Keyed by content,
+   the same file sent again was never taken, and nobody was told. A send
+   offered again is still taken once; a file sent again is a new send, and
+   the sender asks first.)*
 3. **The recipient files it privately.** It lands in their folder like any other
    file, but its index row is scoped to them, so it is never advertised onward.
 4. **The sender releases it first.** Once the recipient confirms, the sender's

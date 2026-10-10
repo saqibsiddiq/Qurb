@@ -669,18 +669,55 @@ function openSend(paths = [], device = null) {
     const d = state.device;
     if (!d || state.paths.length === 0) return;
     go.disabled = true;
+    // Sent there before: say so, and let the person choose, rather than send
+    // a second copy unasked or drop it unsaid (decision 0059).
+    let earlier = [];
+    try { earlier = await invoke("sent_before", { paths: state.paths, to: d.fingerprint }); } catch (e) { /* send as asked */ }
+    if (earlier.length) { askAgain(earlier, d); return; }
+    send(d, []);
+  });
+
+  async function send(d, leaveOut) {
+    go.disabled = true;
     // Storing a large folder takes a while, and the button would otherwise
     // look as though it did nothing.
     says.textContent = `Getting ready to send to ${d.name}…`;
     try {
-      const r = await invoke("send_files", { paths: state.paths, to: d.fingerprint });
+      const r = await invoke("send_files", { paths: state.paths, to: d.fingerprint, leaveOut });
       showJourney(r, d);
     } catch (e) {
       says.textContent = String(e);
       says.classList.add("warn");
       go.disabled = false;
     }
-  });
+  }
+
+  /** Files that went to this device before, and whether to send them again. */
+  function askAgain(earlier, d) {
+    what.replaceChildren();
+    to.replaceChildren();
+    actions.replaceChildren();
+    says.textContent = "";
+    const one = earlier.length === 1;
+    what.append(el("div", "list-label", `Sent to ${d.name} before`));
+    const list = el("ul", "rows");
+    for (const e of earlier) {
+      list.append(row({ iconName: "send", name: base(e.path), sub: [`as ${e.sent_as}`, when(e.at)] }));
+    }
+    what.append(list);
+    says.textContent = one
+      ? `${d.name} may still have it. Sending it again puts another copy there.`
+      : `${d.name} may still have them. Sending them again puts another copy there.`;
+    const all = earlier.length === state.paths.length && earlier.every((e) => state.paths.includes(e.path));
+    const again = button(one ? "Send it again" : "Send them again", "btn primary", "send");
+    const leave = button(all ? "Don't send" : (one ? "Leave it out" : "Leave them out"), "btn");
+    again.addEventListener("click", () => send(d, []));
+    leave.addEventListener("click", () => {
+      if (all) { box.close(); return; }
+      send(d, earlier.map((e) => e.path));
+    });
+    actions.append(leave, again);
+  }
 
   /** §29: what moved where, and when it landed. */
   function showJourney(r, d) {

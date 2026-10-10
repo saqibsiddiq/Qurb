@@ -36,35 +36,39 @@ pub async fn report_holdings(
     offered: &[qurb_sync::FileVersion],
     limit: usize,
 ) -> usize {
-    let mut holdings = match store.db().unreported_to(peer, limit) {
-        Ok(holdings) => holdings,
-        Err(e) => {
-            tracing::debug!(error = %e, "could not work out what to report");
-            return 0;
-        }
-    };
+    let mut holdings: Vec<(blake3::Hash, Option<&qurb_sync::FileVersion>)> =
+        match store.db().unreported_to(peer, limit) {
+            Ok(holdings) => holdings.into_iter().map(|content| (content, None)).collect(),
+            Err(e) => {
+                tracing::debug!(error = %e, "could not work out what to report");
+                return 0;
+            }
+        };
+    // Sends this device took and has not told the sender about, each by
+    // itself (decision 0059): told about the bytes once, a sender of the same
+    // file again would wait for good.
     for version in offered.iter().filter(|v| v.area == qurb_sync::Area::Sent) {
         if holdings.len() >= limit {
             break;
         }
         let Some(hash) = version.content.hash() else { continue };
-        let content = blake3::Hash::from(*hash);
-        if !holdings.contains(&content)
-            && matches!(store.vault_knows(&content), Ok(true))
-            && matches!(store.db().was_reported(peer, &content), Ok(false))
-        {
-            holdings.push(content);
+        if matches!(store.db().unacknowledged(version, peer), Ok(true)) {
+            holdings.push((blake3::Hash::from(*hash), Some(version)));
         }
     }
 
     let mut told = 0;
-    for content in holdings {
+    for (content, send) in holdings {
         if client.got(*content.as_bytes()).await.is_err() {
             // The connection is probably gone. Stop rather than grind through
             // the rest of the list failing.
             break;
         }
-        if let Err(e) = store.db().note_reported(peer, &content) {
+        let recorded = store
+            .db()
+            .note_reported(peer, &content)
+            .and_then(|()| send.map_or(Ok(()), |version| store.db().acknowledge(version)));
+        if let Err(e) = recorded {
             tracing::debug!(error = %e, "could not record what was reported");
             break;
         }

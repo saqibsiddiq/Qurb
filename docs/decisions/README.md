@@ -56,7 +56,7 @@ is worth more than a tidy directory.
 | [0027](0027-plaintext-stops-at-the-local-network.md) | Plaintext rendezvous stops at the local network | Accepted |
 | [0028](0028-waking-a-sleeping-device.md) | Waking a sleeping device, and what it costs | Accepted |
 | [0029](0029-two-areas-shared-and-private.md) | Two areas: one shared, one private per device | Accepted, extended by 0036 |
-| [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted, amended by 0037, extended by 0036; a delivery sent again is acknowledged, and a phone lets go of delivered sends only when asked by name, since 2026-10-07 |
+| [0030](0030-sending-a-file-to-one-device.md) | Sending a file to one device | Accepted, amended by 0037 and 0059 (a send, not its bytes, is taken once), extended by 0036; a phone lets go of delivered sends only when asked by name, since 2026-10-07 |
 | [0031](0031-what-happened-is-written-down.md) | What happened is written down | Accepted |
 | [0032](0032-the-interface-hosts-the-daemon.md) | The interface hosts the daemon, and asks it nouns | Accepted — availability's fourth value in 0055 |
 | [0033](0033-the-phrase-on-a-screen.md) | The recovery phrase on a screen | Superseded by 0052 for setup: no phrase shown or checked; showing it in Settings stands |
@@ -85,3 +85,4 @@ is worth more than a tidy directory.
 | [0056](0056-dark-mode.md) | Dark mode, on the same tokens | Accepted — built on the desktop and Android |
 | [0057](0057-moving-a-file-into-or-out-of-private-vault.md) | Moving a file into or out of Private Vault | Accepted — built on the desktop, Android and the command line; watched with the command line |
 | [0058](0058-a-full-replica-says-so.md) | A full replica keeps everything and says so | Accepted — the existing behaviour, decided |
+| [0059](0059-a-send-is-not-its-bytes.md) | A send is not its bytes: the same file sent again arrives again | Accepted — built on all three; amends 0030 rule 2 |

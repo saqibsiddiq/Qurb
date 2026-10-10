@@ -326,60 +326,120 @@ async fn a_delivery_is_taken_once_and_stays_deleted() {
     assert!(!guest.root.join("once.txt").exists());
 }
 
-/// Taken once, and the sender told even so. The same content sent again --
-/// by another device, or by the same phone set up afresh -- is not taken a
-/// second time, and without a word back its sender would hold it waiting for
-/// good. On 2026-10-05 a cleared phone sent the laptop a 1.7 GB video it had
-/// taken earlier that day, and still held it as undelivered two days later.
+/// The same file sent again, after the first arrived and was deleted, arrives
+/// again (decision 0059). Before, the recipient recorded what it had taken by
+/// its bytes and refused every later send of them, saying nothing; the
+/// sender, told about the bytes the first time, counted the second as
+/// collected the moment it was made.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_delivery_sent_again_is_acknowledged_and_not_taken_twice() {
+async fn a_file_sent_again_arrives_again() {
+    let mut host = Device::new();
+    let mut guest = Device::new();
+    introduce(&host, &guest);
+    let outgoing = host.root.parent().unwrap().join("outgoing.bin");
+    fs::write(&outgoing, b"the same file, twice").unwrap();
+
+    host.engine.store_mut().send_to_vault("tickets.pdf", &outgoing, &guest.device_id()).unwrap();
+    collect(&mut guest, &host).await;
+    assert_eq!(fs::read(guest.root.join("tickets.pdf")).unwrap(), b"the same file, twice");
+    assert!(host.engine.store().pending_deliveries().unwrap().is_empty(), "setup");
+
+    fs::remove_file(guest.root.join("tickets.pdf")).unwrap();
+    guest.engine.reconcile().unwrap();
+
+    let before = host.engine.store().sent_before(std::slice::from_ref(&outgoing), &guest.device_id()).unwrap();
+    assert_eq!(before.len(), 1, "the sender could not say it went before");
+    assert_eq!(before[0].sent_as, "tickets.pdf");
+
+    host.engine.store_mut().send_to_vault("tickets.pdf", &outgoing, &guest.device_id()).unwrap();
+    assert_eq!(
+        host.engine.store().pending_deliveries().unwrap().len(),
+        1,
+        "the second send counted as collected before it was"
+    );
+
+    collect(&mut guest, &host).await;
+    assert_eq!(
+        fs::read(guest.root.join("tickets.pdf")).unwrap(),
+        b"the same file, twice",
+        "the file sent again did not arrive"
+    );
+    let host_store = Store::open(&host.root.join(".qurb"), ChunkKey::from_bytes([42; 32])).unwrap();
+    assert!(host_store.pending_deliveries().unwrap().is_empty(), "the sender still waits");
+}
+
+/// The same bytes from another device are another send: both arrive, side by
+/// side, and both senders are told. On 2026-10-05 a phone set up again sent
+/// the laptop a video it had sent that morning, and it never arrived.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_same_file_from_another_device_is_another_delivery() {
     let mut first = Device::new();
     let mut again = Device::new();
     let mut guest = Device::new();
     introduce(&first, &guest);
     introduce(&again, &guest);
-    let reader = Store::open(&guest.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
-        .unwrap()
-        .in_tree(&guest.root);
-
     for sender in [&mut first, &mut again] {
         let outgoing = sender.root.parent().unwrap().join("outgoing.bin");
         fs::write(&outgoing, b"the same video, twice").unwrap();
         sender.engine.store_mut().send_to_vault("video.mp4", &outgoing, &guest.device_id()).unwrap();
     }
 
-    let (addr, fingerprint) = serve(&first, &[guest.identity.fingerprint()]);
-    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
-    let tree = client.tree().await.unwrap();
-    let plan = guest.engine.plan_against(&tree).unwrap();
-    guest.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
-    client.close();
-    assert_eq!(fs::read(guest.root.join("video.mp4")).unwrap(), b"the same video, twice");
+    collect(&mut guest, &first).await;
+    collect(&mut guest, &again).await;
 
-    assert_eq!(again.engine.store().pending_deliveries().unwrap().len(), 1, "setup");
-    let (addr, fingerprint) = serve(&again, &[guest.identity.fingerprint()]);
-    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
-    let tree = client.tree().await.unwrap();
-    assert!(guest.engine.plan_against(&tree).unwrap().is_empty(), "the delivery was taken twice");
-
-    let told = qurb_peer::report_holdings(&client, &reader, &again.device_id(), &tree, 64).await;
-    let told_again =
-        qurb_peer::report_holdings(&client, &reader, &again.device_id(), &tree, 64).await;
-    client.close();
-
-    assert_eq!(told, 1, "the second sender was not told");
-    assert_eq!(told_again, 0, "told on every pass");
-    assert!(
-        again.engine.store().pending_deliveries().unwrap().is_empty(),
-        "the second sender still waits for a delivery that was taken"
-    );
-    // And it went nowhere new: one file, not a second copy beside it.
     let copies = fs::read_dir(&guest.root)
         .unwrap()
         .flatten()
         .filter(|e| e.file_name().to_string_lossy().starts_with("video"))
         .count();
-    assert_eq!(copies, 1);
+    assert_eq!(copies, 2, "the second send was not taken");
+    for sender in [&first, &again] {
+        let store =
+            Store::open(&sender.root.join(".qurb"), ChunkKey::from_bytes([42; 32])).unwrap();
+        assert!(store.pending_deliveries().unwrap().is_empty(), "a sender still waits");
+    }
+}
+
+/// Told once per send. The recipient tells the sender as it takes a send, and
+/// again at most once after, in case that word was lost on the way.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sender_is_told_about_each_send_once() {
+    let mut host = Device::new();
+    let mut guest = Device::new();
+    introduce(&host, &guest);
+    let outgoing = host.root.parent().unwrap().join("outgoing.bin");
+    fs::write(&outgoing, b"tell me").unwrap();
+    host.engine.store_mut().send_to_vault("note.txt", &outgoing, &guest.device_id()).unwrap();
+    collect(&mut guest, &host).await;
+
+    let (addr, fingerprint) = serve(&host, &[guest.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&guest.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&guest.root);
+    let tree = client.tree().await.unwrap();
+    assert!(guest.engine.plan_against(&tree).unwrap().is_empty(), "taken twice");
+    let told = qurb_peer::report_holdings(&client, &reader, &host.device_id(), &tree, 64).await;
+    let told_again = qurb_peer::report_holdings(&client, &reader, &host.device_id(), &tree, 64).await;
+    client.close();
+    assert!(told <= 1, "told {told} times about one send");
+    assert_eq!(told_again, 0, "told on every pass");
+}
+
+/// Pull everything `from` offers into `into`, and tell `from` what was taken,
+/// as the daemon does at each sync.
+async fn collect(into: &mut Device, from: &Device) {
+    let (addr, fingerprint) = serve(from, &[into.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &into.identity, fingerprint).await.unwrap();
+    let reader = Store::open(&into.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
+        .unwrap()
+        .in_tree(&into.root);
+    let tree = client.tree().await.unwrap();
+    let plan = into.engine.plan_against(&tree).unwrap();
+    let stats = into.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
+    assert!(stats.failures.is_empty(), "{:?}", stats.failures);
+    qurb_peer::report_holdings(&client, &reader, &from.device_id(), &tree, 64).await;
+    client.close();
 }
 
 /// Both people can have a `report.pdf`. Neither loses it.

@@ -1241,6 +1241,27 @@ On the laptop, which runs GNOME set to dark, the real portal answers `1`
 (*prefer dark*) to the same call. The one link not watched is the window on
 the laptop's own screen.
 
+## The same file, sent again
+
+**2026-10-10.** The owner: sending a file to the laptop a second time, after
+deleting the first copy there, did nothing. Three things made sure of it:
+the laptop remembered deliveries by their bytes and refused them ever after;
+the sender, holding the first send still, saw nothing new to send; and the
+sender counted collection by bytes, so the second send looked collected the
+moment it was made. Nobody was told.
+
+A send is now told apart from its bytes: who sent it, under what name, which
+version. One offered again is still taken once, so deleting a received file
+holds. The same file sent again is a new send and arrives again. Before
+sending, the window, the phone and `qurb send` say what went to that device
+before and ask. Only files the size of an earlier send are read to find out,
+so picking a big folder stays quick. What was taken before the change is
+still matched by content, for sends made before it was taken. Decision
+[0059](../decisions/0059-a-send-is-not-its-bytes.md) has the reasoning and
+what it leaves open; `qurb send` was run between two folders paired on the
+laptop, and the window's question looked at against its fixtures. Not yet
+watched between the phone and the laptop.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

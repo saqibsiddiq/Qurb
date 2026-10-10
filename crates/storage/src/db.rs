@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -487,6 +487,34 @@ CREATE TABLE IF NOT EXISTS confirmed (
     content_hash BLOB NOT NULL,
     at           INTEGER NOT NULL,
     PRIMARY KEY (device_id, content_hash)
+) STRICT;
+"#;
+
+const V18: &str = r#"
+-- Deliveries this device has taken, one row per send (decision 0059).
+--
+-- `taken`, from V11, is keyed by content: a delivery of bytes this device had
+-- taken once was never taken again. That kept an old send from arriving
+-- again each time its sender reappeared, and also refused every new send of
+-- the same file -- by the same person after deleting the first, or by a phone
+-- set up again -- silently. A send is identified instead by who sent it,
+-- under what name, and which version of that name: offered again, it is the
+-- same row; sent again, it is a new version and a new row.
+--
+-- `taken` stays, read-only, for what was taken before this: matched by
+-- content, and only for versions made before it was taken.
+CREATE TABLE IF NOT EXISTS deliveries (
+    sender       BLOB NOT NULL,
+    path         TEXT NOT NULL,
+    vector       BLOB NOT NULL,
+    content_hash BLOB NOT NULL,
+    taken_at     INTEGER NOT NULL,
+    filed_as     TEXT NOT NULL,
+    -- Whether the sender has been told, which is what lets it stop waiting.
+    -- Per send: told about the bytes once, a sender of the same file again
+    -- would never be told about the second.
+    acknowledged INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (sender, path, vector)
 ) STRICT;
 "#;
 
@@ -1944,25 +1972,126 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
-    /// Whether this device has already taken delivery of these bytes.
+    /// Whether this device has already taken this send (decision 0059).
     ///
-    /// Tombstones count. A delivery the user accepted and then deleted has
-    /// been taken, and offering it again every time the sender reappears would
-    /// make deleting a received file impossible. So does the `taken` record,
-    /// which outlives a tombstone's retention window and is the only record of
-    /// a delivery filed outside the folder.
-    pub fn vault_knows(&self, content: &blake3::Hash) -> Result<bool> {
-        let me = self.local_device()?;
-        let known: bool = self.conn.query_row(
+    /// A send is who sent it, under what name, and which version of that
+    /// name. Offered again, by a sender that reappears, it is the same send,
+    /// and taking it again would bring back a file the person deleted. Sent
+    /// again, it is a new version, and a new delivery even when the bytes are
+    /// the same.
+    ///
+    /// What was taken before sends were told apart is recorded by content
+    /// alone. It answers only for a version made before it was taken -- that
+    /// is the old send offered again -- so that nothing already received
+    /// arrives twice, and a file sent again since still does. The two clocks
+    /// compared are different devices', which is the cost of a record that
+    /// never held more.
+    pub fn delivery_taken(&self, version: &FileVersion) -> Result<bool> {
+        let Some(hash) = version.content.hash() else { return Ok(false) };
+        let taken: bool = self.conn.query_row(
             "SELECT EXISTS (
-                 SELECT 1 FROM files WHERE content_hash = ?1 AND scope = ?2
+                 SELECT 1 FROM deliveries WHERE sender = ?1 AND path = ?2 AND vector = ?3
              ) OR EXISTS (
-                 SELECT 1 FROM taken WHERE content_hash = ?1
+                 SELECT 1 FROM taken
+                  WHERE content_hash = ?4
+                    AND (sender IS NULL OR sender = ?1)
+                    AND taken_at >= ?5
              )",
-            params![content.as_bytes().as_slice(), me.as_bytes().as_slice()],
+            params![
+                version.modified_by.as_bytes().as_slice(),
+                version.path,
+                version.vector.encode(),
+                hash.as_slice(),
+                version.modified_at
+            ],
             |r| r.get(0),
         )?;
-        Ok(known)
+        Ok(taken)
+    }
+
+    /// Whether the sender of this send is still to be told it was taken.
+    ///
+    /// For a send recorded as one, its own flag. For one taken before sends
+    /// were told apart, whether these bytes were ever reported to `peer`,
+    /// which was the record then.
+    pub fn unacknowledged(&self, version: &FileVersion, peer: &DeviceId) -> Result<bool> {
+        let Some(hash) = version.content.hash() else { return Ok(false) };
+        let flag: Option<bool> = self
+            .conn
+            .query_row(
+                "SELECT acknowledged FROM deliveries WHERE sender = ?1 AND path = ?2 AND vector = ?3",
+                params![version.modified_by.as_bytes().as_slice(), version.path, version.vector.encode()],
+                |r| r.get(0),
+            )
+            .optional()?;
+        match flag {
+            Some(told) => Ok(!told),
+            None => Ok(self.delivery_taken(version)?
+                && !self.was_reported(peer, &blake3::Hash::from(*hash))?),
+        }
+    }
+
+    /// The sender of this send has been told it was taken.
+    pub fn acknowledge(&self, version: &FileVersion) -> Result<()> {
+        self.conn.execute(
+            "UPDATE deliveries SET acknowledged = 1 WHERE sender = ?1 AND path = ?2 AND vector = ?3",
+            params![version.modified_by.as_bytes().as_slice(), version.path, version.vector.encode()],
+        )?;
+        Ok(())
+    }
+
+    /// The last time this device sent these bytes to `device`, if it has:
+    /// the name it sent them under and when (decision 0059).
+    ///
+    /// Asked before sending, so that sending a file again is a choice the
+    /// person makes knowing it went before. Tombstones count -- a send let go
+    /// of after it arrived was still sent.
+    pub fn sent_before(
+        &self,
+        content: &blake3::Hash,
+        device: &DeviceId,
+    ) -> Result<Option<(String, i64)>> {
+        self.conn
+            .query_row(
+                "SELECT path, updated_at FROM files
+                  WHERE scope = ?1 AND content_hash = ?2 AND held = 0
+                  ORDER BY updated_at DESC LIMIT 1",
+                params![device.as_bytes().as_slice(), content.as_bytes().as_slice()],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// Sizes of everything this device has sent to `device`, live or not.
+    ///
+    /// A file whose size is not among them was certainly never sent there,
+    /// so only the rest need hashing before [`sent_before`](Self::sent_before)
+    /// can be asked -- a folder of a thousand photos is not read twice to
+    /// find the one sent last week.
+    pub fn sizes_sent_to(&self, device: &DeviceId) -> Result<std::collections::HashSet<u64>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT size FROM files WHERE scope = ?1 AND held = 0",
+        )?;
+        let rows = stmt.query_map(params![device.as_bytes().as_slice()], |r| r.get::<_, i64>(0))?;
+        rows.map(|r| r.map(|n| n as u64).map_err(Into::into)).collect()
+    }
+
+    /// A new send of `content` to `device`: the device's earlier delivery of
+    /// the same bytes says nothing about this one.
+    ///
+    /// Collected is judged by a record of the device holding the bytes. Left
+    /// in place, the record from the first time would count the new send as
+    /// collected the moment it was made -- and a sender that lets go of what
+    /// has arrived would let go of it before it had. Only a record that the
+    /// device holds them in its own vault is dropped; one that it holds them
+    /// in the shared area is a copy it can hand back, whatever was sent.
+    pub fn sending_again(&self, content: &blake3::Hash, device: &DeviceId) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM replicas WHERE content_hash = ?1 AND device_id = ?2 AND private = 1",
+            params![content.as_bytes().as_slice(), device.as_bytes().as_slice()],
+        )?;
+        Ok(())
     }
 
     /// The file sent to `device` that this chunk is part of, if any: its path
@@ -2067,22 +2196,21 @@ impl Db {
         Ok(())
     }
 
-    /// Remember, for good, that this device took a delivery of these bytes.
+    /// Remember, for good, that this device took this send (decision 0059).
     ///
-    /// The first record stands: a delivery is taken once, so a second call for
-    /// the same content changes nothing.
-    pub fn note_taken(
-        &self,
-        content: &blake3::Hash,
-        sender: Option<&DeviceId>,
-        filed_as: &str,
-    ) -> Result<()> {
+    /// The first record stands: a send is taken once, so a second call for the
+    /// same one changes nothing.
+    pub fn note_taken(&self, version: &FileVersion, filed_as: &str) -> Result<()> {
+        let Some(hash) = version.content.hash() else { return Ok(()) };
         self.conn.execute(
-            "INSERT OR IGNORE INTO taken (content_hash, sender, taken_at, filed_as)
-             VALUES (?1, ?2, unixepoch(), ?3)",
+            "INSERT OR IGNORE INTO deliveries
+                 (sender, path, vector, content_hash, taken_at, filed_as)
+             VALUES (?1, ?2, ?3, ?4, unixepoch(), ?5)",
             params![
-                content.as_bytes().as_slice(),
-                sender.map(|d| d.as_bytes().to_vec()),
+                version.modified_by.as_bytes().as_slice(),
+                version.path,
+                version.vector.encode(),
+                hash.as_slice(),
                 filed_as
             ],
         )?;

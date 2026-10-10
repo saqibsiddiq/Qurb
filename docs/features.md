@@ -70,7 +70,7 @@ not yet looked at by the owner.
 
 | | | |
 |---|---|---|
-| Send to device | a sheet: drop files or folders or choose them, pick a device, then the file travels there — *ready for it*, *sending*, *sent* ([0030](decisions/0030-sending-a-file-to-one-device.md)); from Home, a file, a device, or files dropped anywhere on the window | 🧪 — sending itself ✅ from the command line |
+| Send to device | a sheet: drop files or folders or choose them, pick a device, then the file travels there — *ready for it*, *sending*, *sent* ([0030](decisions/0030-sending-a-file-to-one-device.md)); from Home, a file, a device, or files dropped anywhere on the window. A file sent to that device before is named, with when, and sent again only if asked — *Send it again* or *Leave it out* ([0059](decisions/0059-a-send-is-not-its-bytes.md)) | 🧪 — sending itself ✅ from the command line; the question looked at against the fixtures |
 | Transfers | a chip that appears while something moves or waits, opening a panel: progress with the time left, sends waiting to be collected (cancellable), and what finished | 🧪 |
 | Notifications | three things only: a file sent to you, one of yours collected, one that failed — and a switch to turn them off | 🧪 |
 
@@ -166,7 +166,7 @@ set up, so most commands need no path.
 | `activity [path]` | what happened, newest first, or to one file |
 | `fetch <path>` / `free <path>` | bring a freed file back / free a local copy another device keeps |
 | `private <path>` / `unprivate <path>` | move a file into this device's Private Vault / out of it to every device ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md)) |
-| `send <files and folders> to <device>` / `cancel <name> to <device>` | send to one device / take a send back before it is collected |
+| `send <files and folders> to <device> [--again]` / `cancel <name> to <device>` | send to one device, asking first about anything sent there before ([0059](decisions/0059-a-send-is-not-its-bytes.md)) / take a send back before it is collected |
 | `holders [add\|remove <device>]` | which devices keep this one's own files |
 | `conflicts [keep <copy> this\|other\|both]` | list conflicts, settle one |
 | `share [<folder> with <device>,… \| with everyone]` | which devices a folder goes to |
