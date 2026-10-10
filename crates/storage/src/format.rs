@@ -67,6 +67,16 @@ impl ChunkKey {
     fn cipher(&self) -> XChaCha20Poly1305 {
         XChaCha20Poly1305::new((&self.0).into())
     }
+
+    /// A key for another purpose, derived one way from this one under a
+    /// label: what a guest seals its vault under for a computer (decision
+    /// 0060).
+    pub(crate) fn derive(&self, label: &[u8], extra: &[u8]) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new_keyed(&self.0);
+        hasher.update(label);
+        hasher.update(extra);
+        *hasher.finalize().as_bytes()
+    }
 }
 
 impl std::fmt::Debug for ChunkKey {

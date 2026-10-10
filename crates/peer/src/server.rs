@@ -16,6 +16,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+/// How much of this device's vault is read to seal it for a keeper of another
+/// person in answering one request for the tree (decision 0060). The rest is
+/// sealed when it next asks, so a large vault is shown over a few syncs rather
+/// than holding up the first.
+const SEALING_BUDGET: u64 = 256 << 20;
+
 /// Told about each chunk served, and to whom.
 ///
 /// The server's half of a transfer: what it has handed a peer is the only
@@ -389,11 +395,31 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         None => qurb_storage::db::Audience::Unplaced,
     };
 
+    // Another person's computer this device keeps its own vault on: shown it
+    // sealed, so that it keeps the files without being able to read them
+    // (decision 0060).
+    let keeps_mine = match (&owner, other_person) {
+        (Some(device), true) => store.db().is_holder(device)?,
+        _ => false,
+    };
+
     Ok(match request {
-        Request::Tree => Response::Tree(store.tree_for(audience)?),
+        Request::Tree => {
+            let mut tree = store.tree_for(audience)?;
+            if let (true, Some(holder)) = (keeps_mine, &owner) {
+                store.prepare_sealed(holder, SEALING_BUDGET)?;
+                tree.extend(store.sealed_tree_for(holder)?);
+            }
+            Response::Tree(tree)
+        }
 
         Request::Manifest { content } => {
             let content = blake3::Hash::from(*content);
+            if let (true, Some(holder)) = (keeps_mine, &owner) {
+                if let Some(ids) = store.sealed_manifest(holder, &content)? {
+                    return Ok(Response::Manifest(ids));
+                }
+            }
             if !store.content_visible_to(&content, audience)? {
                 // Indistinguishable from content this device does not hold,
                 // which is deliberate: "you may not have this" and "there is
@@ -441,6 +467,9 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // failing to take a note is not the sender's problem.
         Request::Got { content } => {
             match &owner {
+                // A computer keeping this device's vault, saying it keeps a
+                // sealed file it was shown: recorded against the plain one.
+                Some(device) if keeps_mine && store.note_kept_sealed(device, &blake3::Hash::from(*content))? => {}
                 Some(device) => {
                     let content = blake3::Hash::from(*content);
                     // A delivery out of the peer's own vault is recorded
@@ -454,7 +483,11 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
                     // Recorded, and nothing more: the file is the owner's, and
                     // its name has no business in this device's history or
                     // notifications (decision 0036).
-                    let held = store.db().holds_for(&content, device).unwrap_or(false);
+                    // For a guest, what is kept is kept for its person
+                    // (decision 0060).
+                    let person = store.db().person_of(device).ok().flatten();
+                    let held = store.db().holds_for(&content, device).unwrap_or(false)
+                        || person.is_some_and(|p| store.db().holds_for(&content, &p).unwrap_or(false));
                     let recorded = if held {
                         store.note_replica_in_vault(&content, device)
                     } else if vault_only || other_person {
@@ -490,6 +523,11 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         }
 
         Request::Chunk { hash } => {
+            if let (true, Some(holder)) = (keeps_mine, &owner) {
+                if let Some(sealed) = store.sealed_chunk(holder, hash)? {
+                    return Ok(Response::Chunk(sealed));
+                }
+            }
             let hash = blake3::Hash::from(*hash);
 
             // The bytes, checked the same way as the manifest above. Without

@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -561,6 +561,54 @@ CREATE TABLE IF NOT EXISTS meetings (
 ) STRICT;
 "#;
 
+const V21: &str = r#"
+-- This device's vault, sealed for a keeper of another person (decision 0060):
+-- a computer this device visits as a guest, which keeps its files without
+-- being able to read them. For each file and keeper, the sealed file it was
+-- shown -- its hash and size -- made from which version of the plain file.
+CREATE TABLE IF NOT EXISTS sealed_views (
+    holder       BLOB NOT NULL,
+    path         TEXT NOT NULL,
+    content_hash BLOB NOT NULL,
+    sealed_hash  BLOB NOT NULL,
+    sealed_size  INTEGER NOT NULL,
+    PRIMARY KEY (holder, path)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_sealed_views_hash ON sealed_views (holder, sealed_hash);
+
+-- The parts of a sealed file, in order: the sealed header, then each plain
+-- chunk sealed. What the keeper is told when it asks for the file's chunk
+-- list, and how a sealed chunk it asks for is found again: by reading the
+-- plain chunk and sealing it, the same way every time.
+CREATE TABLE IF NOT EXISTS sealed_parts (
+    holder      BLOB NOT NULL,
+    sealed_hash BLOB NOT NULL,
+    seq         INTEGER NOT NULL,
+    sealed_id   BLOB NOT NULL,
+    chunk_hash  BLOB,
+    header      BLOB,
+    PRIMARY KEY (holder, sealed_hash, seq)
+) STRICT;
+CREATE INDEX IF NOT EXISTS idx_sealed_parts_id ON sealed_parts (holder, sealed_id);
+
+-- On a computer: the person each guest device belongs to, as that device said
+-- when it visited -- an identifier derived from that person's key for this
+-- computer alone. A guest's folder is kept under it, so that a phone set up
+-- again with the same key finds the folder it had (decision 0060).
+CREATE TABLE IF NOT EXISTS visit_persons (
+    device_id BLOB PRIMARY KEY,
+    person    BLOB NOT NULL
+) STRICT;
+
+-- On a guest: files of its vault fetched back from the computer keeping them,
+-- and when. Such a file stays a day before it is let go of again; one added
+-- here goes as soon as the computer has it (decision 0060).
+CREATE TABLE IF NOT EXISTS kept_opened (
+    path TEXT PRIMARY KEY,
+    at   INTEGER NOT NULL
+) STRICT;
+"#;
+
 /// A copy this device could ask for: on a device it is paired with, and not
 /// known to be out of reach (decision 0055). For a query over `replicas r`.
 ///
@@ -570,7 +618,10 @@ CREATE TABLE IF NOT EXISTS meetings (
 ///
 /// Only one of this person's own devices: a guest's copy, or a host's, is
 /// another person's, and nothing here can ask for it back (decision 0060).
-const ASKABLE: &str = "r.private = 0 AND EXISTS (SELECT 1 FROM peers p WHERE p.device_id = r.device_id) AND NOT EXISTS (SELECT 1 FROM peer_relations pr WHERE pr.device_id = r.device_id)";
+///
+/// Except a computer of another person this device keeps its own vault on
+/// (decision 0060): that copy is sealed, and this device can fetch it back.
+const ASKABLE: &str = "r.private = 0 AND EXISTS (SELECT 1 FROM peers p WHERE p.device_id = r.device_id) AND (NOT EXISTS (SELECT 1 FROM peer_relations pr WHERE pr.device_id = r.device_id) OR EXISTS (SELECT 1 FROM holders h WHERE h.device_id = r.device_id))";
 
 /// A copy held by a device not known to be a phone (decision 0053): the other
 /// copy that lets this device free its own. For a query over `replicas r`.
@@ -791,6 +842,19 @@ impl Db {
         let rows = stmt.query_map(params![file_id], |r| {
             let raw: Vec<u8> = r.get(0)?;
             Ok(to_hash(&raw))
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// A file's chunks in order, each with its plain length.
+    pub fn chunks_with_sizes(&self, file_id: i64) -> Result<Vec<(blake3::Hash, u64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT fc.chunk_hash, c.size FROM file_chunks fc JOIN chunks c ON c.hash = fc.chunk_hash
+              WHERE fc.file_id = ?1 ORDER BY fc.seq",
+        )?;
+        let rows = stmt.query_map(params![file_id], |r| {
+            let raw: Vec<u8> = r.get(0)?;
+            Ok((to_hash(&raw), r.get::<_, i64>(1)? as u64))
         })?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
@@ -1686,13 +1750,26 @@ impl Db {
                 rows.map(|row| Ok(row_to_version(&row?))).collect()
             }
             Audience::Guest(asker) => {
-                // Only what is addressed to it: sends into its vault. Never the
-                // shared area, never anything kept for anyone (decision 0060).
+                // Only what is its own: sends into its vault, and what this
+                // computer keeps for its person -- sealed, by them, so nothing
+                // here can read it. Never the shared area, never anything kept
+                // for anyone else (decision 0060).
+                let person = self.person_of(asker)?.unwrap_or(*asker);
                 let mut stmt = self.conn.prepare(&format!(
-                    "SELECT {FILE_COLUMNS} FROM files WHERE scope = ?1 AND held = 0 ORDER BY path"
+                    "SELECT {FILE_COLUMNS}, held FROM files
+                      WHERE (scope = ?1 AND held = 0) OR (scope = ?2 AND held = 1)
+                      ORDER BY path"
                 ))?;
-                let rows = stmt.query_map(params![asker.as_bytes().as_slice()], file_row)?;
-                rows.map(|row| Ok(row_to_version(&row?).in_area(qurb_sync::Area::Sent))).collect()
+                let rows = stmt.query_map(params![asker.as_bytes().as_slice(), person.as_bytes().as_slice()], |r| {
+                    Ok((file_row(r)?, r.get::<_, i64>(FILE_COLUMN_COUNT)? != 0))
+                })?;
+                let mut out = Vec::new();
+                for row in rows {
+                    let (row, held) = row?;
+                    let area = if held { qurb_sync::Area::Held } else { qurb_sync::Area::Sent };
+                    out.push(row_to_version(&row).in_area(area));
+                }
+                Ok(out)
             }
             Audience::Device(asker) => {
                 // Two queries rather than one, so that each version is marked
@@ -2423,14 +2500,15 @@ impl Db {
             return Ok(true);
         }
         if let Audience::Guest(guest) = audience {
-            // What was sent to it, and nothing else, however the bytes are
-            // shared with anything here.
+            // What was sent to it, and what is kept for its person, and
+            // nothing else, however the bytes are shared with anything here.
+            let person = self.person_of(guest)?.unwrap_or(*guest);
             let visible: Option<i64> = self
                 .conn
                 .query_row(
                     "SELECT 1 FROM file_chunks fc JOIN files f ON f.id = fc.file_id
-                      WHERE fc.chunk_hash = ?1 AND f.scope = ?2 AND f.held = 0 LIMIT 1",
-                    params![hash.as_bytes().as_slice(), guest.as_bytes().as_slice()],
+                      WHERE fc.chunk_hash = ?1 AND (f.scope = ?2 OR f.scope = ?3) LIMIT 1",
+                    params![hash.as_bytes().as_slice(), guest.as_bytes().as_slice(), person.as_bytes().as_slice()],
                     |r| r.get(0),
                 )
                 .optional()?;
@@ -2469,11 +2547,12 @@ impl Db {
             return Ok(true);
         }
         if let Audience::Guest(guest) = audience {
+            let person = self.person_of(guest)?.unwrap_or(*guest);
             let visible: Option<i64> = self
                 .conn
                 .query_row(
-                    "SELECT 1 FROM files WHERE content_hash = ?1 AND scope = ?2 AND held = 0 LIMIT 1",
-                    params![content.as_bytes().as_slice(), guest.as_bytes().as_slice()],
+                    "SELECT 1 FROM files WHERE content_hash = ?1 AND (scope = ?2 OR scope = ?3) LIMIT 1",
+                    params![content.as_bytes().as_slice(), guest.as_bytes().as_slice(), person.as_bytes().as_slice()],
                     |r| r.get(0),
                 )
                 .optional()?;
@@ -2819,6 +2898,7 @@ impl Db {
         tx.execute("DELETE FROM confirmed WHERE device_id = ?1", params![id])?;
         tx.execute("DELETE FROM meetings WHERE device_id = ?1", params![id])?;
         tx.execute("DELETE FROM peer_relations WHERE device_id = ?1", params![id])?;
+        tx.execute("DELETE FROM visit_persons WHERE device_id = ?1", params![id])?;
         tx.commit()?;
         Ok(n > 0)
     }
@@ -2844,6 +2924,215 @@ impl Db {
             "INSERT INTO meetings (device_id, secret) VALUES (?1, ?2)
              ON CONFLICT (device_id) DO UPDATE SET secret = excluded.secret",
             params![device.as_bytes().as_slice(), secret.as_slice()],
+        )?;
+        Ok(())
+    }
+
+    /// This device's own vault, tombstones included, with each row's id: what
+    /// a keeper of another person is shown, sealed (decision 0060).
+    pub fn own_vault_rows(&self) -> Result<Vec<(FileRow, FileVersion)>> {
+        let me = self.local_device()?;
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {FILE_COLUMNS} FROM files WHERE scope = ?1 AND held = 0 ORDER BY path"
+        ))?;
+        let rows = stmt.query_map(params![me.as_bytes().as_slice()], file_row)?;
+        let mut out = Vec::new();
+        for row in rows {
+            let row = row?;
+            let version = row_to_version(&row);
+            out.push((row, version));
+        }
+        Ok(out)
+    }
+
+    /// The sealed view of `path` made for `holder`: the plain content it was
+    /// made from, the sealed file's hash and its size.
+    pub fn sealed_view(&self, holder: &DeviceId, path: &str) -> Result<Option<(blake3::Hash, blake3::Hash, u64)>> {
+        self.conn
+            .query_row(
+                "SELECT content_hash, sealed_hash, sealed_size FROM sealed_views WHERE holder = ?1 AND path = ?2",
+                params![holder.as_bytes().as_slice(), path],
+                |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, i64>(2)?)),
+            )
+            .optional()?
+            .map(|(c, s, n)| Ok((to_hash(&c), to_hash(&s), n as u64)))
+            .transpose()
+    }
+
+    /// The plain file a sealed one shown to `holder` was made from: its path
+    /// and content.
+    pub fn unsealed(&self, holder: &DeviceId, sealed: &blake3::Hash) -> Result<Option<(String, blake3::Hash)>> {
+        self.conn
+            .query_row(
+                "SELECT path, content_hash FROM sealed_views WHERE holder = ?1 AND sealed_hash = ?2 LIMIT 1",
+                params![holder.as_bytes().as_slice(), sealed.as_bytes().as_slice()],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?)),
+            )
+            .optional()?
+            .map(|(p, c)| Ok((p, to_hash(&c))))
+            .transpose()
+    }
+
+    /// Record a sealed view, replacing the one made of an earlier version.
+    pub fn put_sealed_view(
+        &self,
+        holder: &DeviceId,
+        path: &str,
+        content: &blake3::Hash,
+        sealed: &blake3::Hash,
+        size: u64,
+        parts: &[([u8; 32], SealedPart)],
+    ) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let h = holder.as_bytes().as_slice();
+        tx.execute(
+            "INSERT INTO sealed_views (holder, path, content_hash, sealed_hash, sealed_size)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT (holder, path) DO UPDATE SET content_hash = excluded.content_hash,
+                 sealed_hash = excluded.sealed_hash, sealed_size = excluded.sealed_size",
+            params![h, path, content.as_bytes().as_slice(), sealed.as_bytes().as_slice(), size as i64],
+        )?;
+        tx.execute(
+            "DELETE FROM sealed_parts WHERE holder = ?1 AND sealed_hash = ?2",
+            params![h, sealed.as_bytes().as_slice()],
+        )?;
+        for (seq, (id, part)) in parts.iter().enumerate() {
+            let (chunk, header) = match part {
+                SealedPart::Chunk(chunk) => (Some(chunk.as_bytes().to_vec()), None),
+                SealedPart::Header(header) => (None, Some(header.clone())),
+            };
+            tx.execute(
+                "INSERT INTO sealed_parts (holder, sealed_hash, seq, sealed_id, chunk_hash, header)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    h,
+                    sealed.as_bytes().as_slice(),
+                    seq as i64,
+                    id.as_slice(),
+                    chunk,
+                    header
+                ],
+            )?;
+        }
+        // Parts of sealed files no view points at any more.
+        tx.execute(
+            "DELETE FROM sealed_parts WHERE holder = ?1
+               AND sealed_hash NOT IN (SELECT sealed_hash FROM sealed_views WHERE holder = ?1)",
+            params![h],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The sealed chunk ids of a sealed file shown to `holder`, in order.
+    pub fn sealed_manifest(&self, holder: &DeviceId, sealed: &blake3::Hash) -> Result<Option<Vec<[u8; 32]>>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT sealed_id FROM sealed_parts WHERE holder = ?1 AND sealed_hash = ?2 ORDER BY seq",
+        )?;
+        let ids: Vec<Vec<u8>> = stmt
+            .query_map(params![holder.as_bytes().as_slice(), sealed.as_bytes().as_slice()], |r| r.get(0))?
+            .collect::<std::result::Result<_, _>>()?;
+        if ids.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(ids.into_iter().filter_map(|id| <[u8; 32]>::try_from(id).ok()).collect()))
+    }
+
+    /// What a sealed chunk shown to `holder` is: the plain chunk it seals, or
+    /// the sealed header itself.
+    pub fn sealed_part(&self, holder: &DeviceId, id: &[u8; 32]) -> Result<Option<SealedPart>> {
+        let found = self
+            .conn
+            .query_row(
+                "SELECT chunk_hash, header FROM sealed_parts WHERE holder = ?1 AND sealed_id = ?2 LIMIT 1",
+                params![holder.as_bytes().as_slice(), id.as_slice()],
+                |r| Ok((r.get::<_, Option<Vec<u8>>>(0)?, r.get::<_, Option<Vec<u8>>>(1)?)),
+            )
+            .optional()?;
+        Ok(match found {
+            Some((_, Some(header))) => Some(SealedPart::Header(header)),
+            Some((Some(chunk), None)) => Some(SealedPart::Chunk(to_hash(&chunk))),
+            _ => None,
+        })
+    }
+
+    /// Files of this device's vault whose bytes are here and which a computer
+    /// of another person keeping that vault is known to hold (decision 0060):
+    /// what this device lets go of, the guest having chosen to keep nothing
+    /// on the phone.
+    pub fn kept_by_hosts(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT f.path FROM files f
+              WHERE f.scope = (SELECT device_id FROM local WHERE id = 1)
+                AND f.held = 0 AND f.deleted_at IS NULL AND f.materialised = 1
+                AND EXISTS (
+                      SELECT 1 FROM replicas r
+                        JOIN holders h ON h.device_id = r.device_id
+                        JOIN peer_relations pr ON pr.device_id = r.device_id
+                       WHERE r.content_hash = f.content_hash AND r.private = 0
+                         AND pr.relation = 'host'
+                    )
+                AND NOT EXISTS (
+                      SELECT 1 FROM kept_opened o
+                       WHERE o.path = f.path AND o.at > unixepoch() - ?1
+                    )
+              ORDER BY f.path",
+        )?;
+        let rows = stmt.query_map(params![KEPT_OPENED_FOR], |r| r.get(0))?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// A file of this device's vault was fetched back from a computer keeping
+    /// it, to be opened: it stays [`KEPT_OPENED_FOR`] before it goes again.
+    pub fn note_kept_opened(&self, path: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO kept_opened (path, at) VALUES (?1, unixepoch())
+             ON CONFLICT (path) DO UPDATE SET at = excluded.at",
+            params![path],
+        )?;
+        self.conn.execute("DELETE FROM kept_opened WHERE at <= unixepoch() - ?1", params![KEPT_OPENED_FOR])?;
+        Ok(())
+    }
+
+    /// The person a guest device belongs to, as it said when it visited.
+    pub fn person_of(&self, device: &DeviceId) -> Result<Option<DeviceId>> {
+        self.conn
+            .query_row(
+                "SELECT person FROM visit_persons WHERE device_id = ?1",
+                params![device.as_bytes().as_slice()],
+                |r| r.get::<_, Vec<u8>>(0),
+            )
+            .optional()
+            .map(|raw| raw.and_then(to_device))
+            .map_err(Into::into)
+    }
+
+    /// The paired devices a guest's person has visited this computer with.
+    pub fn devices_of_person(&self, person: &DeviceId) -> Result<Vec<DeviceId>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT v.device_id FROM visit_persons v JOIN peers p ON p.device_id = v.device_id
+              WHERE v.person = ?1",
+        )?;
+        let rows = stmt.query_map(params![person.as_bytes().as_slice()], |r| r.get::<_, Vec<u8>>(0))?;
+        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?.into_iter().filter_map(to_device).collect())
+    }
+
+    /// How much this computer keeps for a guest's person, in bytes as the
+    /// guest sealed them (decision 0060).
+    pub fn kept_for_person(&self, person: &DeviceId) -> Result<u64> {
+        Ok(self.conn.query_row(
+            "SELECT coalesce(sum(size), 0) FROM files WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL",
+            params![person.as_bytes().as_slice()],
+            |r| r.get::<_, i64>(0),
+        )? as u64)
+    }
+
+    /// Record the person a guest device belongs to.
+    pub fn set_person(&self, device: &DeviceId, person: &[u8; 32]) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO visit_persons (device_id, person) VALUES (?1, ?2)
+             ON CONFLICT (device_id) DO UPDATE SET person = excluded.person",
+            params![device.as_bytes().as_slice(), person.as_slice()],
         )?;
         Ok(())
     }
@@ -3475,6 +3764,20 @@ pub struct NewTrash<'a> {
     pub size: u64,
     pub by: Option<&'a DeviceId>,
     pub why: Option<&'a str>,
+}
+
+/// How long a file fetched back from a computer keeping it stays here before
+/// it is let go of again, in seconds: a day, so that one opened is there to
+/// open again that day (decision 0060).
+pub const KEPT_OPENED_FOR: i64 = 24 * 3600;
+
+/// One part of a sealed file shown to a keeper of another person (decision
+/// 0060): its start, sealed as it is, or a plain chunk that is read and sealed
+/// again whenever it is asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SealedPart {
+    Header(Vec<u8>),
+    Chunk(blake3::Hash),
 }
 
 /// A send read from where its file is (decision 0060). See

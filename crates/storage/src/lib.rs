@@ -27,6 +27,7 @@ pub mod db;
 pub mod error;
 pub mod format;
 pub mod gc;
+pub mod sealed;
 pub mod store;
 
 pub use chunker::{ChunkRef, Manifest, AVG_CHUNK, MAX_CHUNK, MIN_CHUNK};

@@ -2234,6 +2234,13 @@ impl Qurb {
             // And the other way: what it is recorded as holding for files
             // freed here, asked a few at a time (decision 0055).
             runtime.block_on(qurb_peer::check_holders(client, &reader, &known.device_id, 16));
+            // A computer of another person keeping this phone's vault, sealed:
+            // what it keeps that this phone does not know of -- a phone set up
+            // again -- and what was opened and is wanted back (decision 0060).
+            if known.relation == qurb_storage::db::Relation::Host {
+                runtime.block_on(qurb_peer::learn_kept(client, engine.store_mut(), &known.device_id, &tree));
+                runtime.block_on(qurb_peer::fetch_kept(client, engine.store_mut(), &known.device_id, &tree));
+            }
         }
 
         if plan.is_empty() {

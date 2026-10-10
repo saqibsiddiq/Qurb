@@ -114,6 +114,13 @@ async function openDevice(d) {
     ["Status", p.words],
     ["Paired", when(d.paired_at)],
     ...(who ? [["Who", who]] : []),
+    // Their private folder here: sealed on their phone, so nothing on this
+    // computer can open it -- not its name, not a byte (decision 0060).
+    ...(d.relation === "guest"
+      ? [["Their folder", Number(d.kept ?? 0) > 0
+          ? `${size(d.kept)} kept here, sealed: you cannot open it`
+          : "Nothing kept here yet"]]
+      : []),
   ]) facts.append(el("dt", null, term), el("dd", null, value));
   body.append(facts);
 

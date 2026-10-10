@@ -1293,6 +1293,20 @@ computer sent it, and not the computer's shared file; the computer got the
 guest's file in Downloads. The two found each other through their meeting
 in about a second. Not yet between two people's real devices.
 
+## A guest's folder, sealed
+
+**2026-10-11**, step 3 of [decision 0060](../decisions/0060-a-computer-keeps-private-folders-for-several-people.md).
+A guest may choose the computer it visits to keep its Private Vault, and
+everything it shows that computer is sealed first. The computer keeps
+sealed names and sealed files it cannot open. The guest lets go of its own
+copies and fetches one back when it is opened. Running two daemons found
+housekeeping letting go of a file the moment it came back. A fetched file
+now stays a day.
+
+Watched between two scratch folders on the laptop: 300,000 bytes kept as
+300,165 sealed, under a name the computer cannot read; freed by the guest
+and fetched back with the same SHA-256.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

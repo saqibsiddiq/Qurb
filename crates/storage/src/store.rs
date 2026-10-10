@@ -2086,13 +2086,16 @@ impl Store {
             .filter(|(_, _, to)| to == device)
             .map(|(path, size, _)| (path, size))
             .collect();
-        let kept_for_it = self
-            .db
-            .vault_contents(device)?
-            .into_iter()
-            .filter(|(path, _, _)| !waiting.iter().any(|(w, _)| w == path))
-            .map(|(path, size, _)| (path, size))
-            .collect();
+        let kept_for_it = match self.kept_scope(device)? {
+            Some(scope) => self
+                .db
+                .vault_contents(&scope)?
+                .into_iter()
+                .filter(|(path, _, _)| scope != *device || !waiting.iter().any(|(w, _)| w == path))
+                .map(|(path, size, _)| (path, size))
+                .collect(),
+            None => Vec::new(),
+        };
         Ok(RemovalPlan {
             waiting,
             kept_for_it,
@@ -2127,13 +2130,28 @@ impl Store {
             self.cancel_send(path, device)?;
         }
         if delete_kept {
-            for (path, _) in &plan.kept_for_it {
-                self.tombstone(path, Stamp::Local, Some(*device))?;
+            if let Some(scope) = self.kept_scope(device)? {
+                for (path, _) in &plan.kept_for_it {
+                    self.tombstone(path, Stamp::Local, Some(scope))?;
+                }
             }
         }
         self.db.forget_peer(device)?;
         let _ = self.db.record(db::Event::Removed, None, None, Some(device), Some(name));
         Ok(plan)
+    }
+
+    /// Where what this device keeps for `device` is filed: its own vault, or
+    /// for a guest its person's folder (decision 0060) -- `None` when another
+    /// device of that person is still paired, whose folder it is too.
+    fn kept_scope(&self, device: &DeviceId) -> Result<Option<DeviceId>> {
+        match self.db.person_of(device)? {
+            None => Ok(Some(*device)),
+            Some(person) => {
+                let shared = self.db.devices_of_person(&person)?.iter().any(|d| d != device);
+                Ok((!shared).then_some(person))
+            }
+        }
     }
 
     /// What [`release_held_payloads`](Self::release_held_payloads) would free
@@ -2244,7 +2262,10 @@ impl Store {
     pub fn learn_kind(&self, device: &DeviceId, kind: &str) -> Result<bool> {
         self.db.set_peer_kind(device, kind)?;
         let phone = self.db.local_kind()?.as_deref() == Some("phone");
-        if phone && kind == "computer" && !self.db.holders_defaulted()? && self.db.holders()?.is_empty() {
+        // Never another person's computer by default: a guest's files go to a
+        // computer it visits only when it chooses (decision 0060).
+        let own = !self.db.relation_of(device)?.is_some_and(|r| r.is_other_person());
+        if phone && own && kind == "computer" && !self.db.holders_defaulted()? && self.db.holders()?.is_empty() {
             self.db.add_holder(device)?;
             self.db.set_holders_defaulted()?;
             return Ok(true);
@@ -2254,6 +2275,230 @@ impl Store {
 
     pub fn device_id(&self) -> Result<DeviceId> {
         self.db.local_device()
+    }
+
+    // -- a vault kept, sealed, by another person's computer (decision 0060) --
+
+    /// Who this device's person is to the computer with this fingerprint,
+    /// visiting it as a guest: derived from this person's key for that
+    /// computer alone, so one computer cannot link it to another, and every
+    /// device holding the key says the same.
+    pub fn person_for(&self, host: &[u8; 32]) -> [u8; 32] {
+        self.key.derive(b"qurb/guest-person/v1", host)
+    }
+
+    /// Seal what `holder` has not been shown yet of this device's vault: each
+    /// file whose bytes are here and whose current version has no sealed view
+    /// for it. Stops once `budget` bytes have been read, the rest left for
+    /// the next time it asks. Returns how many were sealed.
+    pub fn prepare_sealed(&self, holder: &DeviceId, budget: u64) -> Result<usize> {
+        let key = crate::sealed::FolderKey::for_host(&self.key, holder);
+        let mut read = 0u64;
+        let mut sealed = 0;
+        for (row, _) in self.db.own_vault_rows()? {
+            if row.deleted_at.is_some() || read >= budget {
+                continue;
+            }
+            if self.db.sealed_view(holder, &row.path)?.is_some_and(|(content, _, _)| content == row.content_hash) {
+                continue;
+            }
+            let chunks = self.db.chunks_with_sizes(row.id)?;
+            // A file listed from a keeper and never fetched has no chunk list
+            // here, and nothing to seal it from.
+            if chunks.is_empty() && row.size > 0 {
+                continue;
+            }
+            let meta = crate::sealed::Meta {
+                path: row.path.clone(),
+                size: row.size,
+                content: row.content_hash,
+                modified_at: row.updated_at,
+                chunks: chunks.iter().map(|(_, size)| *size as u32).collect(),
+            };
+            if crate::sealed::seal_name(&key, &row.path).is_none() {
+                continue;
+            }
+            let header = crate::sealed::seal_header(&key, &meta);
+            let mut whole = blake3::Hasher::new();
+            whole.update(&header);
+            let mut size = header.len() as u64;
+            let mut parts = vec![(*blake3::hash(&header).as_bytes(), db::SealedPart::Header(header))];
+            let mut readable = true;
+            for (chunk, _) in chunks {
+                let Ok(plain) = self.read_chunk(&chunk) else {
+                    readable = false;
+                    break;
+                };
+                read += plain.len() as u64;
+                let piece = crate::sealed::seal_chunk(&key, &plain);
+                whole.update(&piece);
+                size += piece.len() as u64;
+                parts.push((*blake3::hash(&piece).as_bytes(), db::SealedPart::Chunk(chunk)));
+            }
+            // Its bytes are not here -- freed, and already kept somewhere --
+            // so there is nothing to seal it from. The view made while they
+            // were is the one that stands.
+            if !readable {
+                continue;
+            }
+            self.db.put_sealed_view(holder, &row.path, &row.content_hash, &whole.finalize(), size, &parts)?;
+            sealed += 1;
+        }
+        Ok(sealed)
+    }
+
+    /// This device's vault as `holder` is shown it: sealed names, sealed
+    /// files, each version as it is here (decision 0060). A file not sealed
+    /// yet is left out until it is; a deletion is shown by the sealed name
+    /// alone, which needs no view, so a file deleted here is deleted there.
+    pub fn sealed_tree_for(&self, holder: &DeviceId) -> Result<Vec<FileVersion>> {
+        let key = crate::sealed::FolderKey::for_host(&self.key, holder);
+        let mut out = Vec::new();
+        for (row, mut version) in self.db.own_vault_rows()? {
+            let Some(name) = crate::sealed::seal_name(&key, &row.path) else { continue };
+            version.path = name;
+            version.area = qurb_sync::Area::Hold;
+            if row.deleted_at.is_none() {
+                match self.db.sealed_view(holder, &row.path)? {
+                    Some((content, sealed, size)) if content == row.content_hash => {
+                        version.content = Content::File { hash: *sealed.as_bytes(), size };
+                    }
+                    _ => continue,
+                }
+            }
+            out.push(version);
+        }
+        Ok(out)
+    }
+
+    /// The chunk list of a sealed file shown to `holder`.
+    pub fn sealed_manifest(&self, holder: &DeviceId, sealed: &blake3::Hash) -> Result<Option<Vec<[u8; 32]>>> {
+        self.db.sealed_manifest(holder, sealed)
+    }
+
+    /// One sealed chunk shown to `holder`: the header as it was sealed, or a
+    /// plain chunk read here and sealed again, the same way. `None` when it is
+    /// not one, or its plain chunk cannot be read any more.
+    pub fn sealed_chunk(&self, holder: &DeviceId, id: &[u8; 32]) -> Result<Option<Vec<u8>>> {
+        let chunk = match self.db.sealed_part(holder, id)? {
+            None => return Ok(None),
+            Some(db::SealedPart::Header(header)) => return Ok(Some(header)),
+            Some(db::SealedPart::Chunk(chunk)) => chunk,
+        };
+        let Ok(plain) = self.read_chunk(&chunk) else { return Ok(None) };
+        let key = crate::sealed::FolderKey::for_host(&self.key, holder);
+        let piece = crate::sealed::seal_chunk(&key, &plain);
+        Ok((blake3::hash(&piece).as_bytes() == id).then_some(piece))
+    }
+
+    /// Let go of this device's copy of each file of its vault that a computer
+    /// of another person keeps (decision 0060). The file stays listed and is
+    /// fetched back when opened. Refused, as any freeing is, unless the copy
+    /// there counts as a safe one. Returns how many.
+    pub fn free_kept_by_hosts(&mut self) -> Result<usize> {
+        let mut freed = 0;
+        for path in self.db.kept_by_hosts()? {
+            if self.evict_because(&path, "kept on a computer this device visits; fetched when opened").is_ok() {
+                freed += 1;
+            }
+        }
+        Ok(freed)
+    }
+
+    /// Record a file of this device's vault that a computer of another person
+    /// keeps and this device does not know of -- a phone set up again with
+    /// the same key -- listed, kept there, and fetched when asked for
+    /// (decision 0060). `version` is the file as its sealed header says: real
+    /// path, size, content hash, time. Returns whether it was new.
+    pub fn know_kept(&mut self, version: &FileVersion, holder: &DeviceId) -> Result<bool> {
+        let Content::File { hash, size } = &version.content else { return Ok(false) };
+        if self.db.own_vault_row(&version.path)?.is_some() {
+            return Ok(false);
+        }
+        let me = self.db.local_device()?;
+        self.db.conn().execute(
+            "INSERT INTO files
+                 (path, size, content_hash, mtime_ns, created_at, updated_at, deleted_at,
+                  vector, modified_by, scope, materialised)
+             VALUES (?1, ?2, ?3, ?4, unixepoch(), ?5, NULL, ?6, ?7, ?8, 0)",
+            rusqlite::params![
+                version.path,
+                *size as i64,
+                hash.as_slice(),
+                version.modified_at.saturating_mul(1_000_000_000),
+                version.modified_at,
+                version.vector.encode(),
+                me.as_bytes().as_slice(),
+                me.as_bytes().as_slice(),
+            ],
+        )?;
+        self.db.note_replica(&blake3::Hash::from(*hash), holder)?;
+        Ok(true)
+    }
+
+    /// Put back a file of this device's vault, fetched from a computer that
+    /// kept it sealed and unsealed into `staging` (decision 0060). Checked
+    /// against the content the index has for it before anything moves.
+    pub fn restore_kept(&mut self, path: &str, staging: &Path) -> Result<()> {
+        let Some(tree) = self.tree.clone() else {
+            return Err(Error::NotFound { path: path.to_string() });
+        };
+        let Some(row) = self.db.own_vault_row(path)? else {
+            return Err(Error::NotFound { path: path.to_string() });
+        };
+        let file = std::fs::File::open(staging).map_err(|e| Error::io(staging, e))?;
+        if hash_reader(file).map_err(|e| Error::io(staging, e))? != row.content_hash {
+            return Err(Error::ChunkCorrupt { hash: row.content_hash.to_hex().to_string() });
+        }
+        let to = tree.join(path);
+        if let Some(parent) = to.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+        }
+        move_file(staging, &to).map_err(|e| Error::io(&to, e))?;
+        // Recorded under the version it already had, so the computer keeping
+        // it is not sent it again as a change; and written out in full, so a
+        // file known only from that computer's list gains its chunk list.
+        let me = self.db.local_device()?;
+        let version = self
+            .db
+            .own_vault_rows()?
+            .into_iter()
+            .find(|(r, _)| r.path == path)
+            .map(|(_, v)| v)
+            .ok_or_else(|| Error::NotFound { path: path.to_string() })?;
+        let file = std::fs::File::open(&to).map_err(|e| Error::io(&to, e))?;
+        let meta = file.metadata().map_err(|e| Error::io(&to, e))?;
+        // SAFETY: as for every other write -- mapped once, chunked and
+        // recorded from the map. An empty file cannot be mapped.
+        let mapped = match meta.len() {
+            0 => None,
+            _ => Some(unsafe { memmap2::Mmap::map(&file) }.map_err(|e| Error::io(&to, e))?),
+        };
+        let data: &[u8] = mapped.as_deref().unwrap_or(&[]);
+        let manifest = chunker::chunk_bytes(data);
+        self.put_manifest(
+            path,
+            &manifest,
+            data,
+            mtime_from(&meta),
+            Placement::remote(&version).in_vault(Some(&me)).rewriting(),
+        )?;
+        self.db.note_kept_opened(path)?;
+        let _ = self.db.record(db::Event::Restored, Some(path), Some(row.size), None, Some("from a computer that keeps it"));
+        Ok(())
+    }
+
+    /// `holder` says it keeps a sealed file it was shown: record that it
+    /// keeps the plain one, so this device can free its own copy and fetch it
+    /// back from there (decision 0060). Returns whether it was one.
+    pub fn note_kept_sealed(&self, holder: &DeviceId, sealed: &blake3::Hash) -> Result<bool> {
+        match self.db.unsealed(holder, sealed)? {
+            Some((_, content)) => {
+                self.db.note_replica(&content, holder)?;
+                Ok(true)
+            }
+            None => Ok(false),
+        }
     }
 
     pub fn list(&self) -> Result<Vec<String>> {

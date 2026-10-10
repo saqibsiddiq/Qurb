@@ -271,10 +271,21 @@ impl Engine {
         // nothing more either, so that a shared file of another person's is
         // never adopted into this person's folder, whatever is offered.
         if let Some(p) = peer {
-            if self.store().db().relation_of(p)?.is_some_and(|r| r.is_other_person()) {
+            if let Some(relation) = self.store().db().relation_of(p)?.filter(|r| r.is_other_person()) {
                 let sent: Vec<FileVersion> =
                     remote.iter().filter(|v| v.area == Area::Sent).cloned().collect();
-                return self.plan_against(&sent);
+                let mut actions = self.plan_against(&sent)?;
+                // And from a guest, its vault to keep, sealed by it: kept
+                // here as bytes this computer cannot read (decision 0060).
+                // Kept under the guest's person, not the device, so that a
+                // phone set up again with the same key finds its folder.
+                if relation == qurb_storage::db::Relation::Guest {
+                    let kept: Vec<FileVersion> =
+                        remote.iter().filter(|v| v.area == Area::Hold).cloned().collect();
+                    let person = self.store().db().person_of(p)?.unwrap_or(*p);
+                    actions.extend(self.holding(&kept, &person)?);
+                }
+                return Ok(actions);
             }
         }
         let remote = self.shared_with(remote, peer)?;

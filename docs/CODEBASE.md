@@ -406,8 +406,18 @@ audience, chosen by the server from the relation on every request: no shared
 area, no vault kept for anyone, and manifests and chunks refused for
 anything else. The engine takes only deliveries from another person's device
 whatever it is offered. A guest's copy never counts as one to ask for.
-Guests are step 2 of 0060. Their private folders on the computer are step 3
-and not built yet.
+A guest's phone may also choose the computer it visits as the keeper of its
+Private Vault, and then everything it shows that computer is **sealed**
+first (`crates/storage/src/sealed.rs`). Sealed names are encrypted paths.
+Each sealed file is a sealed header, carrying the real size, content hash
+and chunk lengths, then each chunk sealed deterministically under a key
+derived from the guest's key for that computer. The computer keeps them as
+it keeps any device's vault, under the guest's *person* (an identifier the
+guest derives for that computer), and can open neither a name nor a byte.
+The guest's phone frees its own copies once kept, and fetches a file back,
+unsealed and checked, when it is opened (`qurb_peer::fetch_kept`); a phone
+set up again with the same key learns its folder from the computer
+(`learn_kept`).
 
 ### 2.7 The index remembers what happened, not just what is
 
@@ -597,6 +607,8 @@ qurb/
 ├── crates/
 │   ├── storage/           Local storage. The foundation everything sits on.
 │   │   └── src/
+│   │       ├── sealed.rs    a guest's files as the computer keeping them sees
+│   │       │                them: sealed names, sealed chunks (0060)
 │   │       ├── chunker.rs   split at content-defined boundaries, hash
 │   │       ├── format.rs    compress, then encrypt (the on-disk format)
 │   │       ├── cas.rs       payloads to and from chunks/<2 hex>/<full hex>
@@ -640,6 +652,8 @@ qurb/
 │   │   ├── src/nat.rs       STUN, NAT classification, hole punching
 │   │   ├── src/connect.rs   the policy: discover, announce, race candidates
 │   │   ├── src/tls.rs       mutual authentication by pinned fingerprint
+│   │   ├── src/kept.rs      a vault kept sealed by another person's computer:
+│   │   │                    fetched back and unsealed (0060)
 │   │   ├── src/server.rs    serves a store, read-only
 │   │   ├── src/client.rs    asks for trees, manifests, chunks
 │   │   └── src/source.rs    plugs the client into the engine
@@ -922,6 +936,7 @@ for the workspace as it stands.
 | Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s under Cubic, barely faster than one at a time ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)); the next row is what changed that |
 | Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md) |
 | Guests | another person's device visits with a guest code, keeping its own key; the two meet at the rendezvous service under a secret of their own and are shown each other only what was sent to them (the `Guest` audience) — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
+| A guest's folder, sealed | a guest's Private Vault kept by the computer it visits under sealed names and sealed chunks the computer cannot open, filed under the guest's person; freed on the phone once kept, fetched back and checked when opened — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |

@@ -1027,6 +1027,16 @@ impl Daemon {
             if asked > 0 {
                 tracing::debug!(peer = %peer.short(), asked, "asked what it holds");
             }
+            // A computer of another person keeping this device's vault,
+            // sealed: what it keeps that this device does not know of, and
+            // what is wanted back from it (decision 0060).
+            if known.relation == qurb_storage::db::Relation::Host {
+                let learned = qurb_peer::learn_kept(&client, engine.store_mut(), &known.device_id, &tree).await;
+                let back = qurb_peer::fetch_kept(&client, engine.store_mut(), &known.device_id, &tree).await;
+                if learned + back > 0 {
+                    tracing::info!(peer = %peer.short(), learned, back, "files it keeps for this device");
+                }
+            }
         }
 
         if plan.is_empty() {

@@ -155,9 +155,19 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
         val facts = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
         val group = kit.group(facts)
         if (peer.relation == "host") {
-            // Another person's computer: it is sent what this phone sends it,
-            // and keeps nothing else of this phone's (decision 0060).
+            // Another person's computer. It keeps this phone's Private Vault
+            // only if chosen, and then sealed: it can open neither a name nor
+            // a byte, and this phone keeps none of its own copies (decision
+            // 0060).
             kit.item(group, "Who", "Someone else's computer, which this phone visits as a guest. It sees only what you send it.")
+            kit.toggle(group, "Keep my files here",
+                if (keeps) "Your Private Vault is kept on ${peer.name}, sealed: nobody using it can open your files. " +
+                    "Each one comes back when you open it."
+                else "Your Private Vault, kept on ${peer.name} and sealed so nobody there can open it. This phone then keeps none of its own copies.",
+                keeps) { on ->
+                sheet.dismiss()
+                if (on) keepWithHost(peer) else stopKeeping(peer)
+            }
             kit.item(group, "Added", Words.ago(peer.pairedAt))
             sheet.view(facts, top = 16)
             sheet.action(R.drawable.ic_send, "Send files…") { app.pickFilesToSend(peer) }
@@ -187,6 +197,19 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
             .text("${peer.name} keeps a copy of the files this phone keeps private, starting at the next " +
                 "sync. Nobody using ${peer.name} sees them; they're yours, and come back to this phone " +
                 "when you ask.\n\nOnce it has a file, this phone can free its own copy to save space.")
+            .buttons("Keep them there", onSecondary = { refresh() }) { setKeeping(peer, true) }
+            .show()
+    }
+
+    /** On a computer of another person: sealed, and nothing kept here. */
+    private fun keepWithHost(peer: PeerInfo) {
+        kit.sheet()
+            .header(R.drawable.ic_lock_keyhole, "Keep your files on ${peer.name}?")
+            .text("Your Private Vault goes to ${peer.name}, sealed on this phone first: whoever uses " +
+                "${peer.name} can't open your files, or see their names. They see only how much space " +
+                "they take.\n\nOnce ${peer.name} has a file, this phone lets go of its own copy, and " +
+                "fetches it back when you open it — while ${peer.name} is on.\n\n" +
+                "It's their computer: they can delete what it keeps, though they can't read it.")
             .buttons("Keep them there", onSecondary = { refresh() }) { setKeeping(peer, true) }
             .show()
     }

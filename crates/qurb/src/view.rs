@@ -50,6 +50,9 @@ pub struct Device {
     /// Who it is to this device: one of the same person's, a guest of this
     /// computer, or a computer this device visits (decision 0060).
     pub relation: qurb_storage::db::Relation,
+    /// For a guest: how much this computer keeps for its person, sealed so
+    /// that nothing here can open it.
+    pub kept: Option<u64>,
 }
 
 /// Where a file's bytes are. Decided in the storage crate, so that the phone,
@@ -145,13 +148,24 @@ impl<'a> View<'a> {
             .db()
             .trusted_peers()?
             .into_iter()
-            .map(|p| Device {
-                id: p.device_id,
-                name: p.name,
-                fingerprint: p.fingerprint[..4].iter().map(|b| format!("{b:02x}")).collect(),
-                paired_at: p.paired_at,
-                last_seen: p.last_seen,
-                relation: p.relation,
+            .map(|p| {
+                let kept = match p.relation {
+                    qurb_storage::db::Relation::Guest => {
+                        let db = self.store.db();
+                        let person = db.person_of(&p.device_id).ok().flatten().unwrap_or(p.device_id);
+                        db.kept_for_person(&person).ok()
+                    }
+                    _ => None,
+                };
+                Device {
+                    id: p.device_id,
+                    name: p.name,
+                    fingerprint: p.fingerprint[..4].iter().map(|b| format!("{b:02x}")).collect(),
+                    paired_at: p.paired_at,
+                    last_seen: p.last_seen,
+                    relation: p.relation,
+                    kept,
+                }
             })
             .collect())
     }

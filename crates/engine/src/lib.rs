@@ -376,6 +376,10 @@ impl Engine {
         // that collection below can then free (decision 0060).
         let called_off = self.store.check_sends()?;
         let sends_done = self.store.tidy_sends()?;
+        // And copies of this device's own files a computer of another person
+        // now keeps: the guest chose to keep nothing on the phone (decision
+        // 0060).
+        self.store.free_kept_by_hosts()?;
         let collected = self.store.gc(retention)?;
         let reclaimed = self.store.reclaim()?;
         let expired = self.store.empty_trash(qurb_storage::TRASH_RETENTION)?;

@@ -360,7 +360,7 @@ impl PairingHost {
                 match Request::decode(&raw) {
                     // Another person's device, visiting as a guest, on a guest
                     // invite and nothing else (decision 0060).
-                    Ok(Request::Visit { token, device_id, name, kind }) if self.invite.guest => {
+                    Ok(Request::Visit { token, device_id, name, kind, person }) if self.invite.guest => {
                         if !constant_time_eq(&token, &self.invite.token) {
                             tracing::warn!(peer = %peer_fingerprint.short(), "wrong pairing token");
                             answer(&mut send, &Response::NotFound, &connection).await;
@@ -402,6 +402,7 @@ impl PairingHost {
                             if let Some(kind) = &guest.kind {
                                 store.learn_kind(&guest.device_id, kind)?;
                             }
+                            store.db().set_person(&guest.device_id, &person)?;
                         }
                         let reply = Response::Welcome {
                             device_id: *our_device.as_bytes(),
@@ -668,7 +669,10 @@ pub async fn visit(
     endpoint.set_default_client_config(tls::client_config(identity, invite.fingerprint)?);
     let connection = endpoint.connect(invite.address, "qurb-device")?.await?;
 
-    let our_device = { store.lock().expect("store mutex").device_id()? };
+    let (our_device, person) = {
+        let store = store.lock().expect("store mutex");
+        (store.device_id()?, store.person_for(invite.fingerprint.as_bytes()))
+    };
     let outcome = async {
         let (mut send, mut recv) = connection.open_bi().await?;
         let ask = Request::Visit {
@@ -676,6 +680,7 @@ pub async fn visit(
             device_id: *our_device.as_bytes(),
             name: our_name.to_string(),
             kind: our_kind.to_string(),
+            person,
         };
         send.write_all(&ask.encode()).await?;
         send.finish()?;

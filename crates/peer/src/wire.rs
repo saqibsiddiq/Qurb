@@ -100,7 +100,11 @@ pub enum Request {
     /// presenting a guest invite's token (decision 0060). Answered with
     /// [`Response::Welcome`] once the person at the computer approves; no key
     /// is asked for or given.
-    Visit { token: [u8; 16], device_id: [u8; 32], name: String, kind: String },
+    ///
+    /// `person` is who the device's person is to this computer, derived from
+    /// their key for it: the computer keeps a guest's folder under it, so a
+    /// phone set up again with the same key finds the folder it had.
+    Visit { token: [u8; 16], device_id: [u8; 32], name: String, kind: String, person: [u8; 32] },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,12 +200,13 @@ impl Request {
                 put_name(&mut out, kind);
                 out.extend_from_slice(key_check);
             }
-            Request::Visit { token, device_id, name, kind } => {
+            Request::Visit { token, device_id, name, kind, person } => {
                 out.push(TAG_VISIT);
                 out.extend_from_slice(token);
                 out.extend_from_slice(device_id);
                 put_name(&mut out, name);
                 put_name(&mut out, kind);
+                out.extend_from_slice(person);
             }
             Request::Join { token, name, kind } => {
                 out.push(TAG_JOIN);
@@ -242,7 +247,13 @@ impl Request {
             TAG_VISIT => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
-                Request::Visit { token, device_id: r.hash()?, name: r.name()?, kind: r.name()? }
+                Request::Visit {
+                    token,
+                    device_id: r.hash()?,
+                    name: r.name()?,
+                    kind: r.name()?,
+                    person: r.hash()?,
+                }
             }
             tag => return Err(Error::Protocol { detail: format!("unknown request tag {tag}") }),
         };
@@ -545,7 +556,13 @@ mod tests {
                 kind: "computer".into(),
                 key_check: [7; 32],
             },
-            Request::Visit { token: [8; 16], device_id: [9; 32], name: "Ammi's phone".into(), kind: "phone".into() },
+            Request::Visit {
+                token: [8; 16],
+                device_id: [9; 32],
+                name: "Ammi's phone".into(),
+                kind: "phone".into(),
+                person: [10; 32],
+            },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }

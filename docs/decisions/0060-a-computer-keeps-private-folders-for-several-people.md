@@ -1,7 +1,8 @@
 # 0060 — A computer keeps private folders for several people, and qurb keeps no copy of what it sends
 
 **Status:** Accepted, 2026-10-10, with the owner's answers at the end — steps
-1 (no copies kept) and 2 (guests) built, steps 3–6 not yet; supersedes [0023](0023-one-person-per-account.md) for people who
+1 (no copies kept), 2 (guests) and 3 (a guest's folder, sealed) built, steps
+4–6 not yet; supersedes [0023](0023-one-person-per-account.md) for people who
 are not the computer's owner, and amends
 [0030](0030-sending-a-file-to-one-device.md) rules 1 and 4.
 **Date:** 2026-10-10
@@ -341,3 +342,112 @@ test passed.
 - A phone cannot welcome guests; only computers show guest codes.
 - **Not watched on hardware.** A second person's phone is needed; until one
   is borrowed, the emulator can play the guest.
+
+### Step 3, a guest's folder — the design, 2026-10-10
+
+**Built from what exists.** A phone's Private Vault can already be kept by a
+computer (0036). The phone frees its own copies, lists them as *available
+elsewhere*, and fetches one back when it is opened. That is the live folder
+the owner chose (answer 5), watched on the S23. What it lacks for a guest is
+privacy from the computer: a keeper sees the names, and receives the bytes
+in plain text inside the encrypted connection. So a guest's phone may choose
+the computer it visits as its vault's keeper, and everything it shows that
+computer is **sealed** first.
+
+**What a host is shown of a guest's vault.** For a keeper of another person:
+
+- **The name** is replaced by a sealed one. The real name, size, content
+  hash and time are encrypted under a key derived from the guest's key for
+  that computer, and written as the path (`~` and base64url). The computer
+  stores a path it cannot read. A rename is a new sealed name.
+- **The content** is the file sealed chunk by chunk, each chunk encrypted
+  deterministically under the same key, so the same chunk always seals the
+  same way. The computer is shown that sealed file: its hash, its size, and
+  the hashes of its sealed chunks. It stores and checks these exactly as it
+  does any file it keeps, and never sees a hash of the plain text, so it
+  cannot test whether a guest holds a file it knows.
+- The guest keeps a map from sealed to plain, built once for each file and
+  keeper, to answer the computer's requests by reading and sealing the
+  chunk it asks for.
+
+**Fetched back**, the guest is shown its sealed entries. It opens the names,
+fetches the sealed chunks, unseals them, and checks the result against the
+content hash inside the sealed name. A new phone set up with the same key,
+from Block Store or a code, can list and open the folder with nothing else.
+
+**No copy on the phone.** Once the computer is known to hold a file of a
+guest's vault, the phone frees its own copy at the next housekeeping, as the
+owner chose. The file stays listed, *on Saqib's laptop*, and is fetched when
+opened.
+
+**The computer's person** sees a guest, the space its folder takes, and
+*Remove*, which can delete the folder. Not a name, not a byte.
+
+**Item 4's two choices**, then: *My folder on Saqib's laptop* is the
+phone's Private Vault, kept by that computer; *Saqib's laptop's Downloads*
+is a send.
+
+### Step 3, a guest's folder — built 2026-10-11
+
+As designed, with three changes found while building it:
+
+- **Sealed names are deterministic, and seal the path alone.** A file keeps
+  its sealed name as it changes, so a new version replaces the old one on
+  the computer, and the sealed name of a file deleted here can be worked out
+  to delete it there with no record kept. The computer can tell that two
+  versions are of one file, and the length of the name. The size, content
+  hash, time and each chunk's length are in a sealed **header** instead.
+- **The sealed file is read back as one stream.** The computer cuts what it
+  keeps into chunks of its own, as it does any file, so its chunks do not
+  follow the guest's. The sealed file is the header's length, the sealed
+  header, then each sealed chunk, and the guest reads it whatever the pieces
+  (`sealed::Unsealer`).
+- **A guest's folder is kept under its person, not its device.** At a visit,
+  the guest's device sends an identifier derived from its person's key for
+  that computer alone (`Store::person_for`, `visit_persons`), and the
+  computer files the folder under it. A phone set up again with the same key
+  finds the folder it had. Removing one device of a guest leaves the folder
+  while another of that person's devices is paired, and removing the last can
+  delete it.
+- **A file fetched back stays a day** (`kept_opened`, `KEPT_OPENED_FOR`).
+  Found running the daemons: housekeeping let go of a file the moment it came
+  back, before anything could open it. A file added still goes as soon as
+  the computer has it.
+
+**What the computer is shown** (`Store::sealed_tree_for`, `prepare_sealed`,
+`sealed_chunk`): sealed names, the sealed file's hash and size, the sealed
+chunk ids. It keeps them as it keeps any device's vault (0036), and serves
+them back to that person's devices only (the `Guest` audience, now including
+what is kept for its person). A sealed view is made once per file and keeper,
+reading at most 256 MiB per request for the tree. **What the guest learns**:
+the computer's "I hold it" names the sealed file, and the guest records it
+against the plain one (`note_kept_sealed`). That copy counts as one this
+device can ask for (`ASKABLE` lets a computer of another person count only
+when it keeps this device's vault). So housekeeping frees the phone's copy
+(`free_kept_by_hosts`), and a wanted file is fetched back, unsealed and
+checked against the header's content hash before it is put back
+(`qurb_peer::fetch_kept`, `restore_kept`). A device with no record of a kept
+file learns it from one sealed header each (`learn_kept`, `know_kept`).
+
+Also found: a phone visiting a computer made it the keeper of its Private
+Vault by default, the 0053 rule for a phone's first computer. A computer of
+another person is never a default keeper now.
+
+On screen: the window says what it keeps for a guest (*12 MB kept here,
+sealed: you cannot open it*); the phone offers *Keep my files here* on a
+computer it visits, saying what that means and that the computer's person can
+delete what it keeps, though not read it.
+
+Tests: `sealed` module (names, headers, chunks, the stream at every cut,
+RFC 4648 vectors); `a_guests_vault_is_kept_sealed`,
+`a_guest_frees_its_copy_and_fetches_it_back`,
+`a_phone_set_up_again_finds_its_folder`,
+`a_guests_folder_goes_only_with_its_last_device`,
+`a_computer_visited_is_not_a_keeper_by_default` (`crates/peer/tests/guests.rs`).
+
+**Watched**: on the laptop, two scratch folders with different keys and a
+rendezvous service of their own; the guest kept its own files private and
+chose the computer as keeper. The computer held a sealed name and 300,165
+bytes for a 300,000-byte file. `qurb free` let go of the guest's copy,
+`qurb fetch` asked for it, and the next sync brought it back with the same
+SHA-256. **Not watched**: any of it on a phone.

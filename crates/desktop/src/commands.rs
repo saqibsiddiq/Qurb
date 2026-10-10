@@ -127,6 +127,8 @@ pub struct Device {
     address: Option<String>,
     /// "own", "guest" or "host" (decision 0060).
     relation: &'static str,
+    /// For a guest: what this computer keeps for them, sealed, in bytes.
+    kept: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1382,6 +1384,7 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
                 paired_at: d.paired_at,
                 last_seen: d.last_seen,
                 relation: d.relation.as_str(),
+                kept: d.kept.map(big),
             }
         })
         .collect())

@@ -273,7 +273,7 @@ const ANSWERS = {
       route: STATE === "synced" ? "relay" : null, address: null, relation: "own" },
     // Another person, visiting this computer (decision 0060).
     { id: "9d01c3aa", name: "Ammi's phone", fingerprint: "c0ffee12", paired_at: now - 86400, last_seen: now - 600,
-      route: null, address: null, relation: "guest" },
+      route: null, address: null, relation: "guest", kept: "12582912" },
   ],
 
   activity: ({ before }) => {

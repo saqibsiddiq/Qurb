@@ -60,7 +60,9 @@ impl Device {
     }
 
     fn write(&mut self, rel: &str, contents: &[u8]) {
-        fs::write(self.root.join(rel), contents).unwrap();
+        let path = self.root.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, contents).unwrap();
         self.engine.reconcile().unwrap();
     }
 
@@ -244,4 +246,172 @@ async fn a_guests_copy_never_counts_as_one_to_ask_for() {
     let content = blake3::hash(b"only on the host");
     host.engine.store().db().note_replica(&content, &guest.id()).unwrap();
     assert_eq!(host.engine.store().db().replica_count(&content).unwrap(), 0, "a guest's copy counted");
+}
+
+/// Take what `from` offers `into`, over a real connection, as a sync would:
+/// `into` plans with `from` as the peer, then tells it what it took.
+async fn sync_from(into: &mut Device, from: &Device) {
+    let addr = from.serve(&[into.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &into.identity, from.identity.fingerprint()).await.unwrap();
+    let reader = Store::open(&into.root.join(".qurb"), ChunkKey::from_bytes(into.key))
+        .unwrap()
+        .in_tree(&into.root);
+    let tree = client.tree().await.unwrap();
+    let plan = into.engine.plan_with(&tree, Some(&from.id())).unwrap();
+    let stats = into.engine.apply_plan(&plan, &mut qurb_peer::NetworkSource::new(&client, &reader)).unwrap();
+    assert!(stats.failures.is_empty(), "{:?}", stats.failures);
+    qurb_peer::report_holdings(&client, &reader, &from.id(), &tree, 64).await;
+    client.close();
+}
+
+/// A guest's Private Vault kept by the computer it visits, which cannot read
+/// it (decision 0060, step 3): the computer holds a sealed name and sealed
+/// bytes, never the name or a byte of the plain text, and the guest learns
+/// the file is kept, so it can free its own copy.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guests_vault_is_kept_sealed() {
+    let mut host = Device::new(42);
+    let mut guest = Device::new(7);
+    welcome(&host, &guest).await;
+
+    guest.engine.store_mut().set_new_files_private(true);
+    let secret = b"Ammi's recipe for nihari, which nobody else may read".repeat(5000);
+    guest.write("recipes/nihari.txt", &secret);
+    guest.engine.store().db().add_holder(&host.id()).unwrap();
+
+    sync_from(&mut host, &guest).await;
+
+    let kept: Vec<qurb_sync::FileVersion> = host
+        .engine
+        .store()
+        .tree_for(qurb_storage::db::Audience::Guest(&guest.id()))
+        .unwrap()
+        .into_iter()
+        .filter(|v| v.area == qurb_sync::Area::Held)
+        .collect();
+    assert_eq!(kept.len(), 1, "the guest's file is not kept");
+    let name = &kept[0].path;
+    assert!(qurb_storage::sealed::is_sealed_name(name), "kept under its real name: {name}");
+    assert!(!name.contains("nihari") && !name.contains("recipes"), "{name}");
+
+    let qurb_sync::Content::File { hash: sealed, .. } = kept[0].content else { panic!("a tombstone") };
+    assert_ne!(sealed, *blake3::hash(&secret).as_bytes(), "the plain text's hash was shown");
+    let stored = host.engine.store().read_content(&blake3::Hash::from(sealed)).unwrap().unwrap();
+    assert!(!stored.windows(32).any(|w| secret.windows(32).next() == Some(w)), "plain text is stored");
+
+    // Told it is kept, the guest counts the computer's copy as one it can
+    // fetch back -- and may free its own.
+    let content = blake3::hash(&secret);
+    assert_eq!(guest.engine.store().db().replica_count(&content).unwrap(), 1, "the guest does not know it is kept");
+}
+
+/// Never a guest's files to a computer it visits unless it chose that: a
+/// phone's vault goes to the first computer it pairs with by default, and a
+/// computer it visits is not one of its own (decision 0060).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_computer_visited_is_not_a_keeper_by_default() {
+    let host = Device::new(42);
+    let guest = Device::new(7);
+    guest.engine.store().db().set_local_kind("phone").unwrap();
+    welcome(&host, &guest).await;
+    assert!(guest.engine.store().db().holders().unwrap().is_empty(), "made a keeper without being chosen");
+}
+
+/// Kept by the computer, the guest lets go of its own copy -- it chose to keep
+/// nothing on the phone -- and gets the file back, unsealed and checked, when
+/// it is wanted (decision 0060, step 3).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guest_frees_its_copy_and_fetches_it_back() {
+    let mut host = Device::new(42);
+    let mut guest = Device::new(7);
+    welcome(&host, &guest).await;
+    guest.engine.store_mut().set_new_files_private(true);
+    let secret = b"a photo of the family, kept on the laptop".repeat(20_000);
+    guest.write("photos/family.jpg", &secret);
+    guest.engine.store().db().add_holder(&host.id()).unwrap();
+    sync_from(&mut host, &guest).await;
+
+    guest.engine.housekeep(std::time::Duration::from_secs(0)).unwrap();
+    assert!(!guest.root.join("photos/family.jpg").exists(), "the phone kept its copy");
+    assert_eq!(guest.engine.store().is_materialised("photos/family.jpg").unwrap(), Some(false));
+
+    guest.engine.store().db().want("photos/family.jpg").unwrap();
+    let back = fetch_back(&mut guest, &host).await;
+    assert_eq!(back, 1);
+    assert_eq!(fs::read(guest.root.join("photos/family.jpg")).unwrap(), secret);
+    assert_eq!(guest.engine.store().is_materialised("photos/family.jpg").unwrap(), Some(true));
+
+    // Fetched to be opened, it stays a while: housekeeping straight after
+    // used to let go of it again before anyone could open it.
+    guest.engine.housekeep(std::time::Duration::from_secs(0)).unwrap();
+    assert!(guest.root.join("photos/family.jpg").exists(), "let go of the moment it came back");
+}
+
+/// A phone set up again with the same key -- from Block Store or a code --
+/// visits as a new device and finds the folder it had: kept under the
+/// person, listed from the computer, and fetched back (decision 0060).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_set_up_again_finds_its_folder() {
+    let mut host = Device::new(42);
+    let mut old = Device::new(7);
+    welcome(&host, &old).await;
+    old.engine.store_mut().set_new_files_private(true);
+    let secret = b"the only copy of something".repeat(10_000);
+    old.write("letters/to-ammi.txt", &secret);
+    old.engine.store().db().add_holder(&host.id()).unwrap();
+    sync_from(&mut host, &old).await;
+
+    // The same person's key, a new device.
+    let mut again = Device::new(7);
+    assert_ne!(again.id(), old.id());
+    welcome(&host, &again).await;
+    again.engine.store().db().add_holder(&host.id()).unwrap();
+
+    let addr = host.serve(&[again.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &again.identity, host.identity.fingerprint()).await.unwrap();
+    let tree = client.tree().await.unwrap();
+    let learned = qurb_peer::learn_kept(&client, again.engine.store_mut(), &host.id(), &tree).await;
+    client.close();
+    assert_eq!(learned, 1, "the folder was not found");
+    assert_eq!(again.engine.store().is_materialised("letters/to-ammi.txt").unwrap(), Some(false));
+
+    again.engine.store().db().want("letters/to-ammi.txt").unwrap();
+    assert_eq!(fetch_back(&mut again, &host).await, 1);
+    assert_eq!(fs::read(again.root.join("letters/to-ammi.txt")).unwrap(), secret);
+}
+
+/// Fetch back what `device` wants of what `host` keeps for it.
+async fn fetch_back(device: &mut Device, host: &Device) -> usize {
+    let addr = host.serve(&[device.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &device.identity, host.identity.fingerprint()).await.unwrap();
+    let tree = client.tree().await.unwrap();
+    let back = qurb_peer::fetch_kept(&client, device.engine.store_mut(), &host.id(), &tree).await;
+    client.close();
+    back
+}
+
+/// Two devices of one guest share its folder. Removing one leaves the folder
+/// to the other; removing the last can delete it, when asked (decision 0060).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guests_folder_goes_only_with_its_last_device() {
+    let mut host = Device::new(42);
+    let mut phone = Device::new(7);
+    let tablet = Device::new(7);
+    welcome(&host, &phone).await;
+    welcome(&host, &tablet).await;
+    phone.engine.store_mut().set_new_files_private(true);
+    phone.write("diary.txt", &b"kept for the person, not the phone".repeat(1000));
+    phone.engine.store().db().add_holder(&host.id()).unwrap();
+    sync_from(&mut host, &phone).await;
+
+    let person = host.engine.store().db().person_of(&phone.id()).unwrap().unwrap();
+    assert!(host.engine.store().db().kept_for_person(&person).unwrap() > 0, "setup");
+
+    let plan = host.engine.store_mut().remove_device(&phone.id(), "phone", true).unwrap();
+    assert!(plan.kept_for_it.is_empty(), "offered to delete a folder the tablet still uses");
+    assert!(host.engine.store().db().kept_for_person(&person).unwrap() > 0, "the tablet's folder went");
+
+    let plan = host.engine.store_mut().remove_device(&tablet.id(), "tablet", true).unwrap();
+    assert_eq!(plan.kept_for_it.len(), 1);
+    assert_eq!(host.engine.store().db().kept_for_person(&person).unwrap(), 0, "the folder stayed");
 }
