@@ -1,8 +1,8 @@
 # 0060 — A computer keeps private folders for several people, and qurb keeps no copy of what it sends
 
-**Status:** Proposed — awaiting the owner's answers to the questions at the
-end. If accepted, it supersedes [0023](0023-one-person-per-account.md) for
-people who are not the computer's owner, and amends
+**Status:** Accepted, 2026-10-10, with the owner's answers at the end — not
+yet built; supersedes [0023](0023-one-person-per-account.md) for people who
+are not the computer's owner, and amends
 [0030](0030-sending-a-file-to-one-device.md) rules 1 and 4.
 **Date:** 2026-10-10
 
@@ -182,3 +182,18 @@ phase document as the work goes.
    if the file is changed or deleted before that device comes on?
 5. **A guest's folder on their phone**: browsed live and fetched when opened,
    as proposed, or a full copy kept on the phone?
+
+## The owner's answers, 2026-10-10
+
+1. **The folder that copies to every device: kept, not central.** It stays
+   for one person's own devices. Sending and private folders become the
+   heart of the app.
+2. **The owner opens a guest's folder only with that guest's approval**, each
+   time, from the guest's phone.
+3. *Not asked.* The owner's own files stay an ordinary folder, as now;
+   locking them like a guest's can be added later.
+4. **No copies.** A send reads the original when it is collected, and says so
+   if it changed or went. A file from the share sheet is copied once and
+   deleted the moment it arrives.
+5. **A guest's folder on the phone is live**, listed from the computer and
+   fetched when opened.

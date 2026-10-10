@@ -1,6 +1,6 @@
 # 0023 — One person per operating-system account
 
-**Status:** Accepted — default location amended by [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md)
+**Status:** Accepted — default location amended by [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md); superseded for guests by [0060](0060-a-computer-keeps-private-folders-for-several-people.md), whose folders on a computer are encrypted with keys the computer does not keep
 **Date:** 2026-09-22
 
 ## Decision
