@@ -61,6 +61,32 @@ pub fn chunk_file(path: &Path) -> Result<Manifest> {
     Ok(chunk_bytes(&mmap))
 }
 
+/// Chunk whatever `reader` reads, a piece at a time: the same cuts and hashes
+/// as [`chunk_bytes`] over the same bytes, holding at most one chunk.
+///
+/// For a file that cannot be mapped -- a document an Android app is lent by
+/// file descriptor, which may be a pipe -- and for content that is only being
+/// described, never stored, as a send read from where it is (decision 0060).
+pub fn chunk_reader<R: std::io::Read>(reader: R) -> std::io::Result<Manifest> {
+    let mut chunks = Vec::new();
+    let mut whole = blake3::Hasher::new();
+    let mut size = 0u64;
+    for entry in fastcdc::v2020::StreamCDC::new(reader, MIN_CHUNK, AVG_CHUNK, MAX_CHUNK) {
+        let entry = entry.map_err(|e| match e {
+            fastcdc::v2020::Error::IoError(e) => e,
+            other => std::io::Error::other(other.to_string()),
+        })?;
+        chunks.push(ChunkRef {
+            hash: blake3::hash(&entry.data),
+            offset: entry.offset,
+            len: entry.length as u32,
+        });
+        whole.update(&entry.data);
+        size += entry.length as u64;
+    }
+    Ok(Manifest { file_hash: whole.finalize(), size, chunks })
+}
+
 /// Chunk an in-memory buffer. Used by tests and by callers that already hold
 /// the data; prefer [`chunk_file`] for anything on disk.
 pub fn chunk_bytes(data: &[u8]) -> Manifest {
@@ -108,6 +134,20 @@ mod tests {
         let m = chunk_bytes(b"");
         assert_eq!(m.size, 0);
         assert!(m.chunks.is_empty());
+    }
+
+    /// Read in pieces, the same file cuts in the same places: a send read
+    /// from a phone's document must be served chunk for chunk as described.
+    #[test]
+    fn a_stream_is_cut_exactly_as_a_buffer_is() {
+        for len in [0, 1, 100_000, 5_000_000] {
+            let data = pseudo_random(7, len);
+            let buffered = chunk_bytes(&data);
+            let streamed = chunk_reader(std::io::Cursor::new(&data)).unwrap();
+            assert_eq!(streamed.file_hash, buffered.file_hash, "{len}");
+            assert_eq!(streamed.size, buffered.size, "{len}");
+            assert_eq!(streamed.chunks, buffered.chunks, "{len}");
+        }
     }
 
     #[test]

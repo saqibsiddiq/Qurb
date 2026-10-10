@@ -372,10 +372,14 @@ impl Engine {
     /// purpose until the disk is short (decision 0030), which is
     /// [`enforce_limit`](Self::enforce_limit)'s business.
     pub fn housekeep(&mut self, retention: std::time::Duration) -> Result<Housekeeping> {
+        // Sends first: one called off, or collected, lets go of references
+        // that collection below can then free (decision 0060).
+        let called_off = self.store.check_sends()?;
+        let sends_done = self.store.tidy_sends()?;
         let collected = self.store.gc(retention)?;
         let reclaimed = self.store.reclaim()?;
         let expired = self.store.empty_trash(qurb_storage::TRASH_RETENTION)?;
-        Ok(Housekeeping { collected, reclaimed, expired })
+        Ok(Housekeeping { collected, reclaimed, expired, called_off, sends_done })
     }
 
     pub fn enforce_limit(&mut self, limit: u64) -> Result<CapStats> {
@@ -736,7 +740,7 @@ fn mtime_ns(meta: &std::fs::Metadata) -> i64 {
 pub const RETENTION: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 60 * 60);
 
 /// What [`Engine::housekeep`] freed.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct Housekeeping {
     /// Garbage past the retention window.
     pub collected: qurb_storage::GcStats,
@@ -744,6 +748,11 @@ pub struct Housekeeping {
     pub reclaimed: qurb_storage::GcStats,
     /// Files and bytes that had been in Recently deleted past its retention.
     pub expired: (usize, u64),
+    /// Sends whose file changed or went before they were collected, and so
+    /// were not sent (decision 0060).
+    pub called_off: Vec<qurb_storage::CalledOff>,
+    /// Sends collected or taken back, whose files qurb stopped reading.
+    pub sends_done: usize,
 }
 
 impl Housekeeping {

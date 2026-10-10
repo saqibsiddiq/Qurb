@@ -347,7 +347,8 @@ async fn a_file_sent_again_arrives_again() {
     fs::remove_file(guest.root.join("tickets.pdf")).unwrap();
     guest.engine.reconcile().unwrap();
 
-    let before = host.engine.store().sent_before(std::slice::from_ref(&outgoing), &guest.device_id()).unwrap();
+    let before =
+        host.engine.store().sent_before(&[outgoing.to_string_lossy().into_owned()], &guest.device_id()).unwrap();
     assert_eq!(before.len(), 1, "the sender could not say it went before");
     assert_eq!(before[0].sent_as, "tickets.pdf");
 
@@ -477,41 +478,48 @@ async fn a_delivery_onto_an_occupied_name_is_filed_beside_it() {
     assert_eq!(fs::read(guest.root.join(&filed[0])).unwrap(), b"the host's report");
 }
 
-/// The retention rule the product promises: the sender keeps its copy until
-/// the recipient confirms, and drops it first once they have.
+/// A send keeps no copy, over a real connection (decision 0060): its file is
+/// read from where it is when the recipient collects it.
 #[tokio::test(flavor = "multi_thread")]
-async fn the_sender_holds_the_copy_until_the_recipient_confirms() {
+async fn a_send_is_read_from_its_file_and_keeps_no_copy() {
     let mut host = Device::new();
     let mut guest = Device::new();
     introduce(&host, &guest);
 
     let outgoing = host.root.parent().unwrap().join("outgoing.bin");
     fs::write(&outgoing, vec![7u8; 400_000]).unwrap();
-    host.engine.store_mut().send_to_vault("big.bin", &outgoing, &guest.device_id()).unwrap();
+    let stats = host.engine.store_mut().send_to_vault("big.bin", &outgoing, &guest.device_id()).unwrap();
+    assert_eq!(stats.bytes_written, 0, "the sender stored a copy");
 
-    // Nobody has it yet, so nothing may be released -- this is the only copy
-    // the recipient will ever get.
-    assert_eq!(host.engine.store_mut().release_held_payloads().unwrap().chunks_removed, 0);
-
-    let (addr, fingerprint) = serve(&host, &[guest.identity.fingerprint()]);
-    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
-    let reader = Store::open(&guest.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
-        .unwrap()
-        .in_tree(&guest.root);
-    let tree = client.tree().await.unwrap();
-    let plan = guest.engine.plan_against(&tree).unwrap();
-    guest.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap();
-    client.close();
-
+    collect(&mut guest, &host).await;
     assert_eq!(fs::read(guest.root.join("big.bin")).unwrap(), vec![7u8; 400_000]);
 
-    // The host served it from the same store the server holds, so the release
-    // is checked through a fresh handle on that store.
     let mut host_store = Store::open(&host.root.join(".qurb"), ChunkKey::from_bytes([42; 32]))
         .unwrap()
         .in_tree(&host.root);
-    let released = host_store.release_held_payloads().unwrap();
-    assert!(released.bytes_reclaimed > 0, "the sender is still paying for a delivered file");
+    assert_eq!(host_store.tidy_sends().unwrap(), 1, "the file is still read after collection");
+    assert!(outgoing.exists(), "the person's own file went");
+}
+
+/// Changed before the recipient came: not sent. The recipient takes nothing,
+/// and the sender is told and stops offering it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_send_changed_before_collection_is_not_delivered() {
+    let mut host = Device::new();
+    let mut guest = Device::new();
+    introduce(&host, &guest);
+
+    let outgoing = host.root.parent().unwrap().join("outgoing.bin");
+    fs::write(&outgoing, b"what was picked").unwrap();
+    host.engine.store_mut().send_to_vault("note.txt", &outgoing, &guest.device_id()).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    fs::write(&outgoing, b"something else entirely").unwrap();
+
+    let called_off = host.engine.store_mut().check_sends().unwrap();
+    assert_eq!(called_off.len(), 1);
+
+    collect(&mut guest, &host).await;
+    assert!(!guest.root.join("note.txt").exists(), "something other than what was picked arrived");
 }
 
 /// Pull everything `from` offers into `into`, over a real connection.

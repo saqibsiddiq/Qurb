@@ -195,8 +195,10 @@ devices which are never awake at the same moment can still exchange files. Run
 with `qurb replica`.
 
 **Send** — Putting a file into one device's *vault*: that device receives it,
-no other does. The sender keeps the bytes until the recipient confirms it has
-them (*collected*), and a send can be cancelled until then. On a desktop, a
+no other does. No copy is kept: the file is read from where it is when the
+recipient collects it, and a send can be cancelled until then. Changing or
+deleting the file first calls the send off
+([0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md)). On a desktop, a
 received file is saved to `Downloads/qurb` as an ordinary file. See
 [decisions/0030](decisions/0030-sending-a-file-to-one-device.md).
 

@@ -1,6 +1,6 @@
 # 0030 — Sending a file to one device
 
-**Status:** Accepted — rule 3 amended by [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md) on devices with a downloads directory; extended by [0036](0036-a-phone-keeps-its-own-files.md); rule 2 completed and rule 4 given a phone's form on 2026-10-07; rule 2 amended by [0059](0059-a-send-is-not-its-bytes.md): a send, not its bytes, is taken once
+**Status:** Accepted — rules 1 and 4 superseded by [0060](0060-a-computer-keeps-private-folders-for-several-people.md) (no copy kept); rule 3 amended by [0037](0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md) on devices with a downloads directory; extended by [0036](0036-a-phone-keeps-its-own-files.md); rule 2 completed and rule 4 given a phone's form on 2026-10-07; rule 2 amended by [0059](0059-a-send-is-not-its-bytes.md): a send, not its bytes, is taken once
 **Date:** 2026-09-23
 
 ## Decision
@@ -12,7 +12,10 @@ that device and to nowhere else.
 Four rules, which together are the whole feature:
 
 1. **The sender keeps the bytes.** They live in the sender's chunk store, not
-   in its folder, until the recipient confirms they arrived.
+   in its folder, until the recipient confirms they arrived. *(Superseded on
+   2026-10-10 by [0060](0060-a-computer-keeps-private-folders-for-several-people.md):
+   no copy is kept. The file is read from where it is when the recipient
+   collects it; changed or deleted first, the send is called off.)*
 2. **A delivery is taken once.** Keyed by content, counting tombstones, so that
    a file the recipient deleted does not come back. *(2026-10-07: and the
    sender is told even so. Content taken before and sent again, by another
@@ -30,7 +33,9 @@ Four rules, which together are the whole feature:
    file, but its index row is scoped to them, so it is never advertised onward.
 4. **The sender releases it first.** Once the recipient confirms, the sender's
    copy is the first thing dropped when the storage cap bites — before any of
-   the sender's own files.
+   the sender's own files. *(Since [0060](0060-a-computer-keeps-private-folders-for-several-people.md)
+   there is no copy to release for a new send; this applies to sends made
+   before 2026-10-10.)*
 
 Rule 4 is the user's explicit instruction: *keep it, but evict it first.*
 

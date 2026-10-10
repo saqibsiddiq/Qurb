@@ -641,8 +641,10 @@ class MainActivity : AppCompatActivity() {
             say(
                 when {
                     left == 0 -> "Sent to ${to.name}"
-                    names.size == 1 -> "Waiting for ${to.name}. It collects it the next time it’s online."
-                    else -> "Waiting for ${to.name}: $left of ${names.size} not collected yet. It gets them the next time it’s online."
+                    // Read from where it is when collected: no copy is kept
+                    // (decision 0060).
+                    names.size == 1 -> "Waiting for ${to.name}. It collects it the next time it’s online — keep the file as it is until then."
+                    else -> "Waiting for ${to.name}: $left of ${names.size} not collected yet. It gets them the next time it’s online — keep the files as they are until then."
                 }
             )
         }
@@ -768,24 +770,26 @@ class MainActivity : AppCompatActivity() {
         sender.launch(arrayOf("*/*"))
     }
 
+    /**
+     * Send files picked with the system's picker. Each is read from where it
+     * is when the other device collects it: nothing is copied (decision
+     * 0060).
+     */
     private fun sendPicked(uris: List<Uri>, to: PeerInfo) {
         lifecycleScope.launch {
-            val staged = mutableListOf<Engine.Staged>()
             val sent = mutableListOf<String>()
             try {
-                for (uri in uris) staged += Engine.stage(this@MainActivity, uri)
-                val earlier = Engine.sentBefore(this@MainActivity, staged.map { it.file }, to.fingerprint)
-                val names = staged.associate { it.file.absolutePath to it.name }
-                val leaveOut = askAgain(to, earlier, everything = earlier.size == staged.size) { names[it] ?: it }
+                val sources = uris.map { it.toString() }
+                val earlier = Engine.sentBefore(this@MainActivity, sources, to.fingerprint)
+                val names = uris.associate { it.toString() to Engine.displayName(this@MainActivity, it) }
+                val leaveOut = askAgain(to, earlier, everything = earlier.size == uris.size) { names[it] ?: it }
                     ?: return@launch
-                for (file in staged.filter { it.file.absolutePath !in leaveOut }) {
-                    sent += Engine.send(this@MainActivity, file, to.fingerprint)
+                for (uri in uris.filter { it.toString() !in leaveOut }) {
+                    sent += Engine.sendDocument(this@MainActivity, uri, to.fingerprint)
                 }
             } catch (e: Exception) {
                 fail(if (sent.isEmpty()) "Could not send that" else "Sent ${sent.size}, then stopped", e)
             } finally {
-                // The engine has stored what it needs of each one sent.
-                staged.forEach { it.file.delete() }
                 changed()
                 if (sent.isNotEmpty()) sendGoes(to, sent)
             }
@@ -793,16 +797,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Send a file already on this phone (§17). The engine keeps its own copy
-     * until the other device collects it, so this works while that device is
-     * off.
+     * Send a file already on this phone (§17). Read from the folder when the
+     * other device collects it, so this works while that device is off; no
+     * copy is kept, and changing or deleting the file first calls the send
+     * off (decision 0060).
      */
     fun send(entry: FileEntry, to: PeerInfo) {
         lifecycleScope.launch {
             val name = entry.path.substringAfterLast('/')
             val source = File(Engine.root(this@MainActivity), entry.path)
             try {
-                val earlier = Engine.sentBefore(this@MainActivity, listOf(source), to.fingerprint)
+                val earlier = Engine.sentBefore(this@MainActivity, listOf(source.absolutePath), to.fingerprint)
                 askAgain(to, earlier, everything = true) { name } ?: return@launch
                 withContext(Dispatchers.IO) {
                     Engine.open(this@MainActivity).sendFile(source.absolutePath, name, to.fingerprint)

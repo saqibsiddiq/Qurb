@@ -155,7 +155,31 @@ object Engine {
                     wakeToken = wake,
                     ownFilesPrivate = ownFilesPrivate(context),
                 ),
-            ).also { handle = it }
+            ).also {
+                // A file sent from the picker is read from where it is when
+                // the other device collects it (decision 0060).
+                it.setDocumentOpener(Documents(context.applicationContext))
+                handle = it
+            }
+        }
+    }
+
+    /**
+     * Documents the engine reads from where they are (decision 0060): opened
+     * by their `content://` address, with the permission to read them kept
+     * from the moment they were picked until the other device has them.
+     */
+    private class Documents(private val context: Context) : uniffi.qurb_mobile.DocumentOpener {
+        override fun open(uri: String): Int = runCatching {
+            context.contentResolver.openFileDescriptor(android.net.Uri.parse(uri), "r")?.detachFd()
+        }.getOrNull() ?: -1
+
+        override fun release(uri: String) {
+            runCatching {
+                context.contentResolver.releasePersistableUriPermission(
+                    android.net.Uri.parse(uri), android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
         }
     }
 
@@ -366,18 +390,21 @@ object Engine {
         withContext(Dispatchers.IO) { open(context).setOwnFilesPrivate(private) }
     }
 
-    /** Something picked from anywhere on the phone, where the engine can read it. */
+    /** A copy of something lent only briefly, made so that it can be sent. */
     class Staged(val file: File, val name: String)
 
     /**
-     * Copy something picked from anywhere on the phone into the cache, to be
-     * sent under the name it had. Staged for the same reason as [importUri]:
-     * the engine takes a path, and a `content://` URI is not one. The caller
-     * deletes it when done, whether or not anything was sent.
+     * Copy something Android's share sheet lent into the app's own files, to
+     * be sent under the name it had. The share sheet's permission lasts only
+     * while the app is on screen, and a send is collected whenever the other
+     * device is next on; the engine deletes the copy once it has been
+     * (decision 0060). Not the cache, which Android may empty before then.
+     * The caller deletes a copy it does not send.
      */
     suspend fun stage(context: Context, uri: android.net.Uri): Staged =
         withContext(Dispatchers.IO) {
-            val staging = File(context.cacheDir, "send-${System.nanoTime()}")
+            val outgoing = File(context.filesDir, "outgoing").apply { mkdirs() }
+            val staging = File(outgoing, "send-${System.nanoTime()}")
             try {
                 context.contentResolver.openInputStream(uri).use { input ->
                     staging.outputStream().use { output ->
@@ -391,14 +418,45 @@ object Engine {
             Staged(staging, safeName(displayName(context, uri)))
         }
 
-    /** Send a staged file to one device. Returns the name it will see. */
+    /**
+     * Send a copy made by [stage] to one device; the engine deletes it once
+     * that device has it. Returns the name it will see.
+     */
     suspend fun send(context: Context, staged: Staged, to: String): String =
         withContext(Dispatchers.IO) {
-            open(context).sendFile(staged.file.absolutePath, staged.name, to)
+            open(context).sendCopy(staged.file.absolutePath, staged.name, to)
             staged.name
         }
 
-    /** Which of these files went to `to` before, and when (decision 0059). */
-    suspend fun sentBefore(context: Context, files: List<File>, to: String): List<uniffi.qurb_mobile.EarlierSend> =
-        withContext(Dispatchers.IO) { open(context).sentBefore(files.map { it.absolutePath }, to) }
+    /**
+     * Send a document picked with the system's file picker, read from where
+     * it is when the other device collects it: no copy is made (decision
+     * 0060). The permission to read it is kept until then. Returns the name
+     * the other device will see.
+     */
+    suspend fun sendDocument(context: Context, uri: android.net.Uri, to: String): String =
+        withContext(Dispatchers.IO) {
+            context.contentResolver.takePersistableUriPermission(
+                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+            val name = safeName(displayName(context, uri))
+            try {
+                open(context).sendDocument(uri.toString(), name, to)
+            } catch (e: Exception) {
+                runCatching {
+                    context.contentResolver.releasePersistableUriPermission(
+                        uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                }
+                throw e
+            }
+            name
+        }
+
+    /**
+     * Which of these went to `to` before, and when (decision 0059): files on
+     * this phone by path, or documents by their `content://` address.
+     */
+    suspend fun sentBefore(context: Context, sources: List<String>, to: String): List<uniffi.qurb_mobile.EarlierSend> =
+        withContext(Dispatchers.IO) { open(context).sentBefore(sources, to) }
 }

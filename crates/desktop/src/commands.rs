@@ -725,14 +725,17 @@ pub struct Earlier {
 pub fn sent_before(hosted: Host<'_>, paths: Vec<String>, to: String) -> Answer<Vec<Earlier>> {
     let device = recipient(&hosted, &to)?;
     let picked: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
-    let sources: Vec<std::path::PathBuf> =
-        qurb_cli::send::plan(&picked).files.into_iter().map(|(_, source)| source).collect();
+    let sources: Vec<String> = qurb_cli::send::plan(&picked)
+        .files
+        .into_iter()
+        .map(|(_, source)| source.to_string_lossy().into_owned())
+        .collect();
     let found = hosted
         .with_store(|store| Ok(store.sent_before(&sources, &device.id)?))
         .map_err(failed)?;
     Ok(found
         .into_iter()
-        .map(|e| Earlier { path: e.file.display().to_string(), sent_as: e.sent_as, at: e.at })
+        .map(|e| Earlier { path: e.source, sent_as: e.sent_as, at: e.at })
         .collect())
 }
 

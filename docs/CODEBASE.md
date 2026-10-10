@@ -324,18 +324,27 @@ stops nothing, and a peer can ask for content by hash without ever looking at a
 listing.
 
 Sending is the operation built on top: `qurb send <file> to <device>` puts a
-file in that device's vault, the sender holds the bytes until the recipient
-confirms they arrived, and the recipient files it in their own folder without
-advertising it onward. See
+file in that device's vault, and the recipient files it in their own folder
+without advertising it onward. See
 [decisions/0029](decisions/0029-two-areas-shared-and-private.md) for the data
 model and [decisions/0030](decisions/0030-sending-a-file-to-one-device.md) for
 what a send promises — including the rule that a copy in somebody's vault is a
 copy this device may *not* count on, which is the difference between eviction
-and data loss. A sender keeps its copy after delivery until space runs short,
-which a desktop's cap decides. A phone has no cap. It shows its copies of
-delivered sends on a line of their own in Settings and on Android's storage
-screen, and lets go of them only when asked by name (`sent_copies`,
-`release_sent_copies`).
+and data loss.
+
+**A send keeps no copy** ([decisions/0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md)).
+The sender records where the file is (`send_sources`): a path, or on a phone
+a document it was lent (the `Documents` the app supplies). When the recipient
+collects, the chunks are read from that file and checked against the hashes
+taken when it was sent, the way a file in the folder supplies its own chunks.
+A file changed or deleted before then is not sent. `Store::check_sends`
+calls the send off and writes why in the history, and both apps' "something
+failed" notification reads it there. Once the recipient has it,
+`Store::tidy_sends` stops reading the file and deletes any copy qurb made —
+only a file Android's share sheet lent briefly is copied, into the app's own
+files. Sends made before 2026-10-10 kept a sealed copy; those still go when
+space runs short on a desktop, or when asked for by name on a phone
+(`sent_copies`, `release_sent_copies`).
 
 **On a desktop, a received file leaves qurb.** The daemon saves it as an
 ordinary file in `Downloads/qurb`, outside the folder, and stops tracking it:
@@ -831,7 +840,7 @@ The unbuilt parts are listed at the end of this section.
 | Per-device private vaults | `files.scope`: `NULL` is shared, a device id is that device's vault |
 | Holding another device's vault | `files.held`, a `holders` list, and four areas on the wire; never released, dropped only on a tombstone |
 | A history of what happened | one table, pruned by age and count; `qurb activity` reads it |
-| Sending to one device | `qurb send <files and folders> to <device>`; held until collected, released first afterwards |
+| Sending to one device | `qurb send <files and folders> to <device>`; no copy kept: read from the file when collected, called off if it changed or went first — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | Receiving on a desktop | saved to `Downloads/qurb` as an ordinary file; overlap with the folder refused |
 | Deliveries remembered | a `deliveries` record per send -- sender, name, version -- never expired, so a send is taken once and the same file sent again arrives again — [0059](decisions/0059-a-send-is-not-its-bytes.md) |
 | Removing a device | `Store::remove_device`: trust ends here, waiting sends cancelled, its copies stop counting as copies, what is kept for it stays unless asked; trust asked per request, not only at the handshake — [0041](decisions/0041-removing-a-device.md) |

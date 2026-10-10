@@ -105,6 +105,7 @@ class ShareActivity : AppCompatActivity() {
             var sent = 0
             var failed = 0
             val staged = mutableListOf<Engine.Staged>()
+            val sending = mutableSetOf<Engine.Staged>()
             try {
                 for (uri in uris) {
                     try {
@@ -115,7 +116,7 @@ class ShareActivity : AppCompatActivity() {
                     }
                 }
                 val earlier = runCatching {
-                    Engine.sentBefore(this@ShareActivity, staged.map { it.file }, to.fingerprint)
+                    Engine.sentBefore(this@ShareActivity, staged.map { it.file.absolutePath }, to.fingerprint)
                 }.getOrDefault(emptyList())
                 val leaveOut = askAgain(to, earlier, staged)
                 if (leaveOut == null) {
@@ -125,6 +126,7 @@ class ShareActivity : AppCompatActivity() {
                 for (file in staged.filter { it.file.absolutePath !in leaveOut }) {
                     try {
                         Engine.send(this@ShareActivity, file, to.fingerprint)
+                        sending += file
                         sent++
                     } catch (e: Exception) {
                         android.util.Log.w("qurb", "could not send a shared file", e)
@@ -132,7 +134,9 @@ class ShareActivity : AppCompatActivity() {
                     }
                 }
             } finally {
-                staged.forEach { it.file.delete() }
+                // Each copy sent is the engine's now, deleted once collected
+                // (decision 0060). The rest were never sent.
+                staged.filter { it !in sending }.forEach { it.file.delete() }
             }
             if (sent == 0) {
                 refuse("Could not send that", "Qurb could not read the file it was handed.")

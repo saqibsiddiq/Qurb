@@ -1,7 +1,7 @@
 # 0060 — A computer keeps private folders for several people, and qurb keeps no copy of what it sends
 
-**Status:** Accepted, 2026-10-10, with the owner's answers at the end — not
-yet built; supersedes [0023](0023-one-person-per-account.md) for people who
+**Status:** Accepted, 2026-10-10, with the owner's answers at the end — step
+1 built (no copies kept), steps 2–6 not yet; supersedes [0023](0023-one-person-per-account.md) for people who
 are not the computer's owner, and amends
 [0030](0030-sending-a-file-to-one-device.md) rules 1 and 4.
 **Date:** 2026-10-10
@@ -197,3 +197,57 @@ phase document as the work goes.
    deleted the moment it arrives.
 5. **A guest's folder on the phone is live**, listed from the computer and
    fetched when opened.
+
+## Progress
+
+### Step 1, no copies kept — built 2026-10-10
+
+- **The engine.** A send records where its file is (`send_sources`, schema
+  19) and stores nothing (`Placement::by_reference`). Its chunks are read
+  from the file when collected and checked against the hashes taken when it
+  was sent (`Store::chunk_from_source`), and they count as held for the
+  question "can you give me this?" (`chunk_in_send`). The file is read once
+  at send time, in pieces, to describe it (`chunker::chunk_reader`, which
+  cuts exactly as the in-memory chunker does).
+- **Called off, and said.** `Store::check_sends` runs in housekeeping, every
+  five minutes on the desktop and after each sync on the phone. It calls off
+  a waiting send whose file is gone, or changed, by size and time, reading
+  the file again when only its time moved. It writes *not sent: it changed
+  after it was sent* in the history, where both apps' "something failed"
+  notification comes from. A change that keeps size and time is caught as
+  it is served, when the chunk does not match, and called off at the next
+  check.
+- **Let go of once collected.** `Store::tidy_sends` stops reading the file,
+  deletes a copy qurb made, gives back a document's read permission, and
+  drops the references to chunks nothing here holds.
+- **The phone.** A file from the picker is read in place through a callback
+  the app supplies (`DocumentOpener`): it takes Android's persistable read
+  permission and lends the engine a file descriptor each time. A file from
+  the share sheet is copied into the app's files, not its cache, which
+  Android may empty, and the copy is deleted once collected. A file already
+  in qurb is read from the folder.
+- **Sends made before** keep their sealed copies, which still go when space
+  runs short on a desktop or when asked for by name on a phone.
+
+Tests: `a_send_keeps_no_copy_and_is_read_from_its_file`,
+`a_send_whose_file_is_deleted_is_called_off`,
+`a_send_whose_file_changed_is_called_off`,
+`a_change_that_hides_from_the_check_is_caught_when_served`,
+`a_file_touched_but_unchanged_still_goes`,
+`a_collected_send_lets_go_of_its_file` (storage);
+`a_send_is_read_from_its_file_and_keeps_no_copy`,
+`a_send_changed_before_collection_is_not_delivered` (over a connection);
+`a_send_keeps_no_copy_and_a_shared_one_goes_once_it_arrives` (the phone's
+FFI); `a_stream_is_cut_exactly_as_a_buffer_is` (the chunker). Four tests that
+asserted the old rule were rewritten.
+
+**Not done in step 1:**
+
+- *Add files* on the phone still copies a file into qurb's folder. That is
+  putting it in qurb, not sending it. Under step 3 it becomes putting it in
+  the person's folder on the computer, with no copy on the phone.
+- A called-off send is said in the history and the notification. Neither
+  window nor phone yet offers *Send the new version* beside it.
+- **Not watched on hardware**: the picker's document read in place on the
+  S23 after the app was closed and opened again, and a send from the phone
+  called off when its file was deleted.

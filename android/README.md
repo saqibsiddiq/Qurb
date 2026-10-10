@@ -351,8 +351,14 @@ replaced by uninstalling — which deletes the phone's key and index. See
   the laptop no longer frees what only a phone also has; and the phone's
   vault is kept by its first computer. Watched on the S23 on 2026-10-07,
   except for uninstalling.
-- **Copies of files the phone sent** are kept after they arrive (decision
-  0030), and a phone has no storage cap to let go of them. Settings shows
+- **A send keeps no copy** since 2026-10-10 (decision 0060). A file from the
+  picker is read from where it is when the other device collects it, the app
+  keeping its permission to read the document until then; a file from the
+  share sheet is copied into the app's files and the copy deleted once
+  collected; a file already in qurb is read from the folder. Changing or
+  deleting the file first calls the send off, and the history says why.
+- **Copies of files the phone sent before that** were kept after they
+  arrived (decision 0030), and a phone has no storage cap to let go of them. Settings shows
   *Copies of files you sent* when there are any, and the Clear-data screen
   offers *Let go of copies of sent files*. Both warn first that a recipient
   may have deleted its copy since. *Free unused space* does not touch them

@@ -839,12 +839,13 @@ fn send(root: &Path, picked: &[PathBuf], recipient: &str, again: bool) -> Result
 
     // Sent there before: said, and sent again only when that is what the
     // person wants (decision 0059). A send is never dropped quietly.
-    let sources: Vec<PathBuf> = plan.files.iter().map(|(_, source)| source.clone()).collect();
+    let sources: Vec<String> =
+        plan.files.iter().map(|(_, source)| source.to_string_lossy().into_owned()).collect();
     let before = store.sent_before(&sources, &peer.id)?;
     if !before.is_empty() {
         println!("sent to {} before:", peer.name);
         for earlier in &before {
-            println!("  {} — as {}, {}", earlier.file.display(), earlier.sent_as, ago(earlier.at));
+            println!("  {} — as {}, {}", earlier.source, earlier.sent_as, ago(earlier.at));
         }
         let yes = again || {
             use std::io::IsTerminal;
@@ -859,8 +860,8 @@ fn send(root: &Path, picked: &[PathBuf], recipient: &str, again: bool) -> Result
             }
         };
         if !yes {
-            let skip: std::collections::HashSet<&PathBuf> = before.iter().map(|b| &b.file).collect();
-            plan.files.retain(|(_, source)| !skip.contains(source));
+            let skip: std::collections::HashSet<&str> = before.iter().map(|b| b.source.as_str()).collect();
+            plan.files.retain(|(_, source)| !skip.contains(source.to_string_lossy().as_ref()));
             println!("  left out; `--again` sends them anyway");
             if plan.files.is_empty() {
                 return Ok(());
@@ -869,26 +870,23 @@ fn send(root: &Path, picked: &[PathBuf], recipient: &str, again: bool) -> Result
     }
 
     println!("sending to {} ({})", peer.name, peer.fingerprint);
-    let (mut sent, mut stored) = (0usize, 0u64);
+    let mut sent = 0usize;
     for (name, source) in &plan.files {
         // One file failing is reported and the rest still go, for the same
         // reason a folder is not refused for one unreadable file in it.
         match store.send_to_vault(name, source, &peer.id) {
-            Ok(stats) => {
+            Ok(_) => {
                 println!("  {name}");
                 sent += 1;
-                stored += stats.bytes_written;
             }
             Err(e) => eprintln!("  not sending {name}: {e}"),
         }
     }
-    println!(
-        "{sent} file{} waiting for {} to collect ({} stored)",
-        if sent == 1 { "" } else { "s" },
-        peer.name,
-        human(stored)
-    );
-    println!("they stay here until then, even if this device restarts");
+    let (it, they) = if sent == 1 { ("it", "it is") } else { ("them", "they are") };
+    println!("{sent} file{} waiting for {} to collect", if sent == 1 { "" } else { "s" }, peer.name);
+    // No copy is kept (decision 0060).
+    println!("  read from where {they} when {} collects {it}, even after a restart;", peer.name);
+    println!("  change or delete one before then and that one is not sent");
     Ok(())
 }
 

@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -518,6 +518,28 @@ CREATE TABLE IF NOT EXISTS deliveries (
 ) STRICT;
 "#;
 
+const V19: &str = r#"
+-- Where a send's bytes are read from (decision 0060).
+--
+-- A send used to keep its own sealed copy of the file in the chunk store
+-- until the recipient had it, and then on until space ran short: 1.6 GB for
+-- one video on a phone. qurb keeps no copy now. The send records where the
+-- file is, and its chunks are read from there when the recipient collects
+-- them, checked against the hashes taken when it was sent. A file changed or
+-- deleted before then calls the send off.
+--
+-- `source` is an absolute path, or on a phone a `content://` document the
+-- app may read again later. `temporary` marks a copy qurb itself made -- of a
+-- file Android's share sheet lent only briefly -- deleted once collected.
+CREATE TABLE IF NOT EXISTS send_sources (
+    file_id   INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+    source    TEXT NOT NULL,
+    size      INTEGER NOT NULL,
+    mtime_ns  INTEGER NOT NULL,
+    temporary INTEGER NOT NULL DEFAULT 0
+) STRICT;
+"#;
+
 /// A copy this device could ask for: on a device it is paired with, and not
 /// known to be out of reach (decision 0055). For a query over `replicas r`.
 ///
@@ -798,6 +820,138 @@ impl Db {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// Where a live send's chunk can be read from: the send's original file,
+    /// the offset of the chunk in it, and its length (decision 0060).
+    ///
+    /// Only a send still waiting -- not yet collected -- is read from: after
+    /// that the file is the person's own again, and qurb has no business
+    /// opening it.
+    pub fn locate_send_chunk(&self, hash: &blake3::Hash) -> Result<Option<(String, u64, u64)>> {
+        let found = self.conn.query_row(
+            "WITH holder AS (
+                 SELECT fc.file_id AS id
+                   FROM file_chunks fc
+                   JOIN files f ON f.id = fc.file_id
+                   JOIN send_sources s ON s.file_id = f.id
+                  WHERE fc.chunk_hash = ?1 AND f.deleted_at IS NULL
+                  LIMIT 1
+             ),
+             laid_out AS (
+                 SELECT fc.chunk_hash,
+                        c.size,
+                        COALESCE(
+                            SUM(c.size) OVER (ORDER BY fc.seq
+                                              ROWS BETWEEN UNBOUNDED PRECEDING
+                                                       AND 1 PRECEDING),
+                            0) AS offset
+                   FROM file_chunks fc
+                   JOIN chunks c ON c.hash = fc.chunk_hash
+                  WHERE fc.file_id = (SELECT id FROM holder)
+             )
+             SELECT (SELECT source FROM send_sources WHERE file_id = (SELECT id FROM holder)),
+                    l.offset,
+                    l.size
+               FROM laid_out l
+              WHERE l.chunk_hash = ?1
+              LIMIT 1",
+            params![hash.as_bytes().as_slice()],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64)),
+        );
+        match found {
+            Ok(located) => Ok(Some(located)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Remember where a send's bytes are to be read from (decision 0060).
+    pub fn note_send_source(
+        &self,
+        file_id: i64,
+        source: &str,
+        size: u64,
+        mtime_ns: i64,
+        temporary: bool,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO send_sources (file_id, source, size, mtime_ns, temporary)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT (file_id) DO UPDATE SET
+                 source = excluded.source, size = excluded.size,
+                 mtime_ns = excluded.mtime_ns, temporary = excluded.temporary",
+            params![file_id, source, size as i64, mtime_ns, temporary as i64],
+        )?;
+        Ok(())
+    }
+
+    /// Every send read from where it is, with whether its recipient has
+    /// collected it yet.
+    pub fn send_sources(&self) -> Result<Vec<SendSource>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT f.id, f.path, f.scope, f.content_hash, f.deleted_at IS NOT NULL,
+                    s.source, s.size, s.mtime_ns, s.temporary,
+                    EXISTS (SELECT 1 FROM replicas r
+                             WHERE r.content_hash = f.content_hash AND r.device_id = f.scope)
+               FROM send_sources s
+               JOIN files f ON f.id = s.file_id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<Vec<u8>>>(2)?,
+                r.get::<_, Vec<u8>>(3)?,
+                r.get::<_, bool>(4)?,
+                r.get::<_, String>(5)?,
+                r.get::<_, i64>(6)?,
+                r.get::<_, i64>(7)?,
+                r.get::<_, bool>(8)?,
+                r.get::<_, bool>(9)?,
+            ))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (file_id, path, scope, hash, deleted, source, size, mtime_ns, temporary, collected) =
+                row?;
+            let Some(to) = scope.and_then(to_device) else { continue };
+            out.push(SendSource {
+                file_id,
+                path,
+                to,
+                content: blake3::Hash::from(<[u8; 32]>::try_from(hash).unwrap_or([0; 32])),
+                source,
+                size: size as u64,
+                mtime_ns,
+                temporary,
+                done: deleted || collected,
+            });
+        }
+        Ok(out)
+    }
+
+    /// A send's file was found not to hold what was sent: recorded as a size
+    /// it cannot have, which the next check reads as changed.
+    pub fn send_source_changed(&self, source: &str) -> Result<()> {
+        self.conn.execute("UPDATE send_sources SET size = -1 WHERE source = ?1", params![source])?;
+        Ok(())
+    }
+
+    /// Stop reading a send from where it was.
+    pub fn forget_send_source(&self, file_id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM send_sources WHERE file_id = ?1", params![file_id])?;
+        Ok(())
+    }
+
+    /// The send's file has been seen unchanged since it was sent, at this
+    /// modification time.
+    pub fn send_source_seen(&self, file_id: i64, mtime_ns: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE send_sources SET mtime_ns = ?2 WHERE file_id = ?1",
+            params![file_id, mtime_ns],
+        )?;
+        Ok(())
     }
 
     /// Total size of every live file, as the user would count it.
@@ -2928,6 +3082,22 @@ impl Db {
         Ok(held)
     }
 
+    /// Whether a send still waiting reads this chunk from its file
+    /// (decision 0060).
+    pub fn chunk_in_send(&self, hash: &blake3::Hash) -> Result<bool> {
+        let held: bool = self.conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM file_chunks fc
+                   JOIN files f ON f.id = fc.file_id
+                   JOIN send_sources s ON s.file_id = f.id
+                  WHERE fc.chunk_hash = ?1 AND f.deleted_at IS NULL
+             )",
+            params![hash.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(held)
+    }
+
     /// Live paths whose content includes this chunk.
     ///
     /// The question repair asks: a chunk has been found damaged, so which files
@@ -3137,6 +3307,27 @@ pub struct NewTrash<'a> {
     pub size: u64,
     pub by: Option<&'a DeviceId>,
     pub why: Option<&'a str>,
+}
+
+/// A send read from where its file is (decision 0060). See
+/// [`Db::send_sources`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SendSource {
+    pub file_id: i64,
+    /// The name the recipient sees.
+    pub path: String,
+    pub to: DeviceId,
+    pub content: blake3::Hash,
+    /// Where the bytes are read from.
+    pub source: String,
+    /// The file's size and modification time when it was sent, or last seen
+    /// unchanged.
+    pub size: u64,
+    pub mtime_ns: i64,
+    /// A copy qurb made, to be deleted once collected.
+    pub temporary: bool,
+    /// Collected, or taken back: nothing more is read from it.
+    pub done: bool,
 }
 
 /// A file in the trash: recently deleted, and still restorable here.

@@ -1262,6 +1262,20 @@ what it leaves open; `qurb send` was run between two folders paired on the
 laptop, and the window's question looked at against its fixtures. Not yet
 watched between the phone and the laptop.
 
+## A send keeps no copy
+
+**2026-10-10**, the first step of [decision 0060](../decisions/0060-a-computer-keeps-private-folders-for-several-people.md),
+at the owner's word: qurb carries files and does not keep them. A send used
+to store a sealed copy of the file until it was collected, and keep it after.
+Now it records where the file is and reads it from there when the recipient
+collects, checked chunk by chunk against what was sent. The file is read
+once at send time to describe it, so sending a large folder from the window
+no longer writes a second copy of it first. A file changed or deleted before
+collection is not sent: the send is called off at the next housekeeping, and
+the history and the window's notification say why. `qurb send` now says
+*read from where it is when Laptop collects it*, not how much it stored.
+Decision 0060 has the detail and what is left.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

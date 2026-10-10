@@ -285,13 +285,19 @@ impl Daemon {
     /// keep syncing, which is what it is for.
     fn housekeep(&self, engine: &mut Engine) {
         match engine.housekeep(qurb_engine::RETENTION) {
-            Ok(done) if done.bytes_freed() > 0 => tracing::info!(
-                collected = done.collected.bytes_reclaimed,
-                reclaimed = done.reclaimed.bytes_reclaimed,
-                tombstones = done.collected.tombstones_expired,
-                "freed what nothing needs"
-            ),
-            Ok(_) => {}
+            Ok(done) => {
+                if done.bytes_freed() > 0 {
+                    tracing::info!(
+                        collected = done.collected.bytes_reclaimed,
+                        reclaimed = done.reclaimed.bytes_reclaimed,
+                        tombstones = done.collected.tombstones_expired,
+                        "freed what nothing needs"
+                    );
+                }
+                for off in &done.called_off {
+                    tracing::info!(path = %off.path, why = %off.why, "a send was called off");
+                }
+            }
             Err(e) => tracing::warn!(error = %e, "housekeeping failed"),
         }
 

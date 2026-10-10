@@ -482,6 +482,40 @@ pub struct Qurb {
     /// What this device has handed to devices collecting from it. Read while
     /// a pass runs, from another thread, so it takes no lock.
     serving: Arc<ServingStats>,
+    /// The app's way to open again a document it sent from where it is
+    /// (decision 0060), given to every store handle opened here.
+    documents: Mutex<Option<Arc<dyn qurb_storage::Documents>>>,
+}
+
+/// The app's way to open a document again later (decision 0060). A file sent
+/// from the system's file picker keeps no copy: it is read from where it is
+/// when the other device collects it, through this.
+#[uniffi::export(with_foreign)]
+pub trait DocumentOpener: Send + Sync {
+    /// A file descriptor open for reading, which the engine then owns and
+    /// closes; -1 when the document cannot be opened any more.
+    fn open(&self, uri: String) -> i32;
+    /// Nothing more will be read from it: release the permission to read it.
+    fn release(&self, uri: String);
+}
+
+/// A [`DocumentOpener`] as the store asks for one.
+struct Lent(Arc<dyn DocumentOpener>);
+
+impl qurb_storage::Documents for Lent {
+    fn open(&self, source: &str) -> Option<std::fs::File> {
+        let fd = self.0.open(source.to_string());
+        if fd < 0 {
+            return None;
+        }
+        // SAFETY: the app detached this descriptor for the engine to own; it
+        // is not used, or closed, anywhere else.
+        Some(unsafe { <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(fd) })
+    }
+
+    fn release(&self, source: &str) {
+        self.0.release(source.to_string());
+    }
 }
 
 /// Bytes served to devices collecting from this one, and when the last went.
@@ -1496,22 +1530,39 @@ impl Qurb {
         Ok(())
     }
 
-    /// Send a file to one device and to nobody else, under `name`.
-    ///
-    /// `source` is a file on this phone: something in the folder, or a copy
-    /// the app staged from the share sheet or a picker. The bytes are kept here
-    /// until that device confirms it has them, so it works while the other
-    /// device is off. Returns the bytes stored to do so.
+    /// Send a file on this phone to one device and to nobody else, under
+    /// `name`: a file in the folder, read from there when that device
+    /// collects it (decision 0060). No copy is kept; a file changed or
+    /// deleted before then is not sent, and the history says why. Returns the
+    /// file's size.
     pub fn send_file(&self, source: String, name: String, to: String) -> Result<u64, QurbError> {
-        let device = self.device_of(&to)?;
-        let name = qurb_watcher::normalize(&name);
-        if !qurb_sync::is_safe_path(&name) {
-            return Err(QurbError::Other {
-                detail: format!("{name:?} is not a name a file can be sent under"),
-            });
+        self.send_from(&source, name, to, false)
+    }
+
+    /// Send a copy the app made of something lent only briefly -- a file from
+    /// Android's share sheet -- deleting the copy once the other device has
+    /// it (decision 0060).
+    pub fn send_copy(&self, copy: String, name: String, to: String) -> Result<u64, QurbError> {
+        self.send_from(&copy, name, to, true)
+    }
+
+    /// Send a document picked with the system's file picker, read from where
+    /// it is through the [`DocumentOpener`] when the other device collects it
+    /// (decision 0060). The app keeps its permission to read the document
+    /// until then.
+    pub fn send_document(&self, uri: String, name: String, to: String) -> Result<u64, QurbError> {
+        self.send_from(&uri, name, to, false)
+    }
+
+    /// How the engine opens documents it sends from where they are (decision
+    /// 0060). Set by the app each time it opens the engine.
+    pub fn set_document_opener(&self, opener: Arc<dyn DocumentOpener>) -> Result<(), QurbError> {
+        let documents: Arc<dyn qurb_storage::Documents> = Arc::new(Lent(opener));
+        if let Ok(mut held) = self.documents.lock() {
+            *held = Some(documents.clone());
         }
-        let stats = self.engine()?.store_mut().send_to_vault(&name, Path::new(&source), &device)?;
-        Ok(stats.bytes_written)
+        self.engine()?.store_mut().set_documents(documents);
+        Ok(())
     }
 
     /// Which of `sources` this phone has sent to `to` before, with the name
@@ -1520,11 +1571,10 @@ impl Qurb {
     /// again is a new send, which the other device takes.
     pub fn sent_before(&self, sources: Vec<String>, to: String) -> Result<Vec<EarlierSend>, QurbError> {
         let device = self.device_of(&to)?;
-        let files: Vec<std::path::PathBuf> = sources.iter().map(std::path::PathBuf::from).collect();
-        let found = self.engine()?.store().sent_before(&files, &device)?;
+        let found = self.engine()?.store().sent_before(&sources, &device)?;
         Ok(found
             .into_iter()
-            .map(|e| EarlierSend { source: e.file.display().to_string(), sent_as: e.sent_as, at: e.at })
+            .map(|e| EarlierSend { source: e.source, sent_as: e.sent_as, at: e.at })
             .collect())
     }
 
@@ -1689,6 +1739,7 @@ impl Qurb {
             wake_token: settings.wake_token,
             runtime: Mutex::new(None),
             serving: Arc::new(ServingStats::default()),
+            documents: Mutex::new(None),
         })
     }
 }
@@ -1697,6 +1748,19 @@ impl Qurb {
 /// Not exported. `#[uniffi::export]` takes every method in the block it is
 /// applied to, and a `MutexGuard` cannot cross an FFI boundary — nor should it.
 impl Qurb {
+    fn send_from(&self, source: &str, name: String, to: String, temporary: bool) -> Result<u64, QurbError> {
+        let device = self.device_of(&to)?;
+        let name = qurb_watcher::normalize(&name);
+        if !qurb_sync::is_safe_path(&name) {
+            return Err(QurbError::Other {
+                detail: format!("{name:?} is not a name a file can be sent under"),
+            });
+        }
+        let mut engine = self.engine()?;
+        engine.store_mut().send_from(&name, source, temporary, &device)?;
+        Ok(engine.store().db().live_row_in(&name, Some(&device))?.map(|r| r.size).unwrap_or(0))
+    }
+
     /// The paired device with this fingerprint, as `peers` gives it: hex, in
     /// full. Only paired devices -- a fingerprint nobody paired with names
     /// nothing here.
@@ -1742,7 +1806,17 @@ impl Qurb {
     /// file this device is holding.
     fn open_store(&self) -> Result<Store, QurbError> {
         let key = self.engine()?.store().chunk_key();
-        Ok(Store::open(&self.store_dir, key)?.in_tree(&self.root))
+        self.another_store(key)
+    }
+
+    /// A second handle on this phone's store, able to read what a send reads
+    /// from where it is.
+    fn another_store(&self, key: ChunkKey) -> Result<Store, QurbError> {
+        let mut store = Store::open(&self.store_dir, key)?.in_tree(&self.root);
+        if let Some(documents) = self.documents.lock().ok().and_then(|d| d.clone()) {
+            store.set_documents(documents);
+        }
+        Ok(store)
     }
 
     /// The tokio runtime, built on first use.
@@ -2105,7 +2179,7 @@ impl Qurb {
         // the ones with holdings to report -- content that arrived before
         // there was any way to say so is content neither side will transfer
         // again.
-        let reader = Store::open(&self.store_dir, engine.store().chunk_key())?.in_tree(&self.root);
+        let reader = self.another_store(engine.store().chunk_key())?;
         if let Ok(Some(known)) = engine.store().db().peer_by_fingerprint(peer.as_bytes()) {
             runtime.block_on(qurb_peer::report_holdings(
                 client,

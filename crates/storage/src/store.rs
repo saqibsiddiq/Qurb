@@ -38,6 +38,32 @@ pub struct Store {
     ///
     /// [decision 0036]: ../../docs/decisions/0036-a-phone-keeps-its-own-files.md
     new_files_private: bool,
+    /// How to open a send's file that is not a path: on Android, a document
+    /// the app was lent (decision 0060). `None` everywhere else.
+    documents: Option<std::sync::Arc<dyn Documents>>,
+}
+
+/// Opens a send's file again when it is to be read, for a source that is not
+/// a path -- on Android, a `content://` document the app may read again later
+/// (decision 0060). The platform supplies it, the way it supplies the keystore
+/// (decision 0021).
+pub trait Documents: Send + Sync {
+    /// The document, open for reading, or `None` when it cannot be opened any
+    /// more: deleted, or the permission to read it taken back.
+    fn open(&self, source: &str) -> Option<std::fs::File>;
+    /// Nothing more will be read from it: give back the permission to.
+    fn release(&self, source: &str);
+}
+
+/// A send called off because its file changed or went before the recipient
+/// collected it (decision 0060).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CalledOff {
+    /// The name the recipient would have seen.
+    pub path: String,
+    pub to: DeviceId,
+    /// Why, in words for the person who sent it.
+    pub why: String,
 }
 
 /// How long a deleted file stays in Recently deleted before it goes for good.
@@ -89,6 +115,9 @@ struct Placement<'a> {
     /// A new version even when the bytes are what the row already holds: a
     /// send made again is a new send (decision 0059).
     fresh: bool,
+    /// The bytes stay where they are, and are read from there when asked
+    /// for: a send, which keeps no copy (decision 0060).
+    by_reference: bool,
 }
 
 impl<'a> Placement<'a> {
@@ -100,6 +129,7 @@ impl<'a> Placement<'a> {
             vault: None,
             held: false,
             fresh: false,
+            by_reference: false,
         }
     }
 
@@ -111,6 +141,7 @@ impl<'a> Placement<'a> {
             vault: None,
             held: false,
             fresh: false,
+            by_reference: false,
         }
     }
 
@@ -132,6 +163,12 @@ impl<'a> Placement<'a> {
         self
     }
 
+    /// Record the chunks, store none of them.
+    fn by_reference(mut self) -> Self {
+        self.by_reference = true;
+        self
+    }
+
     /// Write every payload, whatever the index believes. Repair only.
     fn rewriting(mut self) -> Self {
         self.payloads = Payloads::Rewrite;
@@ -142,8 +179,8 @@ impl<'a> Placement<'a> {
 /// A file this device has sent to a device before (decision 0059).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SentBefore {
-    /// The file picked now.
-    pub file: PathBuf,
+    /// The file picked now: a path, or a document the platform lends.
+    pub source: String,
     /// The name it went under then.
     pub sent_as: String,
     /// When, in unix seconds.
@@ -153,10 +190,9 @@ pub struct SentBefore {
 /// A file's content hash as the index records it -- BLAKE3 over all of its
 /// bytes in order, which is what [`chunker::chunk_bytes`] computes -- read in
 /// pieces rather than held.
-fn hash_file(path: &Path) -> Result<blake3::Hash> {
-    let mut file = std::fs::File::open(path).map_err(|e| Error::io(path, e))?;
+fn hash_reader(mut file: std::fs::File) -> std::io::Result<blake3::Hash> {
     let mut hasher = blake3::Hasher::new();
-    std::io::copy(&mut file, &mut hasher).map_err(|e| Error::io(path, e))?;
+    std::io::copy(&mut file, &mut hasher)?;
     Ok(hasher.finalize())
 }
 
@@ -180,7 +216,7 @@ impl Store {
         std::fs::create_dir_all(root).map_err(|e| Error::io(root, e))?;
         let cas = Cas::open(root.join("chunks"))?;
         let db = Db::open(&root.join("index.db"))?;
-        Ok(Self { cas, db, key, tree: None, new_files_private: false })
+        Ok(Self { cas, db, key, tree: None, new_files_private: false, documents: None })
     }
 
     /// Tell the store where materialised files live.
@@ -259,6 +295,56 @@ impl Store {
             return Ok(None);
         }
         Ok(Some(buffer))
+    }
+
+    /// A send's chunk, read from the send's file and checked (decision 0060).
+    ///
+    /// `None` when there is no such send, or its file no longer holds those
+    /// bytes. The send is called off at the next check, and the person told;
+    /// here it is only not a source.
+    fn chunk_from_source(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
+        let Some((source, offset, len)) = self.db.locate_send_chunk(hash)? else { return Ok(None) };
+        let Ok(mut file) = self.open_source(&source) else { return Ok(None) };
+        use std::io::{Read, Seek, SeekFrom};
+        if file.seek(SeekFrom::Start(offset)).is_err() {
+            return Ok(None);
+        }
+        let mut buffer = vec![0u8; len as usize];
+        if file.read_exact(&mut buffer).is_err() || blake3::hash(&buffer) != *hash {
+            // The file is not what was sent any more. Marked, so that the next
+            // check calls the send off even when its size and time say
+            // nothing changed.
+            self.db.send_source_changed(&source)?;
+            return Ok(None);
+        }
+        Ok(Some(buffer))
+    }
+
+    /// A chunk that is not in the chunk store, from wherever this device has
+    /// it on disk: a file in the folder, or a send's file.
+    fn chunk_from_disk(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
+        match self.chunk_from_tree(hash)? {
+            Some(plaintext) => Ok(Some(plaintext)),
+            None => self.chunk_from_source(hash),
+        }
+    }
+
+    /// Open a send's file: a path, or a document the platform lends.
+    fn open_source(&self, source: &str) -> std::io::Result<std::fs::File> {
+        if source.starts_with("content://") {
+            return self
+                .documents
+                .as_ref()
+                .and_then(|documents| documents.open(source))
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the document cannot be opened"));
+        }
+        std::fs::File::open(source)
+    }
+
+    /// How to open documents that are not paths (decision 0060). Android's
+    /// app sets this when it opens the engine.
+    pub fn set_documents(&mut self, documents: std::sync::Arc<dyn Documents>) {
+        self.documents = Some(documents);
     }
 
     /// Where this store lives, so another handle can be opened on it.
@@ -457,7 +543,7 @@ impl Store {
         mtime_ns: i64,
         placement: Placement<'_>,
     ) -> Result<PutStats> {
-        let Placement { stamp, payloads, vault, held, fresh } = placement;
+        let Placement { stamp, payloads, vault, held, fresh, by_reference } = placement;
         let mut stats = PutStats { chunks_total: manifest.chunks.len(), ..Default::default() };
 
         // A path that is already this device's own private content stays
@@ -611,8 +697,9 @@ impl Store {
             // for content that is already on this disk and already readable.
             //
             // `stored_size` is recorded as zero for such a chunk, which is
-            // true: it occupies nothing of its own.
-            if materialised {
+            // true: it occupies nothing of its own. Nor does a send's: its
+            // file supplies it, wherever that is (decision 0060).
+            if materialised || by_reference {
                 self.db.insert_chunk(&c.hash, c.len as u64, 0)?;
                 stats.bytes_deduplicated += c.len as u64;
                 continue;
@@ -670,7 +757,8 @@ impl Store {
                 // "indexed but no payload" is its normal state, not evidence
                 // that collection took it. Re-assert the index row -- that much
                 // *can* have been collected -- and never write the payload.
-                if materialised {
+                // The same for a send's, read from its file.
+                if materialised || by_reference {
                     if !indexed {
                         insert.execute(rusqlite::params![
                             c.hash.as_bytes().as_slice(),
@@ -837,7 +925,7 @@ impl Store {
         // way round -- cheap membership test, then the file -- so a replica and
         // any content the tree cannot supply take the original path unchanged.
         if !self.cas.contains(hash) {
-            if let Some(plaintext) = self.chunk_from_tree(hash)? {
+            if let Some(plaintext) = self.chunk_from_disk(hash)? {
                 return Ok(plaintext);
             }
         }
@@ -1087,7 +1175,8 @@ impl Store {
         };
         for chunk in &chunks {
             let held = self.cas.contains(chunk)
-                || (self.tree.is_some() && self.db.chunk_in_folder(chunk)?);
+                || (self.tree.is_some() && self.db.chunk_in_folder(chunk)?)
+                || self.db.chunk_in_send(chunk)?;
             if !held {
                 return Ok(None);
             }
@@ -1125,21 +1214,19 @@ impl Store {
         if self.cas.contains(hash) {
             return Ok(true);
         }
-        Ok(matches!(self.chunk_from_tree(hash), Ok(Some(_))))
+        Ok(matches!(self.chunk_from_disk(hash), Ok(Some(_))))
     }
 
-    /// Hold content on another device's behalf, in its private vault.
+    /// Send a file to another device, into its private vault, keeping no copy
+    /// (decision 0060). The recipient learns of it from the tree, which shows
+    /// a device its own vault, and collects it whenever it next appears.
     ///
-    /// The bytes are kept here so the recipient can collect them whenever it
-    /// next appears — a send to a phone that is switched off must not need the
-    /// sender to still be holding a file open when it wakes. The recipient
-    /// learns of it from the tree, which shows a device its own vault.
-    ///
-    /// Always kept as chunks, never as a file in this device's folder. That is
-    /// not an optimisation: a vault entry that leaned on a same-named file in
-    /// the sender's folder would stop being readable the moment the sender
-    /// deleted their own copy, which is not a say the sender should have over
-    /// somebody else's data.
+    /// The file is read from `source` when it does. Until 2026-10-10 a send
+    /// kept its own copy as chunks, so that the sender changing or deleting
+    /// the file could not touch it; the owner chose instead that qurb carries
+    /// files and does not keep them. A file changed or deleted before the
+    /// recipient collects it is not sent, and the history says why
+    /// ([`check_sends`](Self::check_sends)).
     ///
     /// The path is the one the *recipient* will see, so it is theirs to
     /// organise. Two recipients may be sent the same name without collision.
@@ -1149,19 +1236,33 @@ impl Store {
         source: &Path,
         recipient: &DeviceId,
     ) -> Result<PutStats> {
-        let file = std::fs::File::open(source).map_err(|e| Error::io(source, e))?;
-        let meta = file.metadata().map_err(|e| Error::io(source, e))?;
-        let mtime_ns = mtime_from(&meta);
+        let absolute = std::path::absolute(source).map_err(|e| Error::io(source, e))?;
+        self.send_from(logical_path, &absolute.to_string_lossy(), false, recipient)
+    }
 
-        // SAFETY: the same mapping the ordinary write path uses, for the same
-        // reason — chunking and storing from one map rather than reading every
-        // byte twice. An empty file cannot be mapped, and has nothing to map.
-        let mapped = match meta.len() {
-            0 => None,
-            _ => Some(unsafe { memmap2::Mmap::map(&file) }.map_err(|e| Error::io(source, e))?),
-        };
-        let data: &[u8] = mapped.as_deref().unwrap_or(&[]);
-        let manifest = chunker::chunk_bytes(data);
+    /// Send what `source` holds to `recipient`, keeping no copy (decision
+    /// 0060): the file is read here once, to describe it, and its chunks are
+    /// read from it again when the recipient collects them.
+    ///
+    /// `source` is an absolute path, or a document the platform lends (see
+    /// [`Documents`]). `temporary` marks a copy qurb made for the purpose,
+    /// deleted once collected. Changed or deleted before then, the file is
+    /// not sent: [`check_sends`](Self::check_sends) calls the send off and says
+    /// why.
+    pub fn send_from(
+        &mut self,
+        logical_path: &str,
+        source: &str,
+        temporary: bool,
+        recipient: &DeviceId,
+    ) -> Result<PutStats> {
+        let at = Path::new(source);
+        let file = self.open_source(source).map_err(|e| Error::io(at, e))?;
+        let meta = file.metadata().map_err(|e| Error::io(at, e))?;
+        let mtime_ns = mtime_from(&meta);
+        let manifest = chunker::chunk_reader(std::io::BufReader::with_capacity(1 << 20, file))
+            .map_err(|e| Error::io(at, e))?;
+
         // A send, every time: the same file sent again -- the person asked
         // first, by whatever sends it -- is a new version the recipient takes,
         // and not collected until it has (decision 0059).
@@ -1169,10 +1270,15 @@ impl Store {
         let stats = self.put_manifest(
             logical_path,
             &manifest,
-            data,
+            &[],
             mtime_ns,
-            Placement::local().in_vault(Some(recipient)).fresh(),
+            Placement::local().in_vault(Some(recipient)).fresh().by_reference(),
         )?;
+        let row = self
+            .db
+            .live_row_in(logical_path, Some(recipient))?
+            .ok_or_else(|| Error::NotFound { path: logical_path.to_string() })?;
+        self.db.note_send_source(row.id, source, manifest.size, mtime_ns, temporary)?;
         let _ = self.db.record(
             db::Event::Sent,
             Some(logical_path),
@@ -1181,6 +1287,72 @@ impl Store {
             None,
         );
         Ok(stats)
+    }
+
+    /// Call off every waiting send whose file changed or went (decision
+    /// 0060), and say why in the history, which is where both apps' "something
+    /// failed" notification comes from.
+    ///
+    /// Checked by size and modification time; a file whose time moved and
+    /// whose size did not is read again, and only a change in its bytes calls
+    /// the send off. A document the platform lends has no time worth trusting,
+    /// so only its size is compared here; one changed without changing size
+    /// is caught as it is served, and called off at the next check.
+    pub fn check_sends(&mut self) -> Result<Vec<CalledOff>> {
+        let mut called_off = Vec::new();
+        for send in self.db.send_sources()?.into_iter().filter(|s| !s.done) {
+            let why = match self.open_source(&send.source).and_then(|f| f.metadata()) {
+                Err(_) => Some("it was deleted before it was collected"),
+                Ok(meta) if meta.len() != send.size => Some("it changed after it was sent"),
+                Ok(_) if send.source.starts_with("content://") => None,
+                Ok(meta) if mtime_from(&meta) == send.mtime_ns => None,
+                Ok(meta) => match self.open_source(&send.source).map(hash_reader) {
+                    Ok(Ok(hash)) if hash == send.content => {
+                        self.db.send_source_seen(send.file_id, mtime_from(&meta))?;
+                        None
+                    }
+                    _ => Some("it changed after it was sent"),
+                },
+            };
+            let Some(why) = why else { continue };
+            self.tombstone(&send.path, Stamp::Local, Some(send.to))?;
+            let _ = self.db.record(
+                db::Event::Failed,
+                Some(&send.path),
+                Some(send.size),
+                Some(&send.to),
+                Some(&format!("not sent: {why}")),
+            );
+            self.let_go_of_source(&send)?;
+            called_off.push(CalledOff { path: send.path, to: send.to, why: why.to_string() });
+        }
+        Ok(called_off)
+    }
+
+    /// Stop reading the files of sends that have been collected or taken
+    /// back: delete the copies qurb made, give back what the platform lent,
+    /// and drop the references to chunks nothing here holds (decision 0060).
+    /// Returns how many.
+    pub fn tidy_sends(&mut self) -> Result<usize> {
+        let done: Vec<db::SendSource> =
+            self.db.send_sources()?.into_iter().filter(|s| s.done).collect();
+        for send in &done {
+            self.let_go_of_source(send)?;
+        }
+        Ok(done.len())
+    }
+
+    fn let_go_of_source(&mut self, send: &db::SendSource) -> Result<()> {
+        if send.temporary {
+            let _ = std::fs::remove_file(&send.source);
+        }
+        if send.source.starts_with("content://") {
+            if let Some(documents) = &self.documents {
+                documents.release(&send.source);
+            }
+        }
+        self.db.forget_send_source(send.file_id)?;
+        self.release_unbacked(send.file_id)
     }
 
     /// Keep another device's own file for it (decision 0036).
@@ -2296,24 +2468,21 @@ impl Store {
     /// Only a file the size of something already sent there is read, since a
     /// file of any other size cannot hold the same bytes. One that cannot be
     /// read is left out here; sending it says why.
-    pub fn sent_before(
-        &self,
-        files: &[std::path::PathBuf],
-        device: &DeviceId,
-    ) -> Result<Vec<SentBefore>> {
+    pub fn sent_before(&self, sources: &[String], device: &DeviceId) -> Result<Vec<SentBefore>> {
         let sizes = self.db.sizes_sent_to(device)?;
         if sizes.is_empty() {
             return Ok(Vec::new());
         }
         let mut found = Vec::new();
-        for file in files {
-            let Ok(meta) = std::fs::metadata(file) else { continue };
+        for source in sources {
+            let Ok(file) = self.open_source(source) else { continue };
+            let Ok(meta) = file.metadata() else { continue };
             if !meta.is_file() || !sizes.contains(&meta.len()) {
                 continue;
             }
-            let Ok(content) = hash_file(file) else { continue };
+            let Ok(content) = hash_reader(file) else { continue };
             if let Some((sent_as, at)) = self.db.sent_before(&content, device)? {
-                found.push(SentBefore { file: file.clone(), sent_as, at });
+                found.push(SentBefore { source: source.clone(), sent_as, at });
             }
         }
         Ok(found)
@@ -2395,8 +2564,9 @@ impl Store {
                 // Not in the chunk store is not the same as missing. A tree
                 // supplies the payloads for content it materialises, and
                 // reporting every such chunk as lost would make `verify`
-                // useless on exactly the devices people run it on.
-                match self.chunk_from_tree(hash) {
+                // useless on exactly the devices people run it on. A send's
+                // file supplies its chunks the same way (decision 0060).
+                match self.chunk_from_disk(hash) {
                     Ok(Some(_)) => {}
                     _ => report.missing.push(*hash),
                 }
