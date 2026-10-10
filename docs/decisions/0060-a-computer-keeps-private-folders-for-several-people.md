@@ -1,8 +1,9 @@
 # 0060 — A computer keeps private folders for several people, and qurb keeps no copy of what it sends
 
 **Status:** Accepted, 2026-10-10, with the owner's answers at the end — steps
-1 (no copies kept), 2 (guests) and 3 (a guest's folder, sealed) built, steps
-4–6 not yet; supersedes [0023](0023-one-person-per-account.md) for people who
+1 (no copies kept), 2 (guests), 3 (a guest's folder, sealed), 4 (the phone)
+and 5 (opening a folder at the computer) built; step 6, watching it on
+hardware, not yet; supersedes [0023](0023-one-person-per-account.md) for people who
 are not the computer's owner, and amends
 [0030](0030-sending-a-file-to-one-device.md) rules 1 and 4.
 **Date:** 2026-10-10
@@ -451,3 +452,88 @@ chose the computer as keeper. The computer held a sealed name and 300,165
 bytes for a 300,000-byte file. `qurb free` let go of the guest's copy,
 `qurb fetch` asked for it, and the next sync brought it back with the same
 SHA-256. **Not watched**: any of it on a phone.
+
+### Step 4, the phone — built 2026-10-11
+
+Smaller than planned: the folder *is* the phone's Private Vault, kept by a
+computer of another person (step 3). There is no second place to browse.
+
+- **The Private Vault says where it lives.** When a computer the phone visits
+  keeps its vault, the screen's subtitle reads *Your folder, kept on
+  Saqib's laptop and sealed on this phone*, and a file that is there and not
+  here reads *On Saqib's laptop* (`States.of(.., keptOn)`).
+- **Live, fetched when opened** (the owner's answer): a file freed on the
+  phone is fetched back from the computer when it is opened, through the
+  ordinary *fetch* path and `fetch_kept` (step 3).
+- **Item 4, *My folder* or *Downloads*.** The share sheet offers *Save to
+  my folder on Saqib's laptop* in place of *Save to Private Vault* when a
+  computer it visits keeps its vault, and names a send to that computer
+  *Send to Saqib's laptop's Downloads*.
+
+**Not built**: browsing the folder on the computer *from the phone* without
+the phone having its own record. A phone set up again learns the folder from
+the computer's list (`learn_kept`), which covers the case that matters.
+
+### Step 5, opening a folder at the computer — built 2026-10-11
+
+As designed, apart from the points under *Changed* below.
+
+1. The window's *Devices* lists a guest under *Guests*. Its sheet, when the
+   computer keeps a folder for it, offers *Open their folder…*, which shows
+   the folder as *locked*, *asking* or *open*.
+2. *Ask Ammi's phone* records an ask in memory (`qurb_peer::openings`):
+   a random nonce for that person, alive for five minutes.
+3. The guest's phone asks every computer it visits whether one is waiting
+   (`Request::Asks`), during its ordinary sync, and records the answer
+   (`Qurb::open_asks`).
+4. The phone shows *Open your folder on Saqib's laptop?*, says what opening
+   means, and on *Open it there* asks for the fingerprint, face or screen
+   lock (`BiometricPrompt`, strong or weak biometrics or the device
+   credential). A phone with no screen lock is told to set one and cannot
+   approve. *Not now*, or a cancelled prompt, declines.
+5. Approved, it syncs at once and sends the folder key with the ask's nonce
+   (`Request::Unlock`). The computer opens the folder only if the nonce is
+   the ask's and **the key opens one of that person's sealed names**: a phone
+   cannot open another person's folder, or open one with a key that does not
+   fit.
+6. Open, the window lists real names, sizes and times, read from the sealed
+   headers (`Store::open_kept`). A file opened is unsealed into
+   `$XDG_RUNTIME_DIR/qurb-open/<person>/` (memory-backed on a systemd
+   desktop, mode 0700), checked against its header's path and content
+   (`Store::unseal_kept`), and handed to the desktop's program for it.
+7. Closed by *Lock*, by ten minutes without opening a file, or by Qurb
+   quitting. The key is forgotten and the unsealed files are deleted. A run
+   that ended without locking deletes them at its next start.
+
+**Changed from the design:**
+
+- **No keystore key behind the prompt.** The design had a keystore key that
+  cannot be used without the biometric. Built: the prompt guards the
+  *approval*, and the folder key is derived as it always is, from the
+  phone's chunk key. This stops someone holding the unlocked phone from
+  approving. It does not stop malware that can read the app's private
+  storage, which could derive the key itself; a keystore binding would
+  stop that, and is left for later.
+- **The phone cannot say *Lock*.** Locking is at the computer, or by idling.
+- **Only while the phone is syncing.** An ask is collected when the app
+  syncs: on opening it, or by the background worker, which runs every
+  fifteen minutes at the most often Android allows. The window says *Open Qurb on their phone*. Nothing on the phone
+  raises a notification for an ask, since one would usually arrive after the
+  ask's five minutes.
+- **Watching an open folder is not using it.** The window looks every
+  1.5 seconds to notice locking, and that look reads nothing and does not
+  restart the ten minutes (`guest_folder(list: false)`). Found reading the
+  first version, where it did both: an open sheet would never have locked
+  itself, and reread every sealed header each time.
+
+**What the computer is shown**: the folder key, in memory only, for as long
+as the folder is open. What *Open is open* in *Limits* says, still holds.
+
+Tests: `a_folder_opens_only_with_the_ask_and_a_key_that_fits`
+(`openings`); `a_guests_folder_opens_at_the_computer_only_with_its_key`
+(`crates/peer/tests/guests.rs`: the wrong key refused, the listing, a file
+found by its sealed name, unsealing refused under another path, locking).
+The window's sheet in its three states against the fixtures.
+
+**Not watched**: any of it on hardware. That is step 6, and needs a phone
+playing the guest.

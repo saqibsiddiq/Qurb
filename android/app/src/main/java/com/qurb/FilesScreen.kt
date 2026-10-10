@@ -121,12 +121,20 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
         refresh()
     }
 
+    /** A computer of another person keeping this phone's vault, if one does
+     *  (decision 0060): the vault is then "your folder" there. */
+    private var keptOn: String? = null
+
     override fun refresh() {
         drawCrumbs()
         scope.launch {
             try {
                 val (folders, files) = withContext(Dispatchers.IO) {
                     val engine = engine()
+                    if (private) {
+                        val keepers = engine.holders().map { it.fingerprint }.toSet()
+                        keptOn = engine.peers().firstOrNull { it.relation == "host" && it.fingerprint in keepers }?.name
+                    }
                     if (query.isNotEmpty()) {
                         emptyList<String>() to engine.searchIn(query, SEARCH_LIMIT.toUInt(), private)
                     } else {
@@ -142,6 +150,12 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                             .orEmpty()
                         (listing.folders + made).distinct().sorted() to listing.files
                     }
+                }
+                if (private) {
+                    views.subtitle.text = keptOn?.let {
+                        "Your folder, kept on $it and sealed on this phone: nobody using $it can open it. " +
+                            "Each file comes back when you open it."
+                    } ?: "Private to this phone. Only this phone can see these files; a device you choose can keep a backup."
                 }
                 shown = sorted(files)
                 val prefix = if (dir.isEmpty()) "" else "$dir/"
@@ -239,7 +253,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
         val name = entry.path.substringAfterLast('/')
         val folder = entry.path.substringBeforeLast('/', "")
         val downloading = Downloads.wanted(entry)
-        val state = States.of(entry, downloading)
+        val state = States.of(entry, downloading, keptOn)
         val sheet = kit.sheet().header(
             States.icon(entry.path), name,
             (if (entry.private) "Private Vault" else "Qurb") + if (folder.isEmpty()) "" else " / $folder",
@@ -496,7 +510,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             // answer; just the name inside a folder.
             val name = if (query.isNotEmpty()) entry.path else entry.path.substringAfterLast('/')
             val meta = "${Words.size(entry.size)}  ·  ${Words.ago(entry.modifiedAt / 1_000_000_000)}"
-            kit.bindRow(row, States.icon(entry.path), name, meta, States.of(entry, downloading)) { choose(entry) }
+            kit.bindRow(row, States.icon(entry.path), name, meta, States.of(entry, downloading, keptOn)) { choose(entry) }
             row.tile.alpha = if (!States.here(entry) && !downloading) 0.7f else 1f
         }
 

@@ -1331,6 +1331,113 @@ pub fn open_file(hosted: Host<'_>, path: String) -> Answer<()> {
     reveal(&on_disk(&hosted, &path)?)
 }
 
+// ------------------------------------------------- a guest's folder, opened
+
+/// A guest's folder at this computer (decision 0060, step 5): "locked",
+/// "asking" while its phone has not answered, or "open", with its files.
+#[derive(Serialize)]
+pub struct GuestFolder {
+    state: &'static str,
+    files: Vec<GuestFile>,
+}
+
+#[derive(Serialize)]
+pub struct GuestFile {
+    path: String,
+    size: String,
+    modified_at: i64,
+}
+
+/// The person a guest device belongs to: whose folder this computer keeps.
+fn guest_person(hosted: &Host<'_>, guest: &str) -> Result<qurb_sync::DeviceId, String> {
+    let device = recipient(hosted, guest)?;
+    if device.relation != qurb_storage::db::Relation::Guest {
+        return Err(format!("{} is not a guest of this computer", device.name));
+    }
+    hosted
+        .with_store(|store| Ok(store.db().person_of(&device.id)?.unwrap_or(device.id)))
+        .map_err(failed)
+}
+
+/// Where files opened from a guest's folder are unsealed: under the runtime
+/// directory, which is memory-backed on a systemd desktop, so they never
+/// reach the disk, and removed when the folder is locked.
+fn opened_dir(person: &qurb_sync::DeviceId) -> std::path::PathBuf {
+    let base = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    base.join("qurb-open").join(person.short())
+}
+
+/// How a guest's folder stands here, and, with `list`, its files while it is
+/// open. Without `list` it is only a look: it reads nothing and does not count
+/// as using the folder, so a window left watching it lets it lock itself.
+#[tauri::command]
+pub fn guest_folder(hosted: Host<'_>, guest: String, list: bool) -> Answer<GuestFolder> {
+    let person = guest_person(&hosted, &guest)?;
+    if !qurb_peer::openings::is_open(&person) {
+        // Locked, by hand or by idling: what was opened from it goes too.
+        let _ = std::fs::remove_dir_all(opened_dir(&person));
+        let state = if qurb_peer::openings::asking(&person).is_some() { "asking" } else { "locked" };
+        return Ok(GuestFolder { state, files: Vec::new() });
+    }
+    if !list {
+        return Ok(GuestFolder { state: "open", files: Vec::new() });
+    }
+    let key = qurb_peer::openings::key(&person).ok_or("the folder has just locked itself")?;
+    let key = qurb_storage::sealed::FolderKey::from_bytes(key);
+    let files = hosted.with_store(|store| Ok(store.open_kept(&person, &key)?)).map_err(failed)?;
+    Ok(GuestFolder {
+        state: "open",
+        files: files
+            .into_iter()
+            .map(|f| GuestFile { path: f.path, size: big(f.size), modified_at: f.modified_at })
+            .collect(),
+    })
+}
+
+/// Ask the guest's phone to open its folder here. Its person approves on the
+/// phone, behind their screen lock, at its next sync with this computer.
+#[tauri::command]
+pub fn ask_guest_folder(hosted: Host<'_>, guest: String) -> Answer<()> {
+    let person = guest_person(&hosted, &guest)?;
+    qurb_peer::openings::ask(&person);
+    hosted.nudge();
+    Ok(())
+}
+
+/// Open one file of an open guest folder, unsealed into memory-backed space,
+/// with the program the desktop uses for it.
+#[tauri::command]
+pub fn open_guest_file(hosted: Host<'_>, guest: String, path: String) -> Answer<()> {
+    let person = guest_person(&hosted, &guest)?;
+    let key = qurb_peer::openings::key(&person).ok_or("the folder is locked")?;
+    let key = qurb_storage::sealed::FolderKey::from_bytes(key);
+    let sealed = hosted
+        .with_store(|store| Ok(store.kept_file(&person, &key, &path)?))
+        .map_err(failed)?
+        .ok_or("that file is not in the folder")?;
+    let name = std::path::Path::new(&path).file_name().ok_or("that file has no name")?;
+    let dir = opened_dir(&person).join(&sealed.to_hex().as_str()[..12]);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(opened_dir(&person), std::fs::Permissions::from_mode(0o700));
+    }
+    let to = dir.join(name);
+    hosted.with_store(|store| Ok(store.unseal_kept(&key, &sealed, &path, &to)?)).map_err(failed)?;
+    reveal(&to)
+}
+
+/// Lock a guest's folder here: the key is forgotten, and what was opened
+/// from it removed.
+#[tauri::command]
+pub fn lock_guest_folder(hosted: Host<'_>, guest: String) -> Answer<()> {
+    let person = guest_person(&hosted, &guest)?;
+    qurb_peer::openings::lock(&person);
+    let _ = std::fs::remove_dir_all(opened_dir(&person));
+    Ok(())
+}
+
 /// Open the folder a file is in, in the file manager.
 #[tauri::command]
 pub fn show_file(hosted: Host<'_>, path: String) -> Answer<()> {

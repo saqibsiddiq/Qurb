@@ -199,6 +199,26 @@ impl PeerClient {
         }
     }
 
+    /// Whether this computer asks to open this guest's folder there: the
+    /// ask's nonce, or none (decision 0060).
+    pub async fn asks(&self) -> Result<Option<[u8; 16]>> {
+        match self.request(Request::Asks).await? {
+            Response::Asks { opening } => Ok(opening),
+            Response::NotFound => Ok(None),
+            other => Err(unexpected("ask", &other)),
+        }
+    }
+
+    /// Answer an ask with the folder's key, once the person approved.
+    /// Whether the computer opened the folder with it.
+    pub async fn unlock(&self, nonce: [u8; 16], key: [u8; 32]) -> Result<bool> {
+        match self.request(Request::Unlock { nonce, key }).await? {
+            Response::Noted => Ok(true),
+            Response::NotFound => Ok(false),
+            other => Err(unexpected("acknowledgement", &other)),
+        }
+    }
+
     /// Wait until the peer's state differs from `since`.
     ///
     /// Returns where the peer has got to, both when something changed and when
@@ -446,6 +466,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Noted => "acknowledgement",
         Response::Paired { .. } => "pairing reply",
         Response::Welcome { .. } => "guest welcome",
+        Response::Asks { .. } => "ask",
         Response::Key { .. } => "key",
         Response::About { .. } => "description",
         Response::Mismatch => "key mismatch",

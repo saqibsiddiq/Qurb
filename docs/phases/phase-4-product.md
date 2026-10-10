@@ -1307,6 +1307,28 @@ Watched between two scratch folders on the laptop: 300,000 bytes kept as
 300,165 sealed, under a name the computer cannot read; freed by the guest
 and fetched back with the same SHA-256.
 
+## A guest's folder, opened at the computer
+
+**2026-10-11**, steps 4 and 5 of [decision 0060](../decisions/0060-a-computer-keeps-private-folders-for-several-people.md).
+A guest's sheet in the window offers *Open their folder…*. The window asks;
+the guest's phone collects the ask at its next sync and asks its person to
+approve behind their fingerprint, face or screen lock; the phone sends the
+folder's key, which the computer takes only if it opens one of that
+person's sealed names. The folder then lists real names, and a file opened is
+unsealed into memory-backed space and checked against its header. *Lock*, or
+ten minutes without opening anything, forgets the key and deletes what was
+opened.
+
+Found reading the first version: the window looked at the folder every
+1.5 seconds through the call that counts as using it, so an open sheet would
+never have locked itself, and it reread every sealed header each time. The
+look now reads nothing and counts for nothing.
+
+Checked by the guest test suite (13 tests, including a wrong key refused and
+a file refused under another path) and the sheet's three states against the
+fixtures. **Not watched with a phone**: no second person's phone has played
+the guest yet. That is step 6.
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

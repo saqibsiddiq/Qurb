@@ -23,6 +23,10 @@
          never at launch, and the app works without it: the code can always be
          typed instead. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Confirming it is the person, behind their fingerprint, face or screen
+         lock, before a computer they visit may open their folder there
+         (decision 0060). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
     <!-- A long transfer, and only a long one, runs in the foreground so that
          Android does not freeze the app while a device is collecting a large

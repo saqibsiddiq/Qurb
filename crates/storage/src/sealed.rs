@@ -54,6 +54,17 @@ impl FolderKey {
         Self(chunk_key.derive(b"qurb/sealed-folder/v1", host.as_bytes()))
     }
 
+    /// A folder key as its bytes, which a guest's phone sends the computer
+    /// keeping its folder to open it there, and which that computer holds
+    /// only while it is open (decision 0060).
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0
+    }
+
+    pub fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
     fn sub(&self, label: &[u8]) -> [u8; 32] {
         let mut hasher = blake3::Hasher::new_keyed(&self.0);
         hasher.update(label);

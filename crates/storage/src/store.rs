@@ -176,6 +176,17 @@ impl<'a> Placement<'a> {
     }
 }
 
+/// One file of a guest's folder, as it reads once opened at the computer
+/// keeping it (decision 0060).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeptFile {
+    pub path: String,
+    pub size: u64,
+    pub modified_at: i64,
+    /// The sealed file it is kept as, to unseal it from.
+    pub sealed: blake3::Hash,
+}
+
 /// A file this device has sent to a device before (decision 0059).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SentBefore {
@@ -2485,6 +2496,73 @@ impl Store {
         )?;
         self.db.note_kept_opened(path)?;
         let _ = self.db.record(db::Event::Restored, Some(path), Some(row.size), None, Some("from a computer that keeps it"));
+        Ok(())
+    }
+
+    /// A guest's folder kept here, opened with the key its phone sent
+    /// (decision 0060, step 5): each file's real path, size and time, read
+    /// from its sealed header. Files that do not open with `key` are left out.
+    pub fn open_kept(&self, person: &DeviceId, key: &crate::sealed::FolderKey) -> Result<Vec<KeptFile>> {
+        let mut out = Vec::new();
+        for (name, sealed, _) in self.db.kept_entries(person)? {
+            let Some(path) = crate::sealed::open_name(key, &name) else { continue };
+            let Some(chunks) = self.chunk_hashes_for_content(&sealed)? else { continue };
+            let mut reader = crate::sealed::Unsealer::new(key.clone());
+            for chunk in chunks {
+                let Ok(piece) = self.read_chunk(&chunk) else { break };
+                if reader.push(&piece).is_err() || reader.meta().is_some() {
+                    break;
+                }
+            }
+            if let Some(meta) = reader.meta() {
+                if meta.path == path {
+                    out.push(KeptFile { path, size: meta.size, modified_at: meta.modified_at, sealed });
+                }
+            }
+        }
+        out.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(out)
+    }
+
+    /// The sealed file `path` of a guest's folder is kept as here, found by
+    /// its sealed name: no header is read.
+    pub fn kept_file(&self, person: &DeviceId, key: &crate::sealed::FolderKey, path: &str) -> Result<Option<blake3::Hash>> {
+        let Some(name) = crate::sealed::seal_name(key, path) else { return Ok(None) };
+        Ok(self.db.kept_entries(person)?.into_iter().find(|(n, _, _)| *n == name).map(|(_, sealed, _)| sealed))
+    }
+
+    /// Unseal the file `path` of a guest's folder kept here into `to`,
+    /// checked against its header -- the path, and the content -- before it is
+    /// called done (decision 0060, step 5).
+    pub fn unseal_kept(
+        &self,
+        key: &crate::sealed::FolderKey,
+        sealed: &blake3::Hash,
+        path: &str,
+        to: &Path,
+    ) -> Result<()> {
+        use std::io::Write;
+        let chunks = self
+            .chunk_hashes_for_content(sealed)?
+            .ok_or_else(|| Error::NotFound { path: sealed.to_hex().to_string() })?;
+        let mut reader = crate::sealed::Unsealer::new(key.clone());
+        let mut out = std::fs::File::create(to).map_err(|e| Error::io(to, e))?;
+        let mut whole = blake3::Hasher::new();
+        for chunk in chunks {
+            let piece = self.read_chunk(&chunk)?;
+            let opened = reader
+                .push(&piece)
+                .map_err(|_| Error::ChunkCorrupt { hash: sealed.to_hex().to_string() })?;
+            for plain in opened {
+                whole.update(&plain);
+                out.write_all(&plain).map_err(|e| Error::io(to, e))?;
+            }
+        }
+        let expected = reader.meta().filter(|m| m.path == path).map(|m| m.content);
+        if !reader.finished() || expected != Some(whole.finalize()) {
+            let _ = std::fs::remove_file(to);
+            return Err(Error::ChunkCorrupt { hash: sealed.to_hex().to_string() });
+        }
         Ok(())
     }
 

@@ -175,10 +175,27 @@ Each file is stored separately and the session let go of in between, so sending
 a large folder does not stop the rest of the window answering. What to send is
 worked out by `qurb_cli::send`, the same code `qurb send` uses.
 
+No copy is kept: a file is read from where it is when the device collects it,
+and a send whose file changed or went first is called off and says so
+([decision 0060](../../docs/decisions/0060-a-computer-keeps-private-folders-for-several-people.md)).
+A file sent to that device before asks whether to send it again
+([decision 0059](../../docs/decisions/0059-a-send-is-not-its-bytes.md)).
+
 Dragging is the better gesture and needs no plugin — Tauri reports the drop to
 the window, and only the *path* crosses into the page, never the contents. The
 two buttons do the same for anybody who cannot drag: one for files and one for a
 folder, because no platform's dialog picks both at once.
+
+## Other people
+
+*Add a person* shows a guest code for someone else's phone, which keeps its
+own key and sees only what is sent to it. Guests are listed apart. If a
+guest keeps its Private Vault here, it is kept sealed, and its sheet says
+how much and that nobody here can open it. *Open their folder…* asks the
+guest's phone; approved behind its screen lock, the folder lists its real
+names until *Lock* or ten minutes unused, and files opened are unsealed
+under `$XDG_RUNTIME_DIR/qurb-open/` and deleted on locking
+([decision 0060](../../docs/decisions/0060-a-computer-keeps-private-folders-for-several-people.md)).
 
 ## Notifications
 

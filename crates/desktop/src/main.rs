@@ -59,7 +59,13 @@ fn run() -> Result<()> {
             None
         }
     };
-
+    // Files opened from a guest's folder by a run that ended without locking
+    // it -- a crash, a power cut -- go now, as locking would have done
+    // (decision 0060). A running instance would have kept them: this is the
+    // first.
+    if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") {
+        let _ = std::fs::remove_dir_all(std::path::PathBuf::from(runtime).join("qurb-open"));
+    }
     let root = directory();
     let hosted = Arc::new(Hosted::new(root.clone()));
     // A key protected by a passphrase waits for the window to ask for it
@@ -122,6 +128,10 @@ fn run() -> Result<()> {
             commands::situation,
             commands::send_files,
             commands::sent_before,
+            commands::guest_folder,
+            commands::ask_guest_folder,
+            commands::open_guest_file,
+            commands::lock_guest_folder,
             commands::cancel_send,
             commands::removal_plan,
             commands::unlock,

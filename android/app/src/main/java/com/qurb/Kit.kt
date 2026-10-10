@@ -364,9 +364,13 @@ class Kit(private val app: MainActivity) {
 data class State(@DrawableRes val icon: Int, val words: String, val color: Int)
 
 object States {
-    fun of(entry: FileEntry, downloading: Boolean = false): State = when {
+    /** `keptOn` names a computer of another person keeping this phone's
+     *  vault, for a vault file that is there and not here (decision 0060). */
+    fun of(entry: FileEntry, downloading: Boolean = false, keptOn: String? = null): State = when {
         downloading && entry.available == Available.ELSEWHERE ->
             State(R.drawable.ic_download, "Downloading", R.color.green)
+        keptOn != null && entry.private && entry.available == Available.ELSEWHERE ->
+            State(R.drawable.ic_cloud, "On $keptOn", R.color.neutral)
         entry.available == Available.HERE -> State(R.drawable.ic_hard_drive, "On this phone", R.color.text_3)
         entry.available == Available.ONLY_HERE -> State(R.drawable.ic_triangle_alert, "Only copy here", R.color.attention)
         // Decision 0055: listed, and no device this phone syncs with has it.

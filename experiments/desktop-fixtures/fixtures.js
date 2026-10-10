@@ -43,6 +43,8 @@ let startedPairingAt = 0;
 let pairingAnswer = null;
 // Whether the code on screen is a guest code (decision 0060).
 let pairingGuest = false;
+// When the window asked a guest's phone to open their folder here.
+let guestAskedAt = 0;
 
 /** One directory, as `browse` answers it. */
 function browse({ dir, private: priv }) {
@@ -164,6 +166,20 @@ const ANSWERS = {
     if (pairingGuest) return { ...waiting, state: "asking", name: "Ammi's phone", number: "418 205", kind: "phone", wants_key: false, guest: true };
     return { ...waiting, state: "asking", name: "Pixel 8", number: "232 760", kind: "phone", wants_key: false, guest: false };
   },
+
+  // A guest's folder (decision 0060): locked, then asked, then open once
+  // "their phone" approves, a few seconds later.
+  guest_folder: () => {
+    if (!guestAskedAt) return { state: "locked", files: [] };
+    if (Date.now() - guestAskedAt < 4000) return { state: "asking", files: [] };
+    return { state: "open", files: [
+      { path: "recipes/nihari.txt", size: "4200", modified_at: now - 86400 },
+      { path: "photos/eid.jpg", size: "2900000", modified_at: now - 400000 },
+    ] };
+  },
+  ask_guest_folder: () => { guestAskedAt = Date.now(); return null; },
+  open_guest_file: () => null,
+  lock_guest_folder: () => { guestAskedAt = 0; return null; },
 
   // A file called tickets.pdf went to the device three days ago, so the
   // question about sending it again can be looked at (decision 0059).

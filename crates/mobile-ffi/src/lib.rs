@@ -485,6 +485,21 @@ pub struct Qurb {
     /// The app's way to open again a document it sent from where it is
     /// (decision 0060), given to every store handle opened here.
     documents: Mutex<Option<Arc<dyn qurb_storage::Documents>>>,
+    /// Computers this phone visits that asked, at the last sync with each, to
+    /// open its folder there: by fingerprint, the computer's name and the
+    /// ask's nonce (decision 0060, step 5).
+    open_asks: Mutex<std::collections::HashMap<String, (String, [u8; 16])>>,
+    /// Asks the person approved, answered at the next sync with that computer.
+    approved: Mutex<std::collections::HashMap<String, [u8; 16]>>,
+}
+
+/// A computer this phone visits, asking to open the phone's folder there
+/// (decision 0060, step 5).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OpenAsk {
+    pub fingerprint: String,
+    /// The computer's name.
+    pub name: String,
 }
 
 /// The app's way to open a document again later (decision 0060). A file sent
@@ -1588,6 +1603,39 @@ impl Qurb {
         self.send_from(&uri, name, to, false)
     }
 
+    /// Computers this phone visits that asked, at the last sync, to open its
+    /// folder there (decision 0060, step 5). The app shows each, behind the
+    /// phone's screen lock.
+    pub fn open_asks(&self) -> Vec<OpenAsk> {
+        self.open_asks
+            .lock()
+            .map(|asks| {
+                asks.iter().map(|(fingerprint, (name, _))| OpenAsk { fingerprint: fingerprint.clone(), name: name.clone() }).collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// The person approved, behind the phone's screen lock: the folder's key
+    /// goes to that computer at the next sync with it, where it is held in
+    /// memory while the folder is open.
+    pub fn approve_open(&self, fingerprint: String) -> Result<(), QurbError> {
+        let ask = self.open_asks.lock().ok().and_then(|mut asks| asks.remove(&fingerprint));
+        let Some((_, nonce)) = ask else {
+            return Err(QurbError::NotFound { detail: "that computer is not asking any more".into() });
+        };
+        if let Ok(mut approved) = self.approved.lock() {
+            approved.insert(fingerprint, nonce);
+        }
+        Ok(())
+    }
+
+    /// The person said no: nothing is sent, and the computer's ask lapses.
+    pub fn decline_open(&self, fingerprint: String) {
+        if let Ok(mut asks) = self.open_asks.lock() {
+            asks.remove(&fingerprint);
+        }
+    }
+
     /// How the engine opens documents it sends from where they are (decision
     /// 0060). Set by the app each time it opens the engine.
     pub fn set_document_opener(&self, opener: Arc<dyn DocumentOpener>) -> Result<(), QurbError> {
@@ -1774,6 +1822,8 @@ impl Qurb {
             runtime: Mutex::new(None),
             serving: Arc::new(ServingStats::default()),
             documents: Mutex::new(None),
+            open_asks: Mutex::new(std::collections::HashMap::new()),
+            approved: Mutex::new(std::collections::HashMap::new()),
         })
     }
 }
@@ -2240,6 +2290,26 @@ impl Qurb {
             if known.relation == qurb_storage::db::Relation::Host {
                 runtime.block_on(qurb_peer::learn_kept(client, engine.store_mut(), &known.device_id, &tree));
                 runtime.block_on(qurb_peer::fetch_kept(client, engine.store_mut(), &known.device_id, &tree));
+                // Asked to open this phone's folder there (step 5): answered
+                // if the person approved, and the ask noted for the app.
+                let fingerprint = hex(&known.fingerprint);
+                let approved = self.approved.lock().ok().and_then(|mut a| a.remove(&fingerprint));
+                if let Some(nonce) = approved {
+                    let key = qurb_storage::sealed::FolderKey::for_host(&engine.store().chunk_key(), &known.device_id);
+                    let opened = runtime.block_on(client.unlock(nonce, key.to_bytes())).unwrap_or(false);
+                    tracing::info!(opened, "answered an ask to open this phone's folder");
+                }
+                let asked = runtime.block_on(client.asks()).ok().flatten();
+                if let Ok(mut asks) = self.open_asks.lock() {
+                    match asked {
+                        Some(nonce) if approved != Some(nonce) => {
+                            asks.insert(fingerprint, (known.name.clone(), nonce));
+                        }
+                        _ => {
+                            asks.remove(&fingerprint);
+                        }
+                    }
+                }
             }
         }
 

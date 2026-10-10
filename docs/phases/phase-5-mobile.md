@@ -2111,6 +2111,39 @@ laptop reaches its service at `localhost`.
   That setting means nothing new on the laptop reaches the phone unless it is
   moved to the shared area. Whether it is wanted is the owner's call.
 
+## Another person's computer
+
+**2026-10-10 to 2026-10-11**, the phone's side of
+[decision 0060](../decisions/0060-a-computer-keeps-private-folders-for-several-people.md).
+None of this has been tried on a phone yet.
+
+- **No copies kept.** A file picked in the app is sent by its document:
+  the phone keeps Android's permission to read it and reads it again when
+  the recipient collects it (`Qurb.sendDocument`, the FFI's
+  `DocumentOpener`). A file from the share sheet, lent only briefly, is
+  copied into `files/outgoing` and the copy deleted once it has arrived.
+  Tested in the FFI (`a_send_keeps_no_copy_and_a_shared_one_goes_once_it_arrives`).
+- **Visiting.** *Devices → Add → Visit someone's computer* takes a guest
+  code. Computers the phone visits are listed apart, and their sheet offers
+  *Keep my files here*, which says what that means and that the computer's
+  person can delete what it keeps, though not read it.
+- **The folder.** Once such a computer keeps the Private Vault, the screen
+  says *Your folder, kept on …* and each file not on the phone reads
+  *On …*. The share sheet's choices become *Save to my folder on …* and
+  *Send to …'s Downloads*.
+- **Opening it at the computer.** After each sync with the app open, a
+  computer's ask shows *Open your folder on …?*. *Open it there* asks for
+  the fingerprint, face or screen lock (`ScreenLock.kt`: the framework's
+  `BiometricPrompt`, so no library is added). A phone with no screen lock is
+  told to set one. Approved, the phone syncs at once and the key goes. A
+  background sync records an ask but raises nothing, so the person has to
+  open the app; the window at the computer tells them to.
+
+The prompt guards the approval, not the key: the folder key is still
+derived from the chunk key in the app's storage, so malware able to read
+that storage could derive it. A keystore key that only the prompt can
+unlock would close that gap; it is not built.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

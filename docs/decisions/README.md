@@ -86,4 +86,4 @@ is worth more than a tidy directory.
 | [0057](0057-moving-a-file-into-or-out-of-private-vault.md) | Moving a file into or out of Private Vault | Accepted — built on the desktop, Android and the command line; watched with the command line |
 | [0058](0058-a-full-replica-says-so.md) | A full replica keeps everything and says so | Accepted — the existing behaviour, decided |
 | [0059](0059-a-send-is-not-its-bytes.md) | A send is not its bytes: the same file sent again arrives again | Accepted — built on all three; amends 0030 rule 2 |
-| [0060](0060-a-computer-keeps-private-folders-for-several-people.md) | A computer keeps private folders for several people, and qurb keeps no copy of what it sends | Accepted — not yet built; supersedes 0023 for guests, amends 0030 rules 1 and 4 |
+| [0060](0060-a-computer-keeps-private-folders-for-several-people.md) | A computer keeps private folders for several people, and qurb keeps no copy of what it sends | Accepted — steps 1–5 built, step 6 (watched on hardware) not yet; supersedes 0023 for guests, amends 0030 rules 1 and 4 |

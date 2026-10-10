@@ -575,6 +575,9 @@ class MainActivity : AppCompatActivity() {
                 // On screen, so nothing is raised; what was shown here is
                 // marked as seen, and not announced later.
                 withContext(Dispatchers.IO) { Notices.tell(this@MainActivity, engine) }
+                // A computer this phone visits, asking to open its folder
+                // there (decision 0060).
+                engine.openAsks().firstOrNull()?.let { askToOpen(engine, it) }
                 if (!quiet) say(
                     when {
                         outcome.reached == 0u && outcome.unreachable == 0u && outcome.timedOut ->
@@ -648,6 +651,50 @@ class MainActivity : AppCompatActivity() {
                 }
             )
         }
+    }
+
+    /** The ask on screen, so a second sync does not stack another. */
+    private var askShown: String? = null
+
+    /**
+     * A computer this phone visits asks to open its folder there (decision
+     * 0060, step 5): said plainly, and answered only behind the phone's
+     * fingerprint, face or screen lock. Approved, the folder's key goes to
+     * that computer at the next sync, which follows at once.
+     */
+    private fun askToOpen(engine: uniffi.qurb_mobile.Qurb, ask: uniffi.qurb_mobile.OpenAsk) {
+        if (askShown == ask.fingerprint) return
+        askShown = ask.fingerprint
+        kit.sheet()
+            .header(R.drawable.ic_lock_keyhole, "Open your folder on ${ask.name}?",
+                "${ask.name} is asking")
+            .text("Your folder is kept on ${ask.name} sealed: it can't open it. Approve, and it can — " +
+                "for whoever is at that computer, until it's locked there, or ten minutes unused.\n\n" +
+                "Only approve if you're there and asked for it.")
+            .buttons("Open it there", secondary = "Not now", onSecondary = {
+                askShown = null
+                engine.declineOpen(ask.fingerprint)
+            }) {
+                if (!ScreenLock.available(this)) {
+                    askShown = null
+                    say("Set a screen lock on this phone first, so it can confirm it's you.")
+                    return@buttons
+                }
+                ScreenLock.confirm(this, "Open your folder on ${ask.name}", "Confirm it's you") { yes ->
+                    askShown = null
+                    if (!yes) {
+                        engine.declineOpen(ask.fingerprint)
+                        return@confirm
+                    }
+                    runCatching { engine.approveOpen(ask.fingerprint) }
+                        .onSuccess {
+                            say("Opening your folder on ${ask.name}…")
+                            sync(quiet = true)
+                        }
+                        .onFailure { fail("Could not answer ${ask.name}", it) }
+                }
+            }
+            .show()
     }
 
     // ------------------------------------------------------------- pairing

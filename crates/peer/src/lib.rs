@@ -40,6 +40,7 @@ pub mod identity;
 pub mod kept;
 pub mod local;
 pub mod nat;
+pub mod openings;
 pub mod pairing;
 pub mod server;
 pub mod source;

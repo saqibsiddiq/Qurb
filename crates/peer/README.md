@@ -158,6 +158,13 @@ before dropping a local copy. It is credited to the certificate the connection
 authenticated with, never to anything the message claims, so one peer cannot
 report delivery on another's behalf.
 
+A second goes the other way since decision 0060, and is narrower still.
+`Unlock { nonce, key }` is a guest's phone answering this computer's own
+ask to open that guest's folder: it changes no file and no version, only
+whether a key is held in memory (`openings`), and only if the nonce is the
+ask's and the key opens one of that guest's sealed names. A device can open
+only its own person's folder, and only when this side asked.
+
 ## Trying it
 
 ```bash
@@ -253,6 +260,23 @@ bounded the loop, so `qurb pair` sat advertising a code that had stopped working
 five minutes in, with the screen still saying "Waiting...". It was found on a
 terminal that had been waiting two and a half hours.
 
+## Another person's devices
+
+Everything above was written for one person's devices, sharing a key. A
+*guest* is another person's device, with its own
+([decision 0060](../../docs/decisions/0060-a-computer-keeps-private-folders-for-several-people.md)).
+It pairs with a guest code (`qurbg1-…`, `PairingHost::open_for_guest`,
+`visit`); the trust store records it as a guest, or the computer as its
+host. The server answers a guest from the `Guest` audience: what was sent to
+it, and the sealed folder kept for its person, nothing else. The two find
+each other at the rendezvous service under a meeting secret given at the
+welcome, since the service groups devices by their person's key.
+
+`kept.rs` is the guest's side of a folder kept sealed by a host: fetching a
+file back and unsealing it, checked against its sealed header, and learning
+what the host keeps after the phone was set up again. `openings.rs` is the
+host's side of opening that folder with the guest's approval.
+
 ## The guest list is live
 
 `TrustList` is shared with the TLS verifier rather than copied into it, so a
@@ -261,8 +285,8 @@ device paired while a listener is running is accepted without a restart.
 It used to be a snapshot taken at startup. Pairing happens in a separate
 `qurb pair` process, so the daemon could not know about it — and "pair once"
 silently meant "pair once, then restart the daemon". The daemon now re-reads the
-trust store every five seconds, which is a handful of rows describing one
-person's own devices, and syncs immediately when something new appears:
+trust store every five seconds, which is a handful of rows describing the
+devices it trusts, and syncs immediately when something new appears:
 measured at **5 seconds** from scanning a code to the daemon acting on it,
 against 120 before.
 
@@ -272,6 +296,10 @@ a set that only grew would keep letting it in.
 
 ## Not yet built
 
+- **Push, beacons and the relay for guests.** A guest and its host meet at
+  the rendezvous service only. Push wakes, LAN beacons and relay pairing are
+  keyed by one person's key and are not keyed for meetings yet, so a guest
+  that cannot hole-punch to its host does not reach it.
 
 - **Upgrading back to direct.** A connection that fell back to the relay stays
   relayed, even after the device moves to a network where punching would work.

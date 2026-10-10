@@ -353,6 +353,7 @@ async fn serve_request(
         | Response::Noted
         | Response::Paired { .. }
         | Response::Welcome { .. }
+        | Response::Asks { .. }
         | Response::Key { .. }
         | Response::About { .. }
         | Response::Mismatch
@@ -443,6 +444,34 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // a pairing request here is either a mistake or a probe.
         // And the key, above all, is never handed out here.
         Request::Pair { .. } | Request::Join { .. } | Request::Visit { .. } => Response::NotFound,
+
+        // A guest asking whether this computer wants to open its folder here,
+        // and answering with the folder's key once its person approved
+        // (decision 0060). Only a guest, and only about its own person.
+        Request::Asks => match (&owner, other_person) {
+            (Some(device), true) => {
+                let person = store.db().person_of(device)?.unwrap_or(*device);
+                Response::Asks { opening: crate::openings::asking(&person) }
+            }
+            _ => Response::NotFound,
+        },
+        Request::Unlock { nonce, key } => match (&owner, other_person) {
+            (Some(device), true) => {
+                let person = store.db().person_of(device)?.unwrap_or(*device);
+                // The key has to open something sealed with it: one of the
+                // folder's own names.
+                let names = store.db().kept_names(&person)?;
+                let fits = |key: &[u8; 32]| {
+                    let key = qurb_storage::sealed::FolderKey::from_bytes(*key);
+                    names.iter().any(|name| qurb_storage::sealed::open_name(&key, name).is_some())
+                };
+                match crate::openings::unlock(&person, nonce, *key, fits) {
+                    true => Response::Noted,
+                    false => Response::NotFound,
+                }
+            }
+            _ => Response::NotFound,
+        },
 
         // What kind of device this is, for a peer paired before devices said
         // so (decision 0053). Not found until whatever opened the store has

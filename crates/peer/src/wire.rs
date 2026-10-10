@@ -105,6 +105,14 @@ pub enum Request {
     /// their key for it: the computer keeps a guest's folder under it, so a
     /// phone set up again with the same key finds the folder it had.
     Visit { token: [u8; 16], device_id: [u8; 32], name: String, kind: String, person: [u8; 32] },
+
+    /// Whether this computer asks to open the asking guest's folder here
+    /// (decision 0060). Answered with [`Response::Asks`].
+    Asks,
+
+    /// The guest approved, behind its screen lock: the folder's key, for the
+    /// ask with this nonce. Held in memory only, while the folder is open.
+    Unlock { nonce: [u8; 16], key: [u8; 32] },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +149,9 @@ pub enum Response {
     /// rendezvous service (decision 0060).
     Welcome { device_id: [u8; 32], name: String, kind: String, meeting: [u8; 32] },
 
+    /// The ask to open the guest's folder here, by its nonce, or none.
+    Asks { opening: Option<[u8; 16]> },
+
     /// Where the peer's state has got to.
     ///
     /// Returned both when something changed and when the wait timed out, since
@@ -157,6 +168,8 @@ const TAG_GOT: u8 = 6;
 const TAG_JOIN: u8 = 7;
 const TAG_ABOUT: u8 = 8;
 const TAG_VISIT: u8 = 9;
+const TAG_ASKS: u8 = 10;
+const TAG_UNLOCK: u8 = 11;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
@@ -170,6 +183,7 @@ const STATUS_ABOUT: u8 = 9;
 const STATUS_MISMATCH: u8 = 10;
 const STATUS_DECLINED: u8 = 11;
 const STATUS_WELCOME: u8 = 12;
+const STATUS_ASKS: u8 = 13;
 
 impl Request {
     pub fn encode(&self) -> Vec<u8> {
@@ -199,6 +213,12 @@ impl Request {
                 put_name(&mut out, name);
                 put_name(&mut out, kind);
                 out.extend_from_slice(key_check);
+            }
+            Request::Asks => out.push(TAG_ASKS),
+            Request::Unlock { nonce, key } => {
+                out.push(TAG_UNLOCK);
+                out.extend_from_slice(nonce);
+                out.extend_from_slice(key);
             }
             Request::Visit { token, device_id, name, kind, person } => {
                 out.push(TAG_VISIT);
@@ -244,6 +264,12 @@ impl Request {
                 Request::Join { token, name: r.name()?, kind: r.name()? }
             }
             TAG_ABOUT => Request::About,
+            TAG_ASKS => Request::Asks,
+            TAG_UNLOCK => {
+                let mut nonce = [0u8; 16];
+                nonce.copy_from_slice(r.take(16)?);
+                Request::Unlock { nonce, key: r.hash()? }
+            }
             TAG_VISIT => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
@@ -282,6 +308,16 @@ impl Response {
             Response::About { kind } => {
                 out.push(STATUS_ABOUT);
                 put_name(&mut out, kind);
+            }
+            Response::Asks { opening } => {
+                out.push(STATUS_ASKS);
+                match opening {
+                    Some(nonce) => {
+                        out.push(1);
+                        out.extend_from_slice(nonce);
+                    }
+                    None => out.push(0),
+                }
             }
             Response::Welcome { device_id, name, kind, meeting } => {
                 out.push(STATUS_WELCOME);
@@ -332,6 +368,16 @@ impl Response {
                 key_check: r.hash()?,
             },
             STATUS_ABOUT => Response::About { kind: r.name()? },
+            STATUS_ASKS => Response::Asks {
+                opening: match r.u8()? {
+                    0 => None,
+                    _ => {
+                        let mut nonce = [0u8; 16];
+                        nonce.copy_from_slice(r.take(16)?);
+                        Some(nonce)
+                    }
+                },
+            },
             STATUS_WELCOME => Response::Welcome {
                 device_id: r.hash()?,
                 name: r.name()?,
@@ -563,6 +609,8 @@ mod tests {
                 kind: "phone".into(),
                 person: [10; 32],
             },
+            Request::Asks,
+            Request::Unlock { nonce: [11; 16], key: [12; 32] },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -583,6 +631,8 @@ mod tests {
             Response::Declined,
             Response::Paired { device_id: [1; 32], name: "Phone".into(), kind: "phone".into(), key_check: [2; 32] },
             Response::Welcome { device_id: [3; 32], name: "Laptop".into(), kind: "computer".into(), meeting: [4; 32] },
+            Response::Asks { opening: None },
+            Response::Asks { opening: Some([5; 16]) },
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);

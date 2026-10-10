@@ -415,3 +415,49 @@ async fn a_guests_folder_goes_only_with_its_last_device() {
     assert_eq!(plan.kept_for_it.len(), 1);
     assert_eq!(host.engine.store().db().kept_for_person(&person).unwrap(), 0, "the folder stayed");
 }
+
+/// Opened at the computer with the guest's approval (decision 0060, step 5):
+/// the computer asks, the guest's phone collects the ask and answers with the
+/// folder's key, and the computer can read the folder until it is locked.
+/// A key that does not fit opens nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guests_folder_opens_at_the_computer_only_with_its_key() {
+    let mut host = Device::new(42);
+    let mut guest = Device::new(7);
+    welcome(&host, &guest).await;
+    guest.engine.store_mut().set_new_files_private(true);
+    let letter = b"dear Saqib, open this only with me there".repeat(3000);
+    guest.write("letters/saqib.txt", &letter);
+    guest.engine.store().db().add_holder(&host.id()).unwrap();
+    sync_from(&mut host, &guest).await;
+
+    let person = host.engine.store().db().person_of(&guest.id()).unwrap().unwrap();
+    assert!(!qurb_peer::openings::is_open(&person));
+    qurb_peer::openings::ask(&person);
+
+    let addr = host.serve(&[guest.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &guest.identity, host.identity.fingerprint()).await.unwrap();
+    let nonce = client.asks().await.unwrap().expect("the ask did not reach the guest");
+    assert!(!client.unlock(nonce, [0x55; 32]).await.unwrap(), "opened with a key that does not fit");
+    let key = qurb_storage::sealed::FolderKey::for_host(&guest.engine.store().chunk_key(), &host.id());
+    assert!(client.unlock(nonce, key.to_bytes()).await.unwrap(), "the right key did not open it");
+    client.close();
+
+    let held = qurb_storage::sealed::FolderKey::from_bytes(qurb_peer::openings::key(&person).unwrap());
+    let files = host.engine.store().open_kept(&person, &held).unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].path, "letters/saqib.txt");
+    assert_eq!(files[0].size, letter.len() as u64);
+    let out = host.root.parent().unwrap().join("opened.txt");
+    let sealed = host.engine.store().kept_file(&person, &held, "letters/saqib.txt").unwrap();
+    assert_eq!(sealed, Some(files[0].sealed), "found by its sealed name");
+    assert!(
+        host.engine.store().unseal_kept(&held, &files[0].sealed, "letters/other.txt", &out).is_err(),
+        "unsealed as a file it is not"
+    );
+    host.engine.store().unseal_kept(&held, &files[0].sealed, &files[0].path, &out).unwrap();
+    assert_eq!(fs::read(&out).unwrap(), letter);
+
+    qurb_peer::openings::lock(&person);
+    assert!(qurb_peer::openings::key(&person).is_none(), "the key outlived the lock");
+}

@@ -3117,6 +3117,29 @@ impl Db {
         Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?.into_iter().filter_map(to_device).collect())
     }
 
+    /// The sealed names of what this computer keeps for a guest's person,
+    /// with each sealed file's hash and size.
+    pub fn kept_entries(&self, person: &DeviceId) -> Result<Vec<(String, blake3::Hash, u64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT path, content_hash, size FROM files
+              WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL ORDER BY path",
+        )?;
+        let rows = stmt.query_map(params![person.as_bytes().as_slice()], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, Vec<u8>>(1)?, r.get::<_, i64>(2)?))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (path, hash, size) = row?;
+            out.push((path, to_hash(&hash), size as u64));
+        }
+        Ok(out)
+    }
+
+    /// Just the sealed names of what is kept for a guest's person.
+    pub fn kept_names(&self, person: &DeviceId) -> Result<Vec<String>> {
+        Ok(self.kept_entries(person)?.into_iter().map(|(name, _, _)| name).collect())
+    }
+
     /// How much this computer keeps for a guest's person, in bytes as the
     /// guest sealed them (decision 0060).
     pub fn kept_for_person(&self, person: &DeviceId) -> Result<u64> {

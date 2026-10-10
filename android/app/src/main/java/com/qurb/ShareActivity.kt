@@ -76,8 +76,17 @@ class ShareActivity : AppCompatActivity() {
                 return@launch
             }
             val what = if (uris.size == 1) "it" else "${uris.size} files"
-            val choices = listOf("Save to Private Vault", "Save to Files, on all your devices") +
-                peers.map { "Send to ${it.name}" }
+            // Item 4 of the owner's list (decision 0060): into the folder a
+            // computer this phone visits keeps for it, or into that
+            // computer's Downloads, named as such.
+            val keepers = runCatching {
+                withContext(Dispatchers.IO) { Engine.open(this@ShareActivity).holders().map { it.fingerprint }.toSet() }
+            }.getOrDefault(emptySet())
+            val host = peers.firstOrNull { it.relation == "host" && it.fingerprint in keepers }
+            val choices = listOf(
+                host?.let { "Save to my folder on ${it.name}" } ?: "Save to Private Vault",
+                "Save to Files, on all your devices",
+            ) + peers.map { if (it.relation == "host") "Send to ${it.name}'s Downloads" else "Send to ${it.name}" }
             MaterialAlertDialogBuilder(this@ShareActivity)
                 .setTitle("Where should $what go?")
                 .setItems(choices.toTypedArray()) { _, which ->

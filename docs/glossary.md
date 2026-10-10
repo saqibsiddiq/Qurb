@@ -95,7 +95,10 @@ it — *pinned*, so no certificate authority can vouch for an impostor.
 **Guest** — Another person's device visiting a computer, with its own key
 (decision 0060). It joins with a *guest code* and is shown only what is sent
 to it; on its side the computer is its *host*. The two find each other under
-a *meeting* secret of their own.
+a *meeting* secret of their own. A guest's Private Vault may be kept by the
+computer *sealed*: names and contents it cannot open, until the guest's phone
+approves *opening* it there, behind its screen lock, for as long as it stays
+open.
 
 **Holder** — A device that keeps a copy of another device's private files,
 in its store and never in its folder, so the owner — usually a phone — can

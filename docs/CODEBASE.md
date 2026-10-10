@@ -419,6 +419,17 @@ unsealed and checked, when it is opened (`qurb_peer::fetch_kept`); a phone
 set up again with the same key learns its folder from the computer
 (`learn_kept`).
 
+The computer opens a guest's folder only with that person's approval. Its
+window asks (`qurb_peer::openings`, a registry in memory, one per process,
+since the window and the server answering the phone share one). The
+guest's phone collects the ask when it next syncs with that computer
+(`Request::Asks`). The person approves behind their fingerprint, face or
+screen lock (`ScreenLock.kt`), and the phone sends the folder key
+(`Request::Unlock`), which the computer accepts only if it opens one of that
+person's sealed names. The key stays in memory until the folder is locked, or
+for ten minutes without use. Files opened are unsealed under
+`$XDG_RUNTIME_DIR/qurb-open/` and deleted on locking.
+
 ### 2.7 The index remembers what happened, not just what is
 
 Everything above describes the index as a picture of the present: these paths,
@@ -654,6 +665,8 @@ qurb/
 │   │   ├── src/tls.rs       mutual authentication by pinned fingerprint
 │   │   ├── src/kept.rs      a vault kept sealed by another person's computer:
 │   │   │                    fetched back and unsealed (0060)
+│   │   ├── src/openings.rs  a guest's folder opened at the computer with the
+│   │   │                    guest's approval: asks and keys, in memory (0060)
 │   │   ├── src/server.rs    serves a store, read-only
 │   │   ├── src/client.rs    asks for trees, manifests, chunks
 │   │   └── src/source.rs    plugs the client into the engine
@@ -756,6 +769,9 @@ qurb/
 │       │                  ShowCode.kt         this phone showing a pairing code
 │       │                  Approval.kt         a device asking to join, approved by
 │       │                                      the six digits both screens show
+│       │                  ScreenLock.kt       the fingerprint, face or screen lock,
+│       │                                      before a computer may open this
+│       │                                      phone's folder there (0060)
 │       │                  Words.kt            how the app says things, in one place
 │       │                  SetupActivity.kt    set up, or join by scanning a code
 │       │                  Backup.kt           the key, kept in Block Store
@@ -937,6 +953,7 @@ for the workspace as it stands.
 | Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md) |
 | Guests | another person's device visits with a guest code, keeping its own key; the two meet at the rendezvous service under a secret of their own and are shown each other only what was sent to them (the `Guest` audience) — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | A guest's folder, sealed | a guest's Private Vault kept by the computer it visits under sealed names and sealed chunks the computer cannot open, filed under the guest's person; freed on the phone once kept, fetched back and checked when opened — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
+| Opening a guest's folder at the computer | the window asks, the guest's phone approves behind its screen lock and sends the folder key, accepted only if it opens the folder; held in memory until locked or ten minutes unused; files opened unsealed into memory-backed space and checked. Not watched on hardware yet — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |

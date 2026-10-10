@@ -139,6 +139,14 @@ async function openDevice(d) {
   const send = button("Send files…", "btn primary", "send");
   send.style.justifyContent = "flex-start";
   send.addEventListener("click", () => openSend([], d));
+  // A guest's folder, sealed here: opened only with their approval on their
+  // phone (decision 0060).
+  if (d.relation === "guest" && Number(d.kept ?? 0) > 0) {
+    const look = button("Open their folder…", "btn", "lock-keyhole");
+    look.style.justifyContent = "flex-start";
+    look.addEventListener("click", () => openGuestFolder(d));
+    actions.append(look);
+  }
   // Removing it, from here rather than anywhere more prominent: it is rare,
   // and it is the one thing on this screen that cannot be undone without the
   // other device in hand.
@@ -163,6 +171,93 @@ async function openDevice(d) {
   body.append(tech);
 
   box.append(head, body);
+}
+
+/**
+ * A guest's folder at this computer (decision 0060). Sealed on their phone,
+ * so nothing here can open it: the window asks their phone, their person
+ * approves behind a fingerprint, face or screen lock, and the folder opens
+ * here until it is locked -- by hand, after ten minutes unused, or when Qurb
+ * quits.
+ */
+function openGuestFolder(d) {
+  let polling = null;
+  const box = sheet({
+    wide: true,
+    onClose: () => { clearInterval(polling); },
+  });
+  box.append(el("h2", null, `Folder kept for ${d.name}`));
+  const lead = el("p", "lead");
+  const body = el("div");
+  const actions = el("div", "actions end");
+  box.append(lead, body, actions);
+
+  // What is drawn, so the watch below redraws only when that changes.
+  let shown = null;
+
+  // A look every 1.5 s, which reads nothing and does not count as using the
+  // folder: an open folder left on screen still locks itself when idle.
+  async function watch() {
+    try {
+      const { state } = await invoke("guest_folder", { guest: d.fingerprint, list: false });
+      if (state !== shown) draw();
+    } catch (e) { /* drawn on the next change */ }
+  }
+
+  async function draw() {
+    let folder;
+    try {
+      folder = await invoke("guest_folder", { guest: d.fingerprint, list: true });
+    } catch (e) {
+      lead.textContent = String(e);
+      return;
+    }
+    shown = folder.state;
+    body.replaceChildren();
+    actions.replaceChildren();
+    if (folder.state === "locked") {
+      lead.textContent = `Kept here sealed: this computer can't open it. To open it here, ask ${d.name}.`;
+      const ask = button(`Ask ${d.name}'s phone`, "btn primary", "lock-keyhole");
+      ask.addEventListener("click", async () => {
+        try { await invoke("ask_guest_folder", { guest: d.fingerprint }); } catch (e) { lead.textContent = String(e); return; }
+        draw();
+      });
+      actions.append(ask);
+      return;
+    }
+    if (folder.state === "asking") {
+      lead.textContent = `Waiting for ${d.name}. Open Qurb on their phone and approve — it asks for their fingerprint, face or screen lock.`;
+      const stop = button("Stop asking", "btn");
+      stop.addEventListener("click", async () => {
+        try { await invoke("lock_guest_folder", { guest: d.fingerprint }); } catch (e) { /* already */ }
+        draw();
+      });
+      actions.append(stop);
+      return;
+    }
+    lead.textContent = "Open here. Anyone at this computer can see these files until you lock it. It locks itself after ten minutes unused.";
+    const list = el("ul", "rows");
+    for (const f of folder.files) {
+      list.append(row({
+        iconName: KIND_ICON[kindOf(f.path)],
+        name: f.path,
+        sub: [size(f.size), when(f.modified_at)],
+        onClick: async () => {
+          try { await invoke("open_guest_file", { guest: d.fingerprint, path: f.path }); } catch (e) { lead.textContent = String(e); }
+        },
+      }));
+    }
+    if (folder.files.length === 0) list.append(el("li", "meta", "Nothing in it."));
+    body.append(list);
+    const lock = button("Lock", "btn primary", "lock-keyhole");
+    lock.addEventListener("click", async () => {
+      try { await invoke("lock_guest_folder", { guest: d.fingerprint }); } catch (e) { /* already */ }
+      draw();
+    });
+    actions.append(lock);
+  }
+  draw();
+  polling = setInterval(watch, 1500);
 }
 
 /**

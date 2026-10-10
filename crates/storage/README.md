@@ -221,6 +221,25 @@ All of them verify the whole-file hash — but only once the last byte is writte
 which is the earliest it can be known. A destination is therefore not
 trustworthy until the call returns.
 
+## Sealed, for another person's computer
+
+`sealed.rs` is what a guest's Private Vault looks like to a computer of
+another person that keeps it
+([decision 0060](../../docs/decisions/0060-a-computer-keeps-private-folders-for-several-people.md)).
+The key is derived from the guest's chunk key and that computer's identity
+(`FolderKey::for_host`), so each host gets a different one. A name is the
+path sealed deterministically (`seal_name`), so a file keeps its name as it
+changes. A sealed file is a length, a sealed header (path, size, content
+hash, time, chunk lengths), then each chunk sealed. The host re-chunks it as
+it would any file, so `Unsealer` reads it as one stream whatever the pieces.
+
+The store makes a sealed view once per file and host (`prepare_sealed`,
+`sealed_views`, `sealed_parts`), serves it (`sealed_tree_for`,
+`sealed_chunk`), and records the host's copy against the plain file
+(`note_kept_sealed`). On the host, the folder is filed under the guest's
+person (`visit_persons`), and opened only with a key its phone sent
+(`open_kept`, `kept_file`, `unseal_kept`).
+
 ## Not yet built
 
 - **Per-file keys.** One `ChunkKey` encrypts everything. Sharing a single file
