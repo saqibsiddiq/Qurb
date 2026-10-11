@@ -93,8 +93,8 @@ const today: { title: string; icon: IconName; cls: string; items: [string, strin
     icon: 'history',
     cls: 'testing',
     items: [
-      ['Guests and their sealed folders', 'in tests and on a laptop; not yet between two people’s phones'],
-      ['Opening your folder with your fingerprint', 'built; not yet tried on a phone'],
+      ['Guests and their sealed folders', 'in tests, on a laptop and on the Android emulator; not yet between two people’s phones'],
+      ['Opening your folder with your fingerprint', 'on the Android emulator, with a PIN; not yet on a real phone'],
       ['Sends that keep no copy', 'in tests and on a laptop']
     ]
   },

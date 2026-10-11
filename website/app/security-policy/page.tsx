@@ -33,8 +33,9 @@ export default function SecurityPage() {
         with a key derived for that computer alone: the names and the contents, so the computer — and whoever uses it —
         can open neither. To open the folder there, the computer asks the phone, and the phone’s owner approves behind
         their fingerprint, face or screen lock; the key is accepted only if it opens the folder, and held in memory
-        until the folder is locked, or for ten minutes unused. This is new, and checked in tests and on a laptop, not
-        yet between two people’s phones.
+        until the folder is locked, or for ten minutes unused. This is new: checked in tests, on a laptop and on the
+        Android emulator, not yet between two people’s phones. When the computer cannot reach the phone directly, the
+        relay carries it.
       </p>
       <p>Its limits, plainly:</p>
       <ul>
