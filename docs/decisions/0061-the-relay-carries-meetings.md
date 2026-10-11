@@ -86,6 +86,11 @@ that server, and it is made here rather than left to be discovered.
 - **Only while the phone is in a sync pass.** A phone registers on the relay
   for the length of a pass, so the computer reaches it then, as it does
   directly.
+- **A relay is updated before the devices that use it.** A relay built
+  before this replaces a connection's name when given another, so a device
+  updated first would lose its own name there the moment it met a guest. No
+  relay runs anywhere yet (the owner's server is next); when one does, it
+  goes first.
 - **Push and local beacons stay keyed to one person.** A guest's phone is
   not woken when the computer has news for it, and is not found by beacon
   on the computer's Wi-Fi; the rendezvous service still carries its local
