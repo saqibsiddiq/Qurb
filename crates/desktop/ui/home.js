@@ -245,7 +245,7 @@ function conflictCard(c) {
     }
     const who = el("p");
     who.style.cssText = "display:flex;align-items:center;gap:8px;margin-top:6px;font-weight:500";
-    who.append(icon(deviceIcon(v.by), "small"), el("span", null, v.by));
+    who.append(icon(deviceIcon(v.by, v.kind), "small"), el("span", null, v.by));
     col.append(who);
     col.append(el("p", "quiet num", `${when(v.at)} · ${size(v.size)}`));
     if (v.here) col.append(preview(v.path));
@@ -321,10 +321,12 @@ function happenedRow(r) {
   // Most rows are about a path. A pairing is about a device and has no path
   // at all, so the device becomes the subject rather than a note beside one.
   const subject = r.path ? base(r.path) : (r.device ?? "");
-  const other = r.device && r.device !== subject ? r.device : null;
+  const named = otherDevice(r);
+  const other = named && named !== subject ? named : null;
   const said = !other ? words
     : r.kind === "received" ? `${words} from ${other}`
-    : r.kind === "collected" || r.kind === "sent" ? `${words} by ${other}`
+    : r.kind === "collected" ? `${words} by ${other}`
+    : r.kind === "sent" ? `Ready for ${other}`
     : r.kind === "conflicted" ? `Changed here and on ${other}`
     : `${words} · ${other}`;
   const li = row({
@@ -493,7 +495,7 @@ function drawTransfers() {
 
 /** The kinds of history that are a transfer somebody meant, rather than sync. */
 function finishedLine(r) {
-  const who = r.device ?? "another device";
+  const who = otherDevice(r);
   switch (r.kind) {
     case "received":
       return (r.detail ?? "").startsWith("sent to this device") ? `Received from ${who}` : null;

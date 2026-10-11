@@ -9,7 +9,10 @@ found by **measuring** where things sit, not by looking:
 - **Desktop**: positions from the DOM, in the fixture page
   (`experiments/desktop-fixtures`), at a 1280 × 860 window, light and dark.
 - **Android**: positions from the view hierarchy (`uiautomator dump`), on
-  the emulator (`qurb-test`, 1080 × 2400 at 420 dpi, so 1 dp = 2.625 px).
+  the emulator (`qurb-test`, 1080 × 2400 at 420 dpi, so 1 dp = 2.625 px),
+  and from row 29 on the owner's Galaxy S23 too (1080 × 2340 at 480 dpi, so
+  1 dp = 3 px and the screen 360 dp wide), over wireless debugging. What
+  shows through a bar is measured as grey levels in a screenshot.
 
 [direction.md](direction.md) and [brief.md](brief.md) say what the design
 is. This file says how its parts line up.
@@ -22,7 +25,9 @@ is. This file says how its parts line up.
    lights it, reach out into the gutter instead of pushing the tile in.
    Desktop: `.rows` has negative inline margins equal to a row's padding
    and border. Android: the list's 12 dp padding plus a row's 8 dp padding
-   is the 20 dp gutter; Home's Recent list is pulled out by 8 dp.
+   is the 20 dp gutter; Home's Recent list is pulled out by 8 dp. In a
+   sheet, an action's icon sits under the header's icon and its words start
+   where the title does (`Sheet.action`).
 2. **One right edge.** A row's trailing button and a text button (*See
    all*, *Sync now*, a section's action) end on the column's right edge. On
    Android a text button is pulled out by its 12 dp padding, with no minimum
@@ -44,9 +49,10 @@ is. This file says how its parts line up.
    *Back*.
 8. **Dividers in a group run edge to edge.** One inset at one end only read
    as lopsided.
-9. **Glass over moving content is nearly opaque where nothing blurs it.**
-   Android blurs nothing behind a view, so its tab bar is 98% opaque; at
-   95%, words scrolling behind it could still be read.
+9. **Glass over moving content is opaque where nothing blurs it.**
+   Android blurs nothing behind a view, so its tab bar is opaque, in light
+   and dark. At 95% words behind it could be read; at 98% too, on the S23 in
+   dark and at a larger font size in light (row 29).
 10. **Motion never washes out words.** A light travelling across a control
     passes behind its text, dimmed.
 11. **The buttons that end a sheet or a confirmation sit on the right**, the
@@ -59,6 +65,23 @@ is. This file says how its parts line up.
     a phone, a computer, or a hard drive for a replica. A device paired before
     then says so at its first sync since; until it has, and only then, the
     icon is guessed from its name.
+13. **The app is *Qurb* wherever a person reads its name**: every screen,
+    the launcher on both, the desktop's notifications and autostart entry,
+    the tray, and the folder in Android's file picker. *qurb* in lower case
+    only where it is typed or is an identifier: commands, folders, packages.
+14. **A device is named, or is *another device*.** Never its identifier: a
+    device never paired here -- where a file began, reaching this one
+    through another -- is *another device*, as each app already said when
+    no device was recorded.
+15. **An error says what happened, as a sentence.** A refusal -- different
+    keys, declined, a code that lapsed before anybody approved -- is not
+    filed under the network. The engine words its errors to follow `error:`
+    on a command line; both apps start them with a capital.
+16. **Nothing that holds words has a fixed height.** Checked at 1.3× and at
+    2×, Android's largest: at least a height, and taller with the text.
+17. **A step has a title and a way back.** The desktop's setting up and
+    Add a device, and now the phone's setting up, whose back key goes to
+    the step before rather than out of setting up.
 
 ## Found and fixed, 2026-10-11
 
@@ -92,6 +115,22 @@ is. This file says how its parts line up.
 | 26 | desktop, setting up | *Back* a plain link on one step and a button on the others; some steps' buttons on the left, others' and every sheet's on the right | all buttons right, *Back* the same button everywhere |
 | 27 | both, every device icon | guessed from the device's name, though both apps record what each device is: a phone whose name had none of the words looked for (*Ammi*, say) would show as a laptop, and a replica always did | from the recorded kind; on the emulator, test-laptop recorded as a replica showed a hard drive (the record taken out after) |
 | 28 | desktop, removing a device, showing or entering a code, a device asking to join, moving a file into the Private Vault | buttons on the left, unlike every other sheet and every sheet on the phone | last button 41 to 357 px short of the right edge; now on it, and *Decline* / *Approve* on their own card's edge |
+| 29 | Android, tab bar | words behind it readable: on the S23 in dark, 31 to 39 levels behind against the bar's 31; on the emulator in light at 1.3×, *Study desktop* at 246 against 251. Both inside the 5-level margin row 19 accepted, and both read | opaque in both modes; over scrolling rows, a flat 31 in dark |
+| 30 | both, history and conflicts | a device never paired here shown by its identifier: *Arrived from 6d4e9586* on the S23, beside *Arrived from saqib*; the same for a conflict's version made there | *another device* (rule 14) |
+| 31 | desktop, history | a queued send read *Ready to send by Galaxy S23*, the device being the one it is for; the phone says *Ready for* | *Ready for Galaxy S23* |
+| 32 | desktop, send | the result said *you can close this* and not, as the phone does, to leave the file as it is: nothing is copied ([0060](../decisions/0060-a-computer-keeps-private-folders-for-several-people.md)) | *keep it as it is until then* |
+| 33 | Android, every sheet with actions | an action's icon and words 4 to 8 dp right of the header's (icon 38.9 dp against 31.6, words 86.1 against 81.5): a row's padding and a smaller tile | 31.6 and 81.9 (rule 1) |
+| 34 | Android, Files, Private Vault, Recently deleted | the breadcrumb and back links a fixed 36 dp: at 2× their words lost their tops | at least 36 dp, growing with the text |
+| 35 | both, the app's name | *qurb* in both launchers, Android's file picker, the desktop's notifications, autostart entry and tray, and the phone's setting-up title, while every screen says *Qurb* | *Qurb* (rule 13) |
+| 36 | Android, Send to | the device choice listed bare names; the desktop's says when each was last here. And a device never seen was *Not seen yet* on the phone, *Not connected yet* on the desktop | *Last seen 14 days ago* under each; *Not connected yet* on both |
+| 37 | Android, Add a device | four bare choices, where the desktop's each say what they are for | a line under each |
+| 38 | Android, showing a code | *Done* and *Stop showing it* side by side, doing the same thing; the desktop has one | *Stop showing it* |
+| 39 | Android, entering a code | *Enter the code* and *Connect*, where its own menu and the desktop say *Enter a code* and *Join* | *Enter a code*, *Join* |
+| 40 | Android, pairing | a key mismatch read *Network problem.*, then the engine's sentence in lower case; a bad code told a phone user to *Run `qurb pair`* | the sentence alone, capitalised (rule 15); *Show a new one on the other device* |
+| 41 | Android, a conflict | with the other version not on the phone, two of the three choices were simply missing; the desktop greys them and says why | a line saying so |
+| 42 | Android, setting up | not in the app's design: Material's display type, 32 dp margins, stock outlined and text buttons, no mark, *qurb* in lower case; a step with no title or way back, and the back key left setting up | the mark and *Qurb*, the 20 dp gutter, the desktop's choice cards and words, a title and *Back* on each step (rule 17) |
+| 43 | desktop, conflicts | a version's device icon guessed from its name (rule 12) | from its kind |
+| 44 | desktop, showing a code | with no code drawn, *Waiting — …* stayed centred under a left-aligned heading | on the left |
 
 Checked after: the desktop smoke test, in the real window, both modes (*no
 command failed*), and every screen re-measured in the fixtures and on the
@@ -100,7 +139,11 @@ the emulator and then looking at sheets, dark mode and setting up. Rows 27
 and 28 came from going through pairing and removing one screen at a time:
 the desktop's measured in the fixtures with headless Chromium at 1280 × 860,
 each row's buttons measured with and without the change; the phone's icon on
-the emulator.
+the emulator. Rows 29 to 44 came from the rest of the list below, going
+through the send flow, conflicts, the phone's pairing and removing screens
+and its setting up one by one, every place and sheet at 1.3× and 2×, and the
+S23: Rust tests for the desktop and mobile crates, the desktop smoke test,
+and each changed screen measured again after.
 
 ## Left as it is, deliberately
 
@@ -115,6 +158,23 @@ the emulator.
 - **The desktop has no *Sync now*.** It syncs continuously; the phone syncs
   in windows ([decision 0020](../decisions/0020-sync-takes-a-deadline.md)).
 - ***Add a device* is *Add* on the phone**, for width.
+- **The desktop's conflict choices are on the left**, under the two
+  versions, in the order of the columns above them: *Keep this version*,
+  *Keep the other version*, *Keep both*. They are a choice tied to what is
+  above, not a sheet's ending (rule 11). The phone lists the same three, in
+  the same words and order, as a sheet's actions.
+- **The phone's errors and its pairing question are dialogs**, not sheets:
+  themed to the app (`ThemeOverlay.Qurb.Dialog`), and modal, because the
+  engine waits on the answer.
+- **The phone's *Send to* goes on when a device is chosen**, then picks
+  files; the desktop's sheet holds files and a device and sends on *Send*.
+  The same choice, each in its platform's order.
+- **A sheet's way out is *Cancel* on the phone and *Back* in the desktop's
+  Add a device**: on the phone each step is its own sheet, and closing it
+  is going back.
+- **At 2× the floating *Add files* covers the last row** until the list is
+  scrolled, which it can be: the list leaves room for it. A device card's
+  name ends in an ellipsis at large sizes.
 
 ## Not yet checked
 
@@ -124,15 +184,19 @@ Stated so that nobody mistakes this pass for a complete one:
   the device sheet and file sheet on both; Add a device on both; the
   desktop's setting-up steps. Rows 21 to 26. Then the desktop's pairing
   screens, removing a device and moving into the Private Vault, one by one,
-  and device icons on both. Rows 27 and 28.
-- Still not: the send flow and conflicts, one by one, and the phone's
-  pairing and removing screens the same way; the phone's setting up (it
-  needs the emulator's data cleared); font scales above 1.0.
-- **The conflict card's choices** are left-aligned on the desktop, inside
-  the card. They are a choice among three, not an ending, so rule 11 may not
-  apply; not yet compared with the phone's.
-- **A code that could not be drawn** leaves *Waiting — …* centred under a
-  left-aligned heading, the line that sits centred under the QR code
-  otherwise. Seen only in the fixtures, which draw no code.
-- A real phone. Every Android measurement here is the emulator's; the S23
-  is 1080 × 2340 at a different density.
+  and device icons on both. Rows 27 and 28. Then the send flow and
+  conflicts on both, the phone's pairing, removing and setting up (on a
+  second user of the emulator, so nothing was cleared), every place and
+  sheet at 1.3× and 2×, and Home on the S23. Rows 29 to 44.
+- **The S23, screen by screen.** Home was measured on it, in dark, and is
+  on the same edges as the emulator's; row 29 was found there. The phone
+  was then in use, so the rest of its screens were not.
+- **The phone's pairing question** -- another device asking to join, with
+  its number -- was not seen: it needs a device with the same key, or one
+  joining the phone's code from where it can reach it, which the emulator's
+  network does not allow. Its words were compared in the code.
+- **The phone's line for a conflict whose other version is not here yet**
+  (row 41) was not seen: it needs a conflict whose bytes stayed on the
+  other device.
+- **The desktop at larger text sizes.** Its sizes are in pixels; how it
+  behaves under the desktop's text scaling was not checked.

@@ -14,7 +14,7 @@
         android:id="@+id/headline"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Saving to qurb"
+        android:text="Saving to Qurb"
         android:textAppearance="@style/Text.Title" />
 
     <TextView

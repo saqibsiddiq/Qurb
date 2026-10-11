@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Setting up, in the app's own design and the desktop's words: the mark and
+     Qurb, then two choices as the desktop draws them, each a card that says
+     what it does. A step has its own title and a way back, as the desktop's
+     steps do. Measured against the app's pages: the same 20dp gutter. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -7,25 +12,40 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
         android:gravity="center_vertical"
-        android:padding="32dp">
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/gutter"
+        android:paddingVertical="32dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="qurb"
-            android:textAppearance="@style/TextAppearance.Material3.DisplaySmall"
-            android:textColor="@color/ink"
-            android:layout_marginBottom="8dp" />
-
-        <TextView
+        <LinearLayout
+            android:id="@+id/intro"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Your files stay on your own devices. They move directly between them, encrypted end to end, and are never stored on anyone else's server."
-            android:textAppearance="@style/Text.Body"
-            android:textColor="@color/ink_soft"
-            android:layout_marginBottom="40dp" />
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_marginBottom="18dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/qurb_mark" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:accessibilityHeading="true"
+                android:text="Qurb"
+                android:textAppearance="@style/Text.Display" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="28dp"
+                android:text="Your files stay on your own devices. They move directly between them, encrypted end to end, and are never stored on anyone else's server."
+                android:textAppearance="@style/Text.Body"
+                android:textColor="@color/text_2" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/chooser"
@@ -33,42 +53,129 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <com.google.android.material.button.MaterialButton
+            <LinearLayout
                 android:id="@+id/create"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Set up Qurb here" />
+                android:background="@drawable/glass_group"
+                android:foreground="@drawable/row_bg"
+                android:gravity="center_vertical"
+                android:minHeight="@dimen/row"
+                android:orientation="horizontal"
+                android:padding="14dp">
 
-            <TextView
-                android:id="@+id/createSays"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="This phone becomes your first device. There is nothing to write down."
-                android:textAppearance="@style/Text.Quiet"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="28dp" />
+                <FrameLayout
+                    android:layout_width="@dimen/tile"
+                    android:layout_height="@dimen/tile"
+                    android:background="@drawable/tile">
 
-            <com.google.android.material.button.MaterialButton
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_plus"
+                        android:tint="@color/text_2" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Set up Qurb here"
+                        android:textAppearance="@style/Text.Name" />
+
+                    <TextView
+                        android:id="@+id/createSays"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:text="This phone becomes your first device. There is nothing to write down."
+                        android:textAppearance="@style/Text.Meta" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_marginStart="8dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_chevron_right"
+                    android:tint="@color/text_3" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:id="@+id/restore"
-                style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="I already use Qurb" />
+                android:layout_marginTop="10dp"
+                android:background="@drawable/glass_group"
+                android:foreground="@drawable/row_bg"
+                android:gravity="center_vertical"
+                android:minHeight="@dimen/row"
+                android:orientation="horizontal"
+                android:padding="14dp">
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Join the devices you already have, with the code one of them shows."
-                android:textAppearance="@style/Text.Quiet"
-                android:layout_marginTop="8dp" />
+                <FrameLayout
+                    android:layout_width="@dimen/tile"
+                    android:layout_height="@dimen/tile"
+                    android:background="@drawable/tile">
 
-            <!-- Shown only when Block Store holds a key from before. -->
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_key_round"
+                        android:tint="@color/text_2" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="I already use Qurb"
+                        android:textAppearance="@style/Text.Name" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="3dp"
+                        android:text="Join the devices you already have, with the code one of them shows."
+                        android:textAppearance="@style/Text.Meta" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_marginStart="8dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_chevron_right"
+                    android:tint="@color/text_3" />
+            </LinearLayout>
+
+            <!-- Shown only when Block Store holds a key from before. Pulled
+                 out by a text button's padding, so its words start at the
+                 gutter (consistency.md, rule 1). -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/fromBackup"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="match_parent"
+                style="@style/Widget.Qurb.Button.Text"
+                android:gravity="start|center_vertical"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginStart="-12dp"
+                android:layout_marginTop="16dp"
                 android:text="Use the key from your Google backup"
                 android:visibility="gone" />
         </LinearLayout>
@@ -82,24 +189,34 @@
             android:visibility="gone">
 
             <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:accessibilityHeading="true"
+                android:text="Scan the code from your other device"
+                android:textAppearance="@style/Text.Display" />
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
                 android:text="On your computer, open Qurb, go to Devices and choose Add a device. Scan the code it shows. It brings your key with it, so there is nothing else to type."
                 android:textAppearance="@style/Text.Body"
-                android:textColor="@color/ink_soft"
-                android:layout_marginBottom="20dp" />
+                android:textColor="@color/text_2" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/scan"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Scan the code" />
+                android:text="Scan the code"
+                app:icon="@drawable/ic_qr_code"
+                app:iconGravity="textStart" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
-                android:hint="Or type the code">
+                android:hint="Or enter the code">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/code"
@@ -109,20 +226,38 @@
                     android:inputType="textNoSuggestions|textVisiblePassword" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/joinConfirm"
-                style="@style/Widget.Material3.Button.OutlinedButton"
+            <!-- The step's ending, on the right (rule 11). -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="Join" />
+                android:layout_marginTop="16dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/joinBack"
+                    style="@style/Widget.Qurb.Button.Secondary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Back" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/joinConfirm"
+                    style="@style/Widget.Qurb.Button.Secondary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:text="Join" />
+            </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/useWords"
-                style="@style/Widget.Material3.Button.TextButton"
-                android:layout_width="match_parent"
+                style="@style/Widget.Qurb.Button.Text"
+                android:gravity="start|center_vertical"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginStart="-12dp"
+                android:layout_marginTop="12dp"
                 android:text="Use my 24 words instead" />
         </LinearLayout>
 
@@ -132,6 +267,14 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:accessibilityHeading="true"
+                android:text="Enter your 24 words"
+                android:textAppearance="@style/Text.Display" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
@@ -148,12 +291,27 @@
                     android:minLines="4" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/restoreConfirm"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Restore"
-                android:layout_marginTop="16dp" />
+                android:layout_marginTop="16dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/restoreBack"
+                    style="@style/Widget.Qurb.Button.Secondary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Back" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/restoreConfirm"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:text="Restore" />
+            </LinearLayout>
         </LinearLayout>
 
         <com.google.android.material.progressindicator.LinearProgressIndicator

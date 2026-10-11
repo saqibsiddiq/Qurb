@@ -55,6 +55,9 @@ object Words {
 
     fun devices(n: Int) = if (n == 1) "1 device" else "$n devices"
 
+    /** When a device was last here, in the desktop's words. */
+    fun seen(lastSeen: Long?) = lastSeen?.let { "Last seen ${ago(it)}" } ?: "Not connected yet"
+
     /**
      * One entry of history: its icon, its subject -- the file, or the device
      * for a pairing -- and what happened, in words rather than the engine's

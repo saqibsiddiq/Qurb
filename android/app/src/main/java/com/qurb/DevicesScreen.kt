@@ -89,7 +89,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
     }
 
     private fun deviceCard(page: LinearLayout, peer: PeerInfo, holders: Set<String>): View {
-        val seen = peer.lastSeen?.let { "Last seen ${Words.ago(it)}" } ?: "Not seen yet"
+        val seen = Words.seen(peer.lastSeen)
         val extra = when {
             peer.relation == "host" -> "You visit as a guest"
             peer.fingerprint in holders -> "Keeps a backup of your Private Vault"
@@ -151,7 +151,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
 
     /** A device's details, and what can be done about it. */
     private fun open(peer: PeerInfo, keeps: Boolean) {
-        val seen = peer.lastSeen?.let { "Last seen ${Words.ago(it)}" } ?: "Not seen yet"
+        val seen = Words.seen(peer.lastSeen)
         val sheet = kit.sheet().header(States.device(peer.name, peer.kind), peer.name, seen)
         val facts = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
         val group = kit.group(facts)

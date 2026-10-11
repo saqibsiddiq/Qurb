@@ -729,14 +729,19 @@ class MainActivity : AppCompatActivity() {
         kit.sheet()
             .header(R.drawable.ic_monitor_smartphone, "Add a device",
                 "Your computer or another phone. It joins with a code, once.")
-            .action(R.drawable.ic_qr_code, "Scan the other device's code") {
+            // Each choice says what it is for, as the desktop's do.
+            .action(R.drawable.ic_qr_code, "Scan the other device's code",
+                meta = "From a computer or phone that is showing one.") {
                 scanner.launch(Intent(this, ScanActivity::class.java))
             }
-            .action(R.drawable.ic_smartphone, "Show a code on this phone") { ShowCode.show(this) }
-            .action(R.drawable.ic_keyboard, "Enter a code") { typeCode() }
+            .action(R.drawable.ic_smartphone, "Show a code on this phone",
+                meta = "Scan it with the other device, or type it there.") { ShowCode.show(this) }
+            .action(R.drawable.ic_keyboard, "Enter a code",
+                meta = "From a device that is showing one.") { typeCode() }
             // Another person's computer, as a guest (decision 0060). Its code
             // says so, so scanning it from here or above does the same.
-            .action(R.drawable.ic_laptop, "Visit someone's computer") {
+            .action(R.drawable.ic_laptop, "Visit someone's computer",
+                meta = "As their guest. This phone keeps its own key.") {
                 scanner.launch(Intent(this, ScanActivity::class.java))
             }
             .show()
@@ -750,9 +755,10 @@ class MainActivity : AppCompatActivity() {
             background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.glass_group)
         }
         kit.sheet()
-            .header(R.drawable.ic_keyboard, "Enter the code", "The code the other device is showing")
+            // The desktop's words: *Enter a code*, and *Join*.
+            .header(R.drawable.ic_keyboard, "Enter a code", "The code the other device is showing")
             .view(input, top = 16)
-            .buttons("Connect") {
+            .buttons("Join") {
                 val code = input.text.toString().trim()
                 if (code.isNotEmpty()) joinWith(code)
             }
@@ -833,8 +839,10 @@ class MainActivity : AppCompatActivity() {
                 sheet.text("No devices yet. Add one first.")
                     .buttons("Add a device") { pair() }
             }
+            // Each with when it was last here, as the desktop's choice says:
+            // what decides whether a send arrives soon or waits.
             for (peer in peers) {
-                sheet.action(States.device(peer.name, peer.kind), peer.name) { then(peer) }
+                sheet.action(States.device(peer.name, peer.kind), peer.name, meta = Words.seen(peer.lastSeen)) { then(peer) }
             }
             sheet.show()
         }

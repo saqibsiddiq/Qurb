@@ -86,7 +86,7 @@ fn menu(status: &Status) -> Items {
 
     // The headline, not clickable: a menu that opens to tell you nothing is
     // a menu nobody opens twice.
-    let heading = MenuItem::new(format!("qurb — {}", status.state.summary()), false, None);
+    let heading = MenuItem::new(format!("Qurb — {}", status.state.summary()), false, None);
     let _ = menu.append(&heading);
 
     let detail = MenuItem::new(
@@ -238,7 +238,7 @@ fn open_folder(root: &Path) {
 }
 
 fn tooltip(status: &Status) -> String {
-    format!("qurb — {}\n{}", status.state.summary(), devices(status))
+    format!("Qurb — {}\n{}", status.state.summary(), devices(status))
 }
 
 pub(crate) fn devices(status: &Status) -> String {

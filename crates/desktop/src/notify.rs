@@ -202,7 +202,7 @@ fn show(notice: &Notice) {
     let outcome = notify_rust::Notification::new()
         .summary(&notice.title)
         .body(&notice.body)
-        .appname("qurb")
+        .appname("Qurb")
         .icon("folder-remote")
         .show();
 

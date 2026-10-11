@@ -385,7 +385,7 @@ async function openDetails(path) {
     const list = el("ul", "rows");
     for (const r of d.history.slice(0, 5)) {
       const [iconName, words] = HAPPENED[r.kind] ?? ["info", r.kind];
-      list.append(row({ iconName, name: words, sub: [r.device, when(r.at)] }));
+      list.append(row({ iconName, name: words, sub: [otherDevice(r), when(r.at)] }));
     }
     body.append(list);
   }
@@ -764,7 +764,9 @@ function openSend(paths = [], device = null) {
       trip.className = moving ? "journey moving" : "journey waiting";
       says.textContent = moving
         ? `Sending ${what1} to ${d.name}…`
-        : `${what1[0].toUpperCase()}${what1.slice(1)} ${r.sent === 1 ? "is" : "are"} ready for ${d.name}. It collects ${r.sent === 1 ? "it" : "them"} the next time it's online — you can close this.`;
+        // Read from where it is when collected, as the phone says: nothing is
+        // copied (decision 0060).
+        : `${what1[0].toUpperCase()}${what1.slice(1)} ${r.sent === 1 ? "is" : "are"} ready for ${d.name}. It collects ${r.sent === 1 ? "it" : "them"} the next time it's online — keep ${r.sent === 1 ? "it as it is" : "them as they are"} until then. You can close this.`;
       setTimeout(watch, 1500);
     };
     watch();

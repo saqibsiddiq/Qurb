@@ -1162,7 +1162,7 @@ impl Qurb {
         let runtime = self.runtime()?;
         let host = runtime
             .block_on(qurb_peer::visit(&invite, &identity, store, &self.device_name, "phone", now()))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+            .map_err(pairing_failed)?;
         Ok(PeerInfo {
             fingerprint: hex(host.fingerprint.as_bytes()),
             short: host.fingerprint.short(),
@@ -1191,7 +1191,7 @@ impl Qurb {
         let ours = qurb_peer::Ours { name: &self.device_name, kind: "phone", key: &self.master };
         let paired = runtime
             .block_on(qurb_peer::accept(&invite, &identity, store, &ours, now()))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+            .map_err(pairing_failed)?;
 
         Ok(PeerInfo {
             fingerprint: hex(paired.fingerprint.as_bytes()),
@@ -1495,10 +1495,12 @@ impl Qurb {
         // Its own versions too: a conflict is as often with itself as with
         // the other device, and its id is not what anybody calls it.
         names.insert(store.device_id()?, "this phone".into());
+        // A device never paired here has no name: "another device", as for a
+        // version nobody recorded, rather than a code.
         let side = |v: qurb_storage::ConflictVersion| ConflictSide {
             by: v
                 .modified_by
-                .map(|id| names.get(&id).cloned().unwrap_or_else(|| id.short()))
+                .and_then(|id| names.get(&id).cloned())
                 .unwrap_or_else(|| "another device".into()),
             size: v.size,
             here: v.here,
@@ -1730,7 +1732,10 @@ impl Qurb {
                 path: r.path,
                 size: r.size,
                 // A device since removed is named as it was when it was here.
-                device: r.device.map(|id| names.get(&id).cloned().unwrap_or_else(|| id.short())),
+                // One never paired here -- where a file began, reaching this
+                // phone through another -- has no name, and is left unnamed
+                // rather than shown as a code: the app says "another device".
+                device: r.device.and_then(|id| names.get(&id).cloned()),
                 detail: r.detail,
             })
             .collect())
@@ -2546,6 +2551,35 @@ pub struct PeerInfo {
     pub kind: Option<String>,
 }
 
+/// A pairing that did not happen, said as what it was. A refusal -- different
+/// keys, the other person declining, a code that lapsed before anybody
+/// approved -- is not the network, and was filed under it: on 2026-10-11 a
+/// key mismatch read "Network problem." on the phone. Said as a sentence, since
+/// the engine words its errors to follow "error:" on a command line.
+fn pairing_failed(e: qurb_peer::Error) -> QurbError {
+    use qurb_peer::Error as E;
+    match e {
+        E::DifferentKey
+        | E::Declined
+        | E::PairingRefused
+        | E::PairingAbandoned
+        | E::NotApprovedInTime
+        | E::NoKeyGiven
+        | E::InviteExpired
+        | E::SetUpFailed { .. } => QurbError::Other { detail: sentence(&e.to_string()) },
+        other => QurbError::Network { detail: other.to_string() },
+    }
+}
+
+/// "these two devices differ" as "These two devices differ."
+fn sentence(said: &str) -> String {
+    let mut chars = said.chars();
+    match chars.next() {
+        Some(first) => format!("{}{}.", first.to_uppercase(), chars.as_str().trim_end_matches('.')),
+        None => String::new(),
+    }
+}
+
 /// A pairing code as a QR code: `width` modules a side, row by row, `true`
 /// for dark. No quiet zone: the screen adds its own margin at the size it
 /// draws, and a scanner needs one (four modules) to find the code at all.
@@ -2770,7 +2804,7 @@ impl Pairing {
         host.close();
         let paired = outcome
             .ok_or_else(|| QurbError::Other { detail: "pairing was cancelled".into() })?
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+            .map_err(pairing_failed)?;
 
         Ok(PeerInfo {
             fingerprint: hex(paired.fingerprint.as_bytes()),

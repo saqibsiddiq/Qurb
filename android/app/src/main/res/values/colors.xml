@@ -42,7 +42,10 @@
     <color name="scrim">#33171816</color>
 
     <!-- What the drawables are painted with. -->
-    <color name="nav_glass">#FAFBFBF9</color>
+    <!-- The tab bar and transfers bar: opaque. Nothing on Android blurs
+         what scrolls behind a view, and at 98% words behind still read, a
+         few levels off the bar (consistency.md, rows 19 and 29). -->
+    <color name="nav_glass">#FFFBFBF9</color>
     <color name="tile_fill">#CCFFFFFF</color>
     <color name="mark_fill">#E6FFFFFF</color>
     <color name="mark_ring">#2E287052</color>

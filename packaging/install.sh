@@ -49,7 +49,7 @@ mkdir -p "$AUTOSTART"
 cat >"$AUTOSTART/qurb.desktop" <<ENTRY
 [Desktop Entry]
 Type=Application
-Name=qurb
+Name=Qurb
 Comment=Keeps your files in sync in the background
 Exec=$BIN/qurb-desktop --hidden
 Icon=qurb

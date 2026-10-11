@@ -38,7 +38,7 @@ pub fn enable(config: &Path, program: &Path) -> std::io::Result<()> {
         format!(
             "[Desktop Entry]\n\
              Type=Application\n\
-             Name=qurb\n\
+             Name=Qurb\n\
              Comment=Keeps your files in sync in the background\n\
              Exec={} --hidden\n\
              Icon=qurb\n\

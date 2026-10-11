@@ -409,7 +409,10 @@ function openAddDevice() {
     // there is none: a blank square reads as a code still loading.
     const qr = el("div", "qr");
     qr.id = "qr";
-    if (invitation.qr) qr.innerHTML = invitation.qr; else qr.classList.add("hidden");
+    // With no code drawn, the countdown it captions starts on the left edge
+    // under the heading, rather than centred under nothing.
+    if (invitation.qr) qr.innerHTML = invitation.qr;
+    else { qr.classList.add("hidden"); says.style.textAlign = "left"; }
     body.insertBefore(qr, says);
     const code = el("details");
     code.append(el("summary", "meta", "Type it or read it out instead"));

@@ -26,7 +26,8 @@
             <TextView
                 android:id="@+id/back"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_height="wrap_content"
+                android:minHeight="36dp"
                 android:layout_marginStart="-6dp"
                 android:background="@drawable/row_bg"
                 android:drawablePadding="6dp"
@@ -104,10 +105,14 @@
                 android:layout_marginTop="10dp"
                 android:scrollbars="none">
 
+                <!-- At least 36dp, and taller with larger text: fixed at
+                     36dp, its words lost their tops at 2x (consistency.md,
+                     row 34). -->
                 <LinearLayout
                     android:id="@+id/crumbs"
                     android:layout_width="wrap_content"
-                    android:layout_height="36dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="36dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal" />
             </HorizontalScrollView>

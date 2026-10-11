@@ -21,8 +21,7 @@ fun QurbException.readable(): String = when (this) {
 
     is QurbException.BadCode ->
         "That pairing code was not accepted.\n\n" +
-            "Codes last five minutes and work once. Run `qurb pair` again on the " +
-            "other device for a fresh one."
+            "Codes last five minutes and work once. Show a new one on the other device."
 
     is QurbException.BadPhrase ->
         "That recovery phrase was not accepted.\n\n" +

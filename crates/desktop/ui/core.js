@@ -19,7 +19,9 @@ async function invoke(command, args) {
   } catch (e) {
     failures.push(`${command}: ${e}`);
     if (failures.length > 50) failures.shift();
-    throw e;
+    // The engine words its errors to follow "error:" on a command line, in
+    // lower case; on a screen each starts a sentence, as on the phone.
+    throw typeof e === "string" && e ? e[0].toUpperCase() + e.slice(1) : e;
   }
 }
 
@@ -337,6 +339,16 @@ function twoPress(b, asking, act) {
 }
 
 // ------------------------------------------------------------------ devices
+
+/**
+ * The other device in a history entry, by name: "another device" for one
+ * never paired here (where a file began, reaching this computer through
+ * another), as on the phone. Null for an entry no device took part in.
+ */
+function otherDevice(r) {
+  if (r.device) return r.device;
+  return ["received", "collected", "sent", "cancelled", "conflicted"].includes(r.kind) ? "another device" : null;
+}
 
 /**
  * A device's icon, from the kind it said it is (decision 0053): when pairing,

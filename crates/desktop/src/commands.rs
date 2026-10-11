@@ -1162,7 +1162,8 @@ pub fn details(hosted: Host<'_>, path: String) -> Answer<Details> {
                     kind: r.kind.as_str().to_string(),
                     path: r.path,
                     size: r.size.map(big),
-                    device: r.device.as_ref().map(name),
+                    // Unnamed when never paired here, as in Activity.
+                    device: r.device.and_then(|id| named.get(&id).cloned()),
                     detail: r.detail,
                 })
                 .collect();
@@ -1533,8 +1534,11 @@ pub fn activity(
             kind: r.kind.as_str().to_string(),
             path: r.path,
             size: r.size.map(big),
-            // A device since removed is named as it was when it was here.
-            device: r.device.map(|id| named.get(&id).cloned().unwrap_or_else(|| id.short())),
+            // A device since removed is named as it was when it was here. One
+            // never paired here -- where a file began, reaching this one
+            // through another -- has no name, and is left unnamed rather than
+            // shown as a code: the window says "another device".
+            device: r.device.and_then(|id| named.get(&id).cloned()),
             detail: r.detail,
         })
         .collect())
@@ -1685,6 +1689,9 @@ pub struct Side {
     here: bool,
     /// The name of the device that made this version.
     by: String,
+    /// What that device is, for its icon: "computer" for this one, a peer's
+    /// kind once it has said (decision 0053).
+    kind: Option<String>,
     at: i64,
 }
 
@@ -1702,12 +1709,20 @@ pub fn conflicts(hosted: Host<'_>) -> Answer<Vec<Conflicted>> {
     hosted
         .with_store(|store| {
             let mut names = store.db().device_names()?;
-            names.insert(store.device_id()?, "this computer".into());
+            let own = store.device_id()?;
+            names.insert(own, "this computer".into());
+            let kind = |id: &qurb_sync::DeviceId| match *id == own {
+                true => Some("computer".to_string()),
+                false => store.db().peer_kind(id).ok().flatten(),
+            };
             let side = |v: qurb_storage::ConflictVersion| Side {
+                // A device never paired here has no name: "another device",
+                // as for a version nobody recorded, rather than a code.
                 by: v
                     .modified_by
-                    .map(|id| names.get(&id).cloned().unwrap_or_else(|| id.short()))
+                    .and_then(|id| names.get(&id).cloned())
                     .unwrap_or_else(|| "another device".into()),
+                kind: v.modified_by.as_ref().and_then(kind),
                 size: big(v.size),
                 here: v.here,
                 at: v.updated_at,

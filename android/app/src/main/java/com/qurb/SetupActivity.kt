@@ -50,6 +50,11 @@ class SetupActivity : AppCompatActivity() {
 
         views.create.setOnClickListener { create() }
         views.restore.setOnClickListener { show(views.joinPanel) }
+        // A step goes back to the choice, by its button or the phone's back,
+        // as the desktop's steps do; before, back left setting up altogether.
+        views.joinBack.setOnClickListener { show(null) }
+        views.restoreBack.setOnClickListener { show(views.joinPanel) }
+        onBackPressedDispatcher.addCallback(this, stepBack)
         views.scan.setOnClickListener { scanner.launch(Intent(this, ScanActivity::class.java)) }
         views.joinConfirm.setOnClickListener {
             views.code.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { join(it) }
@@ -71,11 +76,21 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
-    private fun show(panel: View) {
-        views.chooser.visibility = View.GONE
+    /** Back from a step: to joining from the 24 words, else to the choice. */
+    private val stepBack = object : androidx.activity.OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            show(if (views.restorePanel.visibility == View.VISIBLE) views.joinPanel else null)
+        }
+    }
+
+    /** One step, or the choice for none; a step has its own title. */
+    private fun show(panel: View?) {
+        views.intro.visibility = if (panel == null) View.VISIBLE else View.GONE
+        views.chooser.visibility = if (panel == null) View.VISIBLE else View.GONE
         views.joinPanel.visibility = View.GONE
         views.restorePanel.visibility = View.GONE
-        panel.visibility = View.VISIBLE
+        panel?.visibility = View.VISIBLE
+        stepBack.isEnabled = panel != null
     }
 
     private fun create() {
@@ -160,8 +175,8 @@ class SetupActivity : AppCompatActivity() {
     private fun busy(working: Boolean) {
         views.progress.visibility = if (working) View.VISIBLE else View.GONE
         listOf(
-            views.create, views.restore, views.scan, views.joinConfirm,
-            views.useWords, views.restoreConfirm, views.fromBackup,
+            views.create, views.restore, views.scan, views.joinConfirm, views.joinBack,
+            views.useWords, views.restoreConfirm, views.restoreBack, views.fromBackup,
         ).forEach { it.isEnabled = !working }
     }
 

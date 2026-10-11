@@ -1331,14 +1331,20 @@ the guest yet. That is step 6.
 
 ## A consistency pass
 
-**2026-10-11**, item 6 of the owner's list, first half. Every screen of
-the window measured for where its parts sit, against its neighbours and against
-the other platform's. Twenty inconsistencies were found and fixed: section labels, breadcrumbs
-and row tiles off the page's left edge by 2 to 9 units, text buttons short of
-the right edge, a card with uneven padding, two heading styles for the same
-kind of section, a page without a subtitle, a back link reading *Back*, and
-more. The rules they now follow, every finding with its measurement, and
-what is not checked yet — sheets, onboarding, the phone in dark mode — are in
+**2026-10-11**, item 6 of the owner's list. Every screen of the window
+measured for where its parts sit, against its neighbours and against the
+other platform's: first its places, then every sheet and flow one by one --
+sending, conflicts, pairing, removing, setting up. In the window, among the
+forty-four found across both apps: section labels, breadcrumbs and row
+tiles off the page's left edge by 2 to 9 units, text buttons short of the
+right edge, a card with uneven padding, two heading styles for the same kind
+of section, a back link reading *Back*, the buttons of five sheets on the
+left where every other sheet has them on the right, a queued send reading
+*Ready to send by* the device it was for, a device never paired here shown
+by its identifier, and the app's name in lower case in the launcher,
+notifications, autostart entry and tray. The rules, every finding with its
+measurement, and what is not checked yet -- the window under the desktop's
+text scaling among it -- are in
 [design/consistency.md](../design/consistency.md).
 
 ## Still to do

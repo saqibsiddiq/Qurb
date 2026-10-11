@@ -489,19 +489,45 @@ class Sheet(private val app: MainActivity, private val kit: Kit) {
     }
 
     /** One of a list of things to do: closes the sheet, then does it. */
-    fun action(@DrawableRes icon: Int, label: String, danger: Boolean = false, onTap: () -> Unit): Sheet {
+    fun action(
+        @DrawableRes icon: Int,
+        label: String,
+        danger: Boolean = false,
+        meta: String = "",
+        onTap: () -> Unit,
+    ): Sheet {
         if (body.getTag(R.id.sheet_actions) == null) {
             body.setTag(R.id.sheet_actions, true)
             body.addView(View(app), LinearLayout.LayoutParams(1, kit.dp(10)))
         }
-        val row = kit.row(body, icon, label, iconTint = if (danger) R.color.error else R.color.text_2) {
+        val row = kit.row(body, icon, label, meta, iconTint = if (danger) R.color.error else R.color.text_2) {
             dialog.dismiss()
             onTap()
         }
         if (danger) row.name.setTextColor(kit.color(R.color.error))
         row.tile.background = null
         row.root.minimumHeight = kit.dp(52)
+        // One left edge with the header (consistency.md, rule 1): the row's
+        // padding reaches into the gutter, and its bare tile is the header's
+        // size, so each icon sits under the header's and each label starts
+        // where the title does.
+        (row.root.layoutParams as LinearLayout.LayoutParams).apply {
+            marginStart = -kit.dp(8)
+            marginEnd = -kit.dp(8)
+        }
+        row.tile.layoutParams = row.tile.layoutParams.apply { width = kit.dp(48); height = kit.dp(48) }
+        row.icon.layoutParams = row.icon.layoutParams.apply { width = kit.dp(24); height = kit.dp(24) }
         return this
+    }
+
+    /** Nothing to decide, only a way out: one quiet button at the foot. */
+    fun closing(label: String): Sheet {
+        val row = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+        }
+        row.addView(kit.button(label, Kit.Style.SECONDARY) { dialog.dismiss() })
+        return view(row, top = 22)
     }
 
     /** The decision at the foot: a primary action, and a way out. */

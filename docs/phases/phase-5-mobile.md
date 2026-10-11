@@ -2167,20 +2167,22 @@ view hierarchy (*Open your folder on Study desktop*, *Confirm it's you*).
 
 ## A consistency pass
 
-**2026-10-11**, item 6 of the owner's list, first half. Every screen of
-the app measured for where its parts sit, against its neighbours and against
-the other platform's. Twenty inconsistencies were found and fixed: section labels, breadcrumbs
-and row tiles off the page's left edge by 2 to 9 units, text buttons short of
-the right edge, a card with uneven padding, two heading styles for the same
-kind of section, a page without a subtitle, a back link reading *Back*, and
-more. Eight more the same day, going through sheets, dark mode, setting up,
-pairing and removing a device: wordings that differed between the apps,
-buttons on the left in the desktop's pairing, removing and moving sheets, and a device's icon
-guessed from its name although both apps record what each device is. The
-rules they now follow, every finding with its measurement, and what is not
-checked yet — the send flow and conflicts screen by screen, the phone's
-setting up, larger font sizes, a real phone — are in
-[design/consistency.md](../design/consistency.md).
+**2026-10-11**, item 6 of the owner's list. Every screen of the app
+measured for where its parts sit, against its neighbours and against the
+other platform's: first its places, then every sheet and flow one by one --
+sending, conflicts, pairing, removing, setting up -- at the ordinary font
+size, 1.3× and 2×, on the emulator and, for Home, on the S23. Forty-four
+inconsistencies were found and fixed. Among them: section labels, breadcrumbs
+and row tiles off the page's left edge by 2 to 9 units, and every sheet's
+actions 4 to 8 dp off its header; text readable through the tab bar on the
+S23 in dark, and in light at a larger size, so the bar is now opaque; a
+device never paired here shown by its identifier; a key mismatch reported
+as *Network problem.*; setting up never brought into the design, with a
+back key that left it; and the app's own name, *qurb* in the launcher and
+*Qurb* on every screen. The rules the apps now follow, every finding with
+its measurement, and what is still not checked -- the rest of the S23
+screen by screen, the phone's pairing question, the desktop under text
+scaling -- are in [design/consistency.md](../design/consistency.md).
 
 ## Deliberately left undone
 

@@ -24,7 +24,7 @@ use std::path::PathBuf;
 pub fn show(root: PathBuf, watcher: Watcher) -> anyhow::Result<()> {
     // GTK is already initialised by the caller.
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
-    window.set_title("qurb");
+    window.set_title("Qurb");
     window.set_default_size(420, 280);
 
     let column = gtk::Box::new(gtk::Orientation::Vertical, 10);

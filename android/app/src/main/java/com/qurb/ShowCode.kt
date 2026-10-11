@@ -89,7 +89,8 @@ object ShowCode {
                 // However it closes -- the button, back, a swipe down -- the
                 // code stops working with it.
                 .onDismiss { offer.cancel() }
-            sheet.buttons("Done", secondary = "Stop showing it") {}
+            // One button, as on the desktop: *Done* beside it did the same.
+            sheet.closing("Stop showing it")
             sheet.show()
             val dialog = sheet.dialog
             // A code that goes dark while somebody fetches the other device is

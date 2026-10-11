@@ -295,6 +295,10 @@ const ANSWERS = {
   activity: ({ before }) => {
     if (before) return [];
     return [
+      // A send waiting to be collected, and a file that began on a device
+      // never paired here: "Ready for", and "another device".
+      { id: 11, at: now - 200, kind: "sent", path: "Tickets.pdf", size: "700416", device: "Galaxy S23", detail: null },
+      { id: 10, at: now - 250, kind: "received", path: "Photos/from-a-friend.jpg", size: "180224", device: null, detail: null },
       { id: 9, at: now - 300, kind: "stored", path: "Project Plan.pdf", size: "2400000", device: null, detail: null },
       { id: 8, at: now - 4000, kind: "received", path: "Photos/cat.png", size: "250112", device: "Galaxy S23", detail: null },
       { id: 7, at: now - 5000, kind: "received", path: "Boarding pass.pdf", size: "700416", device: "Galaxy S23",
@@ -331,21 +335,21 @@ const ANSWERS = {
   conflicts: () => QUIET ? [] : [
     {
       path: "Project Plan.pdf",
-      this: { path: "Project Plan.pdf", size: "2400000", here: true, by: "Saqib's laptop", at: now - 3600 },
+      this: { path: "Project Plan.pdf", size: "2400000", here: true, by: "this computer", kind: "computer", at: now - 3600 },
       other: {
         path: "Project Plan.conflict-a1b2c3d4-2026-09-28-101502.pdf",
-        size: "2380000", here: true, by: "Galaxy S23", at: now - 3500,
+        size: "2380000", here: true, by: "Galaxy S23", kind: "phone", at: now - 3500,
       },
     },
     {
       path: "Notes.md",
-      this: { path: "Notes.md", size: "1840", here: true, by: "Saqib's laptop", at: now - 900 },
-      other: { path: "Notes.conflict-a1b2c3d4-2026-10-08-091200.md", size: "1902", here: true, by: "Galaxy S23", at: now - 840 },
+      this: { path: "Notes.md", size: "1840", here: true, by: "this computer", kind: "computer", at: now - 900 },
+      other: { path: "Notes.conflict-a1b2c3d4-2026-10-08-091200.md", size: "1902", here: true, by: "Galaxy S23", kind: "phone", at: now - 840 },
     },
     {
       path: "Photos/Holiday/beach.jpg",
-      this: { path: "Photos/Holiday/beach.jpg", size: "900000", here: true, by: "Saqib's laptop", at: now - 7200 },
-      other: { path: "Photos/Holiday/beach.conflict-a1b2c3d4-2026-10-08-071500.jpg", size: "880000", here: true, by: "Galaxy S23", at: now - 7000 },
+      this: { path: "Photos/Holiday/beach.jpg", size: "900000", here: true, by: "this computer", kind: "computer", at: now - 7200 },
+      other: { path: "Photos/Holiday/beach.conflict-a1b2c3d4-2026-10-08-071500.jpg", size: "880000", here: false, by: "Galaxy S23", kind: "phone", at: now - 7000 },
     },
   ],
   // What each version looks like: a note's text, and for a photo a picture

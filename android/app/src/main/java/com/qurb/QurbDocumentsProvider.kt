@@ -77,7 +77,8 @@ class QurbDocumentsProvider : DocumentsProvider() {
         cursor.newRow().apply {
             add(Root.COLUMN_ROOT_ID, ROOT_ID)
             add(Root.COLUMN_DOCUMENT_ID, ROOT_ID)
-            add(Root.COLUMN_TITLE, "qurb")
+            // Its name as the app says it; the id stays "qurb".
+            add(Root.COLUMN_TITLE, "Qurb")
             add(Root.COLUMN_SUMMARY, "Synced across your devices")
             add(Root.COLUMN_MIME_TYPES, "*/*")
             add(Root.COLUMN_ICON, R.mipmap.ic_launcher)
@@ -98,7 +99,7 @@ class QurbDocumentsProvider : DocumentsProvider() {
     override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor {
         val cursor = MatrixCursor(projection ?: DOCUMENT_COLUMNS)
         if (documentId == ROOT_ID) {
-            cursor.addDirectory(ROOT_ID, "qurb")
+            cursor.addDirectory(ROOT_ID, "Qurb")
             return cursor
         }
 
