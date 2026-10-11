@@ -169,7 +169,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
                 sheet.dismiss()
                 if (on) keepWithHost(peer) else stopKeeping(peer)
             }
-            kit.item(group, "Added", Words.ago(peer.pairedAt))
+            kit.item(group, "Paired", Words.ago(peer.pairedAt))
             sheet.view(facts, top = 16)
             sheet.action(R.drawable.ic_send, "Send files…") { app.pickFilesToSend(peer) }
             sheet.action(R.drawable.ic_x, "Stop visiting…", danger = true) { askToRemove(peer) }
@@ -184,7 +184,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
             sheet.dismiss()
             if (on) keep(peer) else stopKeeping(peer)
         }
-        kit.item(group, "Added", Words.ago(peer.pairedAt))
+        kit.item(group, "Paired", Words.ago(peer.pairedAt))
         sheet.view(facts, top = 16)
         sheet.action(R.drawable.ic_send, "Send files…") { app.pickFilesToSend(peer) }
         sheet.action(R.drawable.ic_x, "Remove this device…", danger = true) { askToRemove(peer) }

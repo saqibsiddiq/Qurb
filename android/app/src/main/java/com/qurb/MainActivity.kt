@@ -733,7 +733,7 @@ class MainActivity : AppCompatActivity() {
                 scanner.launch(Intent(this, ScanActivity::class.java))
             }
             .action(R.drawable.ic_smartphone, "Show a code on this phone") { ShowCode.show(this) }
-            .action(R.drawable.ic_keyboard, "Type a code") { typeCode() }
+            .action(R.drawable.ic_keyboard, "Enter a code") { typeCode() }
             // Another person's computer, as a guest (decision 0060). Its code
             // says so, so scanning it from here or above does the same.
             .action(R.drawable.ic_laptop, "Visit someone's computer") {
@@ -750,7 +750,7 @@ class MainActivity : AppCompatActivity() {
             background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.glass_group)
         }
         kit.sheet()
-            .header(R.drawable.ic_keyboard, "Type the code", "The code the other device is showing")
+            .header(R.drawable.ic_keyboard, "Enter the code", "The code the other device is showing")
             .view(input, top = 16)
             .buttons("Connect") {
                 val code = input.text.toString().trim()

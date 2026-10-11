@@ -73,7 +73,9 @@ object Words {
             "evicted" -> R.drawable.ic_cloud_off to "Local space freed"
             "restored" -> R.drawable.ic_rotate_ccw to "Restored"
             "conflicted" -> R.drawable.ic_git_compare to "Changed here and on $who"
-            "paired" -> R.drawable.ic_monitor_smartphone to "Added to your devices"
+            // True of a guest or a computer this phone visits as well as of
+            // this person's own devices, and worded as the desktop words it.
+            "paired" -> R.drawable.ic_monitor_smartphone to "Paired with this phone"
             "removed" -> R.drawable.ic_x to "Removed from this phone"
             "cancelled" -> R.drawable.ic_x to "Send cancelled"
             "failed" -> R.drawable.ic_circle_alert to "Didn't finish"

@@ -74,10 +74,17 @@ is. This file says how its parts line up.
 | 18 | Android, group dividers | inset at the start only | edge to edge |
 | 19 | Android, tab bar | text behind it readable at 95% opacity | 98%; behind-text now within 5 of 255 levels of the bar |
 | 20 | desktop, transfers chip | the travelling light passed over the count, which vanished mid-sweep, in dark most of all | behind the words, at 35% |
+| 21 | Android, Devices | *Computers you visit* in the larger heading style, unlike every section, and worded unlike the desktop's *Computers you visit as a guest* | a label, in the desktop's words |
+| 22 | Android, Home and sheets | names listed with commas only (*Study desktop, test-laptop*), with a singular verb (*A, B keeps*) and *both* for three devices | *A and B*, *keep*, *each* |
+| 23 | both, history | a pairing read *Added to your devices* on the phone, untrue of another person's computer, and *Paired* on the desktop | *Paired with this phone / computer*, and *Removed from this …* to match |
+| 24 | Android, a device's sheet | *Added* where the desktop says *Paired* | *Paired* |
+| 25 | Android, Add a device | *Type a code* where the desktop says *Enter a code* | *Enter a code* |
+| 26 | desktop, setting up | *Back* a plain link on one step and a button on the others; some steps' buttons on the left, others' and every sheet's on the right | all buttons right, *Back* the same button everywhere |
 
 Checked after: the desktop smoke test, in the real window, both modes (*no
 command failed*), and every screen re-measured in the fixtures and on the
-emulator.
+emulator. Rows 21 to 26 were found the same day, running the guest flow on
+the emulator and then looking at sheets, dark mode and setting up.
 
 ## Left as it is, deliberately
 
@@ -97,9 +104,11 @@ emulator.
 
 Stated so that nobody mistakes this pass for a complete one:
 
-- Sheets and dialogs, one by one, on either platform: the device sheet, the
-  file details, the send flow, pairing, removing a device, conflicts.
-- Setting up: onboarding on both.
-- The Android app in dark mode, and at font scales above 1.0.
+- **Checked since**: the Android app's four places and two sheets in dark;
+  the device sheet and file sheet on both; Add a device on both; the
+  desktop's setting-up steps. Rows 21 to 26.
+- Still not: the send flow, pairing's screens, removing a device and
+  conflicts, one by one; the phone's setting up (it needs the emulator's
+  data cleared); font scales above 1.0.
 - A real phone. Every Android measurement here is the emulator's; the S23
   is 1080 × 2340 at a different density.

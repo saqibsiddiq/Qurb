@@ -309,10 +309,10 @@ const HAPPENED = {
   evicted: ["cloud-off", "Local space freed"],
   restored: ["rotate-ccw", "Restored"],
   conflicted: ["git-compare", "Changed on two devices"],
-  paired: ["monitor-smartphone", "Paired"],
+  paired: ["monitor-smartphone", "Paired with this computer"],
   failed: ["circle-alert", "Didn't finish"],
   cancelled: ["x", "Send cancelled"],
-  removed: ["x", "Removed"],
+  removed: ["x", "Removed from this computer"],
 };
 
 /** One history entry as a row. */
