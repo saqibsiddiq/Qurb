@@ -61,7 +61,7 @@
     <style name="Theme.Qurb.Share" parent="Theme.Material3.DayNight.Dialog">
         <item name="colorPrimary">@color/green</item>
         <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSurface">@color/glass_elevated</item>
+        <item name="colorSurface">@color/glass_solid</item>
         <item name="colorOnSurface">@color/text</item>
         <item name="colorOnSurfaceVariant">@color/text_2</item>
         <item name="colorSurfaceContainerHighest">@color/border</item>
@@ -209,9 +209,12 @@
         <item name="cornerSizeBottomLeft">0dp</item>
         <item name="cornerSizeBottomRight">0dp</item>
     </style>
+    <!-- Opaque, unlike a sheet: nothing blurs behind a dialog, and through
+         97% a QR code read plainly behind the pairing number on the S23 in
+         dark (consistency.md, row 45). -->
     <style name="ThemeOverlay.Qurb.Dialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
-        <item name="colorSurface">@color/glass_elevated</item>
-        <item name="colorSurfaceContainerHigh">@color/glass_elevated</item>
+        <item name="colorSurface">@color/glass_solid</item>
+        <item name="colorSurfaceContainerHigh">@color/glass_solid</item>
         <item name="shapeAppearanceOverlay">@style/Shape.Qurb.Dialog</item>
         <item name="android:backgroundDimAmount">0.2</item>
         <item name="materialAlertDialogTitleTextStyle">@style/Dialog.Title</item>

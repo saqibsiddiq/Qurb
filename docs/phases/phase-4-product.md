@@ -1335,7 +1335,7 @@ the guest yet. That is step 6.
 measured for where its parts sit, against its neighbours and against the
 other platform's: first its places, then every sheet and flow one by one --
 sending, conflicts, pairing, removing, setting up. In the window, among the
-forty-four found across both apps: section labels, breadcrumbs and row
+forty-five found across both apps: section labels, breadcrumbs and row
 tiles off the page's left edge by 2 to 9 units, text buttons short of the
 right edge, a card with uneven padding, two heading styles for the same kind
 of section, a back link reading *Back*, the buttons of five sheets on the

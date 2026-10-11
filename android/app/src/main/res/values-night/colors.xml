@@ -31,6 +31,7 @@
     <color name="glass_clear">#6B222421</color>
     <color name="glass_frosted">#9E20221F</color>
     <color name="glass_elevated">#F71E201D</color>
+    <color name="glass_solid">#FF1E201D</color>
     <color name="glass_edge">#14FFFFFF</color>
     <color name="hairline">#14ECEDE8</color>
     <color name="scrim">#99000000</color>

@@ -37,6 +37,10 @@
     <color name="glass_clear">#8CFFFFFF</color>
     <color name="glass_frosted">#A6FFFFFF</color>
     <color name="glass_elevated">#F7FCFCFA</color>
+    <!-- The elevated material where nothing blurs behind it, a dialog or
+         a sheet on a phone that cannot blur: opaque, so that what is behind
+         cannot be read through it (consistency.md, rule 9). -->
+    <color name="glass_solid">#FFFCFCFA</color>
     <color name="glass_edge">#B3FFFFFF</color>
     <color name="hairline">#12171816</color>
     <color name="scrim">#33171816</color>

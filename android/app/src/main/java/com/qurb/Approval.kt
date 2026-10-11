@@ -1,11 +1,12 @@
 package com.qurb
 
 import android.app.Activity
-import android.graphics.Typeface
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import uniffi.qurb_mobile.PairingApprover
 import uniffi.qurb_mobile.PairingRequest
@@ -70,11 +71,16 @@ object Approval {
             val side = (24 * resources.displayMetrics.density).toInt()
             setPadding(side, side / 2, side, 0)
             addView(TextView(activity).apply { text = above; setTextAppearance(R.style.Text_Body) })
+            // In the app's colour and Inter, with even figures, as the desktop
+            // shows it: left to the dialog, it came out in Material's lilac
+            // and the system font (consistency.md, row 45).
             addView(TextView(activity).apply {
                 text = number
                 gravity = Gravity.CENTER
                 textSize = 36f
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                typeface = ResourcesCompat.getFont(activity, R.font.inter_semibold)
+                fontFeatureSettings = "tnum"
+                setTextColor(ContextCompat.getColor(activity, R.color.text))
                 letterSpacing = 0.08f
                 setPadding(0, side / 2, 0, side / 2)
             })

@@ -2171,18 +2171,19 @@ view hierarchy (*Open your folder on Study desktop*, *Confirm it's you*).
 measured for where its parts sit, against its neighbours and against the
 other platform's: first its places, then every sheet and flow one by one --
 sending, conflicts, pairing, removing, setting up -- at the ordinary font
-size, 1.3× and 2×, on the emulator and, for Home, on the S23. Forty-four
+size, 1.3× and 2×, on the emulator and on the S23. Forty-five
 inconsistencies were found and fixed. Among them: section labels, breadcrumbs
 and row tiles off the page's left edge by 2 to 9 units, and every sheet's
 actions 4 to 8 dp off its header; text readable through the tab bar on the
-S23 in dark, and in light at a larger size, so the bar is now opaque; a
+S23 in dark, and in light at a larger size, so the bar is now opaque, as
+are dialogs, after a QR code read through the pairing question; a
 device never paired here shown by its identifier; a key mismatch reported
 as *Network problem.*; setting up never brought into the design, with a
 back key that left it; and the app's own name, *qurb* in the launcher and
 *Qurb* on every screen. The rules the apps now follow, every finding with
-its measurement, and what is still not checked -- the rest of the S23
-screen by screen, the phone's pairing question, the desktop under text
-scaling -- are in [design/consistency.md](../design/consistency.md).
+its measurement, and what is still not checked -- a conflict whose other
+version is not on the phone, the desktop under text scaling -- are in
+[design/consistency.md](../design/consistency.md).
 
 ## Deliberately left undone
 

@@ -52,7 +52,9 @@ is. This file says how its parts line up.
 9. **Glass over moving content is opaque where nothing blurs it.**
    Android blurs nothing behind a view, so its tab bar is opaque, in light
    and dark. At 95% words behind it could be read; at 98% too, on the S23 in
-   dark and at a larger font size in light (row 29).
+   dark and at a larger font size in light (row 29). A sheet blurs what is
+   behind it where the phone can, and is otherwise opaque; a dialog never
+   blurs, and is opaque (row 45).
 10. **Motion never washes out words.** A light travelling across a control
     passes behind its text, dimmed.
 11. **The buttons that end a sheet or a confirmation sit on the right**, the
@@ -131,6 +133,7 @@ is. This file says how its parts line up.
 | 42 | Android, setting up | not in the app's design: Material's display type, 32 dp margins, stock outlined and text buttons, no mark, *qurb* in lower case; a step with no title or way back, and the back key left setting up | the mark and *Qurb*, the 20 dp gutter, the desktop's choice cards and words, a title and *Back* on each step (rule 17) |
 | 43 | desktop, conflicts | a version's device icon guessed from its name (rule 12) | from its kind |
 | 44 | desktop, showing a code | with no code drawn, *Waiting — …* stayed centred under a left-aligned heading | on the left |
+| 45 | Android, the pairing question, and every dialog | on the S23 in dark, the QR code behind the question read plainly through it, about 8 levels, under the number to compare; and the number was Material's lilac in the system font | dialogs opaque (and a sheet where nothing blurs); the number in the app's colour, Inter, even figures |
 
 Checked after: the desktop smoke test, in the real window, both modes (*no
 command failed*), and every screen re-measured in the fixtures and on the
@@ -139,7 +142,7 @@ the emulator and then looking at sheets, dark mode and setting up. Rows 27
 and 28 came from going through pairing and removing one screen at a time:
 the desktop's measured in the fixtures with headless Chromium at 1280 × 860,
 each row's buttons measured with and without the change; the phone's icon on
-the emulator. Rows 29 to 44 came from the rest of the list below, going
+the emulator. Rows 29 to 45 came from the rest of the list below, going
 through the send flow, conflicts, the phone's pairing and removing screens
 and its setting up one by one, every place and sheet at 1.3× and 2×, and the
 S23: Rust tests for the desktop and mobile crates, the desktop smoke test,
@@ -165,7 +168,8 @@ and each changed screen measured again after.
   the same words and order, as a sheet's actions.
 - **The phone's errors and its pairing question are dialogs**, not sheets:
   themed to the app (`ThemeOverlay.Qurb.Dialog`), and modal, because the
-  engine waits on the answer.
+  engine waits on the answer. Their buttons are words, as a dialog's are,
+  where the desktop's question has a green *Approve*.
 - **The phone's *Send to* goes on when a device is chosen**, then picks
   files; the desktop's sheet holds files and a device and sends on *Send*.
   The same choice, each in its platform's order.
@@ -187,14 +191,17 @@ Stated so that nobody mistakes this pass for a complete one:
   and device icons on both. Rows 27 and 28. Then the send flow and
   conflicts on both, the phone's pairing, removing and setting up (on a
   second user of the emulator, so nothing was cleared), every place and
-  sheet at 1.3× and 2×, and Home on the S23. Rows 29 to 44.
-- **The S23, screen by screen.** Home was measured on it, in dark, and is
-  on the same edges as the emulator's; row 29 was found there. The phone
-  was then in use, so the rest of its screens were not.
-- **The phone's pairing question** -- another device asking to join, with
-  its number -- was not seen: it needs a device with the same key, or one
-  joining the phone's code from where it can reach it, which the emulator's
-  network does not allow. Its words were compared in the code.
+  sheet at 1.3× and 2×, and the S23. Rows 29 to 45.
+- **The S23, screen by screen**, in dark: the four places, Add a device,
+  entering and showing a code, a device's sheet, removing (dismissed, not
+  done), Send to, and the pairing question -- a throwaway device on the
+  laptop, named *Test joiner*, asking to join the phone's code, declined.
+  Every edge where the emulator puts it, scaled: icons under the header's
+  at 32 dp, words at 82, buttons ending 20 dp in. Rows 29 and 45 were found
+  there.
+- **The S23 in light, at larger font sizes, and setting up**: only on the
+  emulator. Its own setting is dark, and setting up needs a phone with
+  nothing on it.
 - **The phone's line for a conflict whose other version is not here yet**
   (row 41) was not seen: it needs a conflict whose bytes stayed on the
   other device.
