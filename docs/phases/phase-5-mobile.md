@@ -2142,8 +2142,10 @@ sheet ran on the emulator, below.
 
 The prompt guards the approval, not the key: the folder key is still
 derived from the chunk key in the app's storage, so malware able to read
-that storage could derive it. A keystore key that only the prompt can
-unlock would close that gap; it is not built.
+that storage could derive it. A key only the prompt can unlock would not
+simply close that gap: the same key seals each new file in the background,
+with nobody there to answer a prompt. It would take sealing and opening with
+different keys, a change to the sealed format; see decision 0060, step 5.
 
 ### Run on the emulator, as a guest
 

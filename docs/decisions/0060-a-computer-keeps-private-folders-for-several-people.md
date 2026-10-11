@@ -513,8 +513,13 @@ As designed, apart from the points under *Changed* below.
   *approval*, and the folder key is derived as it always is, from the
   phone's chunk key. This stops someone holding the unlocked phone from
   approving. It does not stop malware that can read the app's private
-  storage, which could derive the key itself; a keystore binding would
-  stop that, and is left for later.
+  storage, which could derive the key itself. A key only the prompt can
+  unlock would stop that, but not as designed: the same folder key seals
+  every new file in the background, with nobody there to answer a prompt.
+  Guarding the key itself needs the sealing and the opening to use
+  different keys -- a key pair, sealing with the public half -- which is a
+  change to step 3's format, not a setting. Corrected 2026-10-11: this
+  record first called it simply left for later.
 - **The phone cannot say *Lock*.** Locking is at the computer, or by idling.
 - **Only while the phone is syncing.** An ask is collected when the app
   syncs: on opening it, or by the background worker, which runs every
