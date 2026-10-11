@@ -382,3 +382,101 @@ async fn a_frame_for_a_device_that_is_not_there_is_dropped() {
     assert_eq!(server.stats().forwarded(), 0);
     assert!(server.stats().dropped() > 0);
 }
+
+/// Decision 0061: a device on the relay under its own name and a meeting's.
+/// Alice dials Bob by the meeting's name for him, as the meeting's name for
+/// her, and the session runs both ways -- Bob's answers go out under the name
+/// he was called by, or Alice's QUIC would not recognise them.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_runs_to_a_second_name_and_answers_under_it() {
+    rustls::crypto::ring::default_provider().install_default().ok();
+    const BOB_IN_MEETING: [u8; 32] = [0xB3; 32];
+    const ALICE_IN_MEETING: [u8; 32] = [0xA3; 32];
+    let (server, addr) = relay().await;
+
+    let bob_socket = RelaySocket::connect(addr, BOB).await.unwrap();
+    bob_socket.register(BOB_IN_MEETING).unwrap();
+    let bob = endpoint_over(bob_socket, Some(server_config())).unwrap();
+    let listening = tokio::spawn(async move {
+        let connection = bob.accept().await.expect("a connection").await.expect("handshake");
+        let (mut send, mut recv) = connection.accept_bi().await.expect("stream");
+        let asked = recv.read_to_end(1024).await.expect("read");
+        send.write_all(&[asked.as_slice(), b", answered"].concat()).await.unwrap();
+        send.finish().unwrap();
+        connection.closed().await;
+    });
+
+    let alice_socket = RelaySocket::connect(addr, ALICE).await.unwrap();
+    alice_socket.register(ALICE_IN_MEETING).unwrap();
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    let bob_address = alice_socket.address_for_as(BOB_IN_MEETING, ALICE_IN_MEETING).unwrap();
+    let alice = endpoint_over(alice_socket, None).unwrap();
+
+    let connection = tokio::time::timeout(
+        Duration::from_secs(10),
+        alice.connect_with(client_config(), bob_address, "qurb-device").unwrap(),
+    )
+    .await
+    .expect("the handshake stalled: answers under the wrong name?")
+    .expect("connect through the relay under a meeting's name");
+    let (mut send, mut recv) = connection.open_bi().await.unwrap();
+    send.write_all(b"asked by the meeting's name").await.unwrap();
+    send.finish().unwrap();
+    let answer = tokio::time::timeout(Duration::from_secs(10), recv.read_to_end(1024))
+        .await
+        .expect("the answer stalled")
+        .unwrap();
+    assert_eq!(answer, b"asked by the meeting's name, answered");
+    connection.close(0u32.into(), b"done");
+    let _ = listening.await;
+    assert!(server.stats().forwarded() > 0);
+}
+
+/// Nobody sends as a name they did not register: otherwise anyone on the
+/// relay could pose as a meeting's device to the other side of it.
+#[tokio::test(flavor = "multi_thread")]
+async fn nobody_forwards_as_a_name_they_did_not_register() {
+    use tokio::io::AsyncWriteExt;
+    let (server, addr) = relay().await;
+    let victim = RelaySocket::connect(addr, BOB).await.unwrap();
+    let _keep = Arc::clone(&victim);
+
+    let mut poser = tokio::net::TcpStream::connect(addr).await.unwrap();
+    poser.write_all(&Frame::Register { member: ALICE }.encode()).await.unwrap();
+    let posing = Frame::ForwardAs { from: [0xEE; 32], to: BOB, payload: b"not mine".to_vec() };
+    poser.write_all(&posing.encode()).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    assert_eq!(server.stats().forwarded(), 0, "a frame went out as a name its sender never held");
+    assert!(server.stats().dropped() > 0);
+}
+
+/// Every name a connection held goes when it closes, and a connection holds
+/// no more than the relay allows.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_connections_names_go_with_it_and_are_bounded() {
+    use tokio::io::AsyncWriteExt;
+    let (server, addr) = relay().await;
+    let mut device = tokio::net::TcpStream::connect(addr).await.unwrap();
+    for n in 0..(qurb_relay::MAX_IDENTITIES as u8 + 10) {
+        device.write_all(&Frame::Register { member: [n; 32] }.encode()).await.unwrap();
+    }
+    let held = tokio::time::timeout(Duration::from_secs(2), async {
+        while server.registered_count() < qurb_relay::MAX_IDENTITIES {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(held.is_ok(), "the names were not registered");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(server.registered_count(), qurb_relay::MAX_IDENTITIES, "more names than the bound");
+
+    drop(device);
+    let gone = tokio::time::timeout(Duration::from_secs(2), async {
+        while server.registered_count() > 0 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await;
+    assert!(gone.is_ok(), "names outlived their connection");
+}

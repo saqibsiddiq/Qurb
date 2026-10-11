@@ -37,5 +37,5 @@ pub mod socket;
 
 pub use error::{Error, Result};
 pub use frame::{Frame, RelayId};
-pub use server::{RelayServer, RelayStats};
+pub use server::{RelayServer, RelayStats, MAX_IDENTITIES};
 pub use socket::{endpoint_over, RelaySocket};

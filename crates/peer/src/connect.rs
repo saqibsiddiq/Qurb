@@ -483,10 +483,19 @@ impl Connector {
             return;
         }
         let (signal, commands) = mpsc::unbounded_channel();
+        let member = MemberId::for_meeting(&secret, self.identity.fingerprint().as_bytes());
+        // On the relay under the meeting's name too, so a device that cannot
+        // reach this one directly can still come the long way round (decision
+        // 0061). Best effort, as the relay always is.
+        if let Some(relay) = &self.relay {
+            if let Err(e) = relay.socket.register(*member.as_bytes()) {
+                tracing::warn!(error = %e, "could not be reached through the relay in a meeting");
+            }
+        }
         let reconnect = Reconnect {
             url: self.signal_url.clone(),
             group: GroupId::for_meeting(&secret),
-            member: MemberId::for_meeting(&secret, self.identity.fingerprint().as_bytes()),
+            member,
             straight_away: true,
         };
         let running = tokio::spawn(stay_signalled(
@@ -662,9 +671,10 @@ impl Connector {
         let (signal, target, meeting) = self.session_for(&peer);
         if meeting {
             // Another person's device, met under a secret of their own: not
-            // in this person's beacons, nor at the relay, which are keyed to
-            // this person's key (decision 0060). The rendezvous service
-            // carries its local addresses as well as its public ones.
+            // in this person's beacons, which are keyed to this person's key
+            // (decision 0060). The rendezvous service carries its local
+            // addresses as well as its public ones; and the relay knows it by
+            // the meeting's name for it, when no address answers (0061).
             let (reply, answer) = oneshot::channel();
             signal
                 .send(Command::Introduce { to: target, reply })
@@ -674,7 +684,16 @@ impl Connector {
                 Ok(Err(_)) => return Err(Error::Signalling { detail: "signalling has stopped".into() }),
                 Err(_) => return Err(Error::PeerDidNotAnswer),
             };
-            return self.race(peer, &endpoints).await;
+            return match self.race(peer, &endpoints).await {
+                Ok(client) => Ok(client),
+                Err(direct) => match &self.relay {
+                    Some(relay) => {
+                        tracing::info!(peer = %peer.short(), "no direct path to a meeting's device; falling back to the relay");
+                        self.via_relay(peer, relay).await
+                    }
+                    None => Err(direct),
+                },
+            };
         }
 
         // Somebody who beaconed from this network moments ago is both the
@@ -735,10 +754,17 @@ impl Connector {
 
     /// Reach a peer the long way round.
     async fn via_relay(&self, peer: Fingerprint, relay: &RelayPath) -> Result<PeerClient> {
-        let target = *MemberId::derive(&self.master, peer.as_bytes()).as_bytes();
+        // By the names the two use: a meeting's for another person's device,
+        // this person's for one of their own (decision 0061).
+        let me = self.identity.fingerprint();
+        let (target, as_me) = match self.meetings.lock().ok().and_then(|m| m.get(&peer).map(|m| m.secret)) {
+            Some(secret) => (MemberId::for_meeting(&secret, peer.as_bytes()), MemberId::for_meeting(&secret, me.as_bytes())),
+            None => (MemberId::derive(&self.master, peer.as_bytes()), MemberId::derive(&self.master, me.as_bytes())),
+        };
+        let (target, as_me) = (*target.as_bytes(), *as_me.as_bytes());
         let address = relay
             .socket
-            .address_for(target)
+            .address_for_as(target, as_me)
             .map_err(|e| Error::Signalling { detail: format!("relay: {e}") })?;
 
         let config = tls::client_config(&self.identity, peer)?;

@@ -75,7 +75,8 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
         for (peer in own) cards += deviceCard(page, peer, holders)
         layOut(page, cards)
         if (visited.isNotEmpty()) {
-            kit.section(page, "Computers you visit")
+            // Labelled as every section is, and in the desktop's words.
+            kit.groupTitle(page, "Computers you visit as a guest")
             layOut(page, visited.map { deviceCard(page, it, holders) })
         }
 

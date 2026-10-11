@@ -2461,11 +2461,6 @@ impl Store {
         if hash_reader(file).map_err(|e| Error::io(staging, e))? != row.content_hash {
             return Err(Error::ChunkCorrupt { hash: row.content_hash.to_hex().to_string() });
         }
-        let to = tree.join(path);
-        if let Some(parent) = to.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
-        }
-        move_file(staging, &to).map_err(|e| Error::io(&to, e))?;
         // Recorded under the version it already had, so the computer keeping
         // it is not sent it again as a change; and written out in full, so a
         // file known only from that computer's list gains its chunk list.
@@ -2477,6 +2472,19 @@ impl Store {
             .find(|(r, _)| r.path == path)
             .map(|(_, v)| v)
             .ok_or_else(|| Error::NotFound { path: path.to_string() })?;
+        // Dated when it was changed, as a fetched file is (the engine's
+        // `fetch`), not when it came back: found on the emulator, where a
+        // file kept for a fortnight read "changed just now" once fetched.
+        // Best effort: a filesystem that refuses keeps the arrival time.
+        if version.modified_at > 0 {
+            let changed = std::time::UNIX_EPOCH + std::time::Duration::from_secs(version.modified_at as u64);
+            let _ = std::fs::File::options().write(true).open(staging).and_then(|f| f.set_modified(changed));
+        }
+        let to = tree.join(path);
+        if let Some(parent) = to.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+        }
+        move_file(staging, &to).map_err(|e| Error::io(&to, e))?;
         let file = std::fs::File::open(&to).map_err(|e| Error::io(&to, e))?;
         let meta = file.metadata().map_err(|e| Error::io(&to, e))?;
         // SAFETY: as for every other write -- mapped once, chunked and

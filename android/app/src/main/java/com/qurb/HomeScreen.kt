@@ -157,8 +157,10 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         return if (ownWithNoKeeper) {
             "They're in your Private Vault, and no device is keeping a backup yet. Choose one in Devices."
         } else {
-            val to = (state.holders.ifEmpty { state.peers }).joinToString(", ") { it.name }
-            "Until then they're only on this phone. They go to $to the next time both are online."
+            val going = (state.holders.ifEmpty { state.peers }).map { it.name }
+            val to = Words.list(going)
+            if (going.size == 1) "Until then they're only on this phone. They go to $to the next time both are online."
+            else "Until then they're only on this phone. They go to $to, each the next time it and this phone are online."
         }
     }
 

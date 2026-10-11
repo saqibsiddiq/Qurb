@@ -578,6 +578,12 @@ class MainActivity : AppCompatActivity() {
                 // A computer this phone visits, asking to open its folder
                 // there (decision 0060).
                 engine.openAsks().firstOrNull()?.let { askToOpen(engine, it) }
+                // And what a computer did with a key this phone sent: the
+                // person approved, so they hear whether it opened.
+                for (answer in engine.openAnswers()) {
+                    say(if (answer.opened) "Your folder is open on ${answer.name}. It locks itself after ten minutes unused."
+                        else "${answer.name} didn't open your folder: its ask had lapsed, or it keeps nothing of yours yet.")
+                }
                 if (!quiet) say(
                     when {
                         outcome.reached == 0u && outcome.unreachable == 0u && outcome.timedOut ->
@@ -665,6 +671,9 @@ class MainActivity : AppCompatActivity() {
     private fun askToOpen(engine: uniffi.qurb_mobile.Qurb, ask: uniffi.qurb_mobile.OpenAsk) {
         if (askShown == ask.fingerprint) return
         askShown = ask.fingerprint
+        // Set by either button. A sheet swiped away instead is a "Not now":
+        // otherwise this computer's asks would never be shown again here.
+        var decided = false
         kit.sheet()
             .header(R.drawable.ic_lock_keyhole, "Open your folder on ${ask.name}?",
                 "${ask.name} is asking")
@@ -672,9 +681,11 @@ class MainActivity : AppCompatActivity() {
                 "for whoever is at that computer, until it's locked there, or ten minutes unused.\n\n" +
                 "Only approve if you're there and asked for it.")
             .buttons("Open it there", secondary = "Not now", onSecondary = {
+                decided = true
                 askShown = null
                 engine.declineOpen(ask.fingerprint)
             }) {
+                decided = true
                 if (!ScreenLock.available(this)) {
                     askShown = null
                     say("Set a screen lock on this phone first, so it can confirm it's you.")
@@ -692,6 +703,12 @@ class MainActivity : AppCompatActivity() {
                             sync(quiet = true)
                         }
                         .onFailure { fail("Could not answer ${ask.name}", it) }
+                }
+            }
+            .onDismiss {
+                if (!decided) {
+                    askShown = null
+                    engine.declineOpen(ask.fingerprint)
                 }
             }
             .show()

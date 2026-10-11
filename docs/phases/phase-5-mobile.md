@@ -2115,7 +2115,8 @@ laptop reaches its service at `localhost`.
 
 **2026-10-10 to 2026-10-11**, the phone's side of
 [decision 0060](../decisions/0060-a-computer-keeps-private-folders-for-several-people.md).
-None of this has been tried on a phone yet.
+None of this has been tried on a real phone yet; all of it except the share
+sheet ran on the emulator, below.
 
 - **No copies kept.** A file picked in the app is sent by its document:
   the phone keeps Android's permission to read it and reads it again when
@@ -2143,6 +2144,24 @@ The prompt guards the approval, not the key: the folder key is still
 derived from the chunk key in the app's storage, so malware able to read
 that storage could derive it. A keystore key that only the prompt can
 unlock would close that gap; it is not built.
+
+### Run on the emulator, as a guest
+
+**2026-10-11.** The emulator (`qurb-test`, Android 14) visited a scratch
+computer on the laptop: the real desktop application under GTK's Broadway
+backend, with a rendezvous service and relay of its own. Everything from the
+guest code to the file coming back ran, through the relay, because the
+emulator's address translation leaves the computer no way to dial it — as a
+carrier's NAT does to a phone on mobile data. The full account, and the six
+things it found and fixed (the relay not carrying meetings, the phone not
+saying whether the folder opened, the same ask shown twice, an undelivered
+key dropped, a fetched file dated "just now", and two wordings), is in
+[decision 0060, step 6](../decisions/0060-a-computer-keeps-private-folders-for-several-people.md#step-6-on-the-emulator--2026-10-11)
+and [decision 0061](../decisions/0061-the-relay-carries-meetings.md).
+
+Android blocks screenshots of its credential prompt, so the PIN screen was
+driven blind, by `adb shell input`; that it appeared at all was read from the
+view hierarchy (*Open your folder on Study desktop*, *Confirm it's you*).
 
 ## A consistency pass
 

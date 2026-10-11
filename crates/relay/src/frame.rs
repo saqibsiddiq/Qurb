@@ -7,6 +7,13 @@
 //! ```text
 //!   [u32 length][u8 tag][body]
 //! ```
+//!
+//! A device may register under more than one identifier on one connection:
+//! its own, and one for each meeting with another person's device (decision
+//! 0061). It then says which of them a packet is from (`ForwardAs`), and the
+//! relay says which of them a packet was for (`DeliverTo`), so each side
+//! answers under the name it was called by. A connection with one identifier
+//! sees only the original three frames.
 
 use crate::error::{Error, Result};
 
@@ -18,6 +25,8 @@ pub const MAX_FRAME: usize = 64 * 1024;
 const TAG_REGISTER: u8 = 1;
 const TAG_FORWARD: u8 = 2;
 const TAG_DELIVER: u8 = 3;
+const TAG_FORWARD_AS: u8 = 4;
+const TAG_DELIVER_TO: u8 = 5;
 
 /// Who a device says it is, on the relay.
 ///
@@ -27,12 +36,17 @@ pub type RelayId = [u8; 32];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Frame {
-    /// I am here, under this identifier.
+    /// I am here, under this identifier -- as well as any given before on
+    /// this connection.
     Register { member: RelayId },
-    /// Pass this to that identifier.
+    /// Pass this to that identifier, from the first I registered.
     Forward { to: RelayId, payload: Vec<u8> },
     /// Something arrived for you.
     Deliver { from: RelayId, payload: Vec<u8> },
+    /// Pass this to that identifier, from this one of mine.
+    ForwardAs { from: RelayId, to: RelayId, payload: Vec<u8> },
+    /// Something arrived for this one of your identifiers.
+    DeliverTo { from: RelayId, to: RelayId, payload: Vec<u8> },
 }
 
 impl Frame {
@@ -51,6 +65,18 @@ impl Frame {
             Frame::Deliver { from, payload } => {
                 body.push(TAG_DELIVER);
                 body.extend_from_slice(from);
+                body.extend_from_slice(payload);
+            }
+            Frame::ForwardAs { from, to, payload } => {
+                body.push(TAG_FORWARD_AS);
+                body.extend_from_slice(from);
+                body.extend_from_slice(to);
+                body.extend_from_slice(payload);
+            }
+            Frame::DeliverTo { from, to, payload } => {
+                body.push(TAG_DELIVER_TO);
+                body.extend_from_slice(from);
+                body.extend_from_slice(to);
                 body.extend_from_slice(payload);
             }
         }
@@ -74,6 +100,16 @@ impl Frame {
             TAG_DELIVER => {
                 let (from, payload) = take_id(rest)?;
                 Ok(Frame::Deliver { from, payload: payload.to_vec() })
+            }
+            TAG_FORWARD_AS => {
+                let (from, rest) = take_id(rest)?;
+                let (to, payload) = take_id(rest)?;
+                Ok(Frame::ForwardAs { from, to, payload: payload.to_vec() })
+            }
+            TAG_DELIVER_TO => {
+                let (from, rest) = take_id(rest)?;
+                let (to, payload) = take_id(rest)?;
+                Ok(Frame::DeliverTo { from, to, payload: payload.to_vec() })
             }
             _ => Err(Error::Malformed("unknown frame tag")),
         }
@@ -99,6 +135,8 @@ mod tests {
             Frame::Register { member: [1; 32] },
             Frame::Forward { to: [2; 32], payload: vec![0xAB; 1200] },
             Frame::Deliver { from: [3; 32], payload: Vec::new() },
+            Frame::ForwardAs { from: [4; 32], to: [5; 32], payload: vec![0xCD; 1200] },
+            Frame::DeliverTo { from: [6; 32], to: [7; 32], payload: vec![1, 2, 3] },
         ];
         for frame in frames {
             let encoded = frame.encode();
@@ -131,6 +169,13 @@ mod tests {
         assert!(Frame::decode(&[]).is_err());
         assert!(Frame::decode(&[99]).is_err());
         assert!(Frame::decode(&[TAG_FORWARD, 1, 2, 3]).is_err());
+        // One identifier where two are needed.
+        let mut short = vec![TAG_FORWARD_AS];
+        short.extend_from_slice(&[1; 32]);
+        assert!(Frame::decode(&short).is_err());
+        let mut short = vec![TAG_DELIVER_TO];
+        short.extend_from_slice(&[1; 40]);
+        assert!(Frame::decode(&short).is_err());
     }
 
     #[test]

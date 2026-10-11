@@ -491,6 +491,24 @@ pub struct Qurb {
     open_asks: Mutex<std::collections::HashMap<String, (String, [u8; 16])>>,
     /// Asks the person approved, answered at the next sync with that computer.
     approved: Mutex<std::collections::HashMap<String, [u8; 16]>>,
+    /// What each computer answered when this phone sent the key, for the app
+    /// to say: the person approved, and should know whether it opened.
+    open_answers: Mutex<Vec<OpenAnswer>>,
+    /// The last ask from each computer the person answered, either way. A
+    /// computer goes on asking for five minutes; the same ask is not put to
+    /// the person twice.
+    settled: Mutex<std::collections::HashMap<String, [u8; 16]>>,
+}
+
+/// A computer's answer to the key this phone sent it, once approved
+/// (decision 0060, step 5).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OpenAnswer {
+    /// The computer's name.
+    pub name: String,
+    /// Whether the folder opened there. Not when the computer's ask had
+    /// lapsed by the time the key arrived, or it keeps nothing the key opens.
+    pub opened: bool,
 }
 
 /// A computer this phone visits, asking to open the phone's folder there
@@ -1623,16 +1641,26 @@ impl Qurb {
         let Some((_, nonce)) = ask else {
             return Err(QurbError::NotFound { detail: "that computer is not asking any more".into() });
         };
+        if let Ok(mut settled) = self.settled.lock() {
+            settled.insert(fingerprint.clone(), nonce);
+        }
         if let Ok(mut approved) = self.approved.lock() {
             approved.insert(fingerprint, nonce);
         }
         Ok(())
     }
 
+    /// What computers answered to keys this phone sent since the last call:
+    /// whether each opened the folder (decision 0060, step 5).
+    pub fn open_answers(&self) -> Vec<OpenAnswer> {
+        self.open_answers.lock().map(|mut answers| std::mem::take(&mut *answers)).unwrap_or_default()
+    }
+
     /// The person said no: nothing is sent, and the computer's ask lapses.
     pub fn decline_open(&self, fingerprint: String) {
-        if let Ok(mut asks) = self.open_asks.lock() {
-            asks.remove(&fingerprint);
+        let ask = self.open_asks.lock().ok().and_then(|mut asks| asks.remove(&fingerprint));
+        if let (Some((_, nonce)), Ok(mut settled)) = (ask, self.settled.lock()) {
+            settled.insert(fingerprint, nonce);
         }
     }
 
@@ -1824,6 +1852,8 @@ impl Qurb {
             documents: Mutex::new(None),
             open_asks: Mutex::new(std::collections::HashMap::new()),
             approved: Mutex::new(std::collections::HashMap::new()),
+            open_answers: Mutex::new(Vec::new()),
+            settled: Mutex::new(std::collections::HashMap::new()),
         })
     }
 }
@@ -2296,13 +2326,34 @@ impl Qurb {
                 let approved = self.approved.lock().ok().and_then(|mut a| a.remove(&fingerprint));
                 if let Some(nonce) = approved {
                     let key = qurb_storage::sealed::FolderKey::for_host(&engine.store().chunk_key(), &known.device_id);
-                    let opened = runtime.block_on(client.unlock(nonce, key.to_bytes())).unwrap_or(false);
-                    tracing::info!(opened, "answered an ask to open this phone's folder");
+                    match runtime.block_on(client.unlock(nonce, key.to_bytes())) {
+                        Ok(opened) => {
+                            tracing::info!(opened, "answered an ask to open this phone's folder");
+                            if let Ok(mut answers) = self.open_answers.lock() {
+                                answers.push(OpenAnswer { name: known.name.clone(), opened });
+                            }
+                        }
+                        // Not delivered: still approved, sent at the next sync.
+                        Err(e) => {
+                            tracing::warn!(error = %e, "could not send the key to open this phone's folder");
+                            if let Ok(mut held) = self.approved.lock() {
+                                held.insert(fingerprint.clone(), nonce);
+                            }
+                        }
+                    }
                 }
-                let asked = runtime.block_on(client.asks()).ok().flatten();
+                let asked = match runtime.block_on(client.asks()) {
+                    Ok(asked) => asked,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "could not ask whether a computer wants to open this phone's folder");
+                        None
+                    }
+                };
+                let answered = self.settled.lock().ok().and_then(|s| s.get(&fingerprint).copied());
+                tracing::debug!(asking = asked.is_some(), answered_before = asked.is_some() && asked == answered, "a visited computer's ask");
                 if let Ok(mut asks) = self.open_asks.lock() {
                     match asked {
-                        Some(nonce) if approved != Some(nonce) => {
+                        Some(nonce) if approved != Some(nonce) && answered != Some(nonce) => {
                             asks.insert(fingerprint, (known.name.clone(), nonce));
                         }
                         _ => {

@@ -22,6 +22,16 @@
 //! know in advance who will call it. A socket opened only to dial one peer would
 //! be unable to listen, and a device that cannot be reached over the relay is
 //! half a fallback.
+//!
+//! # More than one name
+//!
+//! A device registers under its own identifier, and may [`register`] more:
+//! one for each meeting with another person's device (decision 0061), whose
+//! name for it is not its own. Each synthetic address then stands for a pair
+//! -- the peer, and which of this device's names the two use -- so a reply
+//! goes out under the name it was called by.
+//!
+//! [`register`]: RelaySocket::register
 
 use crate::error::{Error, Result};
 use crate::frame::{Frame, RelayId, MAX_FRAME};
@@ -49,17 +59,21 @@ const LOCAL_ADDRESS: &str = "192.0.2.255:9";
 /// than popular.
 const MAX_PEERS: u32 = 254;
 
-/// Two-way mapping between relay identifiers and the addresses QUIC sees.
+/// A conversation on the relay: the peer's identifier, and which of this
+/// device's the two use.
+type Pair = (RelayId, RelayId);
+
+/// Two-way mapping between conversations and the addresses QUIC sees.
 #[derive(Debug, Default)]
 struct PeerMap {
-    by_address: HashMap<SocketAddr, RelayId>,
-    by_id: HashMap<RelayId, SocketAddr>,
+    by_address: HashMap<SocketAddr, Pair>,
+    by_pair: HashMap<Pair, SocketAddr>,
     next: u32,
 }
 
 impl PeerMap {
-    fn address_for(&mut self, peer: RelayId) -> Option<SocketAddr> {
-        if let Some(existing) = self.by_id.get(&peer) {
+    fn address_for(&mut self, pair: Pair) -> Option<SocketAddr> {
+        if let Some(existing) = self.by_pair.get(&pair) {
             return Some(*existing);
         }
         if self.next >= MAX_PEERS {
@@ -69,12 +83,12 @@ impl PeerMap {
         let address: SocketAddr = format!("192.0.2.{}:9", self.next)
             .parse()
             .expect("a literal address");
-        self.by_address.insert(address, peer);
-        self.by_id.insert(peer, address);
+        self.by_address.insert(address, pair);
+        self.by_pair.insert(pair, address);
         Some(address)
     }
 
-    fn id_for(&self, address: &SocketAddr) -> Option<RelayId> {
+    fn pair_for(&self, address: &SocketAddr) -> Option<Pair> {
         self.by_address.get(address).copied()
     }
 }
@@ -82,8 +96,11 @@ impl PeerMap {
 /// A relay connection, usable as a QUIC socket.
 #[derive(Debug)]
 pub struct RelaySocket {
+    /// The identifier this socket registered first: what a plain `Forward`
+    /// is from, and what a plain `Deliver` was for.
+    me: RelayId,
     outgoing: mpsc::UnboundedSender<Frame>,
-    incoming: Mutex<mpsc::UnboundedReceiver<(RelayId, Vec<u8>)>>,
+    incoming: Mutex<mpsc::UnboundedReceiver<(Pair, Vec<u8>)>>,
     peers: Mutex<PeerMap>,
 }
 
@@ -98,7 +115,7 @@ impl RelaySocket {
         let (mut reader, mut writer) = stream.into_split();
 
         let (outgoing, mut to_send) = mpsc::unbounded_channel::<Frame>();
-        let (received, incoming) = mpsc::unbounded_channel::<(RelayId, Vec<u8>)>();
+        let (received, incoming) = mpsc::unbounded_channel::<(Pair, Vec<u8>)>();
 
         writer.write_all(&Frame::Register { member: me }.encode()).await?;
 
@@ -126,27 +143,46 @@ impl RelaySocket {
                 }
                 // Anything but a delivery is not ours to act on. A relay that
                 // starts sending other frame kinds is one we do not understand.
-                if let Ok(Frame::Deliver { from, payload }) = Frame::decode(&body[..size]) {
-                    if received.send((from, payload)).is_err() {
-                        break;
-                    }
+                let delivered = match Frame::decode(&body[..size]) {
+                    Ok(Frame::Deliver { from, payload }) => ((from, me), payload),
+                    Ok(Frame::DeliverTo { from, to, payload }) => ((from, to), payload),
+                    _ => continue,
+                };
+                if received.send(delivered).is_err() {
+                    break;
                 }
             }
         });
 
         Ok(Arc::new(Self {
+            me,
             outgoing,
             incoming: Mutex::new(incoming),
             peers: Mutex::new(PeerMap::default()),
         }))
     }
 
+    /// Be reachable under `also` too, on this same connection: the name a
+    /// meeting with another person's device gives this one (decision 0061).
+    /// Asking again for a name already held changes nothing.
+    pub fn register(&self, also: RelayId) -> Result<()> {
+        self.outgoing
+            .send(Frame::Register { member: also })
+            .map_err(|_| Error::Io(io::Error::new(io::ErrorKind::BrokenPipe, "relay connection closed")))
+    }
+
     /// The address to give QUIC when dialling this peer through the relay.
     pub fn address_for(&self, peer: RelayId) -> Result<SocketAddr> {
+        self.address_for_as(peer, self.me)
+    }
+
+    /// The address to give QUIC when dialling this peer through the relay
+    /// under `as_me`, one of this socket's registered names.
+    pub fn address_for_as(&self, peer: RelayId, as_me: RelayId) -> Result<SocketAddr> {
         self.peers
             .lock()
             .expect("peer map")
-            .address_for(peer)
+            .address_for((peer, as_me))
             .ok_or(Error::TooManyPeers { max: MAX_PEERS as usize })
     }
 }
@@ -173,11 +209,11 @@ impl quinn::AsyncUdpSocket for RelaySocket {
         // names a peer. Anything else is a packet for somewhere we have never
         // been, which cannot be relayed and must not be silently discarded
         // either -- QUIC deserves to know it did not go.
-        let peer = self
+        let (peer, as_me) = self
             .peers
             .lock()
             .expect("peer map")
-            .id_for(&transmit.destination)
+            .pair_for(&transmit.destination)
             .ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::AddrNotAvailable,
@@ -185,8 +221,15 @@ impl quinn::AsyncUdpSocket for RelaySocket {
                 )
             })?;
 
+        // From this device's own name, the frame every relay understands.
+        let payload = transmit.contents.to_vec();
+        let frame = if as_me == self.me {
+            Frame::Forward { to: peer, payload }
+        } else {
+            Frame::ForwardAs { from: as_me, to: peer, payload }
+        };
         self.outgoing
-            .send(Frame::Forward { to: peer, payload: transmit.contents.to_vec() })
+            .send(frame)
             .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "relay connection closed"))
     }
 
@@ -202,10 +245,10 @@ impl quinn::AsyncUdpSocket for RelaySocket {
 
         let mut incoming = self.incoming.lock().expect("receiver");
         match incoming.poll_recv(cx) {
-            Poll::Ready(Some((from, payload))) => {
+            Poll::Ready(Some((pair, payload))) => {
                 // A peer we have not seen gets an address now. This is how a
                 // device that was only listening learns to answer.
-                let Some(address) = self.peers.lock().expect("peer map").address_for(from)
+                let Some(address) = self.peers.lock().expect("peer map").address_for(pair)
                 else {
                     // Out of addresses. Dropping is what a router does when it
                     // cannot deliver, and QUIC copes with a lost datagram.

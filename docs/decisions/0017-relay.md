@@ -1,6 +1,6 @@
 # 0017 — The relay carries datagrams, not messages
 
-**Status:** Accepted. Amended 2026-09-27: given by name, and best effort — see [A server of your own](#a-server-of-your-own)
+**Status:** Accepted. Amended 2026-09-27: given by name, and best effort — see [A server of your own](#a-server-of-your-own). Amended 2026-10-11: one connection may hold several names, with two more frames — see [0061](0061-the-relay-carries-meetings.md)
 **Date:** 2026-09-16
 
 ## Decision

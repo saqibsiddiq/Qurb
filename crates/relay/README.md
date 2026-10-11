@@ -57,6 +57,22 @@ receive that device's relayed packets. They cannot read them, but they can stop
 the real device getting them. See
 [decision 0017](../../docs/decisions/0017-relay.md).
 
+## Several names on one connection
+
+A device may register more than one identifier on its connection: its own,
+then one for each meeting with another person's device, up to 64
+([decision 0061](../../docs/decisions/0061-the-relay-carries-meetings.md)).
+`Register` adds a name rather than replacing one. Two frames carry which name
+is meant: `ForwardAs` says which of the sender's names a packet is from, and is
+refused for a name that connection did not register; `DeliverTo` tells a
+connection holding several names which one a packet was for. A connection with
+one name sees only the original frames. On the client, `RelaySocket::register`
+adds a name and `address_for_as` dials under one, so each conversation keeps the
+name it began with.
+
+The relay can therefore tell that a connection's names belong to one device.
+They stay blinded: it still cannot tell whose they are.
+
 ## Not yet built
 
 - **Relay selection**, and moving between relays.

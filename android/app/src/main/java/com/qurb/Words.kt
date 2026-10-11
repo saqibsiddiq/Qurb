@@ -18,6 +18,13 @@ import uniffi.qurb_mobile.QurbException
  */
 object Words {
 
+    /** Names as a sentence lists them: "A", "A and B", "A, B and C". */
+    fun list(names: List<String>): String = when (names.size) {
+        0 -> ""
+        1 -> names[0]
+        else -> names.dropLast(1).joinToString(", ") + " and " + names.last()
+    }
+
     fun size(bytes: ULong): String {
         val units = listOf("B", "KB", "MB", "GB", "TB")
         var value = bytes.toDouble()

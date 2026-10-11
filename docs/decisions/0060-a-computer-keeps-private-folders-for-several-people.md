@@ -2,8 +2,8 @@
 
 **Status:** Accepted, 2026-10-10, with the owner's answers at the end — steps
 1 (no copies kept), 2 (guests), 3 (a guest's folder, sealed), 4 (the phone)
-and 5 (opening a folder at the computer) built; step 6, watching it on
-hardware, not yet; supersedes [0023](0023-one-person-per-account.md) for people who
+and 5 (opening a folder at the computer) built; step 6 run on the Android
+emulator as the guest, not yet with a second person's phone; supersedes [0023](0023-one-person-per-account.md) for people who
 are not the computer's owner, and amends
 [0030](0030-sending-a-file-to-one-device.md) rules 1 and 4.
 **Date:** 2026-10-10
@@ -338,7 +338,8 @@ test passed.
 
 - Local beacons, the relay and push stay keyed to one person. A guest finds
   a computer only through the rendezvous service, which carries its local
-  addresses too. A guest phone is not woken by push when the computer has
+  addresses too. (The relay carries meetings since 2026-10-11:
+  [0061](0061-the-relay-carries-meetings.md).) A guest phone is not woken by push when the computer has
   something for it; it collects at its next sync.
 - A phone cannot welcome guests; only computers show guest codes.
 - **Not watched on hardware.** A second person's phone is needed; until one
@@ -537,3 +538,51 @@ The window's sheet in its three states against the fixtures.
 
 **Not watched**: any of it on hardware. That is step 6, and needs a phone
 playing the guest.
+
+### Step 6, on the emulator — 2026-10-11
+
+The emulator played the guest, as the order of work allowed until a second
+person's phone is borrowed. The computer was a scratch one on the laptop:
+the real desktop application, run under GTK's Broadway backend with a home
+of its own, driven through its own commands, with a rendezvous service and
+relay of its own on spare ports. The emulator was `qurb-test` (Android 14,
+x86_64), behind its own address translation, running the debug APK.
+
+**Worked:** visiting with a guest code, both screens showing the same six
+digits, the computer seeing a phone that wants no key; *Computers you visit
+as a guest* on the phone; *Keep my files here*; the computer keeping the
+vault sealed; *Open their folder* asking, the phone collecting the ask at
+its sync, the sheet, Android's own prompt taking the PIN, the key sent, and
+the computer listing the file by its real name; opening it there, unsealed
+and checked, into a directory only its owner can enter; locking; and the
+file, freed on the phone once kept, coming back when asked for.
+
+**Found, and fixed the same day:**
+
+- **The computer could not keep anything from a guest it cannot dial**: a
+  device fetches by dialling, and the relay did not know meetings. Fixed by
+  [0061](0061-the-relay-carries-meetings.md). Before it, nothing was kept.
+- **The phone did not say whether the folder opened.** It logged the
+  computer's answer and showed nothing. It now says *Your folder is open on
+  Study desktop*, or that the computer did not open it and why that might
+  be (`Qurb::open_answers`).
+- **The same ask could be put to the person twice.** The computer goes on
+  asking for five minutes, so a *Not now*, a refused key, or a sheet swiped
+  away was followed by the same sheet at the next sync. The phone now
+  remembers the last ask it answered from each computer. A swiped-away sheet
+  counts as *Not now*; before, it also stopped any later ask from that
+  computer being shown until the app restarted.
+- **A key that could not be delivered was dropped.** On a failed connection
+  the approval is now kept and sent at the next sync.
+- **A file fetched back read "changed just now".** It is now dated when its
+  version changed, as an ordinary fetch is.
+- **Wording:** *Computers you visit* was a large heading, unlike every
+  other section, and worded differently from the desktop; names were listed
+  as *Study desktop, test-laptop* with a singular verb.
+
+**Not checked here:** a real phone (Block Store, push, the fingerprint
+sensor rather than a PIN, the S23's network); two people's devices on two
+networks; and a guest and computer that use different rendezvous services
+or relays, which do not meet — nothing tells a guest which the computer
+uses. That last one is a gap, stated here.
+

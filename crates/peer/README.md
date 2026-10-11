@@ -296,10 +296,13 @@ a set that only grew would keep letting it in.
 
 ## Not yet built
 
-- **Push, beacons and the relay for guests.** A guest and its host meet at
-  the rendezvous service only. Push wakes, LAN beacons and relay pairing are
-  keyed by one person's key and are not keyed for meetings yet, so a guest
-  that cannot hole-punch to its host does not reach it.
+- **Push and beacons for guests.** A guest and its computer meet at the
+  rendezvous service, and through the relay by their meeting's names when no
+  direct address answers ([decision 0061](../../docs/decisions/0061-the-relay-carries-meetings.md)).
+  Push wakes and LAN beacons are still keyed by one person's key, so a guest's
+  phone is not woken for news, nor found by beacon.
+- **Telling a guest which services the computer uses.** Both must use the same
+  rendezvous service and relay; nothing in the welcome says which.
 
 - **Upgrading back to direct.** A connection that fell back to the relay stays
   relayed, even after the device moves to a network where punching would work.

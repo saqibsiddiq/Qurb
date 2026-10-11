@@ -406,7 +406,8 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                 "No device keeps a backup of your Private Vault, so this phone will have the only copy. " +
                     "Choose one in Devices to keep it."
             } else {
-                "${keepers.joinToString(", ") { it.name }} keeps a backup of your Private Vault, so it keeps this file too."
+                if (keepers.size == 1) "${keepers[0].name} keeps a backup of your Private Vault, so it keeps this file too."
+                else "${Words.list(keepers.map { it.name })} keep a backup of your Private Vault, so they keep this file too."
             }
             kit.sheet()
                 .header(R.drawable.ic_lock_keyhole, "Move $name to Private Vault?")

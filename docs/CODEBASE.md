@@ -430,6 +430,15 @@ person's sealed names. The key stays in memory until the folder is locked, or
 for ten minutes without use. Files opened are unsealed under
 `$XDG_RUNTIME_DIR/qurb-open/` and deleted on locking.
 
+A computer reads what a guest shows it by dialling the guest, which a phone
+behind a carrier's NAT does not allow. The relay covers that case for guests
+too: one relay connection holds a device's own name and one per meeting, and
+`ForwardAs` / `DeliverTo` frames say which name a packet is from and for, so
+each conversation keeps the name it began with
+([decisions/0061](decisions/0061-the-relay-carries-meetings.md)). Both ends
+must use the same rendezvous service and relay; nothing yet tells a guest which
+the computer uses.
+
 ### 2.7 The index remembers what happened, not just what is
 
 Everything above describes the index as a picture of the present: these paths,
@@ -698,7 +707,8 @@ qurb/
 │   ├── relay/             The fallback when no direct path exists.
 │   │   ├── src/frame.rs      opaque forwarding, binary and bounded
 │   │   ├── src/socket.rs     a relay connection pretending to be a UDP socket
-│   │   └── src/server.rs     forwards between registered identifiers
+│   │   └── src/server.rs     forwards between registered identifiers, several
+│   │                         to a connection (0061)
 │   │
 │   ├── qurb/              The program a person runs.
 │   │   ├── src/lib.rs       the daemon, as a library, so an interface can
@@ -954,7 +964,8 @@ for the workspace as it stands.
 | Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md) |
 | Guests | another person's device visits with a guest code, keeping its own key; the two meet at the rendezvous service under a secret of their own and are shown each other only what was sent to them (the `Guest` audience) — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | A guest's folder, sealed | a guest's Private Vault kept by the computer it visits under sealed names and sealed chunks the computer cannot open, filed under the guest's person; freed on the phone once kept, fetched back and checked when opened — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
-| Opening a guest's folder at the computer | the window asks, the guest's phone approves behind its screen lock and sends the folder key, accepted only if it opens the folder; held in memory until locked or ten minutes unused; files opened unsealed into memory-backed space and checked. Not watched on hardware yet — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
+| Opening a guest's folder at the computer | the window asks, the guest's phone approves behind its screen lock and sends the folder key, accepted only if it opens the folder; held in memory until locked or ten minutes unused; files opened unsealed into memory-backed space and checked. Run end to end with the emulator as the guest; not with a real phone — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
+| The relay carries meetings | one relay connection, several names: a device's own and one per meeting with another person's device, so a computer reaches a guest it cannot dial — [0061](decisions/0061-the-relay-carries-meetings.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |

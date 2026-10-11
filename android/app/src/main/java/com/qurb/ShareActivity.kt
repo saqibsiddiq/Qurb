@@ -288,8 +288,10 @@ class ShareActivity : AppCompatActivity() {
                             "Your other devices will get $it the next time one is " +
                                 "online. You don't need to do anything."
                         keepers.isNotEmpty() ->
-                            "${keepers.joinToString(", ") { k -> k.name }} keeps a backup " +
+                            if (keepers.size == 1) "${keepers[0].name} keeps a backup " +
                                 "the next time it's online. Nobody else sees $it."
+                            else "${Words.list(keepers.map { k -> k.name })} keep a backup " +
+                                "the next time each is online. Nobody else sees $it."
                         else ->
                             (if (saved == 1) "It stays" else "They stay") +
                                 " on this phone and nowhere else. To keep a backup, choose a " +

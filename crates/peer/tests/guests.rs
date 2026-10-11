@@ -335,11 +335,18 @@ async fn a_guest_frees_its_copy_and_fetches_it_back() {
     assert!(!guest.root.join("photos/family.jpg").exists(), "the phone kept its copy");
     assert_eq!(guest.engine.store().is_materialised("photos/family.jpg").unwrap(), Some(false));
 
+    // When the vault knew it changed: what it should be dated once back, not
+    // when it arrived -- two seconds later, so the two can be told apart.
+    let changed = guest.engine.store().db().own_vault_rows().unwrap()[0].1.modified_at;
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     guest.engine.store().db().want("photos/family.jpg").unwrap();
     let back = fetch_back(&mut guest, &host).await;
     assert_eq!(back, 1);
     assert_eq!(fs::read(guest.root.join("photos/family.jpg")).unwrap(), secret);
     assert_eq!(guest.engine.store().is_materialised("photos/family.jpg").unwrap(), Some(true));
+    let dated = fs::metadata(guest.root.join("photos/family.jpg")).unwrap().modified().unwrap();
+    let dated = dated.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    assert_eq!(dated, changed, "came back dated when it arrived, not when it changed");
 
     // Fetched to be opened, it stays a while: housekeeping straight after
     // used to let go of it again before anyone could open it.
@@ -460,4 +467,81 @@ async fn a_guests_folder_opens_at_the_computer_only_with_its_key() {
 
     qurb_peer::openings::lock(&person);
     assert!(qurb_peer::openings::key(&person).is_none(), "the key outlived the lock");
+}
+
+/// Decision 0061: a guest and the computer it visits, reaching each other
+/// through the relay by their meeting's names -- the way a computer reaches a
+/// guest's phone that it cannot dial, behind a carrier's NAT. Both ways, each
+/// answered under the name it was called by.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guest_and_its_computer_reach_each_other_through_the_relay() {
+    let signal = Arc::new(qurb_signal::SignalServer::bind(LOOPBACK.parse().unwrap()).await.unwrap());
+    let signal_url = format!("ws://{}", signal.local_addr().unwrap());
+    let running = Arc::clone(&signal);
+    tokio::spawn(async move { running.serve().await });
+    let relay = Arc::new(qurb_relay::RelayServer::bind(LOOPBACK.parse().unwrap()).await.unwrap());
+    let relay_addr = relay.local_addr().unwrap();
+    let serving = Arc::clone(&relay);
+    tokio::spawn(async move { serving.serve().await });
+
+    let host = Device::new(42);
+    let guest = Device::new(7);
+    welcome(&host, &guest).await;
+
+    // Each with both ways in, served, and meeting the other under its secret.
+    let mut connectors = Vec::new();
+    for device in [&host, &guest] {
+        let store = device.engine.store();
+        let allowed = qurb_peer::trusted_fingerprints(store).unwrap();
+        let connector = qurb_peer::Connector::start(
+            LOOPBACK.parse().unwrap(),
+            device.identity.clone(),
+            qurb_keys::MasterKey::from_bytes(device.key),
+            &qurb_peer::tls::TrustList::new(allowed),
+            signal_url.clone(),
+            qurb_peer::Finding { stun: false, beacons: None, relay: Some(relay_addr) },
+        )
+        .await
+        .unwrap();
+        for endpoint in [Some(connector.endpoint().clone()), connector.relay_endpoint().cloned()].into_iter().flatten() {
+            let store = device.handle();
+            tokio::spawn(async move {
+                while let Some(incoming) = endpoint.accept().await {
+                    let store = Arc::clone(&store);
+                    tokio::spawn(async move {
+                        if let Ok(connection) = incoming.await {
+                            qurb_peer::server::serve_connection_for_test(connection, store).await;
+                        }
+                    });
+                }
+            });
+        }
+        for (peer, secret) in store.db().meetings().unwrap() {
+            connector.meet(Fingerprint::from_bytes(peer.fingerprint), secret);
+        }
+        connectors.push(connector);
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    let (host_conn, guest_conn) = (&connectors[0], &connectors[1]);
+
+    let to_guest = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        host_conn.reach_via_relay(guest.identity.fingerprint()),
+    )
+    .await
+    .expect("reaching the guest through the relay timed out")
+    .expect("the computer could not reach its guest through the relay");
+    assert!(to_guest.is_relayed());
+    to_guest.tree().await.expect("a request to the guest, relayed");
+
+    let to_host = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        guest_conn.reach_via_relay(host.identity.fingerprint()),
+    )
+    .await
+    .expect("reaching the computer through the relay timed out")
+    .expect("the guest could not reach its computer through the relay");
+    assert!(to_host.is_relayed());
+    to_host.tree().await.expect("a request to the computer, relayed");
+    assert!(relay.stats().forwarded() > 0);
 }
