@@ -129,6 +129,9 @@ pub struct Device {
     relation: &'static str,
     /// For a guest: what this computer keeps for them, sealed, in bytes.
     kept: Option<String>,
+    /// "phone", "computer" or "replica", once the device has said: what its
+    /// icon is, rather than a guess from its name.
+    kind: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -668,9 +671,11 @@ pub struct PairingState {
     name: Option<String>,
     fingerprint: Option<String>,
     message: Option<String>,
-    /// While "asking": the number the device asking should be showing, and
-    /// what it is (decision 0053).
+    /// While "asking": the number the device asking should be showing
+    /// (decision 0053).
     number: Option<String>,
+    /// While "asking" and once "paired": "phone", "computer" or "replica",
+    /// as the device said, for its icon.
     kind: Option<String>,
     wants_key: bool,
     /// Another person's device, asking to visit as a guest (decision 0060).
@@ -878,6 +883,7 @@ pub async fn start_pairing(hosted: Host<'_>, guest: Option<bool>) -> Answer<Invi
                 crate::session::Pairing::Paired {
                     name: peer.name,
                     fingerprint: peer.fingerprint.short(),
+                    kind: peer.kind,
                 }
             }
             // The ordinary ending when nobody types the code in time. Not an
@@ -910,9 +916,10 @@ pub fn pairing_state(hosted: Host<'_>) -> Answer<PairingState> {
             guest,
             ..PairingState::of("asking")
         },
-        Pairing::Paired { name, fingerprint } => PairingState {
+        Pairing::Paired { name, fingerprint, kind } => PairingState {
             name: Some(name),
             fingerprint: Some(fingerprint),
+            kind,
             ..PairingState::of("paired")
         },
         Pairing::Expired => PairingState::of("expired"),
@@ -985,6 +992,7 @@ pub async fn join_device(hosted: Host<'_>, code: String) -> Answer<PairingState>
     Ok(PairingState {
         name: Some(peer.name),
         fingerprint: Some(peer.fingerprint.short()),
+        kind: peer.kind,
         ..PairingState::of("paired")
     })
 }
@@ -1492,6 +1500,7 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
                 last_seen: d.last_seen,
                 relation: d.relation.as_str(),
                 kept: d.kept.map(big),
+                kind: d.kind,
             }
         })
         .collect())

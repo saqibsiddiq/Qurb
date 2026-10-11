@@ -64,7 +64,7 @@ async function drawDevices() {
   function drawCard(d) {
     const card = el("button", "device glass-frosted");
     const tile = el("span", "tile");
-    tile.append(icon(deviceIcon(d.name)));
+    tile.append(icon(deviceIcon(d.name, d.kind)));
     const text = el("div");
     text.append(el("strong", null, d.name), presenceLine(d));
     const waiting = out.filter((o) => o.to_id === d.id).length;
@@ -99,7 +99,7 @@ async function openDevice(d) {
   const box = panel();
   const head = el("div", "panel-head");
   const tile = el("span", "tile");
-  tile.append(icon(deviceIcon(d.name), "large"));
+  tile.append(icon(deviceIcon(d.name, d.kind), "large"));
   const names = el("div");
   names.style.paddingRight = "32px";
   names.append(el("h2", null, d.name), presenceLine(d));
@@ -315,7 +315,7 @@ async function askToRemove(device, where) {
   }
   say("Only on this computer: your other devices go on trusting it until you remove it there too.", "meta");
 
-  const buttons = el("div", "actions");
+  const buttons = el("div", "actions end");
   const cancel = button("Cancel", "btn");
   const confirm = button("Remove device", "btn danger");
   cancel.addEventListener("click", () => { removing = null; box.remove(); });
@@ -399,7 +399,7 @@ function openAddDevice() {
       body.replaceChildren(el("h2", null, "Couldn't show a code"), el("p", "says warn", String(e)));
       const back = button("Back", "btn");
       back.addEventListener("click", choose);
-      const actions = el("div", "actions");
+      const actions = el("div", "actions end");
       actions.append(back);
       body.append(actions);
       return;
@@ -423,7 +423,7 @@ function openAddDevice() {
     code.style.marginTop = "12px";
     body.append(code);
     body.append(el("p", "note", "The code carries this computer's identity, which is why it travels outside the network. It works once."));
-    const actions = el("div", "actions");
+    const actions = el("div", "actions end");
     const stop = button("Stop showing it", "btn");
     stop.addEventListener("click", async () => {
       clearInterval(watching);
@@ -462,7 +462,7 @@ function openAddDevice() {
       };
       decline.addEventListener("click", () => answer(false));
       approve.addEventListener("click", () => answer(true));
-      const buttons = el("div", "actions");
+      const buttons = el("div", "actions end");
       buttons.append(decline, approve);
       asking.replaceChildren(
         el("strong", null, `${state.name} ${what}.`),
@@ -516,7 +516,7 @@ function openAddDevice() {
     input.placeholder = "qurb1-…";
     input.style.marginTop = "16px";
     const says = el("p", "says warn hidden");
-    const actions = el("div", "actions");
+    const actions = el("div", "actions end");
     const back = button("Back", "btn");
     back.addEventListener("click", choose);
     const go = button("Join", "btn primary");
@@ -555,7 +555,7 @@ function openAddDevice() {
     card.id = "pair-done";
     card.style.cssText = "margin: 8px auto 0; max-width: 280px; align-items: center; text-align: center";
     const t = el("span", "tile");
-    t.append(icon(deviceIcon(state.name)));
+    t.append(icon(deviceIcon(state.name, state.kind)));
     const words = el("div");
     const named = el("strong", null, state.name);
     named.id = "pair-with";

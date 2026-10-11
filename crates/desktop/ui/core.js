@@ -339,11 +339,15 @@ function twoPress(b, asking, act) {
 // ------------------------------------------------------------------ devices
 
 /**
- * Which kind of device a name suggests, for its icon. A guess, from the name
- * the device chose: the index records who a device is, not what it is. A
- * wrong guess costs an icon, never a decision.
+ * A device's icon, from the kind it said it is (decision 0053): when pairing,
+ * or for a device paired before that, at its first sync since. Until then its
+ * icon is guessed from the name it chose: a wrong guess costs an icon, never
+ * a decision.
  */
-function deviceIcon(name) {
+function deviceIcon(name, kind) {
+  if (kind === "phone") return "smartphone";
+  if (kind === "computer") return "laptop";
+  if (kind === "replica") return "hard-drive";
   return /phone|galaxy|pixel|android|iphone|sm-[a-z]\d|oneplus|xiaomi|redmi/i.test(name ?? "")
     ? "smartphone" : "laptop";
 }

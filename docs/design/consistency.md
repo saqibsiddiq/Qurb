@@ -49,6 +49,16 @@ is. This file says how its parts line up.
    95%, words scrolling behind it could still be read.
 10. **Motion never washes out words.** A light travelling across a control
     passes behind its text, dimmed.
+11. **The buttons that end a sheet or a confirmation sit on the right**, the
+    one that goes ahead last: *Cancel* then *Remove device*, *Back* then
+    *Join*. Android's `Sheet.buttons` and the desktop's `.actions.end`. A
+    column of a thing's own actions (a device's or a file's sheet) is a list,
+    not an ending, and is not this rule.
+12. **A device's icon says what it is**, from the kind it said it is when
+    pairing ([decision 0053](../decisions/0053-approval-same-key-and-safe-copies.md)):
+    a phone, a computer, or a hard drive for a replica. A device paired before
+    then says so at its first sync since; until it has, and only then, the
+    icon is guessed from its name.
 
 ## Found and fixed, 2026-10-11
 
@@ -80,11 +90,17 @@ is. This file says how its parts line up.
 | 24 | Android, a device's sheet | *Added* where the desktop says *Paired* | *Paired* |
 | 25 | Android, Add a device | *Type a code* where the desktop says *Enter a code* | *Enter a code* |
 | 26 | desktop, setting up | *Back* a plain link on one step and a button on the others; some steps' buttons on the left, others' and every sheet's on the right | all buttons right, *Back* the same button everywhere |
+| 27 | both, every device icon | guessed from the device's name, though both apps record what each device is: a phone whose name had none of the words looked for (*Ammi*, say) would show as a laptop, and a replica always did | from the recorded kind; on the emulator, test-laptop recorded as a replica showed a hard drive (the record taken out after) |
+| 28 | desktop, removing a device, showing or entering a code, a device asking to join, moving a file into the Private Vault | buttons on the left, unlike every other sheet and every sheet on the phone | last button 41 to 357 px short of the right edge; now on it, and *Decline* / *Approve* on their own card's edge |
 
 Checked after: the desktop smoke test, in the real window, both modes (*no
 command failed*), and every screen re-measured in the fixtures and on the
 emulator. Rows 21 to 26 were found the same day, running the guest flow on
-the emulator and then looking at sheets, dark mode and setting up.
+the emulator and then looking at sheets, dark mode and setting up. Rows 27
+and 28 came from going through pairing and removing one screen at a time:
+the desktop's measured in the fixtures with headless Chromium at 1280 × 860,
+each row's buttons measured with and without the change; the phone's icon on
+the emulator.
 
 ## Left as it is, deliberately
 
@@ -106,9 +122,17 @@ Stated so that nobody mistakes this pass for a complete one:
 
 - **Checked since**: the Android app's four places and two sheets in dark;
   the device sheet and file sheet on both; Add a device on both; the
-  desktop's setting-up steps. Rows 21 to 26.
-- Still not: the send flow, pairing's screens, removing a device and
-  conflicts, one by one; the phone's setting up (it needs the emulator's
-  data cleared); font scales above 1.0.
+  desktop's setting-up steps. Rows 21 to 26. Then the desktop's pairing
+  screens, removing a device and moving into the Private Vault, one by one,
+  and device icons on both. Rows 27 and 28.
+- Still not: the send flow and conflicts, one by one, and the phone's
+  pairing and removing screens the same way; the phone's setting up (it
+  needs the emulator's data cleared); font scales above 1.0.
+- **The conflict card's choices** are left-aligned on the desktop, inside
+  the card. They are a choice among three, not an ending, so rule 11 may not
+  apply; not yet compared with the phone's.
+- **A code that could not be drawn** leaves *Waiting — …* centred under a
+  left-aligned heading, the line that sits centred under the QR code
+  otherwise. Seen only in the fixtures, which draw no code.
 - A real phone. Every Android measurement here is the emulator's; the S23
   is 1080 × 2340 at a different density.

@@ -161,7 +161,7 @@ const ANSWERS = {
     const since = Math.floor(Date.now() / 1000) - startedPairingAt;
     const waiting = { state: "waiting", name: null, fingerprint: null, message: null };
     if (since < 4 || pairingAnswer === false) return waiting;
-    if (pairingAnswer === true) return { state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null };
+    if (pairingAnswer === true) return { state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null, kind: "phone" };
     // A guest code is answered by somebody else's phone (decision 0060).
     if (pairingGuest) return { ...waiting, state: "asking", name: "Ammi's phone", number: "418 205", kind: "phone", wants_key: false, guest: true };
     return { ...waiting, state: "asking", name: "Pixel 8", number: "232 760", kind: "phone", wants_key: false, guest: false };
@@ -193,7 +193,7 @@ const ANSWERS = {
     skipped: [],
   }),
   stop_pairing: () => null,
-  join_device: () => ({ state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null }),
+  join_device: () => ({ state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null, kind: "phone" }),
 
   summary: () => {
     const s = STATES[STATE] ?? STATES.synced;
@@ -284,12 +284,12 @@ const ANSWERS = {
 
   devices: () => STATE === "alone" ? [] : [
     { id: "4cef0d89", name: "Galaxy S23", fingerprint: "a1b2c3d4", paired_at: now - 900000, last_seen: now - 300,
-      route: STATE === "away" ? null : "direct", address: "192.168.1.2:57199" },
+      route: STATE === "away" ? null : "direct", address: "192.168.1.2:57199", kind: "phone" },
     { id: "77b10e2a", name: "Study desktop", fingerprint: "e5f60718", paired_at: now - 3600, last_seen: now - 7200,
-      route: STATE === "synced" ? "relay" : null, address: null, relation: "own" },
+      route: STATE === "synced" ? "relay" : null, address: null, relation: "own", kind: "computer" },
     // Another person, visiting this computer (decision 0060).
     { id: "9d01c3aa", name: "Ammi's phone", fingerprint: "c0ffee12", paired_at: now - 86400, last_seen: now - 600,
-      route: null, address: null, relation: "guest", kept: "12582912" },
+      route: null, address: null, relation: "guest", kept: "12582912", kind: "phone" },
   ],
 
   activity: ({ before }) => {

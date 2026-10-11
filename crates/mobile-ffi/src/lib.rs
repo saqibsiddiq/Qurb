@@ -792,6 +792,7 @@ pub fn join_new(
         paired_at: now(),
         last_seen: None,
         relation: "own".into(),
+        kind: None,
     })
 }
 
@@ -1097,6 +1098,7 @@ impl Qurb {
                     paired_at: p.paired_at,
                     last_seen: p.last_seen,
                     relation: p.relation.as_str().into(),
+                    kind: engine.store().db().peer_kind(&p.device_id).ok().flatten(),
                 }
             })
             .collect())
@@ -1168,6 +1170,7 @@ impl Qurb {
             paired_at: now(),
             last_seen: None,
             relation: "host".into(),
+            kind: Some("computer".into()),
         })
     }
 
@@ -1197,6 +1200,7 @@ impl Qurb {
             paired_at: now(),
             last_seen: None,
             relation: "own".into(),
+            kind: paired.kind,
         })
     }
 
@@ -2536,6 +2540,10 @@ pub struct PeerInfo {
     /// visiting this one; or "host", another person's computer this phone
     /// visits (decision 0060).
     pub relation: String,
+    /// "phone", "computer" or "replica", as the device said (decision 0053):
+    /// what its icon is. None for a device paired before then that has not
+    /// synced since.
+    pub kind: Option<String>,
 }
 
 /// A pairing code as a QR code: `width` modules a side, row by row, `true`
@@ -2771,6 +2779,7 @@ impl Pairing {
             paired_at: now(),
             last_seen: None,
             relation: "own".into(),
+            kind: paired.kind,
         })
     }
 

@@ -834,7 +834,7 @@ class MainActivity : AppCompatActivity() {
                     .buttons("Add a device") { pair() }
             }
             for (peer in peers) {
-                sheet.action(States.device(peer.name), peer.name) { then(peer) }
+                sheet.action(States.device(peer.name, peer.kind), peer.name) { then(peer) }
             }
             sheet.show()
         }

@@ -411,12 +411,18 @@ object States {
         else -> "File"
     }
 
-    /** Which kind of device a name suggests, for its icon: a guess, that
-     *  costs an icon when wrong and never a decision. */
+    /** A device's icon, from the kind it said it is (decision 0053): when
+     *  pairing, or for a device paired before that, at its first sync since.
+     *  Until then it is guessed from the name: a guess that costs an icon
+     *  when wrong, never a decision. */
     @DrawableRes
-    fun device(name: String): Int =
-        if (Regex("phone|galaxy|pixel|android|iphone|sm-[a-z]\\d|oneplus|xiaomi|redmi", RegexOption.IGNORE_CASE)
+    fun device(name: String, kind: String? = null): Int = when (kind) {
+        "phone" -> R.drawable.ic_smartphone
+        "computer" -> R.drawable.ic_laptop
+        "replica" -> R.drawable.ic_hard_drive
+        else -> if (Regex("phone|galaxy|pixel|android|iphone|sm-[a-z]\\d|oneplus|xiaomi|redmi", RegexOption.IGNORE_CASE)
                 .containsMatchIn(name)) R.drawable.ic_smartphone else R.drawable.ic_laptop
+    }
 }
 
 class Sheet(private val app: MainActivity, private val kit: Kit) {

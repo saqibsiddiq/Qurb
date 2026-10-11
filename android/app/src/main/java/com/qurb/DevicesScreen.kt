@@ -95,7 +95,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
             peer.fingerprint in holders -> "Keeps a backup of your Private Vault"
             else -> null
         }
-        val card = card(page, States.device(peer.name), peer.name, seen, on = false, extra = extra) {
+        val card = card(page, States.device(peer.name, peer.kind), peer.name, seen, on = false, extra = extra) {
             open(peer, peer.fingerprint in holders)
         }
         if (peer.fingerprint in arrived && !Kit.calm()) materialise(card)
@@ -152,7 +152,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
     /** A device's details, and what can be done about it. */
     private fun open(peer: PeerInfo, keeps: Boolean) {
         val seen = peer.lastSeen?.let { "Last seen ${Words.ago(it)}" } ?: "Not seen yet"
-        val sheet = kit.sheet().header(States.device(peer.name), peer.name, seen)
+        val sheet = kit.sheet().header(States.device(peer.name, peer.kind), peer.name, seen)
         val facts = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
         val group = kit.group(facts)
         if (peer.relation == "host") {
@@ -237,7 +237,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
                 app.fail("Could not check what removing it would do", e)
                 return@launch
             }
-            val sheet = kit.sheet().header(States.device(peer.name), "Remove ${peer.name}?")
+            val sheet = kit.sheet().header(States.device(peer.name, peer.kind), "Remove ${peer.name}?")
             sheet.text("This phone stops trusting ${peer.name}: it can no longer connect or sync here. " +
                 "It keeps its key and everything already on it — removing it deletes nothing there.")
             if (plan.holdsOurs) {

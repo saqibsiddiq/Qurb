@@ -53,7 +53,7 @@ pub enum Pairing {
     /// it, comparing the number it shows (decision 0053).
     Asking { name: String, kind: Option<String>, number: String, wants_key: bool, guest: bool },
     /// A device presented the right token.
-    Paired { name: String, fingerprint: String },
+    Paired { name: String, fingerprint: String, kind: Option<String> },
     /// Five minutes passed. The code is dead and a new one is needed.
     Expired,
     Failed(String),
@@ -365,10 +365,10 @@ mod tests {
     fn an_outcome_is_what_gets_reported() {
         let hosted = Hosted::new(PathBuf::from("/nowhere"));
         let live = attempt(&hosted);
-        live.settle(Pairing::Paired { name: "phone".into(), fingerprint: "a1b2c3d4".into() });
+        live.settle(Pairing::Paired { name: "phone".into(), fingerprint: "a1b2c3d4".into(), kind: None });
 
         match hosted.attempt().unwrap().state() {
-            Pairing::Paired { name, fingerprint } => {
+            Pairing::Paired { name, fingerprint, .. } => {
                 assert_eq!(name, "phone");
                 assert_eq!(fingerprint, "a1b2c3d4");
             }

@@ -53,6 +53,10 @@ pub struct Device {
     /// For a guest: how much this computer keeps for its person, sealed so
     /// that nothing here can open it.
     pub kept: Option<u64>,
+    /// "phone", "computer" or "replica", as the device said (decision 0053):
+    /// when pairing, or for one paired before that, at its first sync since.
+    /// None until then.
+    pub kind: Option<String>,
 }
 
 /// Where a file's bytes are. Decided in the storage crate, so that the phone,
@@ -165,6 +169,7 @@ impl<'a> View<'a> {
                     last_seen: p.last_seen,
                     relation: p.relation,
                     kept,
+                    kind: self.store.db().peer_kind(&p.device_id).ok().flatten(),
                 }
             })
             .collect())

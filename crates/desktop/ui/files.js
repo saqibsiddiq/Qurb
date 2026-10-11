@@ -264,7 +264,7 @@ async function moveArea(f, intoVault, redraw) {
   box.append(el("p", keepers.length ? "lead" : "caution", keepers.length
     ? `${keepers.join(", ")} keeps a backup of this computer's Private Vault, so it keeps this file too.`
     : "No device keeps a backup of this computer's Private Vault, so this computer will have the only copy."));
-  const actions = el("div", "actions");
+  const actions = el("div", "actions end");
   const cancel = button("Cancel", "btn");
   cancel.addEventListener("click", () => box.close());
   const go = button("Move", "btn primary", "lock-keyhole");
@@ -518,7 +518,7 @@ async function openFolderOptions(folder) {
     input.value = d.id;
     input.checked = f.everyone || f.members.includes(d.id);
     sw.append(input, el("span"));
-    item.append(icon(deviceIcon(d.name)), label, sw);
+    item.append(icon(deviceIcon(d.name, d.kind)), label, sw);
     picks.append(item);
   }
   box.append(picks);
@@ -659,7 +659,7 @@ function openSend(paths = [], device = null) {
     for (const d of devices) {
       const c = el("button", "choice");
       const t = el("span", "tile");
-      t.append(icon(deviceIcon(d.name)));
+      t.append(icon(deviceIcon(d.name, d.kind)));
       const words = el("span");
       words.append(el("strong", null, d.name));
       words.append(el("span", null, d.route ? "Connected now" : d.last_seen ? `Last seen ${when(d.last_seen)}` : "Not connected yet"));
@@ -740,7 +740,7 @@ function openSend(paths = [], device = null) {
       e.append(t, el("span", null, name));
       return e;
     };
-    trip.append(end("This computer", "laptop", "from"), el("div", "path"), end(d.name, deviceIcon(d.name), "to"));
+    trip.append(end("This computer", "laptop", "from"), el("div", "path"), end(d.name, deviceIcon(d.name, d.kind), "to"));
     what.append(trip);
 
     if (r.sent === 0) {

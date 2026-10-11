@@ -2173,8 +2173,13 @@ the other platform's. Twenty inconsistencies were found and fixed: section label
 and row tiles off the page's left edge by 2 to 9 units, text buttons short of
 the right edge, a card with uneven padding, two heading styles for the same
 kind of section, a page without a subtitle, a back link reading *Back*, and
-more. The rules they now follow, every finding with its measurement, and
-what is not checked yet — sheets, onboarding, the phone in dark mode — are in
+more. Eight more the same day, going through sheets, dark mode, setting up,
+pairing and removing a device: wordings that differed between the apps,
+buttons on the left in the desktop's pairing, removing and moving sheets, and a device's icon
+guessed from its name although both apps record what each device is. The
+rules they now follow, every finding with its measurement, and what is not
+checked yet — the send flow and conflicts screen by screen, the phone's
+setting up, larger font sizes, a real phone — are in
 [design/consistency.md](../design/consistency.md).
 
 ## Deliberately left undone
