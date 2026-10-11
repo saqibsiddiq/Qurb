@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No storage permission at all: everything goes through the folder the
+     person picks, which is the only way an app reaches another app's folder
+     under Android/media from Android 11 on. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:label="WhatsApp access spike"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        <activity
+            android:name=".Spike"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

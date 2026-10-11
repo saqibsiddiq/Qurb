@@ -851,8 +851,11 @@ qurb/
 │   ├── phone-serving/     Throwaway. A phone's serving of a large file, timed
 │   │                      on the phone outside the app: what found Cubic
 │   │                      holding transfers to 5 MB/s (decision 0051).
-│   └── service-capacity/  Throwaway. Load for the rendezvous service and the
-│                          relay: what a small server carries, measured.
+│   ├── service-capacity/  Throwaway. Load for the rendezvous service and the
+│   │                      relay: what a small server carries, measured.
+│   └── whatsapp-access/   Throwaway. A one-screen Android app: can an app be
+│                          given WhatsApp's folder, read it and write into
+│                          it (decision 0062).
 │
 └── website/               The website, in the apps' design: the window's
                            tokens and components, its icons (generated from

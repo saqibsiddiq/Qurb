@@ -2185,6 +2185,23 @@ its measurement, and what is still not checked -- a conflict whose other
 version is not on the phone, the desktop under text scaling -- are in
 [design/consistency.md](../design/consistency.md).
 
+## WhatsApp, kept by a computer: can it be done?
+
+**2026-10-11.** The owner asked whether qurb could back up WhatsApp, whose
+backups count against his Google account's free 15 GB. A one-screen spike
+([experiments/whatsapp-access](../../experiments/whatsapp-access/README.md))
+answered the access half on the emulator and, read only, on the S23: an app
+with no storage permission can be given WhatsApp's folder in one tap, keep
+the grant, read every file in it, and -- on the emulator -- write into it
+and make it where it does not exist yet. The S23's folder is 37,722 files,
+9.65 GB; listing it takes 54 s; WhatsApp now backs chats up as a weekly full
+backup of 498 MB and nightly increments of about 100 KB.
+
+**Not answered: whether WhatsApp restores from a backup put back.** It needs
+WhatsApp registered on the emulator with a number nobody uses on WhatsApp,
+and there is none yet. The design, with that stated, is proposed in
+[decision 0062](../decisions/0062-backing-up-whatsapp.md); nothing is built.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
