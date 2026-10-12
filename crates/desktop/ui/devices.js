@@ -123,6 +123,11 @@ async function openDevice(d) {
           ? `${size(d.kept)} kept here, sealed: you cannot open it`
           : "Nothing kept here yet"]]
       : []),
+    // A phone's WhatsApp, kept here in its Private Vault: out of sight, and
+    // brought back only through Qurb on a phone (decision 0062).
+    ...(d.whatsapp
+      ? [["WhatsApp", `${count(d.whatsapp.files, "file")}, ${size(d.whatsapp.bytes)}, kept here for it, out of sight`]]
+      : []),
   ]) facts.append(el("dt", null, term), el("dd", null, value));
   body.append(facts);
 

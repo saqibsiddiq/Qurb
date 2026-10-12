@@ -228,5 +228,12 @@ on. Tests: `whatsapp_is_backed_up_where_it_lies` (the FFI);
 `a_folder_kept_outside_is_in_no_list_a_person_is_shown` and
 `the_backup_is_counted` (storage).
 
-**Not yet:** the S23 backing up to the laptop for real; the desktop showing
-the backup (step 3); restoring (step 4).
+**Not yet:** the S23 backing up to the laptop for real; restoring (step 4).
+
+### Step 3, the desktop — built 2026-10-12
+
+The phone's panel in Devices says what the computer keeps of its WhatsApp:
+*WhatsApp — 37,722 files, 9.6 GB, kept here for it, out of sight* (in the
+fixtures). Nothing more: the files stay in the chunk store, never in a
+folder, as answer 1 asked (`Db::held_outside_for`, `view::Device::whatsapp`).
+The workspace's 845 tests pass.

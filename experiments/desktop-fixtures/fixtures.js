@@ -284,7 +284,9 @@ const ANSWERS = {
 
   devices: () => STATE === "alone" ? [] : [
     { id: "4cef0d89", name: "Galaxy S23", fingerprint: "a1b2c3d4", paired_at: now - 900000, last_seen: now - 300,
-      route: STATE === "away" ? null : "direct", address: "192.168.1.2:57199", kind: "phone" },
+      route: STATE === "away" ? null : "direct", address: "192.168.1.2:57199", kind: "phone",
+      // Its WhatsApp, kept here (decision 0062).
+      whatsapp: { files: 37722, bytes: "10361274163" } },
     { id: "77b10e2a", name: "Study desktop", fingerprint: "e5f60718", paired_at: now - 3600, last_seen: now - 7200,
       route: STATE === "synced" ? "relay" : null, address: null, relation: "own", kind: "computer" },
     // Another person, visiting this computer (decision 0060).

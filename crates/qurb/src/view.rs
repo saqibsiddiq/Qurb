@@ -57,6 +57,10 @@ pub struct Device {
     /// when pairing, or for one paired before that, at its first sync since.
     /// None until then.
     pub kind: Option<String>,
+    /// For a phone whose vault this device keeps: how many files of its
+    /// WhatsApp backup are kept here, and how many bytes (decision 0062).
+    /// None when there is none.
+    pub whatsapp: Option<(u64, u64)>,
 }
 
 /// Where a file's bytes are. Decided in the storage crate, so that the phone,
@@ -170,6 +174,12 @@ impl<'a> View<'a> {
                     relation: p.relation,
                     kept,
                     kind: self.store.db().peer_kind(&p.device_id).ok().flatten(),
+                    whatsapp: self
+                        .store
+                        .db()
+                        .held_outside_for(&p.device_id, &format!("{}/whatsapp", qurb_storage::db::OUTSIDE))
+                        .ok()
+                        .filter(|(files, _)| *files > 0),
                 }
             })
             .collect())

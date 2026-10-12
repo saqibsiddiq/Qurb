@@ -3617,6 +3617,19 @@ impl Db {
         self.set_local_fact("outside_offered", if offered { "1" } else { "0" })
     }
 
+    /// What this device keeps for `owner` of a folder that device keeps
+    /// outside its vault's own, beneath `prefix`: how many files, how many
+    /// bytes (decision 0062). On a computer, the WhatsApp backup of a phone.
+    pub fn held_outside_for(&self, owner: &DeviceId, prefix: &str) -> Result<(u64, u64)> {
+        let pattern = format!("{}/%", prefix.trim_end_matches('/'));
+        Ok(self.conn.query_row(
+            "SELECT count(*), coalesce(sum(size), 0) FROM files
+              WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL AND path LIKE ?2 ESCAPE '\\'",
+            params![owner.as_bytes().as_slice(), escape_like(&pattern)],
+            |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, i64>(1)? as u64)),
+        )?)
+    }
+
     /// The folders kept outside beneath `prefix`, counted: every file and its
     /// bytes, those a computer is known to hold, and those kept there only,
     /// gone from the outside folder (decision 0062).

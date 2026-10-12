@@ -132,6 +132,15 @@ pub struct Device {
     /// "phone", "computer" or "replica", once the device has said: what its
     /// icon is, rather than a guess from its name.
     kind: Option<String>,
+    /// A phone's WhatsApp backup kept here, in its vault: files and bytes
+    /// (decision 0062).
+    whatsapp: Option<WhatsAppKept>,
+}
+
+#[derive(Serialize)]
+pub struct WhatsAppKept {
+    files: u64,
+    bytes: String,
 }
 
 #[derive(Serialize)]
@@ -1502,6 +1511,7 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
                 relation: d.relation.as_str(),
                 kept: d.kept.map(big),
                 kind: d.kind,
+                whatsapp: d.whatsapp.map(|(files, bytes)| WhatsAppKept { files, bytes: big(bytes) }),
             }
         })
         .collect())
