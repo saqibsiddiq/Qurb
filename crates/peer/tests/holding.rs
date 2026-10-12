@@ -175,3 +175,83 @@ async fn a_file_moved_into_the_vault_is_kept_by_the_device_holding_it() {
         Some(&b"shared, then private"[..]),
     );
 }
+
+/// WhatsApp's folder kept in the phone's vault where it lies (decision
+/// 0062): the desktop holds every file with nothing copied on the phone; a
+/// photo WhatsApp deleted stays on the desktop; a chat backup WhatsApp
+/// replaced goes from it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
+    let mut phone = Device::new();
+    phone.engine.store_mut().set_new_files_private(true);
+    let mut desktop = Device::new();
+    introduce(&phone, &desktop);
+    phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+
+    let whatsapp = phone._dir.path().join("whatsapp");
+    let photo: Vec<u8> = (0..600_000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
+    let backup: Vec<u8> = (0..300_000u32).map(|i| (i.wrapping_mul(40_503) >> 7) as u8).collect();
+    let entry = |relative: &str, bytes: &[u8]| {
+        let path = whatsapp.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, bytes).unwrap();
+        qurb_storage::OutsideEntry {
+            path: relative.to_string(),
+            source: path.to_string_lossy().into_owned(),
+            size: bytes.len() as u64,
+            mtime_ns: 1,
+        }
+    };
+    let photo_entry = entry("Media/WhatsApp Images/IMG-1.jpg", &photo);
+    let backup_entry = entry("Databases/msgstore.db.crypt14", &backup);
+    let media = |path: &str| path.starts_with("Media/");
+    let report = phone
+        .engine
+        .store_mut()
+        .keep_outside_folder("WhatsApp backup", &[photo_entry, backup_entry.clone()], &media, None)
+        .unwrap();
+    assert_eq!(report.added, 2);
+
+    // The scan of the phone's own folder does not take them for deletions.
+    phone.engine.reconcile().unwrap();
+    assert_eq!(phone.engine.store().db().outside_under("WhatsApp backup").unwrap().len(), 2);
+
+    let held = desktop.sync_from(&phone).await;
+    assert_eq!(held.held, 2);
+    assert_eq!(phone.engine.store().usage().unwrap().chunks, 0, "the phone stored a copy");
+    let on_desktop = |desktop: &Device, bytes: &[u8]| {
+        desktop.engine.store().read_content(&blake3::hash(bytes)).unwrap()
+    };
+    assert_eq!(on_desktop(&desktop, &photo).unwrap(), photo);
+    assert_eq!(on_desktop(&desktop, &backup).unwrap(), backup);
+    assert!(!desktop.root.join("WhatsApp backup").exists(), "shown on the desktop");
+
+    // WhatsApp deletes the photo, and replaces the backup with a new one.
+    fs::remove_file(whatsapp.join("Media/WhatsApp Images/IMG-1.jpg")).unwrap();
+    fs::remove_file(whatsapp.join("Databases/msgstore.db.crypt14")).unwrap();
+    let newer: Vec<u8> = backup.iter().map(|b| b.wrapping_add(1)).collect();
+    let newer_entry = entry("Databases/msgstore-increment-1.db.crypt14", &newer);
+    let report = phone
+        .engine
+        .store_mut()
+        .keep_outside_folder("WhatsApp backup", &[newer_entry], &media, None)
+        .unwrap();
+    assert_eq!((report.kept, report.deleted, report.added), (1, 1, 1));
+
+    desktop.sync_from(&phone).await;
+    let phone_id = phone.id();
+    let kept = |path: &str| {
+        desktop
+            .engine
+            .store()
+            .db()
+            .live_row_in(&format!("WhatsApp backup/{path}"), Some(&phone_id))
+            .unwrap()
+            .is_some()
+    };
+    assert!(kept("Media/WhatsApp Images/IMG-1.jpg"), "the photo WhatsApp deleted went from the desktop");
+    assert_eq!(on_desktop(&desktop, &photo).unwrap(), photo);
+    assert!(!kept("Databases/msgstore.db.crypt14"), "the replaced backup is still kept");
+    assert!(kept("Databases/msgstore-increment-1.db.crypt14"));
+    assert_eq!(on_desktop(&desktop, &newer).unwrap(), newer);
+}

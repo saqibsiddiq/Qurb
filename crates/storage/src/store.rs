@@ -187,6 +187,46 @@ pub struct KeptFile {
     pub sealed: blake3::Hash,
 }
 
+/// One file of a folder outside qurb's, as just listed (decision 0062).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutsideEntry {
+    /// Its path within that folder.
+    pub path: String,
+    /// Where to read it: a path, or a document the platform lends.
+    pub source: String,
+    pub size: u64,
+    pub mtime_ns: i64,
+}
+
+/// What became of a file kept outside the folder once it went from there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutsideGone {
+    /// Still in the vault, kept by another device.
+    Kept,
+    /// Deleted from the vault.
+    Deleted,
+    /// It was not in the vault.
+    NotThere,
+}
+
+/// What [`Store::keep_outside_folder`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OutsideReport {
+    pub added: usize,
+    pub changed: usize,
+    pub unchanged: usize,
+    /// Gone from the folder, and kept in the vault by another device.
+    pub kept: usize,
+    /// Gone from the folder, and deleted from the vault.
+    pub deleted: usize,
+    /// New or changed, and left for the next run when time ran out.
+    pub remaining: usize,
+    /// Read this run, to describe new and changed files.
+    pub bytes_read: u64,
+    /// Files that could not be read, and why.
+    pub failed: Vec<(String, String)>,
+}
+
 /// A file this device has sent to a device before (decision 0059).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SentBefore {
@@ -331,12 +371,34 @@ impl Store {
         Ok(Some(buffer))
     }
 
+    /// A chunk of a file kept outside the folder, read where it lies and
+    /// checked (decision 0062). `None` when that file no longer holds those
+    /// bytes: it changed, and the next listing of its folder makes it a new
+    /// version.
+    fn chunk_from_outside(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
+        let Some((source, offset, len)) = self.db.locate_outside_chunk(hash)? else { return Ok(None) };
+        let Ok(mut file) = self.open_source(&source) else { return Ok(None) };
+        use std::io::{Read, Seek, SeekFrom};
+        if file.seek(SeekFrom::Start(offset)).is_err() {
+            return Ok(None);
+        }
+        let mut buffer = vec![0u8; len as usize];
+        if file.read_exact(&mut buffer).is_err() || blake3::hash(&buffer) != *hash {
+            return Ok(None);
+        }
+        Ok(Some(buffer))
+    }
+
     /// A chunk that is not in the chunk store, from wherever this device has
-    /// it on disk: a file in the folder, or a send's file.
+    /// it on disk: a file in the folder, a send's file, or a file kept
+    /// outside the folder.
     fn chunk_from_disk(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
-        match self.chunk_from_tree(hash)? {
+        if let Some(plaintext) = self.chunk_from_tree(hash)? {
+            return Ok(Some(plaintext));
+        }
+        match self.chunk_from_source(hash)? {
             Some(plaintext) => Ok(Some(plaintext)),
-            None => self.chunk_from_source(hash),
+            None => self.chunk_from_outside(hash),
         }
     }
 
@@ -1187,7 +1249,8 @@ impl Store {
         for chunk in &chunks {
             let held = self.cas.contains(chunk)
                 || (self.tree.is_some() && self.db.chunk_in_folder(chunk)?)
-                || self.db.chunk_in_send(chunk)?;
+                || self.db.chunk_in_send(chunk)?
+                || self.db.chunk_outside(chunk)?;
             if !held {
                 return Ok(None);
             }
@@ -1407,6 +1470,125 @@ impl Store {
             return Ok(());
         }
         self.tombstone(&version.path, Stamp::Remote(version), Some(*owner))
+    }
+
+    /// Keep a file that lives outside the folder in this device's own vault,
+    /// read where it lies (decision 0062): on a phone, a file of WhatsApp's
+    /// folder. It is read once here, to describe it; its chunks are recorded,
+    /// none is stored, and they are read from `source` again whenever a device
+    /// keeping this vault asks for them.
+    ///
+    /// `size` and `mtime_ns` are the file's as its folder was listed, kept to
+    /// tell whether it has changed when it is next listed. A file already kept
+    /// with the same content is only re-pointed at `source`.
+    pub fn keep_outside(
+        &mut self,
+        logical_path: &str,
+        source: &str,
+        size: u64,
+        mtime_ns: i64,
+    ) -> Result<PutStats> {
+        let at = Path::new(source);
+        let file = self.open_source(source).map_err(|e| Error::io(at, e))?;
+        let manifest = chunker::chunk_reader(std::io::BufReader::with_capacity(1 << 20, file))
+            .map_err(|e| Error::io(at, e))?;
+        let me = self.db.local_device()?;
+        let stats = self.put_manifest(
+            logical_path,
+            &manifest,
+            &[],
+            mtime_ns,
+            Placement::local().in_vault(Some(&me)).by_reference(),
+        )?;
+        let row = self
+            .db
+            .live_row_in(logical_path, Some(&me))?
+            .ok_or_else(|| Error::NotFound { path: logical_path.to_string() })?;
+        self.db.note_outside_source(row.id, source, size, mtime_ns)?;
+        Ok(stats)
+    }
+
+    /// A file kept outside the folder has gone from there (decision 0062).
+    ///
+    /// With `keep`, and another device known to hold it, it stays in the vault
+    /// as a file freed here does: listed, and kept by that device. Otherwise it
+    /// is deleted, and a device keeping this vault drops it in turn.
+    pub fn outside_gone(&mut self, logical_path: &str, keep: bool) -> Result<OutsideGone> {
+        let me = self.db.local_device()?;
+        let Some(row) = self.db.live_row_in(logical_path, Some(&me))? else {
+            return Ok(OutsideGone::NotThere);
+        };
+        self.db.forget_outside_source(row.id)?;
+        if keep && self.db.safe_copies_elsewhere(&row.content_hash)? > 0 {
+            return Ok(OutsideGone::Kept);
+        }
+        self.tombstone(logical_path, Stamp::Local, Some(me))?;
+        self.release_unbacked(row.id)?;
+        Ok(OutsideGone::Deleted)
+    }
+
+    /// Bring the files kept under `prefix` in this device's vault into line
+    /// with a folder outside it, as just listed (decision 0062). Each entry's
+    /// path is relative to the folder, and goes under `prefix`.
+    ///
+    /// Gone files first, which are cheap: those `keep_when_gone` names stay
+    /// in the vault if another device holds them, the rest are deleted. Then
+    /// new and changed ones, each read once, until `until` -- a run that stops
+    /// part-way says how many it left, and the next carries on, since a file
+    /// already kept and unchanged by size and time is not read again.
+    pub fn keep_outside_folder(
+        &mut self,
+        prefix: &str,
+        listing: &[OutsideEntry],
+        keep_when_gone: &dyn Fn(&str) -> bool,
+        until: Option<std::time::Instant>,
+    ) -> Result<OutsideReport> {
+        let prefix = prefix.trim_end_matches('/');
+        let mut report = OutsideReport::default();
+        let kept = self.db.outside_under(prefix)?;
+        let listed: HashSet<String> =
+            listing.iter().map(|e| format!("{prefix}/{}", e.path)).collect();
+
+        for row in &kept {
+            if row.source.is_none() || listed.contains(&row.path) {
+                continue;
+            }
+            let relative = &row.path[prefix.len() + 1..];
+            match self.outside_gone(&row.path, keep_when_gone(relative))? {
+                OutsideGone::Kept => report.kept += 1,
+                OutsideGone::Deleted => report.deleted += 1,
+                OutsideGone::NotThere => {}
+            }
+        }
+
+        let known: std::collections::HashMap<&str, &db::OutsideRow> =
+            kept.iter().map(|row| (row.path.as_str(), row)).collect();
+        for entry in listing {
+            let path = format!("{prefix}/{}", entry.path);
+            let before = known.get(path.as_str());
+            if before
+                .and_then(|row| row.source.as_ref())
+                .is_some_and(|s| s.size == entry.size && s.mtime_ns == entry.mtime_ns)
+            {
+                report.unchanged += 1;
+                continue;
+            }
+            if until.is_some_and(|deadline| std::time::Instant::now() >= deadline) {
+                report.remaining += 1;
+                continue;
+            }
+            match self.keep_outside(&path, &entry.source, entry.size, entry.mtime_ns) {
+                Ok(_) => {
+                    report.bytes_read += entry.size;
+                    match before {
+                        Some(_) => report.changed += 1,
+                        None => report.added += 1,
+                    }
+                }
+                Err(e) => report.failed.push((entry.path.clone(), e.to_string())),
+            }
+        }
+        Ok(report)
     }
 
     /// Take back a send the other device has not collected yet.

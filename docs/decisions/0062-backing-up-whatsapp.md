@@ -1,6 +1,8 @@
 # 0062 — Backing up WhatsApp to a computer, not to the Google account
 
-**Status:** Proposed, 2026-10-11. Measured with
+**Status:** Accepted, 2026-10-12, with the owner's answers at the end, which
+moved where the backup is kept from an ordinary folder to the phone's Private
+Vault. Measured with
 [experiments/whatsapp-access](../../experiments/whatsapp-access/README.md) on
 the emulator and the owner's S23. **Restoring is unproven**, and is said so
 everywhere this touches.
@@ -125,3 +127,67 @@ documents are ordinary files, and come back whatever the answer.
    from it, with a spare number.
 
 A few days for 1 to 3: a guess, to be corrected in the phase document.
+
+## The owner's answers, 2026-10-12
+
+1. **Hidden in the phone's Private Vault on the laptop**, not an ordinary
+   folder: kept out of sight, and brought back only through qurb.
+2. **Media deleted on the phone is kept on the laptop.**
+3. **Chats and media.**
+4. **WhatsApp's Google backup stays on** until a restore from qurb's copy has
+   been watched working.
+
+## The design, as answered
+
+Answer 1 replaces points 5 and 6 above, and undoes the first reason under
+*Why not something else*, whose objection answer 2 settles.
+
+- **The phone's vault, read where it lies.** Each file of WhatsApp's folder
+  is a file in the phone's own vault, under `WhatsApp backup/` followed by
+  its path in WhatsApp's folder. Its chunks are recorded and none stored:
+  its bytes stay in WhatsApp's folder and are read from there, through the
+  grant, whenever they are asked for and checked against its hashes -- as a
+  send's are (0060), but for as long as the file is there, not until it is
+  collected. Recorded in a table of their own, `outside_sources`.
+- **The laptop keeps it as it keeps the vault**: in its chunk store, never
+  in a folder, never shown, dropped only when the phone deletes the file.
+  Nothing new on the laptop's side.
+- **A file changed in WhatsApp's folder is a new version** of its vault
+  file, found by size and time when the folder is next listed.
+- **A file gone from WhatsApp's folder**: under `Media`, it is *freed* on
+  the phone -- as *Free local space* frees a file -- once the laptop is known
+  to hold it, and so stays in the vault and on the laptop (answer 2); a
+  medium the laptop never got is simply gone. Under `Databases` and
+  `Backups`, it is deleted, so that the laptop keeps one consistent set of
+  chat backups.
+- **Never listed, never a deletion by the folder scan.** The phone's Files
+  and Private Vault do not show `WhatsApp backup/`; Settings shows the backup
+  -- when it last ran, how much, on which computer. The scan of qurb's own
+  folder leaves these rows alone, as it leaves a freed file.
+- **A run may stop part-way.** Indexing reads each new file once, to chunk
+  it: about 9.65 GB the first time on the S23. A run stops at its time
+  budget and the next carries on.
+- **Restoring** is as point 7 says, and needs one more thing nothing has
+  yet: a new phone reaching the vault of the phone it replaces, which the
+  laptop keeps under that old phone's identity.
+
+## Progress
+
+### Step 1, the engine — built 2026-10-12
+
+`outside_sources` (schema 22) records where each file is read from;
+`Store::keep_outside` reads a file once to chunk it, into this device's own
+vault, storing nothing; `Store::outside_gone` deletes it, or keeps it as a
+freed file when the caller says so and a computer holds it; and
+`Store::keep_outside_folder` does both for a whole listing, up to a deadline.
+Chunks are served from the file through `chunk_from_disk`, which `read_chunk`,
+`held_chunks` and `verify` already ask. Nothing changed on the device keeping
+the vault: it collects these rows as it collects any.
+
+Tests: nine in `storage/tests/outside.rs` -- kept with no copy and offered to
+the holder; not taken for a deletion by the folder scan; new, changed and
+unchanged; a photo gone and kept, gone and never held, a chat backup gone;
+a run stopped at its deadline; a file changed behind the listing not served
+as the old one; a file that comes back -- and, over a real connection,
+`a_folder_kept_where_it_lies_is_held_by_the_desktop` in
+`peer/tests/holding.rs`.

@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -609,6 +609,22 @@ CREATE TABLE IF NOT EXISTS kept_opened (
 ) STRICT;
 "#;
 
+const V22: &str = r#"
+-- Files of this device's own vault that live outside its folder, and are read
+-- where they lie (decision 0062): on a phone, WhatsApp's folder, through the
+-- grant the person gave. The chunks are recorded and none is stored. They are
+-- read from `source` whenever asked for, and checked against their hashes, for
+-- as long as the file is there -- unlike a send's, which is let go of once
+-- collected. `size` and `mtime_ns` are as the folder was last listed, which is
+-- how a change is noticed.
+CREATE TABLE IF NOT EXISTS outside_sources (
+    file_id  INTEGER PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+    source   TEXT NOT NULL,
+    size     INTEGER NOT NULL,
+    mtime_ns INTEGER NOT NULL
+) STRICT;
+"#;
+
 /// A copy this device could ask for: on a device it is paired with, and not
 /// known to be out of reach (decision 0055). For a query over `replicas r`.
 ///
@@ -952,6 +968,97 @@ impl Db {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// Where a chunk of a file kept outside the folder can be read from: the
+    /// file, the chunk's offset in it, and its length (decision 0062).
+    pub fn locate_outside_chunk(&self, hash: &blake3::Hash) -> Result<Option<(String, u64, u64)>> {
+        let found = self.conn.query_row(
+            "WITH holder AS (
+                 SELECT fc.file_id AS id
+                   FROM file_chunks fc
+                   JOIN files f ON f.id = fc.file_id
+                   JOIN outside_sources o ON o.file_id = f.id
+                  WHERE fc.chunk_hash = ?1 AND f.deleted_at IS NULL
+                  LIMIT 1
+             ),
+             laid_out AS (
+                 SELECT fc.chunk_hash,
+                        c.size,
+                        COALESCE(
+                            SUM(c.size) OVER (ORDER BY fc.seq
+                                              ROWS BETWEEN UNBOUNDED PRECEDING
+                                                       AND 1 PRECEDING),
+                            0) AS offset
+                   FROM file_chunks fc
+                   JOIN chunks c ON c.hash = fc.chunk_hash
+                  WHERE fc.file_id = (SELECT id FROM holder)
+             )
+             SELECT (SELECT source FROM outside_sources WHERE file_id = (SELECT id FROM holder)),
+                    l.offset,
+                    l.size
+               FROM laid_out l
+              WHERE l.chunk_hash = ?1
+              LIMIT 1",
+            params![hash.as_bytes().as_slice()],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64)),
+        );
+        match found {
+            Ok(located) => Ok(Some(located)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Remember where a file kept outside the folder is read from, as it was
+    /// last listed (decision 0062).
+    pub fn note_outside_source(&self, file_id: i64, source: &str, size: u64, mtime_ns: i64) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO outside_sources (file_id, source, size, mtime_ns)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (file_id) DO UPDATE SET
+                 source = excluded.source, size = excluded.size, mtime_ns = excluded.mtime_ns",
+            params![file_id, source, size as i64, mtime_ns],
+        )?;
+        Ok(())
+    }
+
+    /// Stop reading a file kept outside the folder: it has gone from there.
+    pub fn forget_outside_source(&self, file_id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM outside_sources WHERE file_id = ?1", params![file_id])?;
+        Ok(())
+    }
+
+    /// The live files of this device's own vault beneath `prefix`, with where
+    /// each is read from while it is still there to read (decision 0062).
+    pub fn outside_under(&self, prefix: &str) -> Result<Vec<OutsideRow>> {
+        let me = self.local_device()?;
+        let pattern = format!("{}/%", prefix.trim_end_matches('/'));
+        let mut stmt = self.conn.prepare(
+            "SELECT f.id, f.path, f.size, f.content_hash, o.source, o.size, o.mtime_ns
+               FROM files f
+               LEFT JOIN outside_sources o ON o.file_id = f.id
+              WHERE f.scope = ?1 AND f.deleted_at IS NULL AND f.path LIKE ?2 ESCAPE '\\'
+              ORDER BY f.path",
+        )?;
+        let rows = stmt.query_map(params![me.as_bytes().as_slice(), escape_like(&pattern)], |r| {
+            let hash: Vec<u8> = r.get(3)?;
+            Ok(OutsideRow {
+                file_id: r.get(0)?,
+                path: r.get(1)?,
+                size: r.get::<_, i64>(2)? as u64,
+                content: to_hash(&hash),
+                source: match r.get::<_, Option<String>>(4)? {
+                    Some(source) => Some(OutsideSource {
+                        source,
+                        size: r.get::<_, i64>(5)? as u64,
+                        mtime_ns: r.get(6)?,
+                    }),
+                    None => None,
+                },
+            })
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
     /// Remember where a send's bytes are to be read from (decision 0060).
@@ -3539,6 +3646,22 @@ impl Db {
         Ok(held)
     }
 
+    /// Whether a chunk is part of a live file kept outside the folder, read
+    /// where it lies (decision 0062).
+    pub fn chunk_outside(&self, hash: &blake3::Hash) -> Result<bool> {
+        let held: bool = self.conn.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM file_chunks fc
+                   JOIN files f ON f.id = fc.file_id
+                   JOIN outside_sources o ON o.file_id = f.id
+                  WHERE fc.chunk_hash = ?1 AND f.deleted_at IS NULL
+             )",
+            params![hash.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(held)
+    }
+
     /// Live paths whose content includes this chunk.
     ///
     /// The question repair asks: a chunk has been found damaged, so which files
@@ -3822,6 +3945,27 @@ pub struct SendSource {
     pub temporary: bool,
     /// Collected, or taken back: nothing more is read from it.
     pub done: bool,
+}
+
+/// A file of this device's own vault kept outside its folder (decision 0062).
+/// See [`Db::outside_under`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutsideRow {
+    pub file_id: i64,
+    pub path: String,
+    pub size: u64,
+    pub content: blake3::Hash,
+    /// Where it is read from, while it is still there: `None` once it has
+    /// gone from there and is kept by another device only.
+    pub source: Option<OutsideSource>,
+}
+
+/// Where a file kept outside the folder is read from, as it was last listed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutsideSource {
+    pub source: String,
+    pub size: u64,
+    pub mtime_ns: i64,
 }
 
 /// A file in the trash: recently deleted, and still restorable here.
