@@ -187,6 +187,8 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
     let mut desktop = Device::new();
     introduce(&phone, &desktop);
     phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+    // On Wi-Fi, as the app tells the engine: offered (decision 0062).
+    phone.engine.store().db().set_outside_offered(true).unwrap();
 
     let whatsapp = phone._dir.path().join("whatsapp");
     let photo: Vec<u8> = (0..600_000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
@@ -208,13 +210,13 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
     let report = phone
         .engine
         .store_mut()
-        .keep_outside_folder("WhatsApp backup", &[photo_entry, backup_entry.clone()], &media, None)
+        .keep_outside_folder(".qurb-outside/whatsapp", &[photo_entry, backup_entry.clone()], &media, None)
         .unwrap();
     assert_eq!(report.added, 2);
 
     // The scan of the phone's own folder does not take them for deletions.
     phone.engine.reconcile().unwrap();
-    assert_eq!(phone.engine.store().db().outside_under("WhatsApp backup").unwrap().len(), 2);
+    assert_eq!(phone.engine.store().db().outside_under(".qurb-outside/whatsapp").unwrap().len(), 2);
 
     let held = desktop.sync_from(&phone).await;
     assert_eq!(held.held, 2);
@@ -224,7 +226,7 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
     };
     assert_eq!(on_desktop(&desktop, &photo).unwrap(), photo);
     assert_eq!(on_desktop(&desktop, &backup).unwrap(), backup);
-    assert!(!desktop.root.join("WhatsApp backup").exists(), "shown on the desktop");
+    assert!(!desktop.root.join(".qurb-outside/whatsapp").exists(), "shown on the desktop");
 
     // WhatsApp deletes the photo, and replaces the backup with a new one.
     fs::remove_file(whatsapp.join("Media/WhatsApp Images/IMG-1.jpg")).unwrap();
@@ -234,7 +236,7 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
     let report = phone
         .engine
         .store_mut()
-        .keep_outside_folder("WhatsApp backup", &[newer_entry], &media, None)
+        .keep_outside_folder(".qurb-outside/whatsapp", &[newer_entry], &media, None)
         .unwrap();
     assert_eq!((report.kept, report.deleted, report.added), (1, 1, 1));
 
@@ -245,7 +247,7 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
             .engine
             .store()
             .db()
-            .live_row_in(&format!("WhatsApp backup/{path}"), Some(&phone_id))
+            .live_row_in(&format!(".qurb-outside/whatsapp/{path}"), Some(&phone_id))
             .unwrap()
             .is_some()
     };
