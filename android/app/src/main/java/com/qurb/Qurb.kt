@@ -300,6 +300,7 @@ object Engine {
      * refuses, still syncs over the rendezvous service.
      */
     suspend fun <T> hearingTheNetwork(context: Context, work: suspend () -> T): T {
+        noteNetwork(context)
         val wifi = context.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
         val lock = runCatching {
@@ -314,6 +315,18 @@ object Engine {
         } finally {
             runCatching { lock?.release() }
         }
+    }
+
+    /**
+     * Tell the engine whether this phone is on a network that does not count
+     * what it carries, before it syncs: only then is the WhatsApp backup
+     * offered to the computer keeping it (decision 0062). Android's own idea
+     * of metered, which is Wi-Fi unless the person marked it otherwise.
+     */
+    fun noteNetwork(context: Context) {
+        val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val unmetered = connectivity != null && !connectivity.isActiveNetworkMetered
+        runCatching { handle?.setUnmetered(unmetered) }
     }
 
     /**

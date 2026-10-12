@@ -644,11 +644,20 @@ const ASKABLE: &str = "r.private = 0 AND EXISTS (SELECT 1 FROM peers p WHERE p.d
 const SAFE_ELSEWHERE: &str = "NOT EXISTS (SELECT 1 FROM peer_kinds k
                                   WHERE k.device_id = r.device_id AND k.kind = 'phone')";
 
-/// Excludes the sharing rules themselves from anything a person is shown or a
-/// storage cap may drop. For a query over `files` with no alias.
-const NOT_RULES: &str = "substr(path, 1, 14) <> '.qurb-sharing/'";
+/// Excludes qurb's own bookkeeping from anything a person is shown or a
+/// storage cap may drop: the sharing rules themselves, and the folders kept
+/// outside the vault's own (decision 0062) -- WhatsApp's files are not the
+/// person's files in qurb, and are shown as a backup instead. For a query
+/// over `files` with no alias. Both prefixes are 14 characters.
+const NOT_RULES: &str =
+    "substr(path, 1, 14) <> '.qurb-sharing/' AND substr(path, 1, 14) <> '.qurb-outside/'";
 /// The same, for a query that calls `files` `f`.
-const NOT_RULES_F: &str = "substr(f.path, 1, 14) <> '.qurb-sharing/'";
+const NOT_RULES_F: &str =
+    "substr(f.path, 1, 14) <> '.qurb-sharing/' AND substr(f.path, 1, 14) <> '.qurb-outside/'";
+
+/// Where folders kept outside the vault's own go in it (decision 0062), each
+/// under a name of its own beneath this.
+pub const OUTSIDE: &str = ".qurb-outside";
 
 /// A shared-area row's `path` lies outside every folder shared without the
 /// device in SQL parameter `device` -- the per-device half of what it may see
@@ -1652,17 +1661,18 @@ impl Db {
     /// Newest first, because that is the order someone recognises: the thing
     /// they just shared is the thing they are asking about.
     pub fn undelivered(&self) -> Result<Vec<(String, u64)>> {
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT f.path, f.size
                FROM files f
               WHERE f.deleted_at IS NULL
                 AND (f.scope IS NULL OR f.scope = (SELECT device_id FROM local WHERE id = 1))
                 AND f.modified_by = (SELECT device_id FROM local WHERE id = 1)
+                AND {NOT_RULES_F}
                 AND NOT EXISTS (
                       SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash
                     )
-              ORDER BY f.updated_at DESC, f.path",
-        )?;
+              ORDER BY f.updated_at DESC, f.path"
+        ))?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64)))?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
@@ -1910,10 +1920,19 @@ impl Db {
                 // And this device's own vault, for a device allowed to hold it
                 // (decision 0036). Tombstones included: deleting is the one
                 // instruction a holder acts on.
+                //
+                // Less the folders kept outside it while they are not offered
+                // (decision 0062): not on mobile data. A holder does nothing
+                // about a file missing from this list, so leaving them out
+                // costs nothing but the wait.
                 if self.is_holder(asker)? {
                     let me = self.local_device()?;
+                    let outside = match self.outside_offered()? {
+                        true => "",
+                        false => "AND substr(path, 1, 14) <> '.qurb-outside/'",
+                    };
                     let mut mine = self.conn.prepare(&format!(
-                        "SELECT {FILE_COLUMNS} FROM files WHERE scope = ?1 ORDER BY path"
+                        "SELECT {FILE_COLUMNS} FROM files WHERE scope = ?1 {outside} ORDER BY path"
                     ))?;
                     for row in mine.query_map(params![me.as_bytes().as_slice()], file_row)? {
                         out.push(row_to_version(&row?).in_area(qurb_sync::Area::Hold));
@@ -3586,6 +3605,53 @@ impl Db {
         self.set_local_fact("holders_defaulted", "1")
     }
 
+    /// Whether the folders kept outside the vault's own are offered to the
+    /// devices keeping this vault now (decision 0062). Only on a network that
+    /// does not count what it carries: WhatsApp's folder was 9.65 GB on the
+    /// S23, and must not go over mobile data. Off until the app says so.
+    pub fn outside_offered(&self) -> Result<bool> {
+        Ok(self.local_fact("outside_offered")?.as_deref() == Some("1"))
+    }
+
+    pub fn set_outside_offered(&self, offered: bool) -> Result<()> {
+        self.set_local_fact("outside_offered", if offered { "1" } else { "0" })
+    }
+
+    /// The folders kept outside beneath `prefix`, counted: every file and its
+    /// bytes, those a computer is known to hold, and those kept there only,
+    /// gone from the outside folder (decision 0062).
+    pub fn outside_summary(&self, prefix: &str) -> Result<OutsideSummary> {
+        let me = self.local_device()?;
+        let pattern = format!("{}/%", prefix.trim_end_matches('/'));
+        Ok(self.conn.query_row(
+            &format!(
+                "WITH rows AS (
+                     SELECT f.size,
+                            EXISTS (SELECT 1 FROM replicas r
+                                     WHERE r.content_hash = f.content_hash AND r.private = 0
+                                       AND {SAFE_ELSEWHERE}) AS held,
+                            NOT EXISTS (SELECT 1 FROM outside_sources o WHERE o.file_id = f.id) AS only_kept
+                       FROM files f
+                      WHERE f.scope = ?1 AND f.deleted_at IS NULL AND f.path LIKE ?2 ESCAPE '\\'
+                 )
+                 SELECT count(*), coalesce(sum(size), 0),
+                        coalesce(sum(held), 0), coalesce(sum(CASE WHEN held THEN size ELSE 0 END), 0),
+                        coalesce(sum(only_kept), 0)
+                   FROM rows"
+            ),
+            params![me.as_bytes().as_slice(), escape_like(&pattern)],
+            |r| {
+                Ok(OutsideSummary {
+                    files: r.get::<_, i64>(0)? as u64,
+                    bytes: r.get::<_, i64>(1)? as u64,
+                    held_files: r.get::<_, i64>(2)? as u64,
+                    held_bytes: r.get::<_, i64>(3)? as u64,
+                    only_kept: r.get::<_, i64>(4)? as u64,
+                })
+            },
+        )?)
+    }
+
     pub fn mark_peer_seen(&self, fingerprint: &[u8; 32]) -> Result<()> {
         self.conn.execute(
             "UPDATE peers SET last_seen = unixepoch() WHERE fingerprint = ?1",
@@ -3958,6 +4024,18 @@ pub struct OutsideRow {
     /// Where it is read from, while it is still there: `None` once it has
     /// gone from there and is kept by another device only.
     pub source: Option<OutsideSource>,
+}
+
+/// Counted by [`Db::outside_summary`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OutsideSummary {
+    pub files: u64,
+    pub bytes: u64,
+    /// Known to be held by a device this one may count on: a computer.
+    pub held_files: u64,
+    pub held_bytes: u64,
+    /// Gone from the outside folder, and kept by that computer only.
+    pub only_kept: u64,
 }
 
 /// Where a file kept outside the folder is read from, as it was last listed.

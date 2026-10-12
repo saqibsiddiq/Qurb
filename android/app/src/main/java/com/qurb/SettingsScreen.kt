@@ -8,6 +8,7 @@ import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import uniffi.qurb_mobile.BackupState
 import uniffi.qurb_mobile.DeletedFile
 import uniffi.qurb_mobile.PeerInfo
 import uniffi.qurb_mobile.ShareTarget
@@ -40,6 +41,9 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         val deleted: List<DeletedFile>,
         val peers: List<PeerInfo>,
         val sentCopies: ULong,
+        val whatsApp: BackupState,
+        /** Who keeps this phone's Private Vault, and so the WhatsApp backup. */
+        val keepers: List<PeerInfo>,
     )
 
     override fun refresh() {
@@ -50,7 +54,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                     // thread like everything else.
                     val engine = engine()
                     State(engine.usage(), SyncWorker.state(app), engine.recentlyDeleted(), engine.peers(),
-                        engine.sentCopies())
+                        engine.sentCopies(), engine.whatsappBackup(), engine.holders())
                 }
                 show(state)
             } catch (e: Exception) {
@@ -99,6 +103,16 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         if (state.sentCopies > 0uL) {
             kit.item(group, "Copies of files you sent",
                 "${Words.size(state.sentCopies)}, kept here after they arrived") { letGoOfSentCopies(state.sentCopies) }
+        }
+
+        // Decision 0062: WhatsApp kept by the computer that keeps this phone's
+        // vault, instead of in the person's Google account.
+        kit.groupTitle(page, "WhatsApp")
+        group = kit.group(page)
+        val keeper = state.keepers.joinToString(" and ") { it.name }.ifEmpty { null }
+        val backing = WhatsApp.tree(app) != null
+        kit.item(group, "Back up WhatsApp", whatsAppLine(state.whatsApp, keeper, backing)) {
+            whatsApp(state.whatsApp, keeper, backing)
         }
 
         kit.groupTitle(page, "Privacy")
@@ -336,6 +350,76 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                 refresh()
             }
         }
+    }
+
+    private fun whatsAppLine(backup: BackupState, keeper: String?, backing: Boolean): String = when {
+        !backing -> "Off. Keeps WhatsApp's chats and media on ${keeper ?: "your computer"} " +
+            "instead of in your Google account"
+        backup.files == 0uL -> "Starting: it runs on Wi-Fi"
+        backup.heldFiles == backup.files ->
+            "All ${Words.files(backup.files.toInt())}, ${Words.size(backup.bytes)}, on $keeper"
+        else -> "${backup.heldFiles} of ${Words.files(backup.files.toInt())} on ${keeper ?: "your computer"} so far"
+    }
+
+    /** Setting the backup up, or what it is doing (decision 0062). */
+    private fun whatsApp(backup: BackupState, keeper: String?, backing: Boolean) {
+        if (!backing) {
+            val sheet = kit.sheet().header(R.drawable.ic_hard_drive, "Back up WhatsApp",
+                keeper?.let { "To $it" } ?: "")
+            if (keeper == null) {
+                sheet.text("No computer keeps this phone's Private Vault yet. Choose one in Devices: " +
+                    "the backup goes to it.")
+                    .buttons("Devices") { app.go(R.id.tab_devices) }
+                    .show()
+                return
+            }
+            sheet.text("WhatsApp's chats, photos, videos and documents, kept on $keeper in this phone's " +
+                "Private Vault: out of sight there, and nothing copied on this phone. Photos and videos " +
+                "you delete in WhatsApp stay on $keeper.", R.style.Text_Body)
+                .text("Over Wi-Fi only. The first time is everything WhatsApp keeps; after that, " +
+                    "what changed each night.")
+                // Decision 0062, answer 4: said where it is set up, and again
+                // below, until a restore has been watched working.
+                .text("Restoring WhatsApp from it hasn't been tried yet, so keep WhatsApp's own Google " +
+                    "backup on for now. Turning off Include videos there saves the most space.")
+                .text("Next, Android asks which folder: choose Use this folder, then Allow.")
+                .buttons("Choose WhatsApp's folder", secondary = "Not now") { app.pickWhatsApp() }
+                .show()
+            return
+        }
+
+        val sheet = kit.sheet().header(R.drawable.ic_hard_drive, "WhatsApp backup",
+            keeper?.let { "On $it" } ?: "No computer keeps it yet")
+        val facts = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        val group = kit.group(facts)
+        kit.item(group, "On ${keeper ?: "a computer"}",
+            if (backup.files == 0uL) "Nothing yet"
+            else "${backup.heldFiles} of ${Words.files(backup.files.toInt())}, " +
+                "${Words.size(backup.heldBytes)} of ${Words.size(backup.bytes)}")
+        if (backup.onlyKept > 0uL) {
+            kit.item(group, "Deleted in WhatsApp", "${Words.files(backup.onlyKept.toInt())}, kept on $keeper")
+        }
+        kit.item(group, "Last run", WhatsApp.lastRun(app)?.let { (at, said) -> "${Words.ago(at)}: $said" }
+            ?: "Not yet. It runs on Wi-Fi.")
+        sheet.view(facts, top = 16)
+            .text("Restoring WhatsApp from it hasn't been tried yet: keep WhatsApp's own Google backup on " +
+                "for now.")
+            .action(R.drawable.ic_refresh_cw, "Back up now", meta = "On Wi-Fi") {
+                WhatsApp.runNow(app)
+                app.say("Backing up WhatsApp on Wi-Fi")
+            }
+            .action(R.drawable.ic_x, "Stop backing up…", danger = true) { stopWhatsApp(keeper) }
+            .show()
+    }
+
+    private fun stopWhatsApp(keeper: String?) {
+        kit.sheet().header(R.drawable.ic_hard_drive, "Stop backing up WhatsApp?")
+            .text("Nothing new goes to ${keeper ?: "the computer"}. What it keeps already stays there.")
+            .buttons("Stop", danger = true) {
+                WhatsApp.stop(app)
+                refresh()
+            }
+            .show()
     }
 
     private fun tidy() {

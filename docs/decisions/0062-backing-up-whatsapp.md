@@ -143,8 +143,9 @@ Answer 1 replaces points 5 and 6 above, and undoes the first reason under
 *Why not something else*, whose objection answer 2 settles.
 
 - **The phone's vault, read where it lies.** Each file of WhatsApp's folder
-  is a file in the phone's own vault, under `WhatsApp backup/` followed by
-  its path in WhatsApp's folder. Its chunks are recorded and none stored:
+  is a file in the phone's own vault, under `.qurb-outside/whatsapp/`
+  followed by its path in WhatsApp's folder -- a name the person's own files
+  cannot have, kept out of every list as the sharing rules are. Its chunks are recorded and none stored:
   its bytes stay in WhatsApp's folder and are read from there, through the
   grant, whenever they are asked for and checked against its hashes -- as a
   send's are (0060), but for as long as the file is there, not until it is
@@ -161,7 +162,7 @@ Answer 1 replaces points 5 and 6 above, and undoes the first reason under
   `Backups`, it is deleted, so that the laptop keeps one consistent set of
   chat backups.
 - **Never listed, never a deletion by the folder scan.** The phone's Files
-  and Private Vault do not show `WhatsApp backup/`; Settings shows the backup
+  and Private Vault do not show it; Settings shows the backup
   -- when it last ran, how much, on which computer. The scan of qurb's own
   folder leaves these rows alone, as it leaves a freed file.
 - **A run may stop part-way.** Indexing reads each new file once, to chunk
@@ -191,3 +192,41 @@ a run stopped at its deadline; a file changed behind the listing not served
 as the old one; a file that comes back -- and, over a real connection,
 `a_folder_kept_where_it_lies_is_held_by_the_desktop` in
 `peer/tests/holding.rs`.
+
+### Step 2, the phone — built 2026-10-12
+
+- **The engine's side.** `back_up_whatsapp(files, seconds)` takes the app's
+  listing, leaves out WhatsApp's caches (any path with a part starting with
+  a dot), keeps media gone from WhatsApp and deletes chat backups gone from
+  it, and runs in slices of three seconds so that the app is never kept
+  waiting on the engine. `whatsapp_backup()` counts it for Settings.
+- **Not on mobile data.** The backup is offered to the computer keeping the
+  vault only while the app says the phone is on a network that does not
+  count what it carries (`set_unmetered`, before every sync, from Android's
+  own idea of metered). Until then the computer is not shown it, which costs
+  nothing: a holder does nothing about a file missing from a list. Counted
+  then in what keeps the phone serving, so a large first backup runs in the
+  foreground (decision 0050) on Wi-Fi.
+- **Out of every list.** `.qurb-outside/` is excluded wherever the sharing
+  rules are: Files, Private Vault, search, the total of files, what *Clear
+  data* would lose, and Home's files waiting to reach a device.
+- **The app.** Settings → WhatsApp → *Back up WhatsApp*: what it does, that
+  restoring is untried and the Google backup should stay on, then Android's
+  picker at WhatsApp's folder. Only that folder is accepted, read only. Each
+  night, charging and on Wi-Fi, a worker lists it -- skipping its caches --
+  and hands the listing over, then syncs; *Back up now* does the same at
+  once. *Stop backing up* gives the grant back; what the computer keeps
+  stays.
+
+Checked on the emulator, against a stand-in folder of 305 files (38 MB): set
+up through Settings and the picker, the first run listed 304 files in 0.4 s
+-- the `.Statuses` cache left out -- and read 38 MB through WhatsApp's
+documents; a second, after a photo was added and a chat increment removed,
+added one, deleted one, and left 303 unchanged. Settings said *0 of 304
+files on test-laptop so far*, test-laptop being a device that is never
+on. Tests: `whatsapp_is_backed_up_where_it_lies` (the FFI);
+`a_folder_kept_outside_is_in_no_list_a_person_is_shown` and
+`the_backup_is_counted` (storage).
+
+**Not yet:** the S23 backing up to the laptop for real; the desktop showing
+the backup (step 3); restoring (step 4).

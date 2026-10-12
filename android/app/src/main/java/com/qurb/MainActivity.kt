@@ -117,6 +117,21 @@ class MainActivity : AppCompatActivity() {
         result.data?.getStringExtra(ScanActivity.EXTRA_CODE)?.let { joinWith(it) }
     }
 
+    /** WhatsApp's folder, picked once for its backup (decision 0062). */
+    private val whatsAppPicker = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val picked = result.data?.data ?: return@registerForActivityResult
+        if (WhatsApp.accept(this, picked)) {
+            say("Backing up WhatsApp. The first run starts on Wi-Fi.")
+        } else {
+            say("That isn't WhatsApp's folder. Choose Android › media › com.whatsapp › WhatsApp.")
+        }
+        changed()
+    }
+
+    fun pickWhatsApp() = whatsAppPicker.launch(WhatsApp.pickIntent())
+
     /** The file waiting for a destination, while the save dialog is open. */
     private var pendingSave: FileEntry? = null
 

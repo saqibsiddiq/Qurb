@@ -68,6 +68,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // Android will not let this app start a foreground service from
             // where it is -- then the ordinary pass, and resuming carries the
             // file on next time.
+            // Wi-Fi or not first: the WhatsApp backup waits for Wi-Fi, and is
+            // counted only then (decision 0062).
+            Engine.noteNetwork(applicationContext)
             val forOthers = runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
             val long = forOthers >= LONG_PASS_BYTES && inForeground(forOthers)
 

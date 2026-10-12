@@ -208,6 +208,56 @@ pub struct EarlierSend {
     pub at: i64,
 }
 
+/// One file of WhatsApp's folder, as the app listed it through the grant the
+/// person gave (decision 0062).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OutsideFile {
+    /// Its path within WhatsApp's folder: `Media/WhatsApp Images/IMG-….jpg`.
+    pub path: String,
+    /// The document to read it from.
+    pub uri: String,
+    pub size: u64,
+    /// When it last changed, in milliseconds since the epoch, as the listing
+    /// said: how a change is noticed without reading the file.
+    pub modified_ms: i64,
+}
+
+/// What one run of the WhatsApp backup did (decision 0062).
+#[derive(Debug, Clone, Default, uniffi::Record)]
+pub struct BackupRun {
+    pub added: u32,
+    pub changed: u32,
+    pub unchanged: u32,
+    /// Gone from WhatsApp's folder, and kept by the computer.
+    pub kept: u32,
+    /// Gone from WhatsApp's folder, and deleted from the backup.
+    pub deleted: u32,
+    /// New or changed, left for the next run when time ran out.
+    pub remaining: u32,
+    /// Read this run, to describe new and changed files.
+    pub bytes_read: u64,
+    pub failed: u32,
+    /// The first file that could not be read, and why.
+    pub first_failure: Option<String>,
+}
+
+/// The WhatsApp backup as it stands, for Settings (decision 0062).
+#[derive(Debug, Clone, Default, uniffi::Record)]
+pub struct BackupState {
+    pub files: u64,
+    pub bytes: u64,
+    /// On a computer this phone may count on.
+    pub held_files: u64,
+    pub held_bytes: u64,
+    /// Gone from WhatsApp's folder, and kept on that computer only.
+    pub only_kept: u64,
+}
+
+/// Where WhatsApp's folder is kept in this phone's vault (decision 0062).
+fn whatsapp_prefix() -> String {
+    format!("{}/whatsapp", qurb_storage::db::OUTSIDE)
+}
+
 /// One word of the recovery phrase, as somebody typed it back from paper.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct PhraseAnswer {
@@ -1681,6 +1731,77 @@ impl Qurb {
         Ok(())
     }
 
+    /// Bring the backup of WhatsApp's folder into line with a listing of it,
+    /// for up to `seconds` (decision 0062). New and changed files are read
+    /// once each, to describe them, and kept in this phone's vault where they
+    /// lie; nothing is copied. A photo, video or document gone from WhatsApp
+    /// stays, kept by the computer, when the computer has it; a chat backup
+    /// WhatsApp replaced goes. WhatsApp's caches -- its folders whose names
+    /// start with a dot -- are left out. A run that runs out of time says how
+    /// many it left, and the next carries on.
+    pub fn back_up_whatsapp(&self, files: Vec<OutsideFile>, seconds: u32) -> Result<BackupRun, QurbError> {
+        let prefix = whatsapp_prefix();
+        let listing: Vec<qurb_storage::OutsideEntry> = files
+            .into_iter()
+            .filter(|f| !f.path.split('/').any(|part| part.starts_with('.') || part.is_empty()))
+            .map(|f| qurb_storage::OutsideEntry {
+                path: f.path,
+                source: f.uri,
+                size: f.size,
+                mtime_ns: f.modified_ms.saturating_mul(1_000_000),
+            })
+            .collect();
+        let media = |path: &str| path.starts_with("Media/");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds.into());
+        let mut run = BackupRun::default();
+        loop {
+            // A few seconds at a time, letting go of the engine in between, so
+            // that the app is never kept waiting on it for a whole first run.
+            let slice = (std::time::Instant::now() + std::time::Duration::from_secs(3)).min(deadline);
+            let report = self.engine()?.store_mut().keep_outside_folder(&prefix, &listing, &media, Some(slice))?;
+            run.added += report.added as u32;
+            run.changed += report.changed as u32;
+            run.kept += report.kept as u32;
+            run.deleted += report.deleted as u32;
+            run.bytes_read += report.bytes_read;
+            run.remaining = report.remaining as u32;
+            run.failed += report.failed.len() as u32;
+            if run.first_failure.is_none() {
+                run.first_failure = report.failed.first().map(|(path, why)| format!("{path}: {why}"));
+            }
+            // A file that cannot be read is tried again next run, not over
+            // and over in this one.
+            if report.remaining == 0 || !report.failed.is_empty() || std::time::Instant::now() >= deadline {
+                break;
+            }
+        }
+        // Unchanged since before this run: each slice also counts the files
+        // an earlier slice of it just read.
+        run.unchanged = (listing.len() as u32).saturating_sub(run.added + run.changed + run.remaining + run.failed);
+        Ok(run)
+    }
+
+    /// The WhatsApp backup as it stands: how much, and how much of it the
+    /// computer has (decision 0062).
+    pub fn whatsapp_backup(&self) -> Result<BackupState, QurbError> {
+        let summary = self.engine()?.store().db().outside_summary(&whatsapp_prefix())?;
+        Ok(BackupState {
+            files: summary.files,
+            bytes: summary.bytes,
+            held_files: summary.held_files,
+            held_bytes: summary.held_bytes,
+            only_kept: summary.only_kept,
+        })
+    }
+
+    /// Whether this phone is on a network that does not count what it carries
+    /// -- Wi-Fi, usually. Only then is the WhatsApp backup offered to the
+    /// computer keeping it, which is 9.65 GB the first time on the S23
+    /// (decision 0062). The app says so before each sync.
+    pub fn set_unmetered(&self, unmetered: bool) -> Result<(), QurbError> {
+        Ok(self.engine()?.store().db().set_outside_offered(unmetered)?)
+    }
+
     /// Which of `sources` this phone has sent to `to` before, with the name
     /// each went under and when: asked before sending, so that the app can say
     /// so and the person choose (decision 0059). A send of the same file
@@ -2241,8 +2362,8 @@ impl Qurb {
         let mut bytes: u64 = pending.iter().map(|(_, size, _)| *size).sum();
 
         let only_here = store.undelivered()?;
+        let kept = !store.db().holders()?.is_empty();
         if !only_here.is_empty() {
-            let kept = !store.db().holders()?.is_empty();
             let db = store.db();
             for (path, size) in &only_here {
                 let private = matches!(db.folder_row(path), Ok(Some((_, Some(_)))));
@@ -2251,6 +2372,15 @@ impl Qurb {
                     bytes += size;
                 }
             }
+        }
+
+        // The WhatsApp backup the computer does not have yet, while it is
+        // offered: on Wi-Fi (decision 0062). What keeps this phone serving
+        // until the computer has it all.
+        if kept && store.db().outside_offered()? {
+            let backup = store.db().outside_summary(&whatsapp_prefix())?;
+            files += (backup.files - backup.held_files) as usize;
+            bytes += backup.bytes - backup.held_bytes;
         }
         Ok((files, bytes))
     }

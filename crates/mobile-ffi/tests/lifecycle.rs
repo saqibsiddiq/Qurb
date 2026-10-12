@@ -717,3 +717,60 @@ fn a_file_added_during_a_scan_goes_where_it_was_added() {
     let leftovers = std::fs::read_dir(dir.path().join("Shared")).unwrap().count();
     assert_eq!(leftovers, 40, "a staged copy was left behind");
 }
+
+/// WhatsApp's folder backed up as the app does it (decision 0062): listed,
+/// kept in the phone's vault with nothing copied, its caches left out, never
+/// shown among the person's files, counted for Settings, and waiting for the
+/// computer only while on Wi-Fi.
+#[test]
+fn whatsapp_is_backed_up_where_it_lies() {
+    let dir = scratch();
+    let whatsapp = scratch();
+    let root = dir.path().display().to_string();
+    create(root.clone()).unwrap();
+    let laptop = pair_with_somebody(dir.path(), "laptop", 0x2B);
+    let qurb = Qurb::open(root, None).unwrap();
+    qurb.add_holder(laptop).unwrap();
+
+    let file = |relative: &str, size: usize| {
+        let path = whatsapp.path().join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        write_incompressible(&path, size);
+        qurb_mobile::OutsideFile {
+            path: relative.to_string(),
+            uri: path.display().to_string(),
+            size: size as u64,
+            modified_ms: 1_790_000_000_000,
+        }
+    };
+    let listing = vec![
+        file("Databases/msgstore.db.crypt14", 1 << 20),
+        file("Media/WhatsApp Images/IMG-1.jpg", 2 << 20),
+        file("Media/.Statuses/status.jpg", 1 << 20),
+    ];
+    let before = qurb.usage().unwrap().on_disk;
+
+    let run = qurb.back_up_whatsapp(listing.clone(), 60).unwrap();
+    assert_eq!((run.added, run.remaining, run.failed), (2, 0, 0), "{run:?}");
+    assert_eq!(run.bytes_read, 3 << 20, "the cache was read");
+    assert!(qurb.usage().unwrap().on_disk < before + (1 << 20), "a copy is held here");
+
+    // Not among the person's files, anywhere they look.
+    assert!(qurb.browse_in(String::new(), true).unwrap().folders.is_empty());
+    assert!(qurb.search_in("IMG".into(), 10, true).unwrap().is_empty());
+    assert!(qurb.outstanding().unwrap().files.is_empty());
+    assert_eq!(qurb.usage().unwrap().logical, 0);
+
+    let state = qurb.whatsapp_backup().unwrap();
+    assert_eq!((state.files, state.bytes, state.held_files), (2, 3 << 20, 0));
+
+    // Waiting for the computer on Wi-Fi only.
+    assert_eq!(qurb.waiting_for_others_bytes().unwrap(), 0, "offered on mobile data");
+    qurb.set_unmetered(true).unwrap();
+    assert_eq!(qurb.waiting_for_others_bytes().unwrap(), 3 << 20);
+
+    // Unchanged, the second run reads nothing.
+    let again = qurb.back_up_whatsapp(listing, 60).unwrap();
+    assert_eq!((again.added, again.unchanged, again.bytes_read), (0, 2, 0));
+    assert_eq!(run.unchanged, 0, "files read in this run counted as unchanged");
+}

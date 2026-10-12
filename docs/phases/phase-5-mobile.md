@@ -2199,8 +2199,17 @@ backup of 498 MB and nightly increments of about 100 KB.
 
 **Not answered: whether WhatsApp restores from a backup put back.** It needs
 WhatsApp registered on the emulator with a number nobody uses on WhatsApp,
-and there is none yet. The design, with that stated, is proposed in
-[decision 0062](../decisions/0062-backing-up-whatsapp.md); nothing is built.
+and there is none yet. The design, with that stated, is in
+[decision 0062](../decisions/0062-backing-up-whatsapp.md), with the owner's
+answers: kept in the phone's Private Vault on the laptop, media kept there
+after WhatsApp deletes it, the Google backup left on for now.
+
+**Built 2026-10-12, the backup half.** WhatsApp's files are files of the
+phone's vault read where they lie, copied nowhere on the phone, and kept by
+the laptop as it keeps the vault; offered to it on Wi-Fi only; out of every
+list a person is shown. Set up from Settings, run nightly while charging.
+Checked on the emulator against a stand-in folder (0062, step 2); not yet on
+the S23.
 
 ## Deliberately left undone
 

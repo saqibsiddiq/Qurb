@@ -813,6 +813,9 @@ qurb/
 │       │                  Previews.kt         an image or a text's start, for a
 │       │                                      conflict's two versions
 │       │                  SentCopies.kt       copies of sent files, let go of by name
+│       │                  WhatsApp.kt         WhatsApp's folder, picked once and
+│       │                                      listed each night for its backup
+│       │                                      (decision 0062)
 │       │                  Appearance.kt       light, dark, or as the system is set
 │       │                  ManageSpaceActivity.kt
 │       │                                      what Android's Clear data opens: what

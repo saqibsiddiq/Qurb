@@ -10,7 +10,7 @@ use qurb_storage::db::Audience;
 use qurb_storage::{ChunkKey, OutsideEntry, Store};
 use qurb_sync::{Area, Content};
 
-const PREFIX: &str = "WhatsApp backup";
+const PREFIX: &str = ".qurb-outside/whatsapp";
 
 fn noisy(size: usize, seed: u32) -> Vec<u8> {
     let mut out = vec![0u8; size];
@@ -99,8 +99,12 @@ fn a_file_kept_outside_is_in_the_vault_and_read_where_it_lies() {
     assert!(phone.store.held_chunks(&content).unwrap().is_some(), "not offered");
     assert!(phone.store.verify(false).unwrap().missing.is_empty());
 
-    // And it is offered: a holder is shown it in the area it keeps.
+    // And it is offered on a network that does not count what it carries: a
+    // holder is shown it in the area it keeps -- and not on mobile data.
     phone.store.db().add_holder(&computer()).unwrap();
+    let shown = phone.store.tree_for(Audience::Device(&computer())).unwrap();
+    assert!(shown.iter().all(|v| !v.path.starts_with(".qurb-outside/")), "offered on mobile data");
+    phone.store.db().set_outside_offered(true).unwrap();
     let shown = phone.store.tree_for(Audience::Device(&computer())).unwrap();
     let version = shown
         .iter()
@@ -191,6 +195,7 @@ fn a_chat_backup_gone_from_the_folder_is_deleted_for_the_computer_too() {
     phone.sync(&[entry], false);
     phone.store.note_replica(&blake3::hash(&increment), &computer()).unwrap();
     phone.store.db().add_holder(&computer()).unwrap();
+    phone.store.db().set_outside_offered(true).unwrap();
 
     std::fs::remove_file(phone.outside().join("Databases/msgstore-increment-1.db.crypt14")).unwrap();
     let report = phone.sync(&[], false);
@@ -254,4 +259,41 @@ fn a_file_that_comes_back_is_read_where_it_lies_again() {
     let rows = phone.store.db().outside_under(PREFIX).unwrap();
     assert!(rows[0].source.is_some());
     assert_eq!(phone.store.read_content(&blake3::hash(&photo)).unwrap().unwrap(), photo);
+}
+
+/// WhatsApp's files are a backup, not the person's files in qurb: not listed,
+/// not found by a search, not counted, not "waiting to reach your devices",
+/// and not among what clearing the app's data would lose -- it would lose
+/// none of them, since they are WhatsApp's.
+#[test]
+fn a_folder_kept_outside_is_in_no_list_a_person_is_shown() {
+    let mut phone = Phone::new();
+    let entry = phone.write("Media/WhatsApp Images/IMG-2.jpg", &noisy(25_000, 40), 1);
+    phone.sync(&[entry], true);
+    let db = phone.store.db();
+
+    assert!(db.folder_entries_under("").unwrap().is_empty(), "{:?}", db.folder_entries_under("").unwrap());
+    assert!(db.folder_search("IMG", 10).unwrap().is_empty());
+    assert_eq!(db.live_bytes().unwrap(), 0);
+    assert!(db.undelivered().unwrap().is_empty());
+    assert!(db.only_here().unwrap().is_empty());
+}
+
+/// What Settings says about the backup: how much, how much the computer has,
+/// and how much is kept there only.
+#[test]
+fn the_backup_is_counted() {
+    let mut phone = Phone::new();
+    let held = noisy(10_000, 50);
+    let a = phone.write("Media/held.jpg", &held, 1);
+    let b = phone.write("Media/not-yet.jpg", &noisy(20_000, 51), 1);
+    phone.sync(&[a, b.clone()], true);
+    phone.store.note_replica(&blake3::hash(&held), &computer()).unwrap();
+    std::fs::remove_file(phone.outside().join("Media/held.jpg")).unwrap();
+    phone.sync(&[b], true);
+
+    let summary = phone.store.db().outside_summary(PREFIX).unwrap();
+    assert_eq!((summary.files, summary.bytes), (2, 30_000));
+    assert_eq!((summary.held_files, summary.held_bytes), (1, 10_000));
+    assert_eq!(summary.only_kept, 1);
 }
