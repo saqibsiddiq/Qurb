@@ -205,7 +205,9 @@ object WhatsApp {
             // A first run reads more than one window allows -- 3.5 GB of the
             // S23's 9.65 in its seven minutes. The rest carries on now, on
             // Wi-Fi, rather than over the nights that follow.
-            if (run.remaining > 0u && run.failed == 0u) carryOn(applicationContext)
+            // A file that could not be read does not hold the rest up: it is
+            // tried again next run.
+            if (run.remaining > 0u) carryOn(applicationContext)
             return Result.success()
         }
     }

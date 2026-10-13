@@ -285,3 +285,17 @@ probably away from home. The backup carries on when it is back on Wi-Fi.
 Collection still happens only while the phone serves -- a pass in the
 foreground of up to half an hour after each run (decision 0050) -- and
 between passes, nothing.
+
+**Why nothing came after the first run** (2026-10-13). The laptop held
+6,631 files, exactly what the first run read. A run stopped at the first
+file it could not read, and a run that had failed did not carry on -- and a
+file WhatsApp moves or deletes in the minute the listing takes is ordinary.
+So every run after the first stopped at once. A file that cannot be read is
+now skipped for the rest of the run and tried again in the next, and the
+rest go on (`a_file_gone_before_it_is_read_does_not_stop_the_run`). This
+reading of it is inferred from the laptop's count; the phone's log was not
+there to read, its wireless debugging having gone off.
+
+The times in the laptop's log are UTC: collecting went on until 19:38 IST,
+not 14:08 as first read above, and at 21:14 the phone synced over mobile
+data, where the backup is held back, as designed.

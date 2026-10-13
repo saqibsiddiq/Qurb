@@ -1754,11 +1754,18 @@ impl Qurb {
         let media = |path: &str| path.starts_with("Media/");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds.into());
         let mut run = BackupRun::default();
+        // Files that could not be read this run: skipped for the rest of it,
+        // and tried again next time. Mostly ones WhatsApp moved or deleted in
+        // the minute it took to list the folder -- ordinary, and on the S23
+        // it stopped every run after the first at one such file.
+        let mut unreadable = std::collections::HashSet::new();
         loop {
             // A few seconds at a time, letting go of the engine in between, so
             // that the app is never kept waiting on it for a whole first run.
             let slice = (std::time::Instant::now() + std::time::Duration::from_secs(3)).min(deadline);
-            let report = self.engine()?.store_mut().keep_outside_folder(&prefix, &listing, &media, Some(slice))?;
+            let skip = |path: &str| unreadable.contains(path);
+            let report =
+                self.engine()?.store_mut().keep_outside_folder(&prefix, &listing, &media, Some(slice), &skip)?;
             run.added += report.added as u32;
             run.changed += report.changed as u32;
             run.kept += report.kept as u32;
@@ -1769,9 +1776,8 @@ impl Qurb {
             if run.first_failure.is_none() {
                 run.first_failure = report.failed.first().map(|(path, why)| format!("{path}: {why}"));
             }
-            // A file that cannot be read is tried again next run, not over
-            // and over in this one.
-            if report.remaining == 0 || !report.failed.is_empty() || std::time::Instant::now() >= deadline {
+            unreadable.extend(report.failed.into_iter().map(|(path, _)| path));
+            if report.remaining == 0 || std::time::Instant::now() >= deadline {
                 break;
             }
         }

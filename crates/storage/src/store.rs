@@ -1565,12 +1565,16 @@ impl Store {
     /// new and changed ones, each read once, until `until` -- a run that stops
     /// part-way says how many it left, and the next carries on, since a file
     /// already kept and unchanged by size and time is not read again.
+    /// `skip` names files not to read this time -- ones that could not be
+    /// read earlier in the same run -- which are neither read nor taken for
+    /// gone.
     pub fn keep_outside_folder(
         &mut self,
         prefix: &str,
         listing: &[OutsideEntry],
         keep_when_gone: &dyn Fn(&str) -> bool,
         until: Option<std::time::Instant>,
+        skip: &dyn Fn(&str) -> bool,
     ) -> Result<OutsideReport> {
         let prefix = prefix.trim_end_matches('/');
         let mut report = OutsideReport::default();
@@ -1601,6 +1605,9 @@ impl Store {
                 .is_some_and(|s| s.size == entry.size && s.mtime_ns == entry.mtime_ns)
             {
                 report.unchanged += 1;
+                continue;
+            }
+            if skip(&entry.path) {
                 continue;
             }
             work.push((entry, path, before.is_some()));

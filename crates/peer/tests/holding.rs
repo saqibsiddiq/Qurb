@@ -210,7 +210,7 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
     let report = phone
         .engine
         .store_mut()
-        .keep_outside_folder(".qurb-outside/whatsapp", &[photo_entry, backup_entry.clone()], &media, None)
+        .keep_outside_folder(".qurb-outside/whatsapp", &[photo_entry, backup_entry.clone()], &media, None, &|_| false)
         .unwrap();
     assert_eq!(report.added, 2);
 
@@ -236,7 +236,7 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
     let report = phone
         .engine
         .store_mut()
-        .keep_outside_folder(".qurb-outside/whatsapp", &[newer_entry], &media, None)
+        .keep_outside_folder(".qurb-outside/whatsapp", &[newer_entry], &media, None, &|_| false)
         .unwrap();
     assert_eq!((report.kept, report.deleted, report.added), (1, 1, 1));
 
@@ -282,7 +282,7 @@ async fn timing_collecting_many_small_files() {
         })
         .collect();
     let t = std::time::Instant::now();
-    phone.engine.store_mut().keep_outside_folder(".qurb-outside/whatsapp", &listing, &|_| true, None).unwrap();
+    phone.engine.store_mut().keep_outside_folder(".qurb-outside/whatsapp", &listing, &|_| true, None, &|_| false).unwrap();
     println!("indexing: {:.2} ms per file", t.elapsed().as_secs_f64() * 1000.0 / 2000.0);
 
     let t = std::time::Instant::now();
@@ -311,7 +311,7 @@ async fn a_held_file_that_fails_is_not_in_the_history() {
         size: 90_000,
         mtime_ns: 1,
     }];
-    phone.engine.store_mut().keep_outside_folder(".qurb-outside/whatsapp", &listing, &|_| true, None).unwrap();
+    phone.engine.store_mut().keep_outside_folder(".qurb-outside/whatsapp", &listing, &|_| true, None, &|_| false).unwrap();
     // Changed where it lies before the desktop collects it: not servable.
     fs::write(&path, vec![8u8; 90_000]).unwrap();
 

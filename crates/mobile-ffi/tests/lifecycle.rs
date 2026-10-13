@@ -774,3 +774,35 @@ fn whatsapp_is_backed_up_where_it_lies() {
     assert_eq!((again.added, again.unchanged, again.bytes_read), (0, 2, 0));
     assert_eq!(run.unchanged, 0, "files read in this run counted as unchanged");
 }
+
+/// A file WhatsApp moved or deleted between the listing and the reading --
+/// which a minute's listing makes ordinary -- is skipped for the rest of the
+/// run, and the others are kept (decision 0062). On the S23 one such file
+/// stopped every run after the first.
+#[test]
+fn a_file_gone_before_it_is_read_does_not_stop_the_run() {
+    let dir = scratch();
+    let whatsapp = scratch();
+    let root = dir.path().display().to_string();
+    create(root.clone()).unwrap();
+    let qurb = Qurb::open(root, None).unwrap();
+
+    let file = |relative: &str, size: usize| {
+        let path = whatsapp.path().join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        write_incompressible(&path, size);
+        qurb_mobile::OutsideFile {
+            path: relative.to_string(),
+            uri: path.display().to_string(),
+            size: size as u64,
+            modified_ms: 1_790_000_000_000,
+        }
+    };
+    let mut listing: Vec<_> = (0..40).map(|i| file(&format!("Media/WhatsApp Images/IMG-{i:02}.jpg"), 1 << 20)).collect();
+    std::fs::remove_file(whatsapp.path().join("Media/WhatsApp Images/IMG-03.jpg")).unwrap();
+    listing.push(file("Databases/msgstore.db.crypt14", 1 << 20));
+
+    let run = qurb.back_up_whatsapp(listing, 60).unwrap();
+    assert_eq!((run.added, run.failed, run.remaining), (40, 1, 0), "{run:?}");
+    assert!(run.first_failure.unwrap().starts_with("Media/WhatsApp Images/IMG-03.jpg"));
+}

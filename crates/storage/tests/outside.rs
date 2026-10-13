@@ -62,7 +62,7 @@ impl Phone {
     }
 
     fn sync(&mut self, listing: &[OutsideEntry], keep: bool) -> qurb_storage::OutsideReport {
-        self.store.keep_outside_folder(PREFIX, listing, &|_| keep, None).unwrap()
+        self.store.keep_outside_folder(PREFIX, listing, &|_| keep, None, &|_| false).unwrap()
     }
 
     fn live(&self, relative: &str) -> Option<qurb_storage::db::FileRow> {
@@ -219,7 +219,7 @@ fn a_run_stops_at_its_deadline_and_the_next_carries_on() {
         (0..4).map(|i| phone.write(&format!("Media/{i}.jpg"), &noisy(10_000, 10 + i), 1)).collect();
 
     let past = std::time::Instant::now();
-    let stopped = phone.store.keep_outside_folder(PREFIX, &listing, &|_| true, Some(past)).unwrap();
+    let stopped = phone.store.keep_outside_folder(PREFIX, &listing, &|_| true, Some(past), &|_| false).unwrap();
     assert_eq!((stopped.added, stopped.remaining), (0, 4));
 
     let finished = phone.sync(&listing, true);
@@ -310,7 +310,7 @@ fn timing_many_small_files() {
     let mut done = 0;
     for (n, chunk) in [1000usize, 2000, 3000, 4000, 5000, 6000].iter().enumerate() {
         let t = std::time::Instant::now();
-        phone.store.keep_outside_folder(PREFIX, &listing[..*chunk], &|_| true, None).unwrap();
+        phone.store.keep_outside_folder(PREFIX, &listing[..*chunk], &|_| true, None, &|_| false).unwrap();
         println!("files {:5}..{:5}: {:6.2} ms per file", done, chunk, t.elapsed().as_secs_f64() * 1000.0 / (*chunk - done) as f64);
         done = *chunk;
         let _ = n;
