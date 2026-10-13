@@ -11,7 +11,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.ConflictInfo
 import uniffi.qurb_mobile.ConflictSide
-import uniffi.qurb_mobile.Happening
 import uniffi.qurb_mobile.Outstanding
 import uniffi.qurb_mobile.PeerInfo
 import uniffi.qurb_mobile.Usage
@@ -20,9 +19,10 @@ import uniffi.qurb_mobile.Usage
  * Home (direction §5): is my Qurb space okay?
  *
  * One state, one action -- *Send to device*, or *Add a device* until there is
- * one -- a line of secondary facts, attention only when something needs a
- * decision, and a little that is recent. A healthy Home should be almost
- * boring. Pulling down syncs, and so does *Sync now*.
+ * one -- a line of secondary facts, and attention only when something needs a
+ * decision. A healthy Home should be almost boring. Pulling down syncs, and so
+ * does *Sync now*. What happened lately is the clock at the top, a button
+ * away: the owner wanted it off Home (2026-10-13).
  *
  * A phone has no daemon running to ask whether it is up to date, so the state
  * is built from what it does know: whether it is syncing now, whether
@@ -48,7 +48,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         }
         views.sync.setOnClickListener { app.sync() }
         views.mark.setOnClickListener { app.sync() }
-        views.seeAll.setOnClickListener { app.push(ActivityScreen(app)) }
+        views.activity.setOnClickListener { app.push(ActivityScreen(app)) }
     }
 
     /** Everything the screen draws, read in one go off the main thread. */
@@ -57,7 +57,6 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         val holders: List<PeerInfo>,
         val outstanding: Outstanding,
         val usage: Usage,
-        val recent: List<Happening>,
         val conflicts: List<ConflictInfo>,
     )
 
@@ -71,7 +70,6 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                         engine.holders(),
                         engine.outstanding(),
                         engine.usage(),
-                        engine.history(RECENT.toUInt(), null),
                         engine.conflicts(),
                     )
                 }
@@ -135,16 +133,6 @@ class HomeScreen(app: MainActivity) : Screen(app) {
 
         views.attention.removeAllViews()
         showConflicts(state.conflicts)
-
-        views.recent.removeAllViews()
-        if (state.recent.isEmpty()) {
-            kit.empty(views.recent, R.drawable.ic_clock, "Nothing yet. What happens between your devices shows up here.")
-        }
-        for (h in state.recent.take(5)) {
-            val (icon, subject, line) = Words.happened(h)
-            kit.row(views.recent, icon, subject, line)
-        }
-        views.seeAll.visibility = if (state.recent.isEmpty()) View.GONE else View.VISIBLE
     }
 
     /**
@@ -297,10 +285,5 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                 app.changed()
             }
         }
-    }
-
-    private companion object {
-        /** How many recent events Home reads; five are shown. */
-        const val RECENT = 6
     }
 }

@@ -941,6 +941,7 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 .hero { display: flex; align-items: center; gap: var(--s5); margin: var(--s6) 0 var(--s2); }
 .hero h1 { font-size: 32px; line-height: 38px; font-weight: 600; letter-spacing: -0.025em; }
 .hero p { margin-top: 6px; color: var(--text-2); font-size: 15.5px; }
+.hero .hero-aside { margin-left: auto; align-self: flex-start; }
 .hero-actions { display: flex; align-items: center; gap: var(--s4); margin: var(--s5) 0 0 calc(56px + var(--s5)); }
 .secondary-facts { color: var(--text-3); font-size: 13px; }
 .home-body { margin-left: calc(56px + var(--s5)); }

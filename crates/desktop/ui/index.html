@@ -160,7 +160,7 @@
 
       <div class="scroll" id="scroll">
         <!-- §5: is my Qurb space okay? One state, one action, attention only
-             when needed, a little that is recent. -->
+             when needed. What happened lately is the clock, a button away. -->
         <section id="home" class="screen on">
           <div class="hero">
             <div id="mark" class="mark"><svg class="i"><use href="#i-check"/></svg></div>
@@ -168,6 +168,7 @@
               <h1 id="state">Getting ready…</h1>
               <p id="state-says"></p>
             </div>
+            <button class="icon-btn hero-aside" id="home-activity" aria-label="Activity" title="Activity"><svg class="i"><use href="#i-clock"/></svg></button>
           </div>
           <div class="hero-actions">
             <button class="btn primary large" id="home-action">
@@ -177,8 +178,6 @@
           </div>
           <div class="home-body">
             <div id="attention"></div>
-            <h2 class="section">Recent <button class="link" id="see-all">See all</button></h2>
-            <ul id="recent" class="rows"></ul>
           </div>
         </section>
 

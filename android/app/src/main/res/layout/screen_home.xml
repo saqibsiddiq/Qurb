@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Home (direction §5): is my Qurb space okay? One state, one action, a line
-     of facts, attention only when something needs a decision, a little that
-     is recent. Pulling down syncs. -->
+     of facts, attention only when something needs a decision. What happened
+     lately is a button away, not on Home (the owner, 2026-10-13). Pulling
+     down syncs. -->
 <androidx.swiperefreshlayout.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/refresh"
@@ -22,7 +23,7 @@
             android:paddingTop="12dp">
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
@@ -34,11 +35,23 @@
                     android:src="@drawable/qurb_mark" />
 
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="10dp"
+                    android:layout_weight="1"
                     android:text="Qurb"
                     android:textAppearance="@style/Text.Section" />
+
+                <ImageView
+                    android:id="@+id/activity"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="-10dp"
+                    android:background="@drawable/row_bg"
+                    android:contentDescription="Activity"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_clock"
+                    app:tint="@color/text_2" />
             </LinearLayout>
 
             <FrameLayout
@@ -122,38 +135,6 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:accessibilityHeading="true"
-                    android:text="Recent"
-                    android:textAppearance="@style/Text.Section" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/see_all"
-                    style="@style/Widget.Qurb.Button.Text"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="-12dp"
-                    android:minWidth="0dp"
-                    android:text="See all" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/recent"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="-8dp"
-                android:layout_marginEnd="-8dp"
-                android:orientation="vertical" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

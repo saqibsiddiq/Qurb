@@ -2,8 +2,9 @@
 //
 // Home answers one question -- is my Qurb space okay? -- and in the healthy
 // state it should be almost boring (direction §5): the state, one action, a
-// line of secondary facts, attention only when something needs a decision,
-// and a little that is recent.
+// line of secondary facts, and attention only when something needs a
+// decision. What happened lately is the clock beside the state, a button away:
+// the owner wanted it off Home (2026-10-13), as on the phone.
 
 /** The last state drawn, to notice the moment everything becomes synced. */
 let lastState = null;
@@ -102,8 +103,6 @@ async function drawHome() {
       : `${s.peers_reachable} of ${count(s.peers, "device")} connected`);
   }
   $("home-facts").textContent = facts.join(" · ");
-
-  drawRecent(s.recent);
 }
 
 function setHero({ mark, icon: iconName, title, says, action }) {
@@ -131,24 +130,7 @@ function settle() {
   env.classList.add("settled");
 }
 
-function drawRecent(recent) {
-  const list = $("recent");
-  list.replaceChildren();
-  if (recent.length === 0) {
-    list.append(empty("clock", "Nothing yet. Files you add or receive appear here.", null, true));
-    return;
-  }
-  for (const r of recent.slice(0, 5)) {
-    list.append(row({
-      iconName: KIND_ICON[kindOf(r.path)],
-      name: base(r.path),
-      sub: [folderOf(r.path) || "Qurb", `${r.from_peer ? "Arrived" : "Saved here"} ${when(r.at)}`],
-      onClick: () => openDetails(r.path),
-    }));
-  }
-}
-
-$("see-all").addEventListener("click", () => showScreen("activity"));
+$("home-activity").addEventListener("click", () => showScreen("activity"));
 
 /** What needs a decision: conflicts, and only those (§5, §14). */
 async function drawAttention() {
