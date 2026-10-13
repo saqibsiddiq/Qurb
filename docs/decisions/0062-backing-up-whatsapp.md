@@ -356,6 +356,11 @@ re-read its addresses anyway, so that run does not show a change being
 followed. That is shown only by the two tests, until the laptop next
 changes address with qurb running.
 
+It did, at 21:00:45 the same evening: the laptop's Wi-Fi dropped for five
+seconds (NetworkManager re-associated and took the same lease back). qurb
+logged both changes on its next look, `192.168.1.2` gone at 21:00:45 and
+back at 21:00:50, and was connected to the phone again at 21:00:54.
+
 ### Faster, measured on the S23 — 2026-10-13
 
 The same phone and laptop, the phone on battery at 17% and on the home
@@ -446,5 +451,8 @@ What is left is counted and logged once, and taken at the next sync
 (`a_device_that_goes_away_leaves_the_rest_for_next_time`). The phone's
 side, a pass ending because it was frozen, is in
 [0050](0050-large-files-from-a-phone.md). Both are on the laptop and the
-S23 since 20:53, not yet watched.
+S23 since 20:53. The laptop's half was watched at 21:00:53, when its own
+Wi-Fi dropped mid-collection. The log has one failed file and then *the
+device went away part-way; the rest next time, files=11007*, in place of
+11,007 warnings.
 
