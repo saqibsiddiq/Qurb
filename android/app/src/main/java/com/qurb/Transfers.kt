@@ -54,9 +54,33 @@ object Transfers {
         total: ULong,
         since: Long = System.currentTimeMillis(),
     ): ForegroundInfo {
+        val notification = notice(context, sent, total, since)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(NOTIFICATION, notification)
+        }
+    }
+
+    /**
+     * The notice, changed in place once the worker is in the foreground.
+     *
+     * Posted here rather than through `setForeground` again: WorkManager
+     * answers that by posting it twice, starting the service and notifying,
+     * and on the S23 each post had the shade rebuild the row (2026-10-13).
+     */
+    fun update(context: Context, sent: ULong, total: ULong, since: Long) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        NotificationManagerCompat.from(context).notify(NOTIFICATION, notice(context, sent, total, since))
+    }
+
+    private fun notice(context: Context, sent: ULong, total: ULong, since: Long): android.app.Notification {
         channel(context)
         val shown = shown(sent, total)
-        val notification = NotificationCompat.Builder(context, CHANNEL)
+        return NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_arrow_up_down)
             .setColor(ContextCompat.getColor(context, R.color.green))
             .setContentTitle("Sending to your devices")
@@ -75,11 +99,6 @@ object Transfers {
                 )
             )
             .build()
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            ForegroundInfo(NOTIFICATION, notification)
-        }
     }
 
     /**

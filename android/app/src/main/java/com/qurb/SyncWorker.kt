@@ -1,6 +1,7 @@
 package com.qurb
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -82,18 +83,22 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             val outcome = coroutineScope {
                 val from = servedBefore
                 val showing = if (long) launch {
-                    // Posted again only when it would say something new. Every
-                    // two seconds regardless, the S23 redrew it each time.
+                    // Posted again when the bar moves, and for the figures at
+                    // most every ten seconds. Every two seconds regardless, the
+                    // S23 rebuilt the row each time.
                     var shown = Transfers.shown(0uL, forOthers)
+                    var postedAt = 0L
                     while (true) {
                         delay(2_000)
                         val sent = engine.serving().bytes - from
                         val now = Transfers.shown(sent, forOthers)
-                        if (now == shown) continue
+                        val moved = now.percent != shown.percent || now.waiting != shown.waiting
+                        val stale = now != shown &&
+                            SystemClock.elapsedRealtime() - postedAt >= FIGURES_EVERY_MS
+                        if (!moved && !stale) continue
                         shown = now
-                        runCatching {
-                            setForeground(Transfers.foreground(applicationContext, sent, forOthers, started))
-                        }
+                        postedAt = SystemClock.elapsedRealtime()
+                        runCatching { Transfers.update(applicationContext, sent, forOthers, started) }
                     }
                 } else null
                 try {
@@ -237,6 +242,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
 
     companion object {
         private const val TAG = "qurb"
+
+        /** The longest the notice's figures go without being brought up to date. */
+        private const val FIGURES_EVERY_MS = 10_000L
 
         /** Whether a long pass is running in this process. */
         private val LONG_PASS = java.util.concurrent.atomic.AtomicBoolean(false)

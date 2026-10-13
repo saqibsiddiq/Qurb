@@ -169,8 +169,15 @@ there.
     update, so it flicked between two progress bars and redrew constantly;
     the owner called it glitching. Changed: one long pass per process, a
     second doing an ordinary pass; the notice posted again only when its
-    text or bar would change, with one time for the whole pass. Built; not
-    yet watched on the S23.
+    text or bar would change, with one time for the whole pass. Watched on
+    the S23 at 19:45: one worker, no more flicking between figures.
+
+    The same watch found each update posted twice. WorkManager answers
+    `setForeground` by starting the service and by notifying, and the shade
+    rebuilt the row each time (`reInflateViews`, several per update). Changed
+    again: `setForeground` once, then the notice updated in place through
+    the notification manager, when the bar moves and for the figures at most
+    every ten seconds. Built; not yet watched.
 
 ## Reversing it
 

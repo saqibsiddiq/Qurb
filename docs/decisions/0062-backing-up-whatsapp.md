@@ -418,3 +418,17 @@ the owner's say-so.
 The owner also saw the transfer notification glitching. Two long passes
 were running at once, each posting it with its own figures. That fix is in
 [0050](0050-large-files-from-a-phone.md).
+
+**Unrestricted does not keep Samsung off it.** With the owner's say-so,
+Qurb's battery setting was put to *Unrestricted* at 19:40 (`cmd deviceidle
+whitelist +com.qurb`). It helped once: a long pass then went into the
+foreground from the background, which Android had refused before. The
+owner started a backup at 19:45. For two minutes the laptop took 160 files
+and 90 to 150 MB every 30 seconds, with Qurb in a Samsung group named
+`moderate`. At 19:47 it was back in `abnormal`, frozen by 19:48, and down
+to 32 files a 30 seconds. Samsung's own log names the mechanism:
+`FreecessController.freeze` from `FreecessHandler.handleLcdOnFreeze`, at
+19:46:56, 19:47:20 and 19:48:02. That is freezing apps not in use *while
+the screen is on*, foreground service or not. Samsung's own list of
+"never sleeping apps" is the setting not yet tried.
+
