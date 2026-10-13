@@ -347,6 +347,15 @@ found at start is still not looked at again; QUIC owns the socket by then.
 A stale one costs a peer a few packets in the race, and the local addresses
 and the relay are what this keeps right.
 
+Watched on the devices the same evening. The laptop ran the new build
+from 19:26 IST, offering `192.168.1.2`, and the S23 the new app from
+19:40. At 19:40:52 the phone reached the laptop on its own for the first
+time since 18:38 (`connected ... candidate=192.168.1.2:59972`, *reached on
+the local network*), and its pass ended `reached=1`. Restarting the laptop
+re-read its addresses anyway, so that run does not show a change being
+followed. That is shown only by the two tests, until the laptop next
+changes address with qurb running.
+
 ### Faster, measured on the S23 — 2026-10-13
 
 The same phone and laptop, the phone on battery at 17% and on the home
