@@ -299,3 +299,46 @@ there to read, its wireless debugging having gone off.
 The times in the laptop's log are UTC: collecting went on until 19:38 IST,
 not 14:08 as first read above, and at 21:14 the phone synced over mobile
 data, where the backup is held back, as designed.
+
+### The S23 set up again — 2026-10-13
+
+The owner had cleared Qurb's data on the S23 on the evening of 2026-10-12, to
+start over. What that took with it, and what it did not:
+
+- **Gone on the phone:** its index, its key, its settings -- the WhatsApp
+  grant among them, and the rendezvous address, back to the emulator's
+  default.
+- **Kept on the laptop:** everything it held for the phone, the 6,631 files
+  of the first backup and the phone's Private Vault, filed under the
+  phone's old identity. The app cannot yet give them to a phone set up
+  again: the restoring gap above.
+- **WhatsApp itself:** untouched.
+
+Set up again by joining the laptop's code (`qurb pair` beside the running
+window, approved there once the phone showed the same number, 599 487); the
+laptop made to keep the new phone's vault from Devices; the rendezvous set
+back to the laptop's (`wss://saqib.tail86283c.ts.net`, the laptop's service
+through Tailscale Funnel); the WhatsApp backup set up again from Settings at
+18:57. It starts from nothing.
+
+**Open:** the phone could not reach the laptop on its own -- every attempt
+to the laptop's address timed out (`192.168.1.4:37716 timed out`), while the
+laptop reached the phone each time, the firewall allows the network, and the
+laptop's trust list re-reads a device paired outside it. The backup does not
+need that direction: the laptop collects. Home on the phone said *Not synced
+yet* meanwhile. Not found yet.
+
+### Faster, measured on the S23 — 2026-10-13
+
+The same phone and laptop, the phone on battery at 17% and on the home
+Wi-Fi, the backup started again from nothing at 18:57 IST:
+
+| | 2026-10-12 | 2026-10-13 |
+|---|---|---|
+| listing WhatsApp's folder | 36,010 files in 76 s | 36,031 in 43 s |
+| the phone reading new files | 8.3 MB/s, 63 ms a file, one at a time | **23 MB/s, 12 ms a file**, four at a time |
+| the first run, in its 7 minutes | 6,631 files, 3.5 GB | 35,472 files, 9.69 GB -- all but 559 |
+| the laptop collecting small files | 4 to 8 a second | 17 to 28 a second, fetched 32 at a time |
+
+The first 6,631 files cost the laptop a copy, not a transfer: it already
+held their content from the first backup, under the old phone's identity.
