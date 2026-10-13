@@ -1078,6 +1078,9 @@ impl Daemon {
                 "could not apply"
             );
         }
+        if outcome.left > 0 {
+            tracing::info!(peer = %peer.short(), files = outcome.left, "the device went away part-way; the rest next time");
+        }
 
         Ok(outcome.adopted + outcome.conflicts + outcome.resurrected)
     }

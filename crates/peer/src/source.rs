@@ -178,6 +178,11 @@ impl<'a> NetworkSource<'a> {
 }
 
 impl ContentSource for NetworkSource<'_> {
+    /// The connection has ended, from either side or by going quiet.
+    fn gone(&self) -> bool {
+        self.client.is_closed()
+    }
+
     fn fetch(&mut self, hash: &[u8; 32], size: u64) -> qurb_engine::Result<Vec<u8>> {
         if let Some(bytes) = self.fetched_ahead(hash) {
             return Ok(bytes);

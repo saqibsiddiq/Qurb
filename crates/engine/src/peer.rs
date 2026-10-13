@@ -95,6 +95,12 @@ pub trait ContentSource {
     /// Told once the plan has been applied, so that a source can finish
     /// whatever it put off -- telling the other end what arrived, in one go.
     fn finished(&mut self) {}
+
+    /// Whether the source can supply nothing more: a device whose connection
+    /// has ended. The default, for a source that cannot go away, is never.
+    fn gone(&self) -> bool {
+        false
+    }
 }
 
 /// Told about content as it arrives from another device, so that something
@@ -210,12 +216,27 @@ pub struct PlanStats {
     pub offered: usize,
     /// Content that had to come from the source rather than from disk.
     pub fetched: usize,
+    /// Files not tried because the source went away part-way: left for the
+    /// next sync, which plans them again, rather than failed one by one.
+    pub left: usize,
     pub failures: Vec<crate::FileFailure>,
 }
 
 impl PlanStats {
     pub fn is_clean(&self) -> bool {
         self.failures.is_empty()
+    }
+}
+
+/// Whether applying `action` asks the source for content: a file to take,
+/// not a deletion, a merge of histories, or the peer's own work.
+fn asks_source(action: &Action) -> bool {
+    let file = |version: &FileVersion| matches!(version.content, Content::File { .. });
+    match action {
+        Action::Adopt { remote } | Action::Hold { remote, .. } => file(remote),
+        Action::Resurrect { resolved } => file(resolved),
+        Action::Conflict { keeps_path, renamed } => file(keeps_path) || file(renamed),
+        Action::Merge { .. } | Action::Offer { .. } => false,
     }
 }
 
@@ -501,6 +522,15 @@ impl Engine {
         source.coming(&coming);
 
         for action in ordered {
+            // The device has gone: every file still to come from it would fail
+            // the same way, one at a time, each written to the log. On
+            // 2026-10-13 a phone frozen by its maker timed out mid-backup and a
+            // laptop logged 10,408 at once (decision 0062). What needs nothing
+            // from the source still happens.
+            if asks_source(action) && source.gone() {
+                stats.left += 1;
+                continue;
+            }
             let outcome = match action {
                 Action::Offer { .. } => {
                     stats.offered += 1;

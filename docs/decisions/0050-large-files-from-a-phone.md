@@ -187,7 +187,17 @@ there.
     as for one that paused part-way, `PAUSED`, a minute. An ordinary pass
     keeps its ten seconds inside its window. Tested
     (`a_long_pass_waits_a_minute_for_a_collector_to_come`); installed on the
-    S23 at 19:56, not yet watched.
+    S23 at 19:56. Watched at 19:58: after another replacement the laptop
+    came back to the pass and collected 101 files in the next half-minute.
+  - **A frozen pass took the collector's silence for its leaving**,
+    2026-10-13. Samsung freezes an app in a foreground service while the
+    screen is on (0062). A long pass ended at 20:33:52 with 10,408 files of
+    the backup still to go: thawed, it found nothing had gone for a minute.
+    But it had answered nobody while frozen. Changed: the pass notices a
+    look that came far later than it asked (`FROZEN`, three seconds past its
+    200 ms), and excuses the collector for `PAUSED` after it. Tested
+    (`a_pass_that_was_frozen_waits_again_for_its_collector`); installed on
+    the S23 at 20:53, not yet watched.
 
 ## Reversing it
 

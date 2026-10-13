@@ -2331,15 +2331,23 @@ impl Qurb {
             let come_by = come_by(std::time::Instant::now(), started, budget, serving);
             let at_most = started + serving;
             runtime.block_on(connector.announce_news());
-            while keep_answering(
-                std::time::Instant::now(),
-                come_by,
-                at_most,
-                self.serving.recently(COLLECTING),
-                self.serving.recently(PAUSED),
-                || self.waiting_for_others().unwrap_or(false),
-            ) {
-                std::thread::sleep(std::time::Duration::from_millis(200));
+            let mut looked = std::time::Instant::now();
+            let mut excused = looked;
+            loop {
+                let now = std::time::Instant::now();
+                excused = excused_until(looked, now, excused);
+                looked = now;
+                if !keep_answering(
+                    now,
+                    come_by,
+                    at_most,
+                    self.serving.recently(COLLECTING),
+                    self.serving.recently(PAUSED) || now < excused,
+                    || self.waiting_for_others().unwrap_or(false),
+                ) {
+                    break;
+                }
+                std::thread::sleep(LOOK_EVERY);
             }
         }
 
@@ -2585,6 +2593,37 @@ fn come_by(
     match serving > budget {
         true => std::cmp::min(started + serving, now + PAUSED),
         false => std::cmp::min(started + budget, now + LINGER),
+    }
+}
+
+/// How often a pass that is answering looks again at whether to go on.
+const LOOK_EVERY: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// A look that comes this much later than asked means the process was not
+/// running in between.
+const FROZEN: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Until when a collector's silence is excused, given when this pass last
+/// looked and when it looks now.
+///
+/// A pass that was frozen answered nobody, so a collector that sent nothing
+/// meanwhile says nothing about whether it is still there -- and its
+/// connection may have timed out waiting for this one. After a freeze it is
+/// given as long as one that paused part-way, `PAUSED`, to come back.
+///
+/// Samsung freezes an app in a foreground service while the screen is on
+/// (`FreecessHandler.handleLcdOnFreeze`). On the S23 on 2026-10-13 a long pass
+/// ended at 20:33:52 with 10,408 files of the WhatsApp backup still to go:
+/// thawed, it found nothing had gone for a minute, and concluded the laptop
+/// had left.
+fn excused_until(
+    looked: std::time::Instant,
+    now: std::time::Instant,
+    excused: std::time::Instant,
+) -> std::time::Instant {
+    match now.duration_since(looked) >= FROZEN {
+        true => std::cmp::max(excused, now + PAUSED),
+        false => excused,
     }
 }
 
@@ -3060,6 +3099,26 @@ mod tests {
         assert_eq!(ordinary, started + window, "ten seconds would go past the window");
         let short = come_by(now, started, window, Duration::from_secs(30));
         assert_eq!(short, started + Duration::from_secs(30), "never past what it may run for");
+    }
+
+    /// Frozen, a pass excuses the collector's silence for a minute after it
+    /// thaws; an ordinary look between two others excuses nothing new.
+    #[test]
+    fn a_pass_that_was_frozen_waits_again_for_its_collector() {
+        let looked = Instant::now();
+        let none = looked;
+
+        let on_time = looked + LOOK_EVERY;
+        assert_eq!(excused_until(looked, on_time, none), none);
+
+        let thawed = looked + Duration::from_secs(90);
+        let excused = excused_until(looked, thawed, none);
+        assert_eq!(excused, thawed + PAUSED);
+        assert!(keep_answering(thawed, none, looked + Duration::from_secs(1800), false, thawed < excused, || true));
+
+        // A later ordinary look keeps the excuse; it does not cut it short.
+        let next = thawed + LOOK_EVERY;
+        assert_eq!(excused_until(thawed, next, excused), excused);
     }
 
     /// Collected from, a pass stays whether or not it reached anybody itself;

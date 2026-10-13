@@ -364,7 +364,10 @@ the engine tells its source what a plan will ask for
 (`ContentSource::coming`), and the network source fetches small files 32 at
 a time and reports what arrived in batches (`finished`) -- one at a time, a
 laptop collected 4 to 8 a second from a phone. A file kept for another device
-that fails to arrive is logged, never written into this device's history.
+that fails to arrive is logged, never written into this device's history. A
+source whose device has gone (`ContentSource::gone`, a closed connection) is
+asked for nothing more: the rest of the plan is left for the next sync and
+counted (`PlanStats::left`), not failed file by file.
 
 **On a desktop, a received file leaves qurb.** The daemon saves it as an
 ordinary file in `Downloads/qurb`, outside the folder, and stops tracking it:

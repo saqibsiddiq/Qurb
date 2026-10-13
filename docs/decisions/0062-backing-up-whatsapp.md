@@ -432,3 +432,19 @@ to 32 files a 30 seconds. Samsung's own log names the mechanism:
 the screen is on*, foreground service or not. Samsung's own list of
 "never sleeping apps" is the setting not yet tried.
 
+**Away and back, 20:08 to 20:25.** The phone left the home Wi-Fi at about
+20:08, with the laptop at 22,440 files, and came back as `192.168.1.5`
+instead of `.3`. The laptop reached it at the new address at 20:25:09 with
+no help: the phone's own addresses are read at the start of each pass.
+
+**When the phone goes away mid-collection, the laptop now stops asking.**
+At 20:35:46 the laptop's connection to the frozen phone timed out, and it
+went on through its plan: 10,408 files failed at once, each logged with
+`connection lost`. Each would have failed the same way. Changed the same
+evening: a plan asks nothing more of a source whose connection has ended.
+What is left is counted and logged once, and taken at the next sync
+(`a_device_that_goes_away_leaves_the_rest_for_next_time`). The phone's
+side, a pass ending because it was frozen, is in
+[0050](0050-large-files-from-a-phone.md). Both are on the laptop and the
+S23 since 20:53, not yet watched.
+

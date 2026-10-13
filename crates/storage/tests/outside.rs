@@ -248,7 +248,7 @@ fn a_file_that_comes_back_is_read_where_it_lies_again() {
     let mut phone = Phone::new();
     let photo = noisy(30_000, 30);
     let entry = phone.write("Media/back.jpg", &photo, 1);
-    phone.sync(&[entry.clone()], true);
+    phone.sync(std::slice::from_ref(&entry), true);
     phone.store.note_replica(&blake3::hash(&photo), &computer()).unwrap();
     std::fs::remove_file(phone.outside().join("Media/back.jpg")).unwrap();
     assert_eq!(phone.sync(&[], true).kept, 1);
