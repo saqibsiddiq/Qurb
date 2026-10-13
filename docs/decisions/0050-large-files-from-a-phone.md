@@ -162,6 +162,16 @@ there.
     redrew itself when it ended. A second sync asked for during one was not
     tried.
 
+  - **Two long passes at once, 2026-10-13.** The scheduled pass and one asked
+    for now are separate WorkManager queues, and on the S23 both became long
+    passes for the same WhatsApp backup (0062). Each re-posted the one
+    notification every two seconds with its own figures and the time of the
+    update, so it flicked between two progress bars and redrew constantly;
+    the owner called it glitching. Changed: one long pass per process, a
+    second doing an ordinary pass; the notice posted again only when its
+    text or bar would change, with one time for the whole pass. Built; not
+    yet watched on the S23.
+
 ## Reversing it
 
 Each part stands alone. `IN_FLIGHT = 1` restores fetching one at a time;

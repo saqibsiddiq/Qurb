@@ -1288,7 +1288,10 @@ went, or a minute after if what was being collected is still waiting, so a
 collector that restarts mid-file is waited for, and it serves a device
 collecting whether this pass dialled it or it dialled in. Android refuses the
 foreground to an app that has already left the screen; a large transfer cut
-short that way leaves a *Tap to finish sending* notification. The app watches the worker's passes, shows them as syncing and runs
+short that way leaves a *Tap to finish sending* notification. One long pass
+at a time: the scheduled pass and one asked for now are separate queues, and a
+second that finds a long pass running does an ordinary pass instead. The
+notification is posted again only when what it says changes. The app watches the worker's passes, shows them as syncing and runs
 its own after them, and *Sync now* queues behind a running pass rather than
 replacing it.
 

@@ -72,7 +72,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // counted only then (decision 0062).
             Engine.noteNetwork(applicationContext)
             val forOthers = runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
-            val long = forOthers >= LONG_PASS_BYTES && inForeground(forOthers)
+            val long = forOthers >= LONG_PASS_BYTES && startLong(forOthers, started)
+            // Another pass is the long one, and is already answering.
+            val elsewhere = !long && LONG_PASS.get()
 
             // Holding the multicast lock, or the phone cannot hear the devices
             // on its own Wi-Fi answering. See `Engine.hearingTheNetwork`.
@@ -80,10 +82,17 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             val outcome = coroutineScope {
                 val from = servedBefore
                 val showing = if (long) launch {
+                    // Posted again only when it would say something new. Every
+                    // two seconds regardless, the S23 redrew it each time.
+                    var shown = Transfers.shown(0uL, forOthers)
                     while (true) {
                         delay(2_000)
+                        val sent = engine.serving().bytes - from
+                        val now = Transfers.shown(sent, forOthers)
+                        if (now == shown) continue
+                        shown = now
                         runCatching {
-                            setForeground(Transfers.foreground(applicationContext, engine.serving().bytes - from, forOthers))
+                            setForeground(Transfers.foreground(applicationContext, sent, forOthers, started))
                         }
                     }
                 } else null
@@ -127,7 +136,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // What is worth telling the person, now nobody is looking.
             Notices.tell(applicationContext, engine)
 
-            if (long || forOthers < LONG_PASS_BYTES) {
+            if (long || elsewhere || forOthers < LONG_PASS_BYTES) {
                 Transfers.clearPaused(applicationContext)
             } else {
                 val left = runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
@@ -189,6 +198,8 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             } else {
                 Result.retry()
             }
+        } finally {
+            if (holdsLongPass) LONG_PASS.set(false)
         }
     }
 
@@ -197,17 +208,38 @@ class SyncWorker(context: Context, params: WorkerParameters) :
     override suspend fun getForegroundInfo(): ForegroundInfo =
         Transfers.foreground(applicationContext, 0uL, 0uL)
 
-    /** Into the foreground for a long pass, if Android allows it from here. */
-    private suspend fun inForeground(total: ULong): Boolean = try {
-        setForeground(Transfers.foreground(applicationContext, 0uL, total))
-        true
-    } catch (e: Exception) {
-        Log.w(TAG, "could not run in the foreground; an ordinary pass instead", e)
-        false
+    /** Whether this worker is the one long pass, and must let it go. */
+    private var holdsLongPass = false
+
+    /**
+     * Into the foreground for a long pass, unless another pass is the long one
+     * already, and if Android allows it from here.
+     *
+     * One at a time, because the scheduled pass and one asked for now are
+     * separate queues and ran together: on the S23 on 2026-10-13 both were
+     * long passes for the same backup, each posting the one notification
+     * every two seconds with its own figures, so it flicked between them.
+     * The second has nothing to add -- the first is already answering.
+     */
+    private suspend fun startLong(total: ULong, since: Long): Boolean {
+        if (!LONG_PASS.compareAndSet(false, true)) return false
+        holdsLongPass = true
+        return try {
+            setForeground(Transfers.foreground(applicationContext, 0uL, total, since))
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "could not run in the foreground; an ordinary pass instead", e)
+            LONG_PASS.set(false)
+            holdsLongPass = false
+            false
+        }
     }
 
     companion object {
         private const val TAG = "qurb"
+
+        /** Whether a long pass is running in this process. */
+        private val LONG_PASS = java.util.concurrent.atomic.AtomicBoolean(false)
 
         /**
          * How much waiting to be collected makes a pass a long one, run in the

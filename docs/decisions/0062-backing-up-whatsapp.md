@@ -361,3 +361,51 @@ Wi-Fi, the backup started again from nothing at 18:57 IST:
 
 The first 6,631 files cost the laptop a copy, not a transfer: it already
 held their content from the first backup, under the old phone's identity.
+
+### Slower while the phone is in use -- 2026-10-13
+
+From about 19:13 IST the laptop's collection fell from 600 to 2,000 files
+a minute to between 64 and 160. It rose in steps of exactly 32, the
+laptop's fetch-ahead batch, one batch every 15 to 30 seconds. The laptop
+was not the one waiting. Measured at 19:30, it was at 0% CPU and its Wi-Fi
+was receiving 11 KB/s.
+
+On the phone, Samsung had moved Qurb's process into a group of its own
+named `abnormal`. Qurb was the only process in it. Read from `/proc` and
+`/dev/cpuset` over ADB at 19:23 and after:
+
+| | Qurb, in `abnormal` | other foreground apps | the app in front |
+|---|---|---|---|
+| CPUs it may run on | 0-2, the three little cores | 0-6 | 0-7 |
+| CPU group | `background` | `foreground` | `top-app` |
+| disk priority (blkio) | `low` | -- | -- |
+
+Its busiest thread was waiting on the disk (state D). Android itself had it
+in the *active* standby bucket (10) and allowed to run in the background.
+It is not exempt from battery optimisation, which is the S23's default.
+Samsung's freezer (`FreecessHandler`) logged trying to freeze it from 19:04
+and giving up each time, because of the foreground service. At 19:19:51 it
+restricted Qurb's jobs on an app switch (`restrictJobsByOlaf ...
+reason=APP_SWITCH`). The owner was using the phone throughout, with
+Instagram Lite, Gmail and Reddit in front in turn.
+
+So while the phone is in use, its manufacturer sets the pace, not qurb.
+The backup still finishes: what the phone has not served by the end of one
+pass is collected in the next, and the nightly run is while charging.
+
+**Not known yet:** what puts an app in `abnormal` or takes it out. Nothing
+published was found. It was not checked whether it lifts with the screen
+off, while charging, or with Qurb's battery setting at *Unrestricted*,
+which only the owner should change.
+
+The same evening Samsung's freezer was seen at work on it directly:
+`/dev/freezer/abnormal/freezer.state`, read once a second over ADB, went
+from `THAWED` to `FROZEN` and stayed there four seconds, while Qurb's
+threads, the main one included, sat in state D. The laptop's count did not
+move from 19:30:54 to past 19:38. Whether Qurb's battery setting at
+*Unrestricted* keeps it out of `abnormal` is the next thing to try, with
+the owner's say-so.
+
+The owner also saw the transfer notification glitching. Two long passes
+were running at once, each posting it with its own figures. That fix is in
+[0050](0050-large-files-from-a-phone.md).

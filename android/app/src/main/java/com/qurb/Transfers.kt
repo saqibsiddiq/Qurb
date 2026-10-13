@@ -33,19 +33,37 @@ object Transfers {
     /** Set on the intent that opens the app from [paused]'s notification. */
     const val CONTINUE = "com.qurb.CONTINUE_SENDING"
 
-    /** The worker's foreground notice: sent so far, of how much. */
-    fun foreground(context: Context, sent: ULong, total: ULong): ForegroundInfo {
-        channel(context)
+    /** What the notice says, so that a caller can tell when it would change. */
+    data class Shown(val text: String, val percent: Int, val waiting: Boolean)
+
+    fun shown(sent: ULong, total: ULong): Shown {
         val percent = if (total > 0uL) (sent.toDouble() / total.toDouble() * 100).toInt().coerceIn(0, 100) else 0
+        val text = if (sent == 0uL) "Waiting for a device to collect ${Words.size(total)}"
+            else "${Words.size(sent)} of ${Words.size(total)}"
+        return Shown(text, percent, sent == 0uL)
+    }
+
+    /**
+     * The worker's foreground notice: sent so far, of how much, for a pass that
+     * started at [since]. One time for the whole pass, and not shown: given
+     * the time of each update, it moved and redrew every time.
+     */
+    fun foreground(
+        context: Context,
+        sent: ULong,
+        total: ULong,
+        since: Long = System.currentTimeMillis(),
+    ): ForegroundInfo {
+        channel(context)
+        val shown = shown(sent, total)
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_arrow_up_down)
             .setColor(ContextCompat.getColor(context, R.color.green))
             .setContentTitle("Sending to your devices")
-            .setContentText(
-                if (sent == 0uL) "Waiting for a device to collect ${Words.size(total)}"
-                else "${Words.size(sent)} of ${Words.size(total)}"
-            )
-            .setProgress(100, percent, sent == 0uL)
+            .setContentText(shown.text)
+            .setProgress(100, shown.percent, shown.waiting)
+            .setWhen(since)
+            .setShowWhen(false)
             .setOngoing(true)
             .setSilent(true)
             .setOnlyAlertOnce(true)
