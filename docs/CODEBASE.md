@@ -1319,7 +1319,7 @@ network. iOS needs Xcode, which needs a Mac. See
 |---|---|
 | A window | Tauri 2, no framework and no build step; designed from the owner's direction ([design/direction.md](design/direction.md)): a translucent sidebar — Home, Files, Devices, Storage, Private Vault set apart, Settings — glass materials over a quiet environment, Inter, Lucide icons, motion that shows what moved |
 | It hosts the daemon | the same one `qurb run` starts, on its own threads |
-| Home | one state — synced, syncing, devices away, add your first device, needs attention — one action, *Send to device*, attention only when something needs a decision, and Recent |
+| Home | one state — synced, syncing, devices away, add your first device, needs attention — one action, *Send to device*, attention only when something needs a decision; what happened lately is a clock button away (Activity), not on Home |
 | Files | a file browser from the index: search, breadcrumbs, folders apart from files, and where each file's bytes are — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](decisions/0055-a-file-on-no-device-says-so.md)); keep a file here, free its local space, send it, move it into Private Vault, delete it; a details panel naming the devices that hold it |
 | Private Vault | this computer's own files, browsed the same way; *Move to shared* takes one back out ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md)) |
 | Devices | who is paired, whether each is connected now and whether directly or through the relay, when each was last reached; removing one, with what that will and will not do said first |
