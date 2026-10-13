@@ -2328,7 +2328,7 @@ impl Qurb {
             self.serving.recently(COLLECTING),
             || self.waiting_for_others().unwrap_or(false),
         ) {
-            let come_by = std::cmp::min(started + budget, std::time::Instant::now() + LINGER);
+            let come_by = come_by(std::time::Instant::now(), started, budget, serving);
             let at_most = started + serving;
             runtime.block_on(connector.announce_news());
             while keep_answering(
@@ -2565,6 +2565,27 @@ const LINGER: std::time::Duration = std::time::Duration::from_secs(10);
 /// pass stays only when it reached a device and has something waiting for it.
 fn stays_to_answer(reached: bool, collecting: bool, waiting: impl FnOnce() -> bool) -> bool {
     collecting || (reached && waiting())
+}
+
+/// Until when a pass that has finished its own syncing waits for a device to
+/// come and collect, when none has yet.
+///
+/// An ordinary pass gives it `LINGER`, inside its window. A long pass -- one
+/// the platform lets run on past the window -- gives it as long as a device
+/// that paused part-way is given, `PAUSED`. The collector may be busy: on
+/// 2026-10-13 the laptop was still timing out its connection to the phone's
+/// previous process, 58 seconds after the app was replaced, and two long
+/// passes in a row had waited their ten seconds and closed before it came.
+fn come_by(
+    now: std::time::Instant,
+    started: std::time::Instant,
+    budget: std::time::Duration,
+    serving: std::time::Duration,
+) -> std::time::Instant {
+    match serving > budget {
+        true => std::cmp::min(started + serving, now + PAUSED),
+        false => std::cmp::min(started + budget, now + LINGER),
+    }
 }
 
 /// Whether a pass that has finished its own syncing goes on answering.
@@ -3022,6 +3043,23 @@ mod tests {
         let start = Instant::now();
         let window = start + Duration::from_secs(20);
         assert!(!keep_answering(start + Duration::from_secs(20), window, window, true, true, || true));
+    }
+
+    /// A long pass gives a device a minute to come, as long as one that paused
+    /// part-way; an ordinary one ten seconds, inside its window. Neither past
+    /// what it may run for.
+    #[test]
+    fn a_long_pass_waits_a_minute_for_a_collector_to_come() {
+        let started = Instant::now();
+        let now = started + Duration::from_secs(12);
+        let window = Duration::from_secs(20);
+
+        let long = come_by(now, started, window, Duration::from_secs(1800));
+        assert_eq!(long, now + PAUSED);
+        let ordinary = come_by(now, started, window, window);
+        assert_eq!(ordinary, started + window, "ten seconds would go past the window");
+        let short = come_by(now, started, window, Duration::from_secs(30));
+        assert_eq!(short, started + Duration::from_secs(30), "never past what it may run for");
     }
 
     /// Collected from, a pass stays whether or not it reached anybody itself;

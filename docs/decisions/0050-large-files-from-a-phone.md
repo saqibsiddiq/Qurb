@@ -178,6 +178,16 @@ there.
     again: `setForeground` once, then the notice updated in place through
     the notification manager, when the bar moves and for the figures at most
     every ten seconds. Built; not yet watched.
+  - **A long pass gave a collector ten seconds to come**, 2026-10-13. After
+    the app was replaced mid-collection, the laptop went on waiting on its
+    connection to the old process and gave it up 58 seconds later. Meanwhile
+    two long passes had started, waited their ten seconds (`LINGER`), and
+    closed. The laptop asked four seconds after the second had gone, and
+    found nobody. Changed: a long pass waits for a first collector as long
+    as for one that paused part-way, `PAUSED`, a minute. An ordinary pass
+    keeps its ten seconds inside its window. Tested
+    (`a_long_pass_waits_a_minute_for_a_collector_to_come`); installed on the
+    S23 at 19:56, not yet watched.
 
 ## Reversing it
 
