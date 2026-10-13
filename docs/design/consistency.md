@@ -52,9 +52,9 @@ is. This file says how its parts line up.
 9. **Glass over moving content is opaque where nothing blurs it.**
    Android blurs nothing behind a view, so its tab bar is opaque, in light
    and dark. At 95% words behind it could be read; at 98% too, on the S23 in
-   dark and at a larger font size in light (row 29). A sheet blurs what is
-   behind it where the phone can, and is otherwise opaque; a dialog never
-   blurs, and is opaque (row 45).
+   dark and at a larger font size in light (row 29). Sheets and dialogs are
+   opaque too; where the phone blurs, the blur shows around a sheet, never
+   through it (rows 45 and 46).
 10. **Motion never washes out words.** A light travelling across a control
     passes behind its text, dimmed.
 11. **The buttons that end a sheet or a confirmation sit on the right**, the
@@ -134,6 +134,7 @@ is. This file says how its parts line up.
 | 43 | desktop, conflicts | a version's device icon guessed from its name (rule 12) | from its kind |
 | 44 | desktop, showing a code | with no code drawn, *Waiting — …* stayed centred under a left-aligned heading | on the left |
 | 45 | Android, the pairing question, and every dialog | on the S23 in dark, the QR code behind the question read plainly through it, about 8 levels, under the number to compare; and the number was Material's lilac in the system font | dialogs opaque (and a sheet where nothing blurs); the number in the app's colour, Inter, even figures |
+| 46 | Android, every sheet | on the S23 in dark, text behind a sheet read through it: the phone reported blur off (`mBlurEnabled=false`) and the sheet stayed 97%, the case row 45 had made opaque for dialogs only | every sheet opaque; where the phone blurs, the blur shows around it |
 
 Checked after: the desktop smoke test, in the real window, both modes (*no
 command failed*), and every screen re-measured in the fixtures and on the
@@ -142,7 +143,7 @@ the emulator and then looking at sheets, dark mode and setting up. Rows 27
 and 28 came from going through pairing and removing one screen at a time:
 the desktop's measured in the fixtures with headless Chromium at 1280 × 860,
 each row's buttons measured with and without the change; the phone's icon on
-the emulator. Rows 29 to 45 came from the rest of the list below, going
+the emulator. Rows 29 to 46 came from the rest of the list below, going
 through the send flow, conflicts, the phone's pairing and removing screens
 and its setting up one by one, every place and sheet at 1.3× and 2×, and the
 S23: Rust tests for the desktop and mobile crates, the desktop smoke test,
@@ -191,7 +192,7 @@ Stated so that nobody mistakes this pass for a complete one:
   and device icons on both. Rows 27 and 28. Then the send flow and
   conflicts on both, the phone's pairing, removing and setting up (on a
   second user of the emulator, so nothing was cleared), every place and
-  sheet at 1.3× and 2×, and the S23. Rows 29 to 45.
+  sheet at 1.3× and 2×, and the S23. Rows 29 to 46.
 - **The S23, screen by screen**, in dark: the four places, Add a device,
   entering and showing a code, a device's sheet, removing (dismissed, not
   done), Send to, and the pairing question -- a throwaway device on the
