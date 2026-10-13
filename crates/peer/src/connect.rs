@@ -37,7 +37,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot, watch};
 
 /// How long to wait for a peer to answer a request to connect.
 const RENDEZVOUS_TIMEOUT: Duration = Duration::from_secs(20);
@@ -89,7 +89,11 @@ pub struct Connector {
     endpoint: quinn::Endpoint,
     identity: Identity,
     master: MasterKey,
-    endpoints: Endpoints,
+    /// Where this device can be reached, as it is now rather than as it was
+    /// when it started: [`follow_addresses`] changes it when the machine's
+    /// addresses do, and everything that tells peers where this device is
+    /// reads it from here.
+    here: Arc<watch::Sender<Endpoints>>,
     /// The way round, when there is no way through.
     ///
     /// Held open rather than dialled on demand, because a device must be
@@ -340,31 +344,14 @@ impl Connector {
         // loses nothing it cannot rediscover on its next sweep.
         let (arrivals, _) = broadcast::channel(16);
 
-        // Every address this machine has, when the socket is listening on all
-        // of them. On a laptop with an overlay network that is the difference
-        // between a phone elsewhere having a path to it and having none.
+        let endpoints = Endpoints { public, local: reachable_at(local) };
+        // Read again every few seconds once running, because a machine's
+        // addresses are not fixed for the life of the process (2026-10-13).
         //
-        // Only for a wildcard bind, and the distinction is not pedantic: a
-        // socket bound to one address is listening on exactly that address, so
-        // announcing the machine's other interfaces advertises places nothing
-        // is accepting. A peer then races addresses that can only fail and
-        // concludes the device is unreachable — which is what happened to a
-        // test binding loopback the first time this was written.
-        let candidates = match local.ip().is_unspecified() {
-            false => vec![local],
-            true => {
-                let port = local.port();
-                let found: Vec<SocketAddr> = nat::local_addresses()
-                    .into_iter()
-                    .map(|ip| SocketAddr::new(ip, port))
-                    .collect();
-                match found.is_empty() {
-                    true => vec![nat::dialable(local)],
-                    false => found,
-                }
-            }
-        };
-        let endpoints = Endpoints { public, local: candidates };
+        // The public address is not: STUN needs the socket, and QUIC owns it
+        // now. A stale one costs a peer a few packets in the race; the local
+        // addresses and the relay are the paths this keeps right.
+        let here = Arc::new(watch::Sender::new(endpoints.clone()));
         let signal_url = signal_url.into();
         let signal_url: String = signal_url;
 
@@ -420,7 +407,7 @@ impl Connector {
             client,
             reconnect,
             commands,
-            endpoints.clone(),
+            here.subscribe(),
             endpoint.clone(),
             identity.clone(),
             arrivals_tx,
@@ -436,7 +423,7 @@ impl Connector {
             None => None,
             Some(port) => {
                 let me = MemberId::derive(&master, identity.fingerprint().as_bytes());
-                match Beacons::start(master.clone(), me, endpoints.clone(), port) {
+                match Beacons::start(master.clone(), me, endpoints, port) {
                     Ok((beacons, sightings)) => {
                         background.push(
                             tokio::spawn(follow_beacons(
@@ -456,11 +443,26 @@ impl Connector {
             }
         };
 
+        // Only a socket listening everywhere has addresses that can change
+        // under it; one bound to a single address is listening there and
+        // nowhere else, whatever the machine's interfaces do.
+        if local.ip().is_unspecified() {
+            background.push(
+                tokio::spawn(follow_addresses(
+                    Arc::clone(&here),
+                    beacons.clone(),
+                    LOOK_AGAIN,
+                    move || reachable_at(local),
+                ))
+                .abort_handle(),
+            );
+        }
+
         Ok(Self {
             endpoint,
             identity,
             master,
-            endpoints,
+            here,
             relay,
             signal,
             arrivals,
@@ -502,7 +504,7 @@ impl Connector {
             None,
             reconnect,
             commands,
-            self.endpoints.clone(),
+            self.here.subscribe(),
             self.endpoint.clone(),
             self.identity.clone(),
             self.arrivals.clone(),
@@ -641,8 +643,9 @@ impl Connector {
             .map_err(|e| Error::Io { path: "local_addr".into(), source: e })
     }
 
-    pub fn endpoints(&self) -> &Endpoints {
-        &self.endpoints
+    /// Where this device says it can be reached, now.
+    pub fn endpoints(&self) -> Endpoints {
+        self.here.borrow().clone()
     }
 
     pub fn endpoint(&self) -> &quinn::Endpoint {
@@ -651,16 +654,16 @@ impl Connector {
 
     /// Say where this device is, again.
     ///
-    /// Called when the addresses change, which a laptop moving between networks
-    /// does several times a day.
-    pub fn reannounce(&self, endpoints: Endpoints) -> Result<()> {
+    /// For when the addresses change, which a laptop moving between networks
+    /// does several times a day. A connector listening on every interface
+    /// notices that by itself ([`follow_addresses`]); this is for saying so
+    /// directly. The beacons say it from their next one, and the rendezvous
+    /// service is told at once, on every connection this device holds there.
+    pub fn reannounce(&self, endpoints: Endpoints) {
         if let Some(beacons) = &self.beacons {
             beacons.now_at(endpoints.clone());
         }
-        let _ = endpoints;
-        // The signalling task holds the connection; re-announcing through it is
-        // the next thing to add here.
-        Ok(())
+        self.here.send_replace(endpoints);
     }
 
     /// Reach a peer, given the fingerprint pairing established.
@@ -907,7 +910,7 @@ async fn stay_signalled(
     first: Option<SignalClient>,
     reconnect: Reconnect,
     mut commands: mpsc::UnboundedReceiver<Command>,
-    endpoints: Endpoints,
+    mut here: watch::Receiver<Endpoints>,
     endpoint: quinn::Endpoint,
     identity: Identity,
     arrivals_tx: broadcast::Sender<MemberId>,
@@ -924,13 +927,9 @@ async fn stay_signalled(
                     tokio::time::sleep(wait).await;
                     wait = (wait * 2).min(RECONNECT_CEILING);
                 }
-                match SignalClient::connect(
-                    &reconnect.url,
-                    reconnect.group,
-                    reconnect.member,
-                    endpoints.clone(),
-                )
-                .await
+                let now = here.borrow_and_update().clone();
+                match SignalClient::connect(&reconnect.url, reconnect.group, reconnect.member, now)
+                    .await
                 {
                     Ok(fresh) => {
                         tracing::info!("reconnected to the rendezvous service");
@@ -952,7 +951,7 @@ async fn stay_signalled(
         run_signalling(
             connected,
             &mut commands,
-            endpoints.clone(),
+            &mut here,
             endpoint.clone(),
             identity.clone(),
             arrivals_tx.clone(),
@@ -978,15 +977,31 @@ async fn stay_signalled(
 async fn run_signalling(
     mut client: SignalClient,
     commands: &mut mpsc::UnboundedReceiver<Command>,
-    endpoints: Endpoints,
+    here: &mut watch::Receiver<Endpoints>,
     endpoint: quinn::Endpoint,
     identity: Identity,
     arrivals_tx: broadcast::Sender<MemberId>,
 ) {
     let mut waiting: HashMap<MemberId, oneshot::Sender<Result<Endpoints>>> = HashMap::new();
+    // Until the connector goes, which ends this task anyway; a closed channel
+    // must not be asked again, since it answers at once, every time.
+    let mut following = true;
 
     loop {
         tokio::select! {
+            moved = here.changed(), if following => match moved {
+                // This device has moved. Announcing again replaces what the
+                // service holds for it, which is what a peer asking later is
+                // given and what one this device asks for is told to punch.
+                Ok(()) => {
+                    let now = here.borrow_and_update().clone();
+                    if client.announce(now).is_err() {
+                        return;
+                    }
+                }
+                Err(_) => following = false,
+            },
+
             command = commands.recv() => match command {
                 Some(Command::Waiting { to }) => {
                     // Failing is not worth reporting. The peer syncs on its
@@ -1013,7 +1028,8 @@ async fn run_signalling(
             message = client.next() => match message {
                 Some(FromServer::ConnectRequest { from, .. }) => {
                     // Agreeing is what releases the simultaneous punch.
-                    if client.accept(from, endpoints.clone()).is_err() {
+                    let now = here.borrow().clone();
+                    if client.accept(from, now).is_err() {
                         return;
                     }
                 }
@@ -1070,6 +1086,80 @@ async fn run_signalling(
                     return;
                 }
             },
+        }
+    }
+}
+
+/// The addresses a peer can dial this device at, for a socket bound to `local`.
+///
+/// Every address this machine has, when the socket is listening on all of
+/// them. On a laptop with an overlay network that is the difference between a
+/// phone elsewhere having a path to it and having none.
+///
+/// Only for a wildcard bind, and the distinction is not pedantic: a socket
+/// bound to one address is listening on exactly that address, so announcing
+/// the machine's other interfaces advertises places nothing is accepting. A
+/// peer then races addresses that can only fail and concludes the device is
+/// unreachable — which is what happened to a test binding loopback the first
+/// time this was written.
+fn reachable_at(local: SocketAddr) -> Vec<SocketAddr> {
+    if !local.ip().is_unspecified() {
+        return vec![local];
+    }
+    let found: Vec<SocketAddr> = nat::local_addresses()
+        .into_iter()
+        .map(|ip| SocketAddr::new(ip, local.port()))
+        .collect();
+    match found.is_empty() {
+        true => vec![nat::dialable(local)],
+        false => found,
+    }
+}
+
+/// How often to look at this machine's addresses for a change.
+///
+/// Looking costs a system call and sends nothing, so it can be often; what it
+/// buys is a laptop that rejoined its Wi-Fi under a new address being reachable
+/// seconds later rather than not until qurb restarts.
+const LOOK_AGAIN: Duration = Duration::from_secs(5);
+
+/// Notice when this machine's addresses change, and tell peers.
+///
+/// Found on the owner's laptop (2026-10-13). Its Wi-Fi reconnected and came
+/// back as `192.168.1.2` instead of `.4`; qurb, having read its addresses once
+/// at startup, went on offering `.4` in every beacon and every introduction,
+/// and the phone, dialling it, never got through. The laptop could still
+/// reach the phone, so it was half a connection, and looked like a firewall.
+async fn follow_addresses(
+    here: Arc<watch::Sender<Endpoints>>,
+    beacons: Option<Arc<Beacons>>,
+    every: Duration,
+    look: impl Fn() -> Vec<SocketAddr> + Send + 'static,
+) {
+    let mut timer = tokio::time::interval(every);
+    timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // The first tick is immediate, and the connector has only just looked.
+    timer.tick().await;
+    loop {
+        timer.tick().await;
+        let found = look();
+        let moved = here.send_if_modified(|endpoints| {
+            if endpoints.local == found {
+                return false;
+            }
+            endpoints.local = found.clone();
+            true
+        });
+        if !moved {
+            continue;
+        }
+        tracing::info!(reachable = ?found, "this device's addresses changed; telling peers");
+        // The rendezvous connections follow `here` by themselves. The beacons
+        // carry a copy, and say it at once rather than at the next interval,
+        // since a neighbour holding the old address is dialling nowhere.
+        if let Some(beacons) = &beacons {
+            beacons.now_at(here.borrow().clone());
+            beacons.announce().await;
         }
     }
 }
@@ -1159,5 +1249,34 @@ mod tests {
         let announced = nat::dialable(local);
         assert!(!announced.ip().is_unspecified(), "0.0.0.0 was announced to peers");
         assert_eq!(announced.port(), local.port(), "the port must survive");
+    }
+
+    /// A change in this machine's addresses reaches what tells peers where it
+    /// is, and no change says nothing.
+    #[tokio::test]
+    async fn a_new_address_is_noticed_and_passed_on() {
+        let before: SocketAddr = "192.168.1.4:37716".parse().unwrap();
+        let after: SocketAddr = "192.168.1.2:37716".parse().unwrap();
+        let here = Arc::new(watch::Sender::new(Endpoints { public: None, local: vec![before] }));
+        let mut told = here.subscribe();
+        let machine = Arc::new(std::sync::Mutex::new(vec![before]));
+        let looking = Arc::clone(&machine);
+        let following = tokio::spawn(follow_addresses(
+            Arc::clone(&here),
+            None,
+            Duration::from_millis(20),
+            move || looking.lock().unwrap().clone(),
+        ));
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert!(!told.has_changed().unwrap(), "announced again with nothing changed");
+
+        *machine.lock().unwrap() = vec![after];
+        tokio::time::timeout(Duration::from_secs(2), told.changed())
+            .await
+            .expect("the new address was never noticed")
+            .unwrap();
+        assert_eq!(told.borrow_and_update().local, vec![after]);
+        following.abort();
     }
 }

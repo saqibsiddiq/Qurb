@@ -139,3 +139,77 @@ async fn an_unreachable_device_is_reported_address_by_address() {
     let said = error.to_string();
     assert!(said.contains(&format!("{address} timed out")), "{said}");
 }
+
+/// A device whose address changes is offered where it is now.
+///
+/// The owner's laptop rejoined its Wi-Fi as `192.168.1.2` instead of `.4`
+/// (2026-10-13) and went on offering `.4`, so the phone, asking the rendezvous
+/// for it, was handed an address where nothing answered. Both places the
+/// service hands out a device's addresses are checked: what it holds for the
+/// device, and what the device answers with when another asks to meet it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_that_moves_is_offered_where_it_is_now() {
+    use qurb_signal::{Endpoints, FromServer, GroupId, MemberId, SignalClient};
+    use std::time::{Duration, Instant};
+
+    let dir = tempfile::tempdir().unwrap();
+    let master = MasterKey::generate();
+    let identity = Identity::load_or_create(dir.path()).unwrap();
+    let laptop = MemberId::derive(&master, identity.fingerprint().as_bytes());
+    let port = {
+        let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        probe.local_addr().unwrap().port()
+    };
+    let _service = service_on(port).await;
+    let url = format!("ws://127.0.0.1:{port}");
+    let connector = Connector::start(
+        "127.0.0.1:0".parse().unwrap(),
+        identity,
+        master.clone(),
+        &qurb_peer::tls::TrustList::default(),
+        &url,
+        qurb_peer::Finding::nothing(),
+    )
+    .await
+    .unwrap();
+
+    // Documentation addresses: nothing is there, and nothing is dialled.
+    let moved = Endpoints { public: None, local: vec!["192.0.2.2:37716".parse().unwrap()] };
+    connector.reannounce(moved.clone());
+    assert_eq!(connector.endpoints(), moved);
+
+    // A phone in the same group, at an address that swallows the laptop's
+    // knock rather than sending it out of the machine.
+    let silent = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    let mine = Endpoints { public: None, local: vec![silent.local_addr().unwrap()] };
+    let phone = MemberId::derive(&master, &[9; 32]);
+    let mut asking = SignalClient::connect(&url, GroupId::derive(&master), phone, mine.clone())
+        .await
+        .unwrap();
+
+    // What the service holds. The change travels on the laptop's own
+    // connection, so it is looked for rather than assumed to have arrived.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut held = asking.peers().await.unwrap();
+    while !held.iter().any(|p| p.member == laptop && p.endpoints == moved) {
+        assert!(Instant::now() < deadline, "the service still holds the old address: {held:?}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        asking.announce(mine.clone()).unwrap();
+        held = asking.peers().await.unwrap();
+    }
+
+    // And what the phone is told to punch when it asks to meet the laptop.
+    asking.connect_to(laptop).unwrap();
+    let told = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match asking.next().await {
+                Some(FromServer::Punch { peer, endpoints }) if peer == laptop => break endpoints,
+                Some(_) => continue,
+                None => panic!("the service closed the connection"),
+            }
+        }
+    })
+    .await
+    .expect("the laptop never answered the introduction");
+    assert_eq!(told, moved, "the laptop answered with where it used to be");
+}

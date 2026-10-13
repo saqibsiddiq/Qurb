@@ -321,12 +321,31 @@ back to the laptop's (`wss://saqib.tail86283c.ts.net`, the laptop's service
 through Tailscale Funnel); the WhatsApp backup set up again from Settings at
 18:57. It starts from nothing.
 
-**Open:** the phone could not reach the laptop on its own -- every attempt
+**Found: the phone could not reach the laptop on its own** -- every attempt
 to the laptop's address timed out (`192.168.1.4:37716 timed out`), while the
-laptop reached the phone each time, the firewall allows the network, and the
-laptop's trust list re-reads a device paired outside it. The backup does not
-need that direction: the laptop collects. Home on the phone said *Not synced
-yet* meanwhile. Not found yet.
+laptop reached the phone each time. The backup does not need that
+direction, since the laptop collects, but Home on the phone said *Not synced
+yet* meanwhile.
+
+Not the firewall, though it looked like it. A UDP packet sent from the phone
+(toybox `nc`) to `192.168.1.4` never arrived; the same packet to
+`192.168.1.2` did. The laptop's Wi-Fi had reconnected at 18:38:46 IST and
+come back with a new lease, `.2` instead of `.4` (NetworkManager's log).
+The laptop's qurb had started the evening before and read its addresses once,
+at startup, so it went on offering `.4` -- in its beacons, in what the
+rendezvous service held for it, and in its answer each time the phone asked
+to meet. Nothing answered there.
+
+Fixed in `crates/peer` the same day: a connector listening on every
+interface reads its addresses again every five seconds and, on a change,
+announces again to the rendezvous (which already replaced a device's
+addresses on a second announce), answers introductions with the new ones,
+and puts them in its beacons at once. Tested against a real rendezvous
+service (`a_device_that_moves_is_offered_where_it_is_now`, which fails with
+the re-announce taken out) and on the loop itself. The public address STUN
+found at start is still not looked at again; QUIC owns the socket by then.
+A stale one costs a peer a few packets in the race, and the local addresses
+and the relay are what this keeps right.
 
 ### Faster, measured on the S23 — 2026-10-13
 

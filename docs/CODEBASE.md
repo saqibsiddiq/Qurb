@@ -997,7 +997,7 @@ for the workspace as it stands.
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
-| Every reachable address offered | LAN, overlay network and public, raced in parallel |
+| Every reachable address offered | LAN, overlay network and public, raced in parallel; the local ones offered again within seconds of changing |
 | Signalling that reconnects | a rendezvous restart costs seconds, not a daemon restart |
 | Local discovery | encrypted beacons; two devices on one network need no server at all |
 | A rendezvous on a bare IP | self-signed, pinned by fingerprint in the URL — no domain, no authority |
@@ -1070,6 +1070,16 @@ its public address, announces, asks to be introduced, and races every address th
 peer offered — keeping the first that answers, local addresses first. Both sides
 dial when told to, because a QUIC handshake's opening packets *are* the hole
 punch and a device that only listens has punched nothing.
+
+Its own addresses are not fixed for the life of the process. A connector
+listening on every interface reads them again every five seconds
+(`follow_addresses`), and on a change announces again to the rendezvous service
+— which replaces what it holds — answers later introductions with the new ones,
+and puts them in its beacons at once. The public address is the exception: it
+stays as STUN found it at start, because QUIC owns the socket by then. Found
+when the owner's laptop rejoined its Wi-Fi under a new address and went on
+offering the old one, so the phone could not reach it
+([decisions/0062](decisions/0062-backing-up-whatsapp.md), 2026-10-13).
 
 **And a relay carries what cannot go directly.** It forwards opaque datagrams
 with an ordinary QUIC session running inside, so it sees ciphertext addressed to

@@ -2208,8 +2208,25 @@ after WhatsApp deletes it, the Google backup left on for now.
 phone's vault read where they lie, copied nowhere on the phone, and kept by
 the laptop as it keeps the vault; offered to it on Wi-Fi only; out of every
 list a person is shown. Set up from Settings, run nightly while charging.
-Checked on the emulator against a stand-in folder (0062, step 2); not yet on
-the S23.
+Checked on the emulator against a stand-in folder (0062, step 2), then run
+on the S23 the same evening.
+
+**On the S23, 2026-10-12 and 13.** The first run read 6,631 files in its
+seven minutes and stopped at the first file it could not read. After the
+owner's "its too slow", both ends were made faster. On the phone, files are
+read four at a time and a run carries on in a follow-up job. On the laptop,
+small files are fetched 32 at a time. Measured on 2026-10-13, after the
+owner had set the phone up again from nothing, on battery and home Wi-Fi:
+36,031 files listed in 43 s, 9.69 GB of 35,472 read in the first seven
+minutes (23 MB/s), and the last 559 read in 12 s by the follow-up. Figures,
+conditions and the laptop's side are in 0062.
+
+**Found on the way: a laptop that changed address was unreachable.** Its
+Wi-Fi reconnected under a new lease and qurb went on offering the old
+address, read once at startup, so the phone could not reach it although the
+laptop could reach the phone. A connector now reads its addresses again
+every five seconds and offers the new ones at once (0062, *Found*). The
+public address found by STUN at start is still not looked at again.
 
 ## Deliberately left undone
 
