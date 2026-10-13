@@ -41,6 +41,7 @@ object WhatsApp {
     private const val PREFS = "whatsapp"
     private const val NIGHTLY = "whatsapp-nightly"
     private const val NOW = "whatsapp-now"
+    private const val MORE = "whatsapp-more"
 
     /** WhatsApp's folder, as the external storage provider names it. */
     private const val FOLDER = "primary:Android/media/com.whatsapp/WhatsApp"
@@ -105,6 +106,7 @@ object WhatsApp {
         val files = list(context, tree)
         val listed = System.currentTimeMillis() - started
         val run = Engine.open(context).backUpWhatsapp(files, RUN_SECONDS)
+        val took = System.currentTimeMillis() - started - listed
         val said = buildList {
             add("${run.added + run.changed + run.unchanged} files")
             if (run.added > 0u) add("${run.added} new")
@@ -117,7 +119,8 @@ object WhatsApp {
             .putLong("at", System.currentTimeMillis() / 1000)
             .putString("said", said)
             .apply()
-        Log.i(TAG, "listed ${files.size} in ${listed} ms; $run")
+        Log.i(TAG, "listed ${files.size} in ${listed} ms; read ${run.bytesRead} bytes of " +
+            "${run.added + run.changed} files in ${took} ms; $run")
         run
     }
 
@@ -178,6 +181,13 @@ object WhatsApp {
         WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.KEEP, request)
     }
 
+    private fun carryOn(context: Context) {
+        val request = OneTimeWorkRequestBuilder<Nightly>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(MORE, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    }
+
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /**
@@ -187,11 +197,15 @@ object WhatsApp {
      */
     class Nightly(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
-            runCatching { run(applicationContext) }
+            val run = runCatching { run(applicationContext) }
                 .onFailure { Log.w(TAG, "the backup did not run", it) }
                 .getOrNull() ?: return Result.success()
             // Always: what an earlier run found may still be on its way.
             SyncWorker.runNow(applicationContext)
+            // A first run reads more than one window allows -- 3.5 GB of the
+            // S23's 9.65 in its seven minutes. The rest carries on now, on
+            // Wi-Fi, rather than over the nights that follow.
+            if (run.remaining > 0u && run.failed == 0u) carryOn(applicationContext)
             return Result.success()
         }
     }

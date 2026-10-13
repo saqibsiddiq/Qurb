@@ -237,3 +237,51 @@ The phone's panel in Devices says what the computer keeps of its WhatsApp:
 fixtures). Nothing more: the files stay in the chunk store, never in a
 folder, as answer 1 asked (`Db::held_outside_for`, `view::Device::whatsapp`).
 The workspace's 845 tests pass.
+
+### On the S23, the first time — 2026-10-12
+
+Set up from Settings on the owner's S23 (Android 16, One UI 8.5), charging,
+on the home Wi-Fi, with the laptop keeping its vault.
+
+| | |
+|---|---|
+| listing WhatsApp's folder | 36,010 files in 76 s, its caches left out |
+| the first run | 6,631 files, 3.5 GB, in its 7 minutes: 8.3 MB/s, 63 ms a file, one file at a time |
+| the laptop collecting small files | 4 to 8 a second, 0.5 to 1 MB/s |
+| the laptop collecting large files | 10 to 13 MB/s, round trips of 15 to 25 ms |
+| at 19:39 | 5,648 files, 3.3 GB on the laptop |
+
+**Too slow, the owner said, and it was.** Each end did its files one after
+another and waited on every one: the phone on Android's document provider
+for each file it read, the laptop on several round trips per file to a
+phone whose Wi-Fi, with the screen off, answers slowly. On this machine the
+same work is 0.4 ms a file to read and 3.7 to collect, so the time was the
+waiting. Changed:
+
+- **The laptop fetches ahead.** The engine tells the network source every
+  file a plan will ask for (`ContentSource::coming`), and small ones (4 MB
+  or less) are fetched 32 at a time, at most 64 MB held; what arrived is told
+  to the phone in batches rather than a round trip after each file
+  (`finished`). Collecting 2,000 small files over a connection on this
+  machine went from 3.7 ms a file to 2.3; the gain on Wi-Fi is the round
+  trips it overlaps, not yet measured.
+- **The phone reads four at a time.** New files are read and chunked on
+  four threads and recorded in order on one. Not yet measured on the S23.
+- **A run that leaves files carries on at once**, on Wi-Fi, rather than
+  waiting for the next night: 3.5 GB of 9.65 went in the first window.
+
+**And a bug the run found.** When the phone went away part-way through, at
+14:07, every file the laptop was fetching for it failed, and each was
+written into the laptop's history by name -- 5,027 of them, which the
+desktop's Activity and its *could not finish* notifications read. A file
+kept for another device is now only logged when it fails
+(`a_held_file_that_fails_is_not_in_the_history`), and the history leaves out
+the backup's paths, so the 5,027 already written are no longer shown. The
+notification also said *qurb* in lower case; it says *Qurb*.
+
+**Not finished.** The phone has not connected since 14:08: its wireless
+debugging went off, which Android does when a phone leaves Wi-Fi, so it is
+probably away from home. The backup carries on when it is back on Wi-Fi.
+Collection still happens only while the phone serves -- a pass in the
+foreground of up to half an hour after each run (decision 0050) -- and
+between passes, nothing.

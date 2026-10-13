@@ -157,7 +157,7 @@ fn worth_saying(row: &Activity, who: Option<String>) -> Option<Notice> {
         }),
 
         Event::Failed => Some(Notice {
-            title: "qurb could not finish something".to_string(),
+            title: "Qurb could not finish something".to_string(),
             body: match &row.detail {
                 Some(why) => format!("{what}: {why}"),
                 None => what,

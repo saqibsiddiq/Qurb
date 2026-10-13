@@ -382,8 +382,10 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                 // below, until a restore has been watched working.
                 .text("Restoring WhatsApp from it hasn't been tried yet, so keep WhatsApp's own Google " +
                     "backup on for now. Turning off Include videos there saves the most space.")
-                .text("Next, Android asks which folder: choose Use this folder, then Allow.")
-                .buttons("Choose WhatsApp's folder", secondary = "Not now") { app.pickWhatsApp() }
+                .text("Next, Android opens WhatsApp's folder: choose Use this folder, then Allow.")
+                // Short: on the S23's 360 dp, "Choose WhatsApp's folder" broke
+                // over two lines inside the button.
+                .buttons("Choose folder", secondary = "Not now") { app.pickWhatsApp() }
                 .show()
             return
         }

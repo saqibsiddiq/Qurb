@@ -198,8 +198,11 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightNavigationBar">@bool/light_bars</item>
     </style>
+    <!-- Opaque, like a dialog: on the S23 the phone said it would blur behind
+         a sheet and did not, and the page read through the 3% (consistency.md,
+         row 46). Where it does blur, the blur shows around the sheet. -->
     <style name="Widget.Qurb.Sheet" parent="Widget.Material3.BottomSheet.Modal">
-        <item name="backgroundTint">@color/glass_elevated</item>
+        <item name="backgroundTint">@color/glass_solid</item>
         <item name="shapeAppearance">@style/Shape.Qurb.Sheet</item>
     </style>
     <style name="Shape.Qurb.Sheet" parent="">

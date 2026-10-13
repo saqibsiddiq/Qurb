@@ -257,3 +257,74 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
     assert!(kept("Databases/msgstore-increment-1.db.crypt14"));
     assert_eq!(on_desktop(&desktop, &newer).unwrap(), newer);
 }
+
+/// Not a test: how long the desktop takes to collect many small files of a
+/// folder kept where it lies, over a connection on this machine.
+/// `cargo test --release -p qurb-peer --test holding timing -- --ignored --nocapture`
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn timing_collecting_many_small_files() {
+    let mut phone = Device::new();
+    phone.engine.store_mut().set_new_files_private(true);
+    let mut desktop = Device::new();
+    introduce(&phone, &desktop);
+    phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+    phone.engine.store().db().set_outside_offered(true).unwrap();
+
+    let whatsapp = phone._dir.path().join("whatsapp");
+    let listing: Vec<qurb_storage::OutsideEntry> = (0..2000u32)
+        .map(|i| {
+            let path = whatsapp.join(format!("Media/{i:05}.jpg"));
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let bytes: Vec<u8> = (0..150_000u32).map(|j| (j.wrapping_mul(2_654_435_761).wrapping_add(i * 7919) >> 13) as u8).collect();
+            fs::write(&path, &bytes).unwrap();
+            qurb_storage::OutsideEntry { path: format!("Media/{i:05}.jpg"), source: path.to_string_lossy().into_owned(), size: bytes.len() as u64, mtime_ns: 1 }
+        })
+        .collect();
+    let t = std::time::Instant::now();
+    phone.engine.store_mut().keep_outside_folder(".qurb-outside/whatsapp", &listing, &|_| true, None).unwrap();
+    println!("indexing: {:.2} ms per file", t.elapsed().as_secs_f64() * 1000.0 / 2000.0);
+
+    let t = std::time::Instant::now();
+    let held = desktop.sync_from(&phone).await;
+    println!("collecting {} files: {:.2} ms per file", held.held, t.elapsed().as_secs_f64() * 1000.0 / held.held as f64);
+}
+
+/// A file kept for another device that cannot be fetched -- the phone went
+/// away part-way -- is not named in this device's history (decision 0062).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_held_file_that_fails_is_not_in_the_history() {
+    let mut phone = Device::new();
+    phone.engine.store_mut().set_new_files_private(true);
+    let mut desktop = Device::new();
+    introduce(&phone, &desktop);
+    phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+    phone.engine.store().db().set_outside_offered(true).unwrap();
+
+    let whatsapp = phone._dir.path().join("whatsapp");
+    let path = whatsapp.join("Media/gone.jpg");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, vec![7u8; 90_000]).unwrap();
+    let listing = [qurb_storage::OutsideEntry {
+        path: "Media/gone.jpg".into(),
+        source: path.to_string_lossy().into_owned(),
+        size: 90_000,
+        mtime_ns: 1,
+    }];
+    phone.engine.store_mut().keep_outside_folder(".qurb-outside/whatsapp", &listing, &|_| true, None).unwrap();
+    // Changed where it lies before the desktop collects it: not servable.
+    fs::write(&path, vec![8u8; 90_000]).unwrap();
+
+    let (addr, fingerprint) = phone.serve(desktop.identity.fingerprint());
+    let client = PeerClient::connect(addr, &desktop.identity, fingerprint).await.unwrap();
+    let tree = client.tree().await.unwrap();
+    let plan = desktop.engine.plan_with(&tree, Some(&phone.id())).unwrap();
+    let reader = desktop.reader();
+    let stats = tokio::task::block_in_place(|| {
+        desktop.engine.apply_plan(&plan, &mut NetworkSource::new(&client, &reader)).unwrap()
+    });
+    client.close();
+    assert_eq!(stats.failures.len(), 1, "setup: the fetch should fail");
+    let history = desktop.engine.store().db().activity(50, None).unwrap();
+    assert!(history.iter().all(|a| a.path.as_deref().is_none_or(|p| !p.contains("gone.jpg"))), "{history:?}");
+}

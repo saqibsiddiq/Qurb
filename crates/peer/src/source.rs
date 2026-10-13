@@ -131,7 +131,23 @@ pub struct NetworkSource<'a> {
     runtime: tokio::runtime::Handle,
     /// The device at the other end, where the caller knows it.
     peer: Option<qurb_sync::DeviceId>,
+    /// Small files the plan will ask for, in order, not fetched yet; and
+    /// those fetched ahead, waiting to be asked for. See [`AHEAD`].
+    ahead: std::collections::VecDeque<([u8; 32], u64)>,
+    ready: std::collections::HashMap<[u8; 32], Vec<u8>>,
+    /// What arrived, not yet told to the other end: told in batches.
+    arrived: Vec<[u8; 32]>,
 }
+
+/// Files fetched at once, when a plan asks for small ones: a round trip to a
+/// phone with its screen off is long, and one at a time a laptop collected 4
+/// to 8 a second of a WhatsApp backup that had 36,010 (decision 0062).
+const AHEAD: usize = 32;
+/// Files no larger than this are fetched ahead, held in memory until asked
+/// for; larger ones stream to disk as before.
+const SMALL: u64 = 4 << 20;
+/// At most this much held in memory at once by fetching ahead.
+const AHEAD_BYTES: u64 = 64 << 20;
 
 impl<'a> NetworkSource<'a> {
     /// # Runtime requirement
@@ -142,7 +158,15 @@ impl<'a> NetworkSource<'a> {
     /// cannot do — it would deadlock rather than fail, which is why this
     /// captures the handle up front and panics here instead.
     pub fn new(client: &'a PeerClient, local: &'a Store) -> Self {
-        Self { client, local, runtime: tokio::runtime::Handle::current(), peer: None }
+        Self {
+            client,
+            local,
+            runtime: tokio::runtime::Handle::current(),
+            peer: None,
+            ahead: Default::default(),
+            ready: Default::default(),
+            arrived: Vec::new(),
+        }
     }
 
     /// Name the device at the other end, so that its saying it does not hold
@@ -155,6 +179,9 @@ impl<'a> NetworkSource<'a> {
 
 impl ContentSource for NetworkSource<'_> {
     fn fetch(&mut self, hash: &[u8; 32], size: u64) -> qurb_engine::Result<Vec<u8>> {
+        if let Some(bytes) = self.fetched_ahead(hash) {
+            return Ok(bytes);
+        }
         let result = tokio::task::block_in_place(|| {
             self.runtime
                 .block_on(self.client.fetch_content(self.local, *hash, size))
@@ -179,14 +206,24 @@ impl ContentSource for NetworkSource<'_> {
     /// end, and a sync that succeeded must not be reported as failed because
     /// the closing remark did not get through — the file is here either way.
     /// The peer will learn of it on the next exchange.
+    ///
+    /// Put off and told [`AHEAD`] at a time, all at once, rather than a round
+    /// trip after every file; the rest when the plan is done.
     fn received(&mut self, content: &[u8; 32]) {
-        let content = *content;
-        let outcome = tokio::task::block_in_place(|| {
-            self.runtime.block_on(self.client.got(content))
-        });
-        if let Err(e) = outcome {
-            tracing::debug!(error = %e, "could not tell the peer the content arrived");
+        self.arrived.push(*content);
+        if self.arrived.len() >= AHEAD {
+            self.tell_arrived();
         }
+    }
+
+    fn coming(&mut self, contents: &[([u8; 32], u64)]) {
+        self.ahead = contents.iter().filter(|(_, size)| *size <= SMALL).copied().collect();
+    }
+
+    fn finished(&mut self) {
+        self.tell_arrived();
+        self.ahead.clear();
+        self.ready.clear();
     }
 
     /// The streaming form, which is the one that actually runs.
@@ -206,6 +243,10 @@ impl ContentSource for NetworkSource<'_> {
         _size: u64,
         out: &mut dyn std::io::Write,
     ) -> qurb_engine::Result<u64> {
+        if let Some(bytes) = self.fetched_ahead(hash) {
+            out.write_all(&bytes).map_err(|e| qurb_engine::Error::Io { path: "the destination".into(), source: e })?;
+            return Ok(bytes.len() as u64);
+        }
         let result = tokio::task::block_in_place(|| {
             self.runtime.block_on(async {
                 // Awaited here rather than spawned. `out` is borrowed from this
@@ -228,11 +269,73 @@ impl ContentSource for NetworkSource<'_> {
         partial: &std::path::Path,
         progress: &mut dyn qurb_engine::Progress,
     ) -> qurb_engine::Result<u64> {
+        if let Some(bytes) = self.fetched_ahead(hash) {
+            let io = |e| qurb_engine::Error::Io { path: partial.to_path_buf(), source: e };
+            std::fs::write(partial, &bytes).map_err(io)?;
+            progress.advanced(bytes.len() as u64);
+            return Ok(bytes.len() as u64);
+        }
         self.resume(hash, partial, progress).map_err(for_the_engine)
     }
 }
 
 impl NetworkSource<'_> {
+    /// `hash`, if it is one of the small files the plan said it would ask
+    /// for: fetched now with the next ones, [`AHEAD`] at a time, unless it
+    /// already was. `None` for anything else, and for one whose fetch ahead
+    /// failed, which is then fetched on its own as before -- so a failure is
+    /// reported as it always was.
+    fn fetched_ahead(&mut self, hash: &[u8; 32]) -> Option<Vec<u8>> {
+        if let Some(bytes) = self.ready.remove(hash) {
+            return Some(bytes);
+        }
+        let at = self.ahead.iter().position(|(h, _)| h == hash)?;
+        // Those before it were asked for already, or were not needed.
+        self.ahead.drain(..at);
+        let mut batch = Vec::new();
+        let mut bytes = 0;
+        while let Some(&(next, size)) = self.ahead.front() {
+            if batch.len() >= AHEAD || (bytes + size > AHEAD_BYTES && !batch.is_empty()) {
+                break;
+            }
+            self.ahead.pop_front();
+            // Content this device has already is not asked for at all.
+            if next != *hash && self.local.can_read_content(&blake3::Hash::from(next)).unwrap_or(false) {
+                continue;
+            }
+            bytes += size;
+            batch.push((next, size));
+        }
+        self.tell_arrived();
+        let (client, local) = (self.client, self.local);
+        let fetched = tokio::task::block_in_place(|| {
+            self.runtime.block_on(futures_util::future::join_all(batch.iter().map(|&(h, size)| async move {
+                (h, client.fetch_content(local, h, size).await)
+            })))
+        });
+        for (h, result) in fetched {
+            if let Ok(bytes) = result {
+                self.ready.insert(h, bytes);
+            }
+        }
+        self.ready.remove(hash)
+    }
+
+    /// Tell the other end, all at once, what arrived since it was last told.
+    fn tell_arrived(&mut self) {
+        if self.arrived.is_empty() {
+            return;
+        }
+        let arrived = std::mem::take(&mut self.arrived);
+        let client = self.client;
+        let outcomes = tokio::task::block_in_place(|| {
+            self.runtime.block_on(futures_util::future::join_all(arrived.iter().map(|&content| client.got(content))))
+        });
+        if let Some(Err(e)) = outcomes.into_iter().find(|o| o.is_err()) {
+            tracing::debug!(error = %e, "could not tell the peer what arrived");
+        }
+    }
+
     /// The resuming form of [`fetch_into`](ContentSource::fetch_into); see
     /// [`PeerClient::resume_point`].
     fn resume(

@@ -238,6 +238,32 @@ pub struct SentBefore {
     pub at: i64,
 }
 
+/// Open a file to read: a path, or a document the platform lends.
+fn open_with(
+    documents: Option<&std::sync::Arc<dyn Documents>>,
+    source: &str,
+) -> std::io::Result<std::fs::File> {
+    if source.starts_with("content://") {
+        return documents
+            .and_then(|documents| documents.open(source))
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the document cannot be opened"));
+    }
+    std::fs::File::open(source)
+}
+
+/// Read a file kept outside the folder through, to describe it: its chunks
+/// and its hash.
+fn describe(documents: Option<&std::sync::Arc<dyn Documents>>, source: &str) -> Result<Manifest> {
+    let at = Path::new(source);
+    let file = open_with(documents, source).map_err(|e| Error::io(at, e))?;
+    chunker::chunk_reader(std::io::BufReader::with_capacity(1 << 20, file)).map_err(|e| Error::io(at, e))
+}
+
+/// How many files outside the folder are read at once to describe them. On a
+/// phone each is opened through the platform, which takes long enough that
+/// reading them one at a time came to 63 ms a file on the S23 (decision 0062).
+const READING_AT_ONCE: usize = 4;
+
 /// A file's content hash as the index records it -- BLAKE3 over all of its
 /// bytes in order, which is what [`chunker::chunk_bytes`] computes -- read in
 /// pieces rather than held.
@@ -404,14 +430,7 @@ impl Store {
 
     /// Open a send's file: a path, or a document the platform lends.
     fn open_source(&self, source: &str) -> std::io::Result<std::fs::File> {
-        if source.starts_with("content://") {
-            return self
-                .documents
-                .as_ref()
-                .and_then(|documents| documents.open(source))
-                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the document cannot be opened"));
-        }
-        std::fs::File::open(source)
+        open_with(self.documents.as_ref(), source)
     }
 
     /// How to open documents that are not paths (decision 0060). Android's
@@ -1488,14 +1507,24 @@ impl Store {
         size: u64,
         mtime_ns: i64,
     ) -> Result<PutStats> {
-        let at = Path::new(source);
-        let file = self.open_source(source).map_err(|e| Error::io(at, e))?;
-        let manifest = chunker::chunk_reader(std::io::BufReader::with_capacity(1 << 20, file))
-            .map_err(|e| Error::io(at, e))?;
+        let manifest = describe(self.documents.as_ref(), source)?;
+        self.record_outside(logical_path, source, size, mtime_ns, &manifest)
+    }
+
+    /// Keep a file outside the folder as [`keep_outside`](Self::keep_outside)
+    /// does, already read through.
+    fn record_outside(
+        &mut self,
+        logical_path: &str,
+        source: &str,
+        size: u64,
+        mtime_ns: i64,
+        manifest: &Manifest,
+    ) -> Result<PutStats> {
         let me = self.db.local_device()?;
         let stats = self.put_manifest(
             logical_path,
-            &manifest,
+            manifest,
             &[],
             mtime_ns,
             Placement::local().in_vault(Some(&me)).by_reference(),
@@ -1563,6 +1592,7 @@ impl Store {
 
         let known: std::collections::HashMap<&str, &db::OutsideRow> =
             kept.iter().map(|row| (row.path.as_str(), row)).collect();
+        let mut work = Vec::new();
         for entry in listing {
             let path = format!("{prefix}/{}", entry.path);
             let before = known.get(path.as_str());
@@ -1573,19 +1603,59 @@ impl Store {
                 report.unchanged += 1;
                 continue;
             }
+            work.push((entry, path, before.is_some()));
+        }
+
+        // Read several at once, a few batches at a time, and record each in
+        // order here: the reading waits on the platform, the recording on
+        // the index, which takes one writer.
+        let documents = self.documents.clone();
+        let mut left = work.as_slice();
+        while !left.is_empty() {
             if until.is_some_and(|deadline| std::time::Instant::now() >= deadline) {
-                report.remaining += 1;
-                continue;
+                report.remaining += left.len();
+                break;
             }
-            match self.keep_outside(&path, &entry.source, entry.size, entry.mtime_ns) {
-                Ok(_) => {
-                    report.bytes_read += entry.size;
-                    match before {
-                        Some(_) => report.changed += 1,
-                        None => report.added += 1,
+            let (batch, rest) = left.split_at(left.len().min(READING_AT_ONCE * 4));
+            left = rest;
+            let next = std::sync::atomic::AtomicUsize::new(0);
+            let mut described: Vec<Option<Result<Manifest>>> = (0..batch.len()).map(|_| None).collect();
+            std::thread::scope(|scope| {
+                let workers: Vec<_> = (0..READING_AT_ONCE.min(batch.len()))
+                    .map(|_| {
+                        let (next, documents) = (&next, documents.as_ref());
+                        scope.spawn(move || {
+                            let mut mine = Vec::new();
+                            loop {
+                                let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let Some((entry, _, _)) = batch.get(i) else { break };
+                                mine.push((i, describe(documents, &entry.source)));
+                            }
+                            mine
+                        })
+                    })
+                    .collect();
+                for worker in workers {
+                    for (i, result) in worker.join().expect("a reader panicked") {
+                        described[i] = Some(result);
                     }
                 }
-                Err(e) => report.failed.push((entry.path.clone(), e.to_string())),
+            });
+            for ((entry, path, before), manifest) in batch.iter().zip(described) {
+                let recorded = manifest
+                    .expect("every file was read")
+                    .and_then(|m| self.record_outside(path, &entry.source, entry.size, entry.mtime_ns, &m));
+                match recorded {
+                    Ok(_) => {
+                        report.bytes_read += entry.size;
+                        if *before {
+                            report.changed += 1;
+                        } else {
+                            report.added += 1;
+                        }
+                    }
+                    Err(e) => report.failed.push((entry.path.clone(), e.to_string())),
+                }
             }
         }
         Ok(report)

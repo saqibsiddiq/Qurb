@@ -84,6 +84,17 @@ pub trait ContentSource {
     /// file is not shown as on that device (decision 0055). The default, for
     /// a source with no device behind it, does nothing.
     fn not_held(&mut self, _content: &[u8; 32]) {}
+
+    /// Told, before a plan is applied, every content it will ask for, in
+    /// order: so that a source can fetch ahead, several at once, rather than
+    /// paying a round trip per file in turn. On a phone's Wi-Fi with its screen
+    /// off a round trip is long, and 36,010 small files of a WhatsApp backup
+    /// each waited for their own (decision 0062). The default does nothing.
+    fn coming(&mut self, _contents: &[([u8; 32], u64)]) {}
+
+    /// Told once the plan has been applied, so that a source can finish
+    /// whatever it put off -- telling the other end what arrived, in one go.
+    fn finished(&mut self) {}
 }
 
 /// Told about content as it arrives from another device, so that something
@@ -476,6 +487,19 @@ impl Engine {
             _ => 0,
         });
 
+        // What will be asked for, in order, so the source can fetch ahead.
+        let coming: Vec<([u8; 32], u64)> = ordered
+            .iter()
+            .filter_map(|action| match action {
+                Action::Adopt { remote } | Action::Hold { remote, .. } => match &remote.content {
+                    Content::File { hash, size } => Some((*hash, *size)),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        source.coming(&coming);
+
         for action in ordered {
             let outcome = match action {
                 Action::Offer { .. } => {
@@ -526,8 +550,15 @@ impl Engine {
                 // name taken by a file sent here, a file no device it meets
                 // has -- was recorded on every one, and a phone's Home showed
                 // nothing else (2026-10-07). Still a failure of this sync.
+                //
+                // Not for a file kept for another device: its name has no
+                // business on this device's screen, any more than its arrival
+                // does. On 2026-10-12 a phone that went away part-way through
+                // its WhatsApp backup left 5,027 of them in a laptop's history
+                // (decision 0062).
                 let detail = e.to_string();
-                if !self.store().db().failed_last_with(action.path(), &detail).unwrap_or(false) {
+                let held = matches!(action, Action::Hold { .. });
+                if !held && !self.store().db().failed_last_with(action.path(), &detail).unwrap_or(false) {
                     crate::note(
                         self.store(),
                         db::Event::Failed,
@@ -541,6 +572,7 @@ impl Engine {
             }
         }
 
+        source.finished();
         Ok(stats)
     }
 

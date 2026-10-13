@@ -297,3 +297,23 @@ fn the_backup_is_counted() {
     assert_eq!((summary.held_files, summary.held_bytes), (1, 10_000));
     assert_eq!(summary.only_kept, 1);
 }
+
+/// Not a test: how long indexing takes per file, and whether that grows with
+/// the number of files. `cargo test -p qurb-storage --test outside -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn timing_many_small_files() {
+    let mut phone = Phone::new();
+    let listing: Vec<OutsideEntry> =
+        (0..6000).map(|i| phone.write(&format!("Media/{:05}.jpg", i), &noisy(40_000, 100 + i), 1)).collect();
+    let started = std::time::Instant::now();
+    let mut done = 0;
+    for (n, chunk) in [1000usize, 2000, 3000, 4000, 5000, 6000].iter().enumerate() {
+        let t = std::time::Instant::now();
+        phone.store.keep_outside_folder(PREFIX, &listing[..*chunk], &|_| true, None).unwrap();
+        println!("files {:5}..{:5}: {:6.2} ms per file", done, chunk, t.elapsed().as_secs_f64() * 1000.0 / (*chunk - done) as f64);
+        done = *chunk;
+        let _ = n;
+    }
+    println!("total {:?}", started.elapsed());
+}

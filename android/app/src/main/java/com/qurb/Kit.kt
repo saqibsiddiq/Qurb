@@ -575,14 +575,8 @@ class Sheet(private val app: MainActivity, private val kit: Kit) {
         ) {
             window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
             window.attributes = window.attributes.apply { blurBehindRadius = kit.dp(12) }
-            dialog.show()
-            return this
         }
         dialog.show()
-        // Nothing blurs behind it: opaque, so that what is behind cannot be
-        // read through the 3% (consistency.md, rule 9).
-        dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-            ?.backgroundTintList = ColorStateList.valueOf(kit.color(R.color.glass_solid))
         return this
     }
 

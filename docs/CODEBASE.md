@@ -358,7 +358,13 @@ folder: new and changed files are read once, to chunk them, up to a deadline;
 a file gone from the folder is deleted, or, where the caller says so and a
 computer holds it, kept as a freed file is. The rows are never materialised
 here, so the scan of qurb's own folder leaves them alone, as it leaves a
-freed file.
+freed file. New files are read four at a time, each through the platform,
+and recorded in order. A device collecting many small files fetches ahead:
+the engine tells its source what a plan will ask for
+(`ContentSource::coming`), and the network source fetches small files 32 at
+a time and reports what arrived in batches (`finished`) -- one at a time, a
+laptop collected 4 to 8 a second from a phone. A file kept for another device
+that fails to arrive is logged, never written into this device's history.
 
 **On a desktop, a received file leaves qurb.** The daemon saves it as an
 ordinary file in `Downloads/qurb`, outside the folder, and stops tracking it:

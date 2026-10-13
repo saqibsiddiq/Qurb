@@ -2040,9 +2040,12 @@ impl Db {
     /// boundary landing between them would repeat or skip one.
     pub fn activity(&self, limit: usize, before: Option<i64>) -> Result<Vec<Activity>> {
         let mut stmt = self.conn.prepare(
+            // Never a file of a folder kept outside a vault (decision 0062):
+            // a phone's WhatsApp, kept by this computer out of sight.
             "SELECT id, at, kind, path, size, device, detail
                FROM activity
-              WHERE ?1 IS NULL OR id < ?1
+              WHERE (?1 IS NULL OR id < ?1)
+                AND (path IS NULL OR substr(path, 1, 14) <> '.qurb-outside/')
               ORDER BY at DESC, id DESC
               LIMIT ?2",
         )?;
