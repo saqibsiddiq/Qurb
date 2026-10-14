@@ -753,7 +753,7 @@ class MainActivity : AppCompatActivity() {
             .action(R.drawable.ic_smartphone, "Show a code on this phone",
                 meta = "Scan it with the other device, or type it there.") { ShowCode.show(this) }
             .action(R.drawable.ic_keyboard, "Enter a code",
-                meta = "From a device that is showing one.") { typeCode() }
+                meta = "The six digits a device on this Wi-Fi is showing.") { typeCode() }
             // Another person's computer, as a guest (decision 0060). Its code
             // says so, so scanning it from here or above does the same.
             .action(R.drawable.ic_laptop, "Visit someone's computer",
@@ -763,44 +763,73 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /** The fallback, for a phone with no camera or a refused permission. */
+    /**
+     * The six digits a device on the same Wi-Fi shows beside its QR code
+     * (decision 0066), on a number pad: joining starts as the sixth is typed,
+     * as WhatsApp's linking code does. The digits fetch the long code, which
+     * the engine still takes typed in full.
+     */
     private fun typeCode() {
         val input = EditText(this).apply {
-            hint = "qurb1-…"
+            hint = "000000"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(android.text.InputFilter.LengthFilter(6))
+            gravity = android.view.Gravity.CENTER
+            textSize = 30f
+            letterSpacing = 0.35f
+            typeface = androidx.core.content.res.ResourcesCompat.getFont(this@MainActivity, R.font.inter_semibold)
+            fontFeatureSettings = "tnum"
+            importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO
             setPadding(kit.dp(18), kit.dp(14), kit.dp(18), kit.dp(14))
             background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.glass_group)
         }
-        kit.sheet()
+        val sheet = kit.sheet()
             // The desktop's words: *Enter a code*, and *Join*.
-            .header(R.drawable.ic_keyboard, "Enter a code", "The code the other device is showing")
+            .header(R.drawable.ic_keyboard, "Enter a code", "The six digits the other device shows")
             .view(input, top = 16)
+            .text("Both on the same Wi-Fi. Otherwise, scan its QR code.")
             .buttons("Join") {
-                val code = input.text.toString().trim()
-                if (code.isNotEmpty()) joinWith(code)
+                val code = input.text.toString()
+                if (code.length == 6) joinWith(code)
             }
-            .show()
+        input.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(typed: android.text.Editable?) {
+                if (typed?.length == 6 && sheet.dialog.isShowing) {
+                    sheet.dialog.dismiss()
+                    joinWith(typed.toString())
+                }
+            }
+        })
+        sheet.show()
+        // The number pad up at once: the digits are all this sheet is for.
+        input.requestFocus()
+        sheet.dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
     }
 
     private fun joinWith(code: String) {
         lifecycleScope.launch {
             try {
+                // Six digits are looked for on this Wi-Fi, which the phone
+                // hears only while it holds the multicast lock.
+                if (code.length == 6) say("Looking for it on this Wi-Fi…")
                 // The other device asks its person to approve this phone: the
                 // number to compare is on this screen meanwhile (decision 0053).
                 val number = withContext(Dispatchers.IO) {
-                    pairingNumber(Engine.root(this@MainActivity).absolutePath, code)
+                    Engine.hearingTheNetwork(this@MainActivity) {
+                        pairingNumber(Engine.root(this@MainActivity).absolutePath, code)
+                    }
                 }
                 val showing = Approval.showWhileJoining(this@MainActivity, number)
-                // A guest code: another person's computer, which this phone
-                // visits keeping its own key (decision 0060).
-                val guest = code.trim().lowercase().startsWith("qurbg1-")
                 val peer = try {
-                    withContext(Dispatchers.IO) {
-                        val engine = Engine.open(this@MainActivity)
-                        if (guest) engine.visitComputer(code) else engine.joinPairing(code)
-                    }
+                    withContext(Dispatchers.IO) { Engine.open(this@MainActivity).joinPairing(code) }
                 } finally {
                     showing.dismiss()
                 }
+                // A guest code, another person's computer, is a visit: this
+                // phone keeps its own key (decision 0060).
+                val guest = peer.relation == "host"
                 say(if (guest) "You visit ${peer.name} as a guest now" else "Connected to ${peer.name}")
                 madeChange()
             } catch (e: Exception) {

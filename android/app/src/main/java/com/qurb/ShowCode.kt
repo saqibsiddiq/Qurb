@@ -42,6 +42,21 @@ object ShowCode {
             val qr = withContext(Dispatchers.IO) { runCatching { qrCode(offer.code()) }.getOrNull() }
 
             val kit = app.kit
+            // Six digits a device on the same Wi-Fi types instead (decision
+            // 0066), in the number's own style (Approval).
+            val digitsSay = TextView(app).apply {
+                gravity = Gravity.CENTER
+                setTextAppearance(R.style.Text_Meta)
+            }
+            val digits = TextView(app).apply {
+                gravity = Gravity.CENTER
+                textSize = 36f
+                typeface = androidx.core.content.res.ResourcesCompat.getFont(app, R.font.inter_semibold)
+                fontFeatureSettings = "tnum"
+                letterSpacing = 0.08f
+                setTextColor(kit.color(R.color.text))
+                setTextIsSelectable(true)
+            }
             val status = TextView(app).apply {
                 gravity = Gravity.CENTER
                 setTextAppearance(R.style.Text_Quiet)
@@ -66,11 +81,15 @@ object ShowCode {
                         }
                     }, LinearLayout.LayoutParams(size, size))
                 }
+                addView(digitsSay, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = kit.dp(16) })
+                addView(digits)
                 addView(status, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = kit.dp(14) })
+                ).apply { topMargin = kit.dp(10) })
                 addView(TextView(app).apply {
-                    text = "Or read this out, or type it:"
+                    text = "Or read the whole code out, or type it:"
                     setTextAppearance(R.style.Text_Meta)
                     setPadding(0, kit.dp(18), 0, kit.dp(4))
                 })
@@ -99,6 +118,11 @@ object ShowCode {
 
             val countdown = launch {
                 while (isActive) {
+                    val typed = offer.digits()
+                    digits.text = typed ?: "——— ———"
+                    digits.alpha = if (typed == null) 0.35f else 1f
+                    digitsSay.text = if (typed != null) "Or type these on a device on this Wi-Fi"
+                        else "These were typed wrongly too often. Scan the code instead."
                     val left = offer.expiresAt() - System.currentTimeMillis() / 1000
                     status.text = if (left > 0) {
                         "Waiting — this code works for ${left / 60}:${"%02d".format(left % 60)}"

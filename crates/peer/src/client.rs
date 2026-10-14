@@ -531,6 +531,9 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Changed { .. } => "change notification",
         Response::Folders { .. } => "list of folders",
         Response::Chosen(_) => "list of chosen folders",
+        Response::Short { .. } => "half of a key exchange",
+        Response::Sealed(_) => "sealed code",
+        Response::Withdrawn => "refusal of six digits",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }
 }

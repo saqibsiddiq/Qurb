@@ -2297,7 +2297,19 @@ His answers to the questions they raised are with them.
    still in use stay two, and another person's never stands for this
    person's (tests). Nothing is removed without the person.
 7. **A six-digit code to pair**, as WhatsApp links a computer. Answer: the
-   laptop shows it, the phone types it.
+   laptop shows it, the phone types it. **Built 2026-10-14**
+   ([0066](../decisions/0066-six-digits-to-pair.md)): beside the QR code,
+   six digits; typed on a device on the same Wi-Fi, they find the showing
+   device by a multicast offer and fetch the long code through SPAKE2, so
+   knowing them is not enough to stand in for it, and approval with the
+   number is unchanged. Five wrong tries and they stop working for that
+   code. On the phone *Enter a code* is a number pad that joins as the sixth
+   digit is typed, in setting up too; the phone's own code shows digits as
+   well. Tested: the exchange (right, wrong, five wrong, a machine in the
+   middle), over multicast on one machine, and in the real desktop window,
+   where the smoke test now joins by the digits. **Not yet seen between the
+   S23 and the laptop**, nor on a network that blocks multicast, where the
+   QR code is the way.
 8. **Home redesigned**: a sync button, a send button, and what is waiting to
    sync. **Built on the phone 2026-10-14**: *Sync now* and *Send* side by
    side, of one size; then *Waiting*, the files made here not yet on another

@@ -694,6 +694,8 @@ qurb/
 │   │   ├── src/wire.rs      the message format; bounded and hostile-input safe
 │   │   ├── src/identity.rs  a device's certificate and its fingerprint
 │   │   ├── src/pairing.rs   deciding which device to trust in the first place
+│   │   ├── src/short.rs     six digits to pair: offered on the local network,
+│   │   │                    proved by SPAKE2, fetching the long code (0066)
 │   │   ├── src/base32.rs    invite encoding, chosen for how QR codes work
 │   │   ├── src/local.rs     beacons: finding each other with no server at all
 │   │   ├── src/nat.rs       STUN, NAT classification, hole punching
@@ -1010,6 +1012,7 @@ for the workspace as it stands.
 | Wire format | length-bounded; decoder has no panicking path |
 | Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s under Cubic, barely faster than one at a time ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)); the next row is what changed that |
 | Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md) |
+| Six digits to pair | beside the QR code, six digits a device on the same network types: the showing device multicasts an offer (port 47318), the typing one connects unpinned and runs SPAKE2 with the digits, both certificates bound in, and is given the long code sealed under the key; then pairs with it as if scanned, approval included. Five wrong tries and the digits stop working for that code — [0066](decisions/0066-six-digits-to-pair.md) |
 | Guests | another person's device visits with a guest code, keeping its own key; the two meet at the rendezvous service under a secret of their own and are shown each other only what was sent to them (the `Guest` audience) — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | A guest's folder, sealed | a guest's Private Vault kept by the computer it visits under sealed names and sealed chunks the computer cannot open, filed under the guest's person; freed on the phone once kept, fetched back and checked when opened — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | Opening a guest's folder at the computer | the window asks, the guest's phone approves behind its screen lock and sends the folder key, accepted only if it opens the folder; held in memory until locked or ten minutes unused; files opened unsealed into memory-backed space and checked. Run end to end with the emulator as the guest; not with a real phone — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
@@ -1351,7 +1354,7 @@ network. iOS needs Xcode, which needs a Mac. See
 | Settings | grouped lists: this device and its key, devices and pairings, where files sent here go, keep new files private, notifications, the 24 words, appearance — system, light or dark ([0056](decisions/0056-dark-mode.md)) — and the advanced settings — rendezvous, relay, port, start at login, version, Quit |
 | Setting a device up | make a new one, with nothing to write down, or join with another device's code, which brings the key ([0052](decisions/0052-the-key-travels-with-the-code.md)); the storage question asked; the 24 words a fallback |
 | Locked | a key protected by a passphrase is unlocked in the window; at login the window shows itself to ask |
-| Pairing | show a code — QR, typed or spoken — or enter one, with a countdown; a device asking is approved by the six digits both screens show ([0053](decisions/0053-approval-same-key-and-safe-copies.md)) |
+| Pairing | show a code — QR and six digits, the whole code folded away — or enter one, six digits or the whole code, joining as the sixth digit is typed; with a countdown; a device asking is approved by the number both screens show ([0053](decisions/0053-approval-same-key-and-safe-copies.md), [0066](decisions/0066-six-digits-to-pair.md)) |
 | Sending | a sheet — what, to which device, then the file travelling there and landing — from Home, a file, a device, or files dropped anywhere on the window |
 | Notifications | three things only: a file sent to you, one collected, one that failed |
 | Transfer progress | a panel that appears while something moves or waits: both directions, live, with the time left |

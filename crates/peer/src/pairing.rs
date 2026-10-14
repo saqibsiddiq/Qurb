@@ -170,6 +170,10 @@ impl Invite {
 pub struct PairingHost {
     endpoint: quinn::Endpoint,
     invite: Invite,
+    /// Six digits that fetch the invite on this network (decision 0066).
+    offered: crate::short::Offered,
+    /// Where they are offered: the standard port, or a test's own.
+    offer_port: u16,
 }
 
 /// What the two sides learn about each other.
@@ -269,7 +273,24 @@ impl PairingHost {
         // at the far end in a way that looks like the joining device's fault.
         let address = crate::nat::dialable(bound);
 
-        Ok(Self { invite: Invite::new(identity.fingerprint(), address, now), endpoint })
+        Ok(Self {
+            invite: Invite::new(identity.fingerprint(), address, now),
+            endpoint,
+            offered: crate::short::Offered::new(),
+            offer_port: crate::short::OFFER_PORT,
+        })
+    }
+
+    /// Offer the digits on this port rather than the standard one.
+    pub fn offering_on(mut self, port: u16) -> Self {
+        self.offer_port = port;
+        self
+    }
+
+    /// The six digits that pair with this code from a device on the same
+    /// network, while they still work: tried wrongly too often, they stop.
+    pub fn digits(&self) -> Option<String> {
+        self.offered.digits().map(str::to_string)
     }
 
     /// The same, for another person's device to visit as a guest (decision
@@ -319,9 +340,16 @@ impl PairingHost {
         }
         let deadline = Duration::from_secs(remaining as u64);
 
-        tokio::time::timeout(deadline, self.accept_one(store, ours, our_device, approve))
-            .await
-            .unwrap_or(Err(Error::InviteExpired))
+        // The digits are offered on this network while the code waits, and
+        // not a moment longer.
+        let port = self.endpoint.local_addr().map(|a| a.port()).unwrap_or(0);
+        let waiting = async {
+            tokio::select! {
+                paired = self.accept_one(store, ours, our_device, approve) => paired,
+                _ = crate::short::offer(&self.offered, port, self.offer_port) => unreachable!("offers until dropped"),
+            }
+        };
+        tokio::time::timeout(deadline, waiting).await.unwrap_or(Err(Error::InviteExpired))
     }
 
     /// The accept loop, run under the caller's deadline.
@@ -352,6 +380,8 @@ impl PairingHost {
             // Approved on this connection already, by its Join: its Pair,
             // which follows on the same connection, is not asked about twice.
             let mut approved = false;
+            // Six digits tried over this connection, if they are.
+            let mut digits = crate::short::Exchange::default();
 
             loop {
                 let Ok((mut send, mut recv)) = connection.accept_bi().await else { break };
@@ -511,6 +541,21 @@ impl PairingHost {
                         // Give the reply time to leave before the endpoint closes under it.
                         connection.closed().await;
                         return Ok(peer);
+                    }
+
+                    // Six digits, fetching the code (decision 0066). Nothing
+                    // else is asked of a device that connected this way.
+                    Ok(request @ (Request::Short { .. } | Request::ShortConfirm { .. })) => {
+                        let reply = digits
+                            .answer(&request, &self.offered, self.invite.fingerprint, peer_fingerprint, &self.invite.encode())
+                            .expect("one of the two");
+                        if matches!(reply, Response::Short { .. }) {
+                            let _ = send.write_all(&reply.encode()).await;
+                            let _ = send.finish();
+                        } else {
+                            answer(&mut send, &reply, &connection).await;
+                            break;
+                        }
                     }
 
                     _ => {

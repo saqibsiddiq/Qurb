@@ -380,7 +380,10 @@ async fn serve_request(
         | Response::Declined
         | Response::Changed { .. }
         | Response::Folders { .. }
-        | Response::Chosen(_) => 0,
+        | Response::Chosen(_)
+        | Response::Short { .. }
+        | Response::Sealed(_)
+        | Response::Withdrawn => 0,
     };
 
     match (&request, &response) {
@@ -481,7 +484,11 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // certificates. This one only ever talks to devices already trusted, so
         // a pairing request here is either a mistake or a probe.
         // And the key, above all, is never handed out here.
-        Request::Pair { .. } | Request::Join { .. } | Request::Visit { .. } => Response::NotFound,
+        Request::Pair { .. }
+        | Request::Join { .. }
+        | Request::Visit { .. }
+        | Request::Short { .. }
+        | Request::ShortConfirm { .. } => Response::NotFound,
 
         // A guest asking whether this computer wants to open its folder here,
         // and answering with the folder's key once its person approved

@@ -31,6 +31,19 @@ pub enum Error {
     #[error("the other device said no")]
     Declined,
 
+    /// Six digits typed, and no device on this network offering a code
+    /// (decision 0066).
+    #[error("no device on this network is showing a code: show one, and check both are on the same Wi-Fi, or scan its QR code")]
+    NoneOffering,
+
+    /// Six digits typed, and no device showing a code took them.
+    #[error("those digits are not the code being shown: check them and type them again")]
+    WrongDigits,
+
+    /// The device showing the code took too many wrong tries of its digits.
+    #[error("those digits were tried too often and no longer work: scan the QR code, or show a new code")]
+    DigitsWithdrawn,
+
     /// The device showing the code stops waiting when its code expires, and
     /// closes without an answer.
     #[error("the code expired before the other device approved this one: show a new code there, and approve it when asked")]

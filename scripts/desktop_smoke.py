@@ -9,8 +9,9 @@ What it does, in the real application with the real engine behind it:
    nothing to write down since decision 0052.
 2. Opens every place in the sidebar.
 3. Adds a device: shows a pairing code, has a second device (the command line,
-   in a folder not set up) join with it and take the key, and approves it in
-   the window once the two numbers match (decision 0053).
+   in a folder not set up) join with its six digits (decision 0066) and take
+   the key, and approves it in the window once the two numbers match
+   (decision 0053).
 4. Sends that device a file, and sees it waiting under Transfers and on
    Home, then presses *Sync now*.
 5. Removes that device, from its details, answering the question.
@@ -234,6 +235,13 @@ def pair(window):
         "const t = document.getElementById('pair-code'); return t && t.textContent.split(' ').pop()")
     qr = window.js("return document.getElementById('qr').innerHTML.length")
     assert qr > 1000, f"no QR drawn ({qr} characters)"
+    # Joined by the six digits beside it (decision 0066), which fetch the
+    # long code over this machine's own network; SMOKE_LONG_CODE=1 for the
+    # long code instead.
+    digits = window.js("return document.getElementById('pair-digits').textContent")
+    assert re.fullmatch(r"\d{3} \d{3}", digits or ""), f"no six digits shown: {digits!r}"
+    if not os.environ.get("SMOKE_LONG_CODE"):
+        code = digits.replace(" ", "")
 
     # The joining side prints the number before it connects, then waits for
     # the window's answer; the window shows who asks and the number it should
@@ -417,7 +425,7 @@ def run_through(window):
     print("opened", ", ".join(every_tab(window)))
 
     other, named = pair(window)
-    print(f"paired by code with {named}, approved in the window by its number")
+    print(f"paired by its six digits with {named}, approved in the window by its number")
 
     device = named.split(" (")[0]
     send(window, device)

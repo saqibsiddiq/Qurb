@@ -151,6 +151,9 @@ const ANSWERS = {
     // None, unless a script has put a real one from the Rust renderer in
     // `window.__fixtureQr` -- the way to look at the actual drawing here.
     qr: window.__fixtureQr ?? null,
+    // Six digits (decision 0066). `?withdrawn` for digits tried wrongly too
+    // often.
+    digits: "482 913",
   }),
 
   // Answers "waiting" for a few seconds, then a phone asks to join with the
@@ -159,8 +162,8 @@ const ANSWERS = {
   // arrival can all be looked at without a second device.
   pairing_state: () => {
     const since = Math.floor(Date.now() / 1000) - startedPairingAt;
-    const waiting = { state: "waiting", name: null, fingerprint: null, message: null };
-    if (since < 4 || pairingAnswer === false) return waiting;
+    const waiting = { state: "waiting", name: null, fingerprint: null, message: null, digits_withdrawn: params.has("withdrawn") };
+    if (since < 4 || params.has("withdrawn") || pairingAnswer === false) return waiting;
     if (pairingAnswer === true) return { state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null, kind: "phone" };
     // A guest code is answered by somebody else's phone (decision 0060).
     if (pairingGuest) return { ...waiting, state: "asking", name: "Ammi's phone", number: "418 205", kind: "phone", wants_key: false, guest: true };

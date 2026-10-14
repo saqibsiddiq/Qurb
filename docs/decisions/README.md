@@ -40,7 +40,7 @@ is worth more than a tidy directory.
 | [0011](0011-peer-identity-pinning.md) | Peer identity is a pinned certificate fingerprint | Accepted, completed by 0014 |
 | [0012](0012-key-hierarchy-and-recovery.md) | One root secret, derived keys, 24-word phrase | Accepted — "the phrase is the only way to recover" superseded by 0052 |
 | [0013](0013-case-collisions.md) | Case collisions are refused, not resolved | Accepted |
-| [0014](0014-pairing.md) | Pairing transfers a full fingerprint out of band | Accepted — the token also guards the key since 0052; a device is let in only on approval since 0053 |
+| [0014](0014-pairing.md) | Pairing transfers a full fingerprint out of band | Accepted — the token also guards the key since 0052; a device is let in only on approval since 0053; six digits fetch the code since 0066 |
 | [0015](0015-control-plane-in-rust.md) | Signalling and the relay are written in Rust | Accepted — billing open |
 | [0016](0016-what-signalling-learns.md) | What the signalling server is allowed to learn | Accepted |
 | [0017](0017-relay.md) | The relay carries datagrams, not messages | Accepted |
@@ -92,3 +92,4 @@ is worth more than a tidy directory.
 | [0063](0063-backing-up-a-phones-folders-chosen-on-the-desktop.md) | Backing up a phone's folders, chosen on the desktop | Accepted — built and seen on the S23 and the laptop; chosen on either device |
 | [0064](0064-many-small-files-quickly.md) | Many small files, quickly: what limits it, and the order of work | Accepted as a plan — step 1, answering requests in parallel, built; not yet measured on the S23 |
 | [0065](0065-the-scale-qurb-is-built-for.md) | The scale qurb is built for: big libraries, a family server, a service | Accepted as targets — measured at 100,000 and a million files; the file list in frames, and V24's index, built |
+| [0066](0066-six-digits-to-pair.md) | Six digits to pair, on the same network | Accepted — built on the command line, the desktop and Android; paired by digits in the real-window smoke test, not yet between the S23 and the laptop; amends 0014 |

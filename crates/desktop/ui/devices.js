@@ -561,15 +561,15 @@ function openAddDevice() {
       c.addEventListener("click", act);
       choices.append(c);
     };
-    option("pair-show", "qr-code", "Show a code", "Scan it with your phone, or type it on another computer.", () => show(false));
-    option("pair-enter", "keyboard", "Enter a code", "From a device that is showing one.", enter);
+    option("pair-show", "qr-code", "Show a code", "Scan it with your phone, or type its six digits there.", () => show(false));
+    option("pair-enter", "keyboard", "Enter a code", "The six digits a device on this network is showing.", enter);
     // Another person, as a guest of this computer (decision 0060).
     option("pair-guest", "user-plus", "Add a person", "Someone else's phone, as a guest. It keeps its own key and sees only what you send it.", () => show(true));
     body.append(choices);
   }
 
   async function show(guest) {
-    body.replaceChildren(el("h2", null, guest ? "Scan this on their phone" : "Scan this on the other device"));
+    body.replaceChildren(el("h2", null, guest ? "Scan or type this on their phone" : "Scan or type this on the other device"));
     if (guest) body.append(el("p", "lead", "In Qurb on their phone: Devices → Add → Visit a computer."));
     const says = el("p", "countdown", "Opening a port…");
     body.append(says);
@@ -593,10 +593,23 @@ function openAddDevice() {
     // With no code drawn, the countdown it captions starts on the left edge
     // under the heading, rather than centred under nothing.
     if (invitation.qr) qr.innerHTML = invitation.qr;
-    else { qr.classList.add("hidden"); says.style.textAlign = "left"; }
+    else {
+      qr.classList.add("hidden");
+      if (!invitation.digits) says.style.textAlign = "left";
+    }
     body.insertBefore(qr, says);
+    // Six digits, typed on a device on the same network (decision 0066):
+    // what the owner asked for in place of the long code, as WhatsApp's.
+    const digitsSay = el("p", "meta digits-say", guest
+      ? "Or type these on their phone, on this Wi-Fi"
+      : "Or type these on your phone, on this Wi-Fi");
+    const digits = el("p", "digits num", invitation.digits ?? "");
+    digits.id = "pair-digits";
+    if (!invitation.digits) { digitsSay.classList.add("hidden"); digits.classList.add("hidden"); }
+    body.insertBefore(digitsSay, says);
+    body.insertBefore(digits, says);
     const code = el("details");
-    code.append(el("summary", "meta", "Type it or read it out instead"));
+    code.append(el("summary", "meta", "Type the whole code or read it out instead"));
     code.append(el("p", "meta", guest ? "On their computer:" : "On another computer:"));
     const typed = el("pre", "code", guest ? `qurb visit ${invitation.code}` : `qurb join <folder> ${invitation.code}`);
     typed.id = "pair-code";
@@ -606,7 +619,7 @@ function openAddDevice() {
     code.append(spoken);
     code.style.marginTop = "12px";
     body.append(code);
-    body.append(el("p", "note", "The code carries this computer's identity, which is why it travels outside the network. It works once."));
+    body.append(el("p", "note", "The code carries this computer's identity, which is why it travels outside the network; the six digits fetch it, for whoever knows them. It works once."));
     const actions = el("div", "actions end");
     const stop = button("Stop showing it", "btn");
     stop.addEventListener("click", async () => {
@@ -674,6 +687,11 @@ function openAddDevice() {
       }
       if (state.state === "waiting") {
         if (asked !== null) { asked = null; asking.classList.add("hidden"); }
+        // Tried wrongly too often, the digits stop working; the QR still does.
+        if (state.digits_withdrawn && !digits.classList.contains("withdrawn")) {
+          digits.classList.add("withdrawn");
+          digitsSay.textContent = "These were typed wrongly too often. Scan the code instead.";
+        }
         // Counted down rather than left saying "waiting". A code that stopped
         // working minutes ago, under a screen that says it is waiting, is
         // worse than no screen: somebody reads it out and is told it is wrong.
@@ -692,12 +710,13 @@ function openAddDevice() {
   }
 
   function enter() {
-    body.replaceChildren(el("h2", null, "Enter a code"), el("p", "lead", "The code the other device is showing."));
-    const input = el("textarea", "input");
+    body.replaceChildren(el("h2", null, "Enter a code"), el("p", "lead", "The six digits the other device is showing, on the same network. The whole code works too."));
+    const input = el("input", "input digits-input num");
     input.id = "pair-input";
-    input.rows = 3;
     input.spellcheck = false;
-    input.placeholder = "qurb1-…";
+    input.autocomplete = "off";
+    input.inputMode = "numeric";
+    input.placeholder = "000000";
     input.style.marginTop = "16px";
     const says = el("p", "says warn hidden");
     const actions = el("div", "actions end");
@@ -705,10 +724,14 @@ function openAddDevice() {
     back.addEventListener("click", choose);
     const go = button("Join", "btn primary");
     go.id = "pair-go";
-    go.addEventListener("click", async () => {
+    const join = async () => {
+      if (go.disabled) return;
       go.disabled = true;
       go.querySelector("span").textContent = "Joining…";
       try {
+        // Six digits are looked for on this network first (decision 0066).
+        says.classList.remove("warn", "hidden");
+        says.textContent = "Looking for it on this network…";
         // The other device asks its person to approve this one: show the
         // number it will be comparing (decision 0053).
         const number = await invoke("pairing_number", { code: input.value });
@@ -724,7 +747,11 @@ function openAddDevice() {
         go.disabled = false;
         go.querySelector("span").textContent = "Join";
       }
-    });
+    };
+    go.addEventListener("click", join);
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter") join(); });
+    // Joining starts as the sixth digit is typed, as on the phone.
+    input.addEventListener("input", () => { if (/^\d{6}$/.test(input.value.trim())) join(); });
     actions.append(back, go);
     body.append(input, says, actions);
     input.focus();

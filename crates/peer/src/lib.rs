@@ -43,6 +43,7 @@ pub mod nat;
 pub mod openings;
 pub mod pairing;
 pub mod server;
+pub mod short;
 pub mod source;
 pub mod tls;
 pub mod wire;

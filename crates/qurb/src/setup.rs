@@ -138,12 +138,12 @@ pub fn enrol(root: &Path, phrase: &RecoveryPhrase) -> Result<()> {
 /// already used leaves only this device's new certificate behind, which the
 /// next attempt reuses.
 pub async fn join(root: &Path, code: &str) -> Result<qurb_peer::Paired> {
-    let invite = qurb_peer::Invite::parse(code.trim()).context("that is not a valid pairing code")?;
     let dir = store_dir(root);
     if Vault::at(&dir).exists() {
         bail!("{} is already set up", root.display());
     }
     let identity = identity_for_joining(root)?;
+    let invite = invite(code, &identity).await?;
     let name = Config::default().name;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -163,10 +163,21 @@ pub async fn join(root: &Path, code: &str) -> Result<qurb_peer::Paired> {
 
 /// The number this folder's device will show while the device showing `code`
 /// approves it (decision 0053): show it before [`join`], so the person can
-/// compare the two screens.
-pub fn number_for(root: &Path, code: &str) -> Result<String> {
-    let invite = qurb_peer::Invite::parse(code.trim()).context("that is not a valid pairing code")?;
-    Ok(invite.number_for(&identity_for_joining(root)?.fingerprint()))
+/// compare the two screens. Six digits are found on the network here, once.
+pub async fn number_for(root: &Path, code: &str) -> Result<String> {
+    let identity = identity_for_joining(root)?;
+    Ok(invite(code, &identity).await?.number_for(&identity.fingerprint()))
+}
+
+/// A typed code, long or six digits (decision 0066), as an invite.
+pub async fn invite(code: &str, identity: &Identity) -> Result<qurb_peer::Invite> {
+    match qurb_peer::short::resolve(code.trim(), identity).await {
+        Ok(invite) => Ok(invite),
+        Err(e @ (qurb_peer::Error::NoneOffering | qurb_peer::Error::WrongDigits | qurb_peer::Error::DigitsWithdrawn)) => {
+            Err(e.into())
+        }
+        Err(e) => Err(anyhow::Error::new(e).context("that is not a valid pairing code")),
+    }
 }
 
 /// The certificate a device joining presents, made the first time it is

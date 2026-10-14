@@ -678,6 +678,8 @@ pub struct Invitation {
     expires_at: i64,
     /// An SVG of the code, to put on the screen.
     qr: Option<String>,
+    /// Six digits a device on the same network types instead (decision 0066).
+    digits: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -696,6 +698,8 @@ pub struct PairingState {
     wants_key: bool,
     /// Another person's device, asking to visit as a guest (decision 0060).
     guest: bool,
+    /// The six digits were tried wrongly too often and no longer work.
+    digits_withdrawn: bool,
 }
 
 impl PairingState {
@@ -709,6 +713,7 @@ impl PairingState {
             kind: None,
             wants_key: false,
             guest: false,
+            digits_withdrawn: false,
         }
     }
 }
@@ -877,8 +882,10 @@ pub async fn start_pairing(hosted: Host<'_>, guest: Option<bool>) -> Answer<Invi
     // be read aloud, so failing to render is worth noting and not worth
     // refusing over.
     let qr = qurb_cli::qr::svg(&code).ok();
+    let digits = host.digits().map(|d| qurb_peer::short::spaced(&d));
 
     let attempt = hosted.begin_pairing(code.clone(), spoken.clone(), expires_at);
+    let digits_work = Arc::clone(&attempt.digits_work);
     let waiting = Arc::clone(&attempt);
     let asker = Arc::clone(&attempt);
     let nudge = hosted.nudger();
@@ -892,7 +899,20 @@ pub async fn start_pairing(hosted: Host<'_>, guest: Option<bool>) -> Answer<Invi
             let told = asker.ask(&asking);
             async move { told.await.unwrap_or(false) }
         };
-        let outcome = match host.wait(store, &ours, now, approve).await {
+        // Whether the digits still work, kept current for the screen while
+        // the code waits.
+        let watching = async {
+            while host.digits().is_some() {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+            digits_work.store(false, std::sync::atomic::Ordering::SeqCst);
+            std::future::pending::<()>().await
+        };
+        let outcome = tokio::select! {
+            outcome = host.wait(store, &ours, now, approve) => outcome,
+            _ = watching => unreachable!("watches until dropped"),
+        };
+        let outcome = match outcome {
             Ok(peer) => {
                 // The daemon syncs with it now, not at its next check.
                 nudge.notify_one();
@@ -911,7 +931,7 @@ pub async fn start_pairing(hosted: Host<'_>, guest: Option<bool>) -> Answer<Invi
         waiting.settle(outcome);
     }));
 
-    Ok(Invitation { code, spoken, expires_at, qr })
+    Ok(Invitation { code, spoken, expires_at, qr, digits })
 }
 
 /// How the attempt on screen is going. Polled while the code is up.
@@ -923,7 +943,10 @@ pub fn pairing_state(hosted: Host<'_>) -> Answer<PairingState> {
     };
 
     Ok(match attempt.state() {
-        Pairing::Waiting => PairingState::of("waiting"),
+        Pairing::Waiting => PairingState {
+            digits_withdrawn: !attempt.digits_work.load(std::sync::atomic::Ordering::SeqCst),
+            ..PairingState::of("waiting")
+        },
         Pairing::Asking { name, kind, number, wants_key, guest } => PairingState {
             name: Some(name),
             number: Some(number),
@@ -953,20 +976,30 @@ pub fn answer_pairing(hosted: Host<'_>, approve: bool) -> Answer<()> {
 }
 
 /// The number this computer will show while the device showing `code`
-/// approves it, before joining it (decision 0053).
+/// approves it, before joining it (decision 0053). Six digits are found on
+/// the network here (decision 0066), once: joining uses what was found.
 #[tauri::command]
-pub fn pairing_number(hosted: Host<'_>, code: String) -> Answer<String> {
-    let invite = qurb_peer::Invite::parse(code.trim())
-        .map_err(|_| "that is not a pairing code — check it was copied whole".to_string())?;
+pub async fn pairing_number(hosted: Host<'_>, code: String) -> Answer<String> {
     let (_, identity, _) = hosted.for_pairing().map_err(failed)?;
+    let invite = typed(&code, &identity).await?;
     Ok(invite.number_for(&identity.fingerprint()))
+}
+
+/// A code typed into the window, long or six digits, as an invite.
+async fn typed(code: &str, identity: &qurb_peer::Identity) -> Answer<qurb_peer::Invite> {
+    qurb_peer::short::resolve(code.trim(), identity).await.map_err(|e| match e {
+        qurb_peer::Error::BadInvite { .. } => {
+            "that is not a pairing code — type the six digits, or the whole code".to_string()
+        }
+        other => other.to_string(),
+    })
 }
 
 /// The same, for a folder being set up by joining: its certificate is made
 /// now if it has none, and is the one joining then presents.
 #[tauri::command]
-pub fn setup_pairing_number(path: String, code: String) -> Answer<String> {
-    qurb_cli::setup::number_for(&expand(&path), &code).map_err(failed)
+pub async fn setup_pairing_number(path: String, code: String) -> Answer<String> {
+    qurb_cli::setup::number_for(&expand(&path), &code).await.map_err(failed)
 }
 
 /// Stop showing a code, and stop answering it.
@@ -987,9 +1020,8 @@ pub fn stop_pairing(hosted: Host<'_>) -> Answer<()> {
 /// in front of somebody, and either works or does not within seconds.
 #[tauri::command]
 pub async fn join_device(hosted: Host<'_>, code: String) -> Answer<PairingState> {
-    let invite = qurb_peer::Invite::parse(code.trim())
-        .map_err(|_| "that is not a pairing code — check it was copied whole".to_string())?;
     let (store, identity, name) = hosted.for_pairing().map_err(failed)?;
+    let invite = typed(&code, &identity).await?;
     let master = hosted.master().map_err(failed)?;
 
     // The other device asks its person to approve this one, comparing the

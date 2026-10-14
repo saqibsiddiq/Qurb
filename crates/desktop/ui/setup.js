@@ -250,7 +250,7 @@ $("join-words").addEventListener("click", () => {
   $("join-title").textContent = byWords ? "Enter your recovery phrase" : "Enter the code from your other device";
   $("join-lead").textContent = byWords
     ? "The 24 words of your key. Order matters; spacing and capitals don't."
-    : "On your phone, open Qurb, go to Devices, choose Add a device and then Show a code on this phone. Type that code here. It brings your key with it, so there's nothing else to type.";
+    : "On your phone, open Qurb, go to Devices, choose Add a device and then Show a code on this phone. Type its six digits here, on the same Wi-Fi. It brings your key with it, so there's nothing else to type.";
   $("join-words").textContent = byWords ? "Use a code instead" : "Use my 24 words instead";
   $("join-says").classList.add("hidden");
 });
@@ -269,8 +269,10 @@ $("join-next").addEventListener("click", async () => {
     } else {
       // The phone asks its person to approve this computer: show the number
       // it will be comparing (decision 0053).
-      const number = await invoke("setup_pairing_number", { path, code: $("given-code").value });
+      // Six digits are looked for on this network first (decision 0066).
       says.classList.remove("warn", "hidden");
+      says.textContent = "Looking for it on this network…";
+      const number = await invoke("setup_pairing_number", { path, code: $("given-code").value });
       says.textContent = `Approve this computer on your phone. It should show ${number}.`;
       const joined = await invoke("join_new_device", { path, code: $("given-code").value, allowance });
       $("given-code").value = "";

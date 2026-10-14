@@ -340,6 +340,74 @@ impl ClientCertVerifier for AnyCertificate {
     }
 }
 
+/// A server's certificate, whichever it is, its handshake signature still
+/// verified.
+///
+/// Only for finding a device by six digits (decision 0066), where there is no
+/// fingerprint to pin yet: the certificate each side saw is bound into the
+/// key exchange that follows, so one presented by anything in between makes
+/// the exchange fail rather than succeed with the wrong device.
+#[derive(Debug)]
+struct AnyServer {
+    provider: Arc<CryptoProvider>,
+}
+
+impl ServerCertVerifier for AnyServer {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp: &[u8],
+        _now: UnixTime,
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        Err(rustls::Error::General("TLS 1.2 is not accepted".into()))
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+/// Connect to whatever device answers, to try six digits with it (decision
+/// 0066). Nothing but that exchange is ever asked over such a connection.
+pub fn finding_config(identity: &Identity) -> Result<quinn::ClientConfig> {
+    let mut tls = rustls::ClientConfig::builder_with_provider(provider())
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .map_err(|e| Error::Tls(e.to_string()))?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(AnyServer { provider: provider() }))
+        .with_client_auth_cert(vec![identity.cert_der()], identity.key_der()?)
+        .map_err(|e| Error::Tls(e.to_string()))?;
+    tls.alpn_protocols = vec![ALPN.to_vec()];
+    let quic = quinn::crypto::rustls::QuicClientConfig::try_from(tls)
+        .map_err(|e| Error::Tls(e.to_string()))?;
+    Ok(quinn::ClientConfig::new(Arc::new(quic)))
+}
+
 /// A listener for pairing: any certificate, but nothing served except pairing.
 pub fn pairing_server_config(identity: &Identity) -> Result<quinn::ServerConfig> {
     let verifier = AnyCertificate { provider: provider() };

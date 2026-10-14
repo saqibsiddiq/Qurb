@@ -62,6 +62,9 @@ pub enum Pairing {
 /// A code on the screen, and the wait behind it.
 pub struct Attempt {
     pub code: String,
+    /// Whether its six digits still work (decision 0066): tried wrongly too
+    /// often, they stop, and the screen says so.
+    pub digits_work: Arc<std::sync::atomic::AtomicBool>,
     /// The same invite in a form somebody can read down a telephone.
     pub spoken: String,
     pub expires_at: i64,
@@ -312,6 +315,7 @@ impl Hosted {
     pub fn begin_pairing(&self, code: String, spoken: String, expires_at: i64) -> Arc<Attempt> {
         let attempt = Arc::new(Attempt {
             code,
+            digits_work: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             spoken,
             expires_at,
             state: Mutex::new(Pairing::Waiting),

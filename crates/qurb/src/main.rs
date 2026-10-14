@@ -22,7 +22,8 @@ qurb — private cloud storage
   qurb pair [dir] [--guest]           show a code and wait for a device to join;
                                         --guest: another person's, keeping its key
   qurb visit [dir] <code>             visit another person's computer as a guest
-  qurb join [dir] <code>              join a device showing a code; a folder not
+  qurb join [dir] <code>              join a device showing a code, or its six
+                                        digits on the same network; a folder not
                                         set up yet takes that device's key
   qurb run [dir]                      watch, sync, and keep running
   qurb replica <dir> [--only <path>]  hold content for devices that are asleep
@@ -540,11 +541,17 @@ async fn pair(root: PathBuf, guest: bool) -> Result<()> {
         println!("Or on another computer:\n");
         println!("  qurb join <dir> {code}\n");
     }
+    // Six digits, typed on a device on the same network (decision 0066).
+    if let Some(digits) = host.digits() {
+        println!("Or type these six digits on a device on this network:\n");
+        println!("  {}\n", qurb_peer::short::spaced(&digits));
+    }
     println!("Or read this out:\n");
     println!("  {}\n", host.invite().for_humans());
     println!("The code carries this device's full identity, which is why it has to");
     println!("travel outside the network — someone able to change what is on your");
-    println!("screen has already won.\n");
+    println!("screen has already won. The digits fetch it, and only for whoever");
+    println!("knows them.\n");
     println!("It expires in 5 minutes and works once. Waiting...");
 
     // A device with no key that joins with this code gets this one's
@@ -578,11 +585,11 @@ async fn pair(root: PathBuf, guest: bool) -> Result<()> {
 /// person there approves, and from then on can send that computer files and
 /// be sent them.
 async fn visit(root: PathBuf, code: String) -> Result<()> {
-    let invite = qurb_peer::Invite::parse(&code)?;
+    let (_, identity, store, config) = open(&root)?;
+    let invite = qurb_cli::setup::invite(&code, &identity).await?;
     if !invite.guest {
         bail!("that code adds one of your own devices; use `qurb join` for that");
     }
-    let (_, identity, store, config) = open(&root)?;
     let store = Arc::new(Mutex::new(store));
     let kind = kind_of(&store);
     println!("Visiting as {}: check that the other computer shows {}.", config.name, invite.number_for(&identity.fingerprint()));
@@ -634,7 +641,7 @@ fn kind_of(store: &Arc<Mutex<qurb_storage::Store>>) -> String {
 
 async fn join(root: PathBuf, code: String) -> Result<()> {
     if !qurb_cli::is_set_up(&root) {
-        let number = qurb_cli::setup::number_for(&root, &code)?;
+        let number = qurb_cli::setup::number_for(&root, &code).await?;
         println!("Joining your other device. It will ask you to approve this one:");
         println!("check that it shows {number}.");
         let peer = qurb_cli::setup::join(&root, &code).await?;
@@ -645,7 +652,7 @@ async fn join(root: PathBuf, code: String) -> Result<()> {
     let (master, identity, store, config) = open(&root)?;
     let store = Arc::new(Mutex::new(store));
 
-    let invite = qurb_peer::Invite::parse(&code).context("that is not a valid pairing code")?;
+    let invite = qurb_cli::setup::invite(&code, &identity).await?;
     println!("Joining {} ...", invite.address);
     println!("Approve it there: it should show {}.", invite.number_for(&identity.fingerprint()));
 

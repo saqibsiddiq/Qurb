@@ -132,6 +132,15 @@ pub enum Request {
     /// [`MAX_MESSAGE`], and a million files' list is larger than that, so a
     /// library that size could not sync at all.
     TreeStream,
+
+    /// Six digits tried with a device showing a code (decision 0066): this
+    /// side's half of SPAKE2. Answered with [`Response::Short`], or
+    /// [`Response::Withdrawn`] once the digits have been tried too often.
+    Short { spake: [u8; SPAKE_LEN] },
+
+    /// This side's confirmation that it derived the same key. Answered with
+    /// the long code, [`Response::Sealed`] under that key, or *not found*.
+    ShortConfirm { confirm: [u8; 32] },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,6 +195,17 @@ pub enum Response {
     /// with when, answering [`Request::Chosen`]. The later choice wins,
     /// wherever it was made (item 10).
     Chosen(Vec<Choice>),
+
+    /// The device showing a code's half of SPAKE2, and its confirmation
+    /// (decision 0066).
+    Short { spake: [u8; SPAKE_LEN], confirm: [u8; 32] },
+
+    /// The long code, sealed under the key six digits agreed.
+    Sealed(Vec<u8>),
+
+    /// The digits were tried too often, and are no longer taken for this
+    /// code. The QR code and the long code still work.
+    Withdrawn,
 }
 
 const TAG_TREE: u8 = 1;
@@ -202,6 +222,14 @@ const TAG_UNLOCK: u8 = 11;
 const TAG_FOLDERS: u8 = 12;
 const TAG_CHOSEN: u8 = 13;
 const TAG_TREE_STREAM: u8 = 14;
+const TAG_SHORT: u8 = 15;
+const TAG_SHORT_CONFIRM: u8 = 16;
+
+/// The length of one side's SPAKE2 message in the Ed25519 group: a byte
+/// saying which side, and a point.
+pub const SPAKE_LEN: usize = 33;
+/// The most a sealed long code may be: a nonce, the code, and the tag.
+const MAX_SEALED: usize = 512;
 
 /// How large a frame of a streamed file list is made: small enough that the
 /// receiver holds little of it at a time.
@@ -227,6 +255,9 @@ const STATUS_WELCOME: u8 = 12;
 const STATUS_ASKS: u8 = 13;
 const STATUS_FOLDERS: u8 = 14;
 const STATUS_CHOSEN: u8 = 15;
+const STATUS_SHORT: u8 = 16;
+const STATUS_SEALED: u8 = 17;
+const STATUS_WITHDRAWN: u8 = 18;
 
 /// The most folders one answer may list: two levels of a phone's storage come
 /// to a few hundred. A peer claiming more is not describing a phone.
@@ -285,6 +316,14 @@ impl Request {
             Request::Folders => out.push(TAG_FOLDERS),
             Request::Chosen => out.push(TAG_CHOSEN),
             Request::TreeStream => out.push(TAG_TREE_STREAM),
+            Request::Short { spake } => {
+                out.push(TAG_SHORT);
+                out.extend_from_slice(spake);
+            }
+            Request::ShortConfirm { confirm } => {
+                out.push(TAG_SHORT_CONFIRM);
+                out.extend_from_slice(confirm);
+            }
         }
         out
     }
@@ -317,6 +356,8 @@ impl Request {
             TAG_FOLDERS => Request::Folders,
             TAG_CHOSEN => Request::Chosen,
             TAG_TREE_STREAM => Request::TreeStream,
+            TAG_SHORT => Request::Short { spake: r.array()? },
+            TAG_SHORT_CONFIRM => Request::ShortConfirm { confirm: r.hash()? },
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -346,6 +387,17 @@ impl Response {
         let mut out = Vec::new();
         match self {
             Response::NotFound => out.push(STATUS_NOT_FOUND),
+            Response::Short { spake, confirm } => {
+                out.push(STATUS_SHORT);
+                out.extend_from_slice(spake);
+                out.extend_from_slice(confirm);
+            }
+            Response::Sealed(sealed) => {
+                out.push(STATUS_SEALED);
+                put_u32(&mut out, sealed.len());
+                out.extend_from_slice(sealed);
+            }
+            Response::Withdrawn => out.push(STATUS_WITHDRAWN),
             Response::Noted => out.push(STATUS_NOTED),
             Response::Changed { generation } => {
                 out.push(STATUS_CHANGED);
@@ -487,6 +539,15 @@ impl Response {
                 let len = r.count()?;
                 Response::Chunk(r.take(len)?.to_vec())
             }
+            STATUS_SHORT => Response::Short { spake: r.array()?, confirm: r.hash()? },
+            STATUS_SEALED => {
+                let len = r.count()?;
+                if len > MAX_SEALED {
+                    return Err(Error::Protocol { detail: format!("a sealed code of {len} bytes") });
+                }
+                Response::Sealed(r.take(len)?.to_vec())
+            }
+            STATUS_WITHDRAWN => Response::Withdrawn,
             status => {
                 return Err(Error::Protocol { detail: format!("unknown response status {status}") })
             }
@@ -703,9 +764,13 @@ impl<'a> Reader<'a> {
     }
 
     fn hash(&mut self) -> Result<[u8; 32]> {
-        let mut h = [0u8; 32];
-        h.copy_from_slice(self.take(32)?);
-        Ok(h)
+        self.array()
+    }
+
+    fn array<const N: usize>(&mut self) -> Result<[u8; N]> {
+        let mut a = [0u8; N];
+        a.copy_from_slice(self.take(N)?);
+        Ok(a)
     }
 
     /// Reject trailing bytes rather than ignoring them: a message that decodes

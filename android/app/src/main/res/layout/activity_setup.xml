@@ -200,7 +200,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="20dp"
-                android:text="On your computer, open Qurb, go to Devices and choose Add a device. Scan the code it shows. It brings your key with it, so there is nothing else to type."
+                android:text="On your computer, open Qurb, go to Devices and choose Add a device. Scan the code it shows, or type its six digits on the same Wi-Fi. It brings your key with it, so there is nothing else to type."
                 android:textAppearance="@style/Text.Body"
                 android:textColor="@color/text_2" />
 
@@ -216,14 +216,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
-                android:hint="Or enter the code">
+                android:hint="Or type its six digits">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/code"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:importantForAutofill="no"
-                    android:inputType="textNoSuggestions|textVisiblePassword" />
+                    android:inputType="number"
+                    android:maxLength="6"
+                    android:fontFeatureSettings="tnum"
+                    android:letterSpacing="0.3"
+                    android:textSize="24sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <!-- The step's ending, on the right (rule 11). -->

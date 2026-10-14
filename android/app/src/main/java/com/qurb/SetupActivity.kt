@@ -114,9 +114,13 @@ class SetupActivity : AppCompatActivity() {
             if (Engine.unfinished(this)) Engine.discardUnfinished(this)
             // After putting an unfinished key aside: the number comes from the
             // certificate that then joins.
+            // Six digits are looked for on this Wi-Fi (decision 0066), which
+            // the phone hears only while it holds the multicast lock.
             val number = withContext(Dispatchers.IO) {
                 Engine.root(this@SetupActivity).mkdirs()
-                pairingNumber(Engine.root(this@SetupActivity).absolutePath, code)
+                Engine.hearingTheNetwork(this@SetupActivity) {
+                    pairingNumber(Engine.root(this@SetupActivity).absolutePath, code)
+                }
             }
             val showing = Approval.showWhileJoining(this, number)
             try {

@@ -30,6 +30,10 @@ futures-util = "0.3"
 # café wifi sees packets of random bytes rather than a list of who is here.
 chacha20poly1305 = "0.10"
 rand = "0.8"
+# Six digits to pair (decision 0066): a password-authenticated key exchange,
+# so that the digits fetch the long code without being enough to stand in for
+# the device showing them.
+spake2 = "0.4"
 # Every address this machine can be reached at, not just the one the default
 # route uses. A device on a VPN or overlay network has a second address that
 # peers elsewhere can reach and the default route never mentions.

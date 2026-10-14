@@ -886,8 +886,6 @@ pub fn join_new(
     keystore: Option<Arc<dyn KeyStore>>,
 ) -> Result<PeerInfo, QurbError> {
     logging();
-    let invite = qurb_peer::Invite::parse(code.trim())
-        .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
     let store_dir = store_dir(Path::new(&root));
     let vault = vault_at(&store_dir, keystore.as_ref());
     if vault.exists() {
@@ -908,6 +906,7 @@ pub fn join_new(
         .enable_all()
         .build()
         .map_err(|e| QurbError::Other { detail: format!("no runtime: {e}") })?;
+    let invite = typed_code(&runtime, &code, &identity)?;
     let paired = runtime
         .block_on(qurb_peer::join(&invite, &identity, &device_name, "phone", now(), |key| {
             let master = vault
@@ -945,15 +944,39 @@ pub fn join_new(
 /// (decision 0053). Shown before joining, so the person can compare the two
 /// screens; the certificate it is derived from is made here if this phone has
 /// none yet, and is the one joining then presents.
+///
+/// Six digits are found on this network here (decision 0066), and what they
+/// fetched is remembered for the joining that follows.
 #[uniffi::export]
 pub fn pairing_number(root: String, code: String) -> Result<String, QurbError> {
-    let invite = qurb_peer::Invite::parse(code.trim())
-        .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
+    logging();
     let store_dir = store_dir(Path::new(&root));
     std::fs::create_dir_all(&store_dir).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
     let identity = qurb_peer::Identity::load_or_create(&store_dir)
         .map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .map_err(|e| QurbError::Other { detail: format!("no runtime: {e}") })?;
+    let invite = typed_code(&runtime, &code, &identity)?;
     Ok(invite.number_for(&identity.fingerprint()))
+}
+
+/// A typed code, the long one or six digits found on this network
+/// (decision 0066), as an invite.
+fn typed_code(
+    runtime: &tokio::runtime::Runtime,
+    code: &str,
+    identity: &qurb_peer::Identity,
+) -> Result<qurb_peer::Invite, QurbError> {
+    runtime.block_on(qurb_peer::short::resolve(code.trim(), identity)).map_err(|e| match e {
+        qurb_peer::Error::BadInvite { detail } => QurbError::BadCode { detail },
+        e @ (qurb_peer::Error::NoneOffering
+        | qurb_peer::Error::WrongDigits
+        | qurb_peer::Error::DigitsWithdrawn) => QurbError::Other { detail: sentence(&e.to_string()) },
+        other => QurbError::Network { detail: other.to_string() },
+    })
 }
 
 /// Who wants to pair with this phone, for the person to approve.
@@ -1281,6 +1304,8 @@ impl Qurb {
             code: invite.encode(),
             human: invite.for_humans(),
             expires_at: invite.expires_at,
+            digits: host.digits().map(|d| qurb_peer::short::spaced(&d)),
+            digits_work: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             store: self.shared_store()?,
             name: self.device_name.clone(),
             runtime,
@@ -1295,41 +1320,31 @@ impl Qurb {
     /// from [`pairing_number`] while the person there approves, and from then
     /// on can send that computer files and be sent them.
     pub fn visit_computer(&self, code: String) -> Result<PeerInfo, QurbError> {
-        let invite = qurb_peer::Invite::parse(&code)
-            .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
+        let identity = self.identity()?;
+        let runtime = self.runtime()?;
+        let invite = typed_code(&runtime, &code, &identity)?;
         if !invite.guest {
             return Err(QurbError::BadCode {
                 detail: "that code adds one of your own devices, not a visit as a guest".into(),
             });
         }
-        let identity = self.identity()?;
-        let store = self.shared_store()?;
-        let runtime = self.runtime()?;
-        let host = runtime
-            .block_on(qurb_peer::visit(&invite, &identity, store, &self.device_name, "phone", now()))
-            .map_err(pairing_failed)?;
-        Ok(PeerInfo {
-            fingerprint: hex(host.fingerprint.as_bytes()),
-            short: host.fingerprint.short(),
-            name: host.name,
-            paired_at: now(),
-            last_seen: None,
-            relation: "host".into(),
-            kind: Some("computer".into()),
-        })
+        self.visit_with(&invite, &identity, &runtime)
     }
 
     /// Accept an invitation offered by another device.
     ///
     /// The usual direction for a phone: the desktop shows a QR code and the
-    /// phone's camera reads it.
+    /// phone's camera reads it, or the person types the six digits beside it
+    /// (decision 0066). A guest code -- another person's computer -- is a
+    /// visit, and the device it gives back is a host.
     pub fn join_pairing(&self, code: String) -> Result<PeerInfo, QurbError> {
-        let invite = qurb_peer::Invite::parse(&code)
-            .map_err(|e| QurbError::BadCode { detail: e.to_string() })?;
-
         let identity = self.identity()?;
-        let store = self.shared_store()?;
         let runtime = self.runtime()?;
+        let invite = typed_code(&runtime, &code, &identity)?;
+        if invite.guest {
+            return self.visit_with(&invite, &identity, &runtime);
+        }
+        let store = self.shared_store()?;
 
         // The other device asks its person to approve this one, comparing the
         // number `pairing_number` gave this screen (decision 0053).
@@ -2219,6 +2234,28 @@ impl Qurb {
 /// Not exported. `#[uniffi::export]` takes every method in the block it is
 /// applied to, and a `MutexGuard` cannot cross an FFI boundary — nor should it.
 impl Qurb {
+    /// Visit another person's computer with a guest invite (decision 0060).
+    fn visit_with(
+        &self,
+        invite: &qurb_peer::Invite,
+        identity: &qurb_peer::Identity,
+        runtime: &tokio::runtime::Runtime,
+    ) -> Result<PeerInfo, QurbError> {
+        let store = self.shared_store()?;
+        let host = runtime
+            .block_on(qurb_peer::visit(invite, identity, store, &self.device_name, "phone", now()))
+            .map_err(pairing_failed)?;
+        Ok(PeerInfo {
+            fingerprint: hex(host.fingerprint.as_bytes()),
+            short: host.fingerprint.short(),
+            name: host.name,
+            paired_at: now(),
+            last_seen: None,
+            relation: "host".into(),
+            kind: Some("computer".into()),
+        })
+    }
+
     fn send_from(&self, source: &str, name: String, to: String, temporary: bool) -> Result<u64, QurbError> {
         let device = self.device_of(&to)?;
         let name = qurb_watcher::normalize(&name);
@@ -3159,6 +3196,10 @@ pub struct Pairing {
     code: String,
     human: String,
     expires_at: i64,
+    /// Six digits a device on the same network types instead (decision 0066).
+    digits: Option<String>,
+    /// Whether they still work: tried wrongly too often, they stop.
+    digits_work: Arc<std::sync::atomic::AtomicBool>,
     inner: Mutex<Option<qurb_peer::PairingHost>>,
     store: Arc<std::sync::Mutex<Store>>,
     name: String,
@@ -3190,6 +3231,12 @@ impl Pairing {
     /// Unix seconds after which the code stops working.
     pub fn expires_at(&self) -> i64 {
         self.expires_at
+    }
+
+    /// Six digits, spaced, that a device on the same network types instead
+    /// (decision 0066); `None` once they were tried wrongly too often.
+    pub fn digits(&self) -> Option<String> {
+        self.digits.clone().filter(|_| self.digits_work.load(std::sync::atomic::Ordering::SeqCst))
     }
 
     /// Block until another device joins, or the invitation expires.
@@ -3225,10 +3272,20 @@ impl Pairing {
                 tokio::task::spawn_blocking(move || approver.approve(request)).await.unwrap_or(false)
             }
         };
+        // Whether the digits still work, kept current for the screen.
+        let digits_work = Arc::clone(&self.digits_work);
+        let watching = async {
+            while host.digits().is_some() {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
+            digits_work.store(false, std::sync::atomic::Ordering::SeqCst);
+            std::future::pending::<()>().await
+        };
         let outcome = self.runtime.block_on(async {
             tokio::select! {
                 joined = host.wait(Arc::clone(&self.store), &ours, now(), approve) => Some(joined),
                 () = cancelled.notified() => None,
+                () = watching => None,
             }
         });
         // Either way nothing more is listened for: a code works once.
