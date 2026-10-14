@@ -2257,6 +2257,37 @@ freezer. Where each stands:
    free its copy. Reshaping it is left until item 3 exists, which is where
    phone backups will live.
 
+## The owner's list of 2026-10-14
+
+Eleven items, given after item 3 of the list before was watched working.
+His answers to the questions they raised are with them.
+
+1. **Keep the laptop awake while it collects, when plugged in.** Its idle
+   suspend cost 12 of the WhatsApp backup's 15.5 hours (0062).
+2. **A `qurb` folder in the home directory holding one folder per user**,
+   each with everything backed up from that person, which the desktop's user
+   opens only when the person approves on their phone. Answers: only user
+   folders in `~/qurb`, today's shared files moving to `~/qurb/Shared`; one
+   folder per person, each phone in its own folder inside; opened inside Qurb
+   only, decrypted when a file is opened, nothing readable left on disk.
+3. **A phone sends either to Downloads**, which the desktop opens freely, **or
+   to the person's own folder**, which needs approval on the phone.
+4. **The desktop's Files shows every user folder**, navigated and opened as in
+   2 and 3.
+5. **The phone's Files reaches the person's folder on the desktop** while the
+   desktop is online, to restore or download from it.
+6. **The S23 is listed twice in the laptop's Devices**: its identity from
+   before it was set up again, and its new one.
+7. **A six-digit code to pair**, as WhatsApp links a computer. Answer: the
+   laptop shows it, the phone types it.
+8. **Home redesigned**: a sync button, a send button, and what is waiting to
+   sync.
+9. **The desktop's Storage redesigned**, thoroughly.
+10. **The folders to back up chosen on the phone too**, and on its Home.
+11. **All of it beautiful, symmetric and elegant.**
+
+Where each stands is kept here as it moves.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
