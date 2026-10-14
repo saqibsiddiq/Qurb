@@ -60,8 +60,8 @@ order of expected gain for the least change:
    files, against 39.6 to 57.5), reading twice as fast a file (2.6 to 3.0 ms
    against 5.8).
 3. **Keep the laptop awake while it is collecting**, through the system's
-   sleep inhibitor, released when the collection ends. The owner decides
-   whether by default.
+   sleep inhibitor, released when the collection ends. The owner decided:
+   yes, while plugged in (2026-10-14). Built the same day (`awake.rs`).
 4. **Do the heavy part while the phone charges**: a first backup of a large
    folder waits for, or finishes during, charging with the screen off, where
    Samsung's freezer is not running against it.

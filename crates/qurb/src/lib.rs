@@ -7,6 +7,7 @@
 //! The binary in `main.rs` is the terminal front end. `qurb-tray` is another.
 //! Neither owns the daemon; both run the same one.
 
+pub mod awake;
 pub mod config;
 pub mod daemon;
 pub mod lock;

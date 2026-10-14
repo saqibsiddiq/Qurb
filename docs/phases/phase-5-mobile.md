@@ -2263,7 +2263,14 @@ Eleven items, given after item 3 of the list before was watched working.
 His answers to the questions they raised are with them.
 
 1. **Keep the laptop awake while it collects, when plugged in.** Its idle
-   suspend cost 12 of the WhatsApp backup's 15.5 hours (0062).
+   suspend cost 12 of the WhatsApp backup's 15.5 hours (0062). **Built
+   2026-10-14** (`crates/qurb/src/awake.rs`): while a plan brings content in
+   and the computer is on mains power or has no battery, GNOME's session
+   inhibitor and logind's are held, and let go when the plan is applied.
+   Measured on the laptop: held, GNOME's `IsInhibited` for suspend and idle
+   both true and logind listing it; let go, neither, and nothing left
+   running. logind's alone did not register with GNOME, hence both. They hold
+   `tail --pid` on Qurb, so they cannot outlive it.
 2. **A `qurb` folder in the home directory holding one folder per user**,
    each with everything backed up from that person, which the desktop's user
    opens only when the person approves on their phone. Answers: only user

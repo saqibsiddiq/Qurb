@@ -1076,6 +1076,18 @@ impl Daemon {
             .map(|action| action.path().to_string())
             .collect();
 
+        // Awake while content comes in, on mains power: the laptop's idle
+        // suspend cost 12 of a WhatsApp backup's 15.5 hours (the owner's item
+        // 1, 2026-10-14). Let go when the plan is applied.
+        let brings = plan.iter().any(|action| match action {
+            qurb_sync::Action::Adopt { remote } | qurb_sync::Action::Hold { remote, .. } => {
+                matches!(remote.content, qurb_sync::Content::File { .. })
+            }
+            qurb_sync::Action::Resurrect { .. } | qurb_sync::Action::Conflict { .. } => true,
+            qurb_sync::Action::Merge { .. } | qurb_sync::Action::Offer { .. } => false,
+        });
+        let _awake = brings.then(|| crate::awake::Awake::while_collecting(&format!("Collecting from {from}")));
+
         let outcome = tokio::task::block_in_place(|| {
             let mut source = qurb_peer::NetworkSource::new(&client, &reader).for_peer(peer_device);
             let mut progress = Reporting::new(self.status.as_ref(), from);
