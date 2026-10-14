@@ -55,8 +55,22 @@ About 6.4 ms a file through the picked folder whatever the files' size, and
 app reads `Android/media/com.whatsapp` directly, which the 0062 spike's
 manifest called impossible; it is, without that permission.
 
-**Galaxy S23: not measured yet.** It is what decides the matter: a real
-phone's flash and storage layer, cold, against WhatsApp's 36,031 files.
+**Galaxy S23, 2026-10-14** (Android 16, One UI 8.5, on battery at 72%, the
+screen on and nothing else running), against WhatsApp's real folder, 36,055
+files. The first 2,000 files of the listing, about 1.2 MB each, last read
+the evening before for the WhatsApp backup:
+
+| | through the picked folder | directly by path |
+|---|---|---|
+| listing 36,055 files | 57.5 s, then 39.6 s | **5.3 s, then 4.3 s** |
+| reading, halves as split | 5.85 ms a file, 196 MB/s (1,000 files, 1.15 GB) | **3.03 ms a file**, 435 MB/s (1,000 files, 1.32 GB) |
+| reading, halves swapped | 5.75 ms a file, 229 MB/s (1.32 GB) | **2.58 ms a file**, 444 MB/s (1.15 GB) |
+
+Listing is about ten times faster directly, and reading about twice as fast
+a file, the same in both rounds. Not the twentyfold of the emulator, whose
+files were small and warm. Both read far faster than Qurb's backup did
+(23 MB/s, 0062): reading the bytes is not where that time goes. The spike
+was uninstalled afterwards, taking its permission and grant with it.
 
 ## Corners cut
 

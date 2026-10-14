@@ -148,8 +148,13 @@ the runtime directory, as a guest's file is (0060). Checked on the emulator
 and in the desktop fixtures (the panel, the folders, the listing, a phone
 that has not listed them yet).
 
-**Not yet:** watched between the S23 and the laptop, and the spike's S23 run
-(step 1).
+**Step 1, measured on the S23 2026-10-14** ([file-access-speed](../../experiments/file-access-speed/README.md)):
+with "All files access", listing WhatsApp's 36,055 files took 4.3 to 5.3 s
+against 39.6 to 57.5 s through the picked folder, and reading took 2.6 to
+3.0 ms a file against 5.8. Direct reads are worth having for speed as well as
+for choosing on the desktop.
+
+**Not yet:** watched between the S23 and the laptop.
 
 ## Reversing it
 

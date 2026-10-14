@@ -55,8 +55,10 @@ order of expected gain for the least change:
    checking happen after the lock is let go, so 32 requests read at once.
    Measured on the S23 against the 17 to 28 a second above.
 2. **Read the phone's folders directly** where "All files access" is granted
-   ([0063](0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)), after
-   the spike's S23 run confirms the emulator's tenfold.
+   ([0063](0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)). On
+   the S23: listing ten times faster (4.3 to 5.3 s for WhatsApp's 36,055
+   files, against 39.6 to 57.5), reading twice as fast a file (2.6 to 3.0 ms
+   against 5.8).
 3. **Keep the laptop awake while it is collecting**, through the system's
    sleep inhibitor, released when the collection ends. The owner decides
    whether by default.
