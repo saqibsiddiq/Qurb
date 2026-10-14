@@ -1,8 +1,9 @@
 # 0065 — The scale qurb is built for
 
-**Status:** Accepted as targets and an order of work, 2026-10-14. Nothing here
-is built; the first step is measuring, because two of the three limits below
-are expected rather than measured.
+**Status:** Accepted as targets and an order of work, 2026-10-14. Measured at
+100,000 and a million files the same day: **above a few hundred thousand
+files a library cannot sync at all yet**, the whole file list being too large
+for one message. Fixing that is next.
 **Date:** 2026-10-14
 
 ## What was asked
@@ -118,7 +119,27 @@ Phase 1's run of the same example:
 
 Every check passed, 500 sampled files byte-identical after each sync.
 
-**Not done yet:** the run at a million files.
+**A million files, 2026-10-14**, the same laptop and example, 43.99 GiB
+generated:
+
+| stage | measured | target |
+|---|---|---|
+| first index | 1,623 s, 616 files/s | -- |
+| re-index, nothing changed | 27.5 s | within 15 s: **missed** |
+| first sync | **failed**: `ReadToEnd(TooLong)` | -- |
+
+The sync could not start. The whole file list goes in one message, and one
+message is capped at 64 MiB (`MAX_MESSAGE`); a million entries, each with
+its path, content hash, size, version history and author, do not fit. At
+100,000 the list fits, so the limit is somewhere between: **qurb cannot sync
+a library that large at all today**, which is expected limit 1 above, met as
+a hard failure rather than a slow one. Re-indexing grew 22 times for 10
+times the files, and the first index slowed per file once the files no
+longer fitted in the laptop's 15 GiB of memory.
+
+Next, in this order: the file list in pages, so a large library syncs at
+all; then only what changed since the last exchange; then the re-index's
+growth.
 
 ## Reversing it
 
