@@ -791,14 +791,26 @@ fn status(root: &Path) -> Result<()> {
         println!("\n  no paired devices — run `qurb pair` here and `qurb join` there");
     } else {
         println!("\n  paired with:");
+        // Which were set up again, and as what (item 6): the window shows each
+        // as the device it became; here both are listed, and said so.
+        let devices = qurb_cli::View::new(&store, 0).devices().unwrap_or_default();
         for peer in peers {
+            let became = devices
+                .iter()
+                .find(|d| d.id == peer.device_id)
+                .and_then(|d| d.replaced_by)
+                .and_then(|newer| devices.iter().find(|d| d.id == newer));
             println!(
-                "    {}  {}  ({})",
+                "    {}  {}  ({}{})",
                 hex_short(&peer.fingerprint),
                 peer.name,
                 match peer.last_seen {
                     Some(at) => format!("last reached {}", ago(at)),
                     None => "not reached yet".to_string(),
+                },
+                match became {
+                    Some(newer) => format!("; set up again as {}", newer.fingerprint),
+                    None => String::new(),
                 }
             );
         }
@@ -874,7 +886,7 @@ fn send(root: &Path, picked: &[PathBuf], recipient: &str, again: bool) -> Result
     let (_, _, mut store, _) = open(root)?;
 
     let peer = match qurb_cli::View::new(&store, 0).device_named(recipient)? {
-        qurb_cli::Recipient::One(device) => device,
+        qurb_cli::Recipient::One(device) => *device,
         qurb_cli::Recipient::Unknown { known } if known.is_empty() => {
             bail!("this device has not been paired with anything yet")
         }
@@ -1191,7 +1203,7 @@ fn holders(root: &Path, rest: &[String]) -> Result<()> {
     let view = qurb_cli::View::new(&store, 0);
     let named = |text: &str| -> Result<qurb_cli::Device> {
         match view.device_named(text)? {
-            qurb_cli::Recipient::One(device) => Ok(device),
+            qurb_cli::Recipient::One(device) => Ok(*device),
             _ => bail!("no single paired device called {text} — see `qurb status`"),
         }
     };
@@ -1234,7 +1246,7 @@ fn holders(root: &Path, rest: &[String]) -> Result<()> {
 fn remove_device(root: &Path, text: &str, delete_kept: bool, yes: bool) -> Result<()> {
     let (_, _, mut store, _) = open(root)?;
     let device = match qurb_cli::View::new(&store, 0).device_named(text)? {
-        qurb_cli::Recipient::One(device) => device,
+        qurb_cli::Recipient::One(device) => *device,
         _ => bail!("no single paired device called {text} — see `qurb status`"),
     };
     let plan = store.removal_plan(&device.id)?;
@@ -1299,7 +1311,7 @@ fn files(n: usize) -> String {
 fn cancel(root: &Path, name: &str, recipient: &str) -> Result<()> {
     let (_, _, mut store, _) = open(root)?;
     let peer = match qurb_cli::View::new(&store, 0).device_named(recipient)? {
-        qurb_cli::Recipient::One(device) => device,
+        qurb_cli::Recipient::One(device) => *device,
         _ => bail!("no single paired device called {recipient} — see `qurb status`"),
     };
     store.cancel_send(name, &peer.id).map_err(|e| match e {

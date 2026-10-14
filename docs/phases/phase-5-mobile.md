@@ -2284,7 +2284,18 @@ His answers to the questions they raised are with them.
 5. **The phone's Files reaches the person's folder on the desktop** while the
    desktop is online, to restore or download from it.
 6. **The S23 is listed twice in the laptop's Devices**: its identity from
-   before it was set up again, and its new one.
+   before it was set up again, and its new one. **Built 2026-10-14**: a
+   device of the same person with the same name and kind, paired after an
+   older one was last seen, is that one set up again (`set_up_again` in
+   `view.rs`). Devices shows one card; its panel says when it was set up
+   again and how much is still kept here from before (on the laptop: 6,637
+   files, 3.7 GB, the first WhatsApp backup), with *Remove the earlier one…*,
+   asked as "Remove the earlier SM-S911B, from before it was set up again?"
+   so that it cannot be taken for the phone in hand. Sending and Settings
+   list it once; a name shared with an earlier self means the one in use;
+   `qurb status` lists both and says which became which. Two phones alike
+   still in use stay two, and another person's never stands for this
+   person's (tests). Nothing is removed without the person.
 7. **A six-digit code to pair**, as WhatsApp links a computer. Answer: the
    laptop shows it, the phone types it.
 8. **Home redesigned**: a sync button, a send button, and what is waiting to

@@ -643,7 +643,8 @@ function openSend(paths = [], device = null) {
     to.replaceChildren(el("div", "list-label", "To"));
     let devices;
     try {
-      devices = await invoke("devices");
+      // Not one set up again since: what it was is not there to send to.
+      devices = (await invoke("devices")).filter((d) => !d.replaced_by);
     } catch (e) {
       to.append(el("p", "says warn", String(e)));
       return;

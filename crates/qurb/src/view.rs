@@ -61,6 +61,49 @@ pub struct Device {
     /// WhatsApp backup are kept here, and how many bytes (decision 0062).
     /// None when there is none.
     pub whatsapp: Option<(u64, u64)>,
+    /// Everything this device keeps for it: files and bytes. None when none.
+    pub held: Option<(u64, u64)>,
+    /// The device this one was set up again as: the same person's, the same
+    /// name and kind, paired after this one was last seen. Shown as that one,
+    /// not beside it (the owner's item 6, 2026-10-14: the S23 was listed
+    /// twice after its data was cleared and it was paired again).
+    pub replaced_by: Option<DeviceId>,
+    /// The device this one replaced, the other way round.
+    pub earlier: Option<DeviceId>,
+}
+
+/// Mark each device that was set up again as the newer one it became.
+///
+/// The same person's, with the same name and kind, the newer paired after the
+/// older was last seen: clearing a phone's data and pairing it again makes a
+/// new identity, and the old one stays paired, with whatever was kept for it.
+/// Neither is forgotten; the newer stands for both, and says what the older
+/// left here. A device still seen after the newer was paired is a second
+/// device, not the same one again.
+fn set_up_again(devices: &mut [Device]) {
+    for newer in 0..devices.len() {
+        for older in 0..devices.len() {
+            let (n, o) = (&devices[newer], &devices[older]);
+            let same = newer != older
+                && n.relation == qurb_storage::db::Relation::Own
+                && o.relation == qurb_storage::db::Relation::Own
+                && n.name == o.name
+                && n.kind.is_some()
+                && n.kind == o.kind
+                && o.paired_at < n.paired_at
+                && o.last_seen.is_none_or(|seen| seen <= n.paired_at);
+            // The latest earlier one, if it was set up again more than once.
+            let later_than_known = devices[newer]
+                .earlier
+                .and_then(|known| devices.iter().find(|d| d.id == known))
+                .is_none_or(|known| known.paired_at < devices[older].paired_at);
+            if same && later_than_known {
+                let (older_id, newer_id) = (devices[older].id, devices[newer].id);
+                devices[newer].earlier = Some(older_id);
+                devices[older].replaced_by = Some(newer_id);
+            }
+        }
+    }
 }
 
 /// Where a file's bytes are. Decided in the storage crate, so that the phone,
@@ -115,7 +158,7 @@ impl Storage {
 /// into `None` would leave the caller inventing the difference.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Recipient {
-    One(Device),
+    One(Box<Device>),
     /// Nothing matched. Carries every paired device, so the caller can say what
     /// the choices were rather than only that this was not one of them.
     Unknown { known: Vec<Device> },
@@ -151,7 +194,7 @@ impl<'a> View<'a> {
 
     /// Every paired device.
     pub fn devices(&self) -> qurb_storage::Result<Vec<Device>> {
-        Ok(self
+        let mut devices = self
             .store
             .db()
             .trusted_peers()?
@@ -180,9 +223,14 @@ impl<'a> View<'a> {
                         .held_outside_for(&p.device_id, &format!("{}/whatsapp", qurb_storage::db::OUTSIDE))
                         .ok()
                         .filter(|(files, _)| *files > 0),
+                    held: self.store.db().held_for(&p.device_id).ok().filter(|(files, _)| *files > 0),
+                    replaced_by: None,
+                    earlier: None,
                 }
             })
-            .collect())
+            .collect::<Vec<_>>();
+        set_up_again(&mut devices);
+        Ok(devices)
     }
 
     /// The one paired device somebody meant, or why that is not clear.
@@ -208,8 +256,13 @@ impl<'a> View<'a> {
             .cloned()
             .collect();
 
+        // A device set up again shares its name with its earlier self; the
+        // name means the one in use (item 6).
+        let current: Vec<Device> = matched.iter().filter(|d| d.replaced_by.is_none()).cloned().collect();
+        let matched = if matched.len() > 1 && current.len() == 1 { current } else { matched };
+
         Ok(match matched.len() {
-            1 => Recipient::One(matched.into_iter().next().expect("one")),
+            1 => Recipient::One(Box::new(matched.into_iter().next().expect("one"))),
             0 => Recipient::Unknown { known: devices },
             _ => Recipient::Several(matched),
         })
@@ -306,5 +359,61 @@ impl<'a> View<'a> {
                 })
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod set_up_again_tests {
+    use super::*;
+    use qurb_storage::db::Relation;
+
+    fn device(seed: u8, name: &str, paired_at: i64, last_seen: Option<i64>) -> Device {
+        Device {
+            id: DeviceId::from_bytes([seed; 32]),
+            name: name.into(),
+            fingerprint: format!("{seed:02x}"),
+            paired_at,
+            last_seen,
+            relation: Relation::Own,
+            kept: None,
+            kind: Some("phone".into()),
+            whatsapp: None,
+            held: None,
+            replaced_by: None,
+            earlier: None,
+        }
+    }
+
+    /// The owner's S23 as the laptop had it: paired 8 Oct, last seen 12 Oct,
+    /// paired again 13 Oct after its data was cleared. Listed once, as the
+    /// newer, which says what the older left here.
+    #[test]
+    fn a_phone_set_up_again_is_one_device() {
+        let mut devices = vec![
+            device(1, "SM-S911B", 1_791_492_981, Some(1_791_869_229)),
+            device(2, "SM-S911B", 1_791_893_368, Some(1_791_980_000)),
+            device(3, "Pixel 8", 1_791_000_000, Some(1_791_980_000)),
+        ];
+        set_up_again(&mut devices);
+        assert_eq!(devices[0].replaced_by, Some(devices[1].id));
+        assert_eq!(devices[1].earlier, Some(devices[0].id));
+        assert_eq!((devices[1].replaced_by, devices[2].replaced_by, devices[2].earlier), (None, None, None));
+    }
+
+    /// Two phones of the same model, both still in use, are two devices; and
+    /// another person's never stands for this person's.
+    #[test]
+    fn two_phones_alike_are_two_devices() {
+        let mut both_in_use = vec![
+            device(1, "SM-S911B", 1_791_000_000, Some(1_791_980_000)),
+            device(2, "SM-S911B", 1_791_500_000, Some(1_791_980_000)),
+        ];
+        set_up_again(&mut both_in_use);
+        assert!(both_in_use.iter().all(|d| d.replaced_by.is_none()), "one hid the other");
+
+        let mut guest = vec![device(1, "SM-S911B", 1_791_000_000, Some(1_791_100_000)), device(2, "SM-S911B", 1_791_500_000, None)];
+        guest[1].relation = Relation::Guest;
+        set_up_again(&mut guest);
+        assert!(guest.iter().all(|d| d.replaced_by.is_none()), "a guest's phone stood for this person's");
     }
 }

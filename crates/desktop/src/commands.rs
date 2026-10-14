@@ -135,6 +135,13 @@ pub struct Device {
     /// A phone's WhatsApp backup kept here, in its vault: files and bytes
     /// (decision 0062).
     whatsapp: Option<WhatsAppKept>,
+    /// Everything kept here for it: files and bytes.
+    held: Option<WhatsAppKept>,
+    /// The device this one was set up again as, by id: listed as that one
+    /// (the owner's item 6, 2026-10-14).
+    replaced_by: Option<String>,
+    /// The device this one replaced, by id.
+    earlier: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -729,7 +736,7 @@ pub struct Skipped {
 /// `qurb send` uses, so the two cannot disagree about which device is meant.
 fn recipient(hosted: &Host<'_>, to: &str) -> Result<qurb_cli::Device, String> {
     match hosted.with_store(|store| Ok(View::new(store, 0).device_named(to)?)).map_err(failed)? {
-        qurb_cli::Recipient::One(device) => Ok(device),
+        qurb_cli::Recipient::One(device) => Ok(*device),
         qurb_cli::Recipient::Unknown { .. } => Err(format!("no paired device {to}")),
         qurb_cli::Recipient::Several(_) => Err(format!("more than one device is called {to}")),
     }
@@ -1648,6 +1655,9 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
                 kept: d.kept.map(big),
                 kind: d.kind,
                 whatsapp: d.whatsapp.map(|(files, bytes)| WhatsAppKept { files, bytes: big(bytes) }),
+                held: d.held.map(|(files, bytes)| WhatsAppKept { files, bytes: big(bytes) }),
+                replaced_by: d.replaced_by.map(|id| id.short()),
+                earlier: d.earlier.map(|id| id.short()),
             }
         })
         .collect())
@@ -1992,7 +2002,7 @@ fn paired_device(hosted: &Host<'_>, text: &str) -> Answer<qurb_cli::Device> {
         .with_store(|store| Ok(View::new(store, 0).device_named(text)?))
         .map_err(failed)?
     {
-        qurb_cli::Recipient::One(device) => Ok(device),
+        qurb_cli::Recipient::One(device) => Ok(*device),
         _ => Err(format!("no paired device {text}")),
     }
 }

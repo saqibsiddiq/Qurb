@@ -3790,6 +3790,16 @@ impl Db {
         )?)
     }
 
+    /// Everything this device keeps for `owner`, live: files and bytes.
+    pub fn held_for(&self, owner: &DeviceId) -> Result<(u64, u64)> {
+        Ok(self.conn.query_row(
+            "SELECT count(*), coalesce(sum(size), 0) FROM files
+              WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL",
+            params![owner.as_bytes().as_slice()],
+            |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, i64>(1)? as u64)),
+        )?)
+    }
+
     /// Files this device keeps for `owner` beneath `prefix`, live: name from
     /// the prefix, size, and when it last changed (decision 0063).
     pub fn held_under(&self, owner: &DeviceId, prefix: &str) -> Result<Vec<(String, u64, i64)>> {

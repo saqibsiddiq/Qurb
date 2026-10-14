@@ -306,7 +306,11 @@ const ANSWERS = {
   keep_remotely: () => ({ freed: 12, bytes: "480000000", kept: [] }),
 
   devices: () => STATE === "alone" ? [] : [
-    { id: "4cef0d89", name: "Galaxy S23", fingerprint: "a1b2c3d4", paired_at: now - 900000, last_seen: now - 300,
+    // Before it was set up again (item 6): shown through the one it became.
+    { id: "6d4e9586", name: "Galaxy S23", fingerprint: "6d4e9586", paired_at: now - 1500000, last_seen: now - 950000,
+      route: null, address: null, kind: "phone", relation: "own", replaced_by: "4cef0d89",
+      held: { files: 6637, bytes: "3897558016" } },
+    { id: "4cef0d89", name: "Galaxy S23", fingerprint: "a1b2c3d4", paired_at: now - 900000, last_seen: now - 300, earlier: "6d4e9586",
       route: STATE === "away" ? null : "direct", address: "192.168.1.2:57199", kind: "phone", relation: "own",
       // Its WhatsApp, kept here (decision 0062).
       whatsapp: { files: 37722, bytes: "10361274163" } },
@@ -347,7 +351,7 @@ const ANSWERS = {
 
   // Removing a device: the question has something in each part.
   removal_plan: ({ device }) => ({
-    name: device === "a1b2c3d4" ? "Galaxy S23" : "Study desktop",
+    name: device === "a1b2c3d4" || device === "6d4e9586" ? "Galaxy S23" : "Study desktop",
     waiting: 1,
     kept: 12,
     kept_bytes: String(340 * 1024 * 1024),

@@ -302,7 +302,8 @@ async function drawSettings() {
   $("open-downloads").classList.toggle("hidden", !("Ok" in at) || at.Ok === null);
 
   try {
-    const devices = await invoke("devices");
+    // A device set up again is one device (item 6).
+    const devices = (await invoke("devices")).filter((d) => !d.replaced_by);
     $("paired-says").textContent = devices.length === 0 ? "None yet" : devices.map((d) => d.name).join(", ");
   } catch (e) { /* the row says nothing */ }
 

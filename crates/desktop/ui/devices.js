@@ -50,8 +50,11 @@ async function drawDevices() {
     ["guest", "Guests"],
     ["host", "Computers you visit as a guest"],
   ];
+  // One card a device: one set up again is shown as what it became, and its
+  // earlier self is reached from there (the owner's item 6, 2026-10-14).
+  everyDevice = devices;
   for (const [relation, label] of groups) {
-    const these = devices.filter((d) => (d.relation ?? "own") === relation);
+    const these = devices.filter((d) => (d.relation ?? "own") === relation && !d.replaced_by);
     if (these.length === 0) continue;
     if (label) {
       const heading = el("div", "list-label", label);
@@ -88,6 +91,9 @@ $("add-device").addEventListener("click", () => openAddDevice());
 
 // ------------------------------------------------------------ one device
 
+/** Every paired device as last drawn, those set up again included. */
+let everyDevice = [];
+
 /**
  * The device whose removal is being asked about, if one is. The list is not
  * redrawn meanwhile: a redraw every few seconds would take the question away
@@ -115,6 +121,8 @@ async function openDevice(d) {
     try { folders = await invoke("phone_folders", { phone: d.fingerprint }); } catch (e) { /* not shown */ }
   }
   const chosen = folders ? folders.folders.filter((f) => f.chosen) : [];
+  // What it was before it was set up again, if it was.
+  const earlier = d.earlier ? everyDevice.find((e) => e.id === d.earlier) : null;
   const who = {
     guest: "A guest: another person's device, with its own key. It sees only what you send it.",
     host: "Another person's computer, which you visit as a guest. It sees only what you send it.",
@@ -138,6 +146,11 @@ async function openDevice(d) {
     ...(chosen.length
       ? [["Folders", `${count(chosen.length, "folder")} backed up here: ` +
           `${count(chosen.reduce((n, f) => n + f.kept_files, 0), "file")} so far`]]
+      : []),
+    ...(earlier
+      ? [["Set up again", `${when(d.paired_at)}. ` + (earlier.held
+          ? `From before, ${count(earlier.held.files, "file")}, ${size(earlier.held.bytes)}, are still kept here.`
+          : "Nothing from before is kept here.")]]
       : []),
   ]) facts.append(el("dt", null, term), el("dd", null, value));
   body.append(facts);
@@ -165,19 +178,28 @@ async function openDevice(d) {
     look.addEventListener("click", () => openGuestFolder(d));
     actions.append(look);
   }
-  if (ownPhone) {
-    const back = button("Choose folders to back up…", "btn", "hard-drive");
-    back.style.justifyContent = "flex-start";
-    back.addEventListener("click", () => openPhoneFolders(d));
-    actions.append(back);
-  }
   // Removing it, from here rather than anywhere more prominent: it is rare,
   // and it is the one thing on this screen that cannot be undone without the
   // other device in hand.
   const remove = button(d.relation === "guest" ? "Remove this guest…" : "Remove this device…", "btn ghost quiet-danger", "x");
   remove.style.justifyContent = "flex-start";
   remove.addEventListener("click", () => askToRemove(d, body));
-  actions.append(send, remove);
+  // The main thing first, then what is particular to this device, then
+  // removing, which is rare.
+  actions.append(send);
+  if (ownPhone) {
+    const back = button("Choose folders to back up…", "btn", "hard-drive");
+    back.style.justifyContent = "flex-start";
+    back.addEventListener("click", () => openPhoneFolders(d));
+    actions.append(back);
+  }
+  if (earlier) {
+    const before = button("Remove the earlier one…", "btn ghost", "history");
+    before.style.justifyContent = "flex-start";
+    before.addEventListener("click", () => askToRemove(earlier, body, `the earlier ${earlier.name}, from before it was set up again`));
+    actions.append(before);
+  }
+  actions.append(remove);
   body.append(actions);
 
   // For whoever wants them, folded away (§16: no identifiers by default).
@@ -424,7 +446,7 @@ function openGuestFolder(d) {
  * trust ends here; nothing on the device itself is touched; and whatever this
  * computer can no longer get back because of it, named.
  */
-async function askToRemove(device, where) {
+async function askToRemove(device, where, called = null) {
   let plan;
   try {
     plan = await invoke("removal_plan", { device: device.fingerprint });
@@ -437,7 +459,9 @@ async function askToRemove(device, where) {
 
   const box = el("div", "confirm card glass-frosted");
   box.style.marginTop = "16px";
-  box.append(el("strong", null, `Remove ${plan.name}?`));
+  // Named as the person would tell it apart: the earlier self of a device set
+  // up again has the same name as the device in front of them.
+  box.append(el("strong", null, `Remove ${called ?? plan.name}?`));
   const say = (text, cls = "quiet") => {
     const p = el("p", cls, text);
     p.style.marginTop = "8px";
