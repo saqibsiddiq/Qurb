@@ -271,31 +271,28 @@ async function openPhoneFolders(d) {
       one.meta.textContent = outer ? `Backed up with ${outer.input.value}` : one.facts;
     }
   };
-  inputs.forEach(({ input }) => input.addEventListener("change", cover));
-  cover();
-  box.append(picks);
-  box.append(el("p", "note", "Unticked, a folder backs up nothing new. What is kept here already stays."));
+  // At once, as every switch in Qurb is: there is no Save to miss. On the
+  // owner's first try (2026-10-14) Save sat below a long list's edge, and the
+  // folder he ticked was never chosen.
   const says = el("p", "says warn hidden");
-  const actions = el("div", "actions end");
-  const save = button("Save", "btn primary");
-  save.addEventListener("click", async () => {
-    save.disabled = true;
+  inputs.forEach(({ input }) => input.addEventListener("change", async () => {
+    cover();
+    says.classList.add("hidden");
     try {
-      for (const { input } of inputs) {
-        const was = answer.folders.find((f) => f.path === input.value).chosen;
-        const now = input.checked && !input.disabled;
-        if (now !== was) await invoke("choose_phone_folder", { phone: d.fingerprint, folder: input.value, chosen: now });
-      }
-      toast(`Saved. ${d.name} picks it up the next time it syncs`);
-      box.close();
+      await invoke("choose_phone_folder", { phone: d.fingerprint, folder: input.value, chosen: input.checked });
+      toast(input.checked
+        ? `${input.value} is backed up from the next time ${d.name} syncs`
+        : `${input.value} backs up nothing new`);
     } catch (e) {
-      save.disabled = false;
+      input.checked = !input.checked;
+      cover();
       says.textContent = String(e);
       says.classList.remove("hidden");
     }
-  });
-  actions.append(save);
-  box.append(says, actions);
+  }));
+  cover();
+  box.append(says, picks);
+  box.append(el("p", "note", "Unticked, a folder backs up nothing new. What is kept here already stays."));
 }
 
 /** What this computer keeps of one of a phone's folders, each file openable. */

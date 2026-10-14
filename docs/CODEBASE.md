@@ -355,7 +355,9 @@ gives once. Such a file is a row in the device's vault under a prefix
 says where it is read from -- whenever a device keeping the vault asks, and
 checked against its hashes, for as long as the file is there.
 `Store::keep_outside_folder` brings the rows into line with a listing of the
-folder: new and changed files are read once, to chunk them, up to a deadline;
+folder: new and changed files are read once, to chunk them, up to a deadline,
+and one found at a new address with the same size and time is recorded there
+unread;
 a file gone from the folder is deleted, or, where the caller says so and a
 computer holds it, kept as a freed file is. The rows are never materialised
 here, so the scan of qurb's own folder leaves them alone, as it leaves a

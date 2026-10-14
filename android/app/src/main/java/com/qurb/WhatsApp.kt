@@ -3,6 +3,7 @@ package com.qurb
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.util.Log
@@ -19,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.BackupRun
 import uniffi.qurb_mobile.OutsideFile
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
@@ -127,6 +129,11 @@ object WhatsApp {
     }
 
     private fun list(context: Context, tree: Uri): List<OutsideFile> {
+        // Directly where the phone has "All files access" (decision 0063): on
+        // the S23, WhatsApp's 36,055 files listed in 4.3 to 5.3 s this way
+        // against 39.6 to 57.5 through the picked folder, and each read in
+        // half the time.
+        if (Folders.allowed()) listDirectly()?.let { return it }
         val out = ArrayList<OutsideFile>(40_000)
         val columns = arrayOf(
             Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE,
@@ -157,12 +164,34 @@ object WhatsApp {
         return out
     }
 
+    /** The same listing, read by path. `null` when the folder is not there. */
+    private fun listDirectly(): List<OutsideFile>? {
+        val base = File(Environment.getExternalStorageDirectory(), FOLDER.substringAfter(':'))
+        if (!base.isDirectory) return null
+        val out = ArrayList<OutsideFile>(40_000)
+        fun walk(dir: File, path: String) {
+            for (entry in dir.listFiles() ?: return) {
+                if (entry.name.startsWith(".")) continue
+                val here = if (path.isEmpty()) entry.name else "$path/${entry.name}"
+                if (entry.isDirectory) walk(entry, here)
+                else out += OutsideFile(
+                    path = here,
+                    uri = entry.path,
+                    size = entry.length().toULong(),
+                    modifiedMs = entry.lastModified(),
+                )
+            }
+        }
+        walk(base, "")
+        return out
+    }
+
     /**
-     * Each night, charging and on Wi-Fi: after WhatsApp's own backup. Not at
-     * once -- a periodic request runs straight away, beside the first run
-     * [runNow] starts, and two ran together on the emulator.
+     * Each night, charging and on Wi-Fi: after WhatsApp's own backup, and the
+     * folders chosen on the computer with it (decision 0063). Not at once --
+     * a periodic request runs straight away, beside the first run [runNow]
+     * starts, and two ran together on the emulator.
      */
-    /** The nightly run, while charging on Wi-Fi: WhatsApp's folder and the chosen ones. */
     fun schedule(context: Context) {
         val request = PeriodicWorkRequestBuilder<Nightly>(24, TimeUnit.HOURS)
             .setInitialDelay(12, TimeUnit.HOURS)

@@ -1751,10 +1751,17 @@ impl Store {
         for entry in listing {
             let path = format!("{prefix}/{}", entry.path);
             let before = known.get(path.as_str());
-            if before
-                .and_then(|row| row.source.as_ref())
-                .is_some_and(|s| s.size == entry.size && s.mtime_ns == entry.mtime_ns)
-            {
+            if let Some(row) = before.filter(|row| {
+                row.source.as_ref().is_some_and(|s| s.size == entry.size && s.mtime_ns == entry.mtime_ns)
+            }) {
+                // The same file, found another way: read from where it was
+                // found this time, without reading it again. WhatsApp's files
+                // listed through a picked folder, then directly once the phone
+                // has "All files access" (decision 0063), keep serving through
+                // the faster way.
+                if row.source.as_ref().is_some_and(|s| s.source != entry.source) {
+                    self.db.note_outside_source(row.file_id, &entry.source, entry.size, entry.mtime_ns)?;
+                }
                 report.unchanged += 1;
                 continue;
             }

@@ -154,7 +154,29 @@ against 39.6 to 57.5 s through the picked folder, and reading took 2.6 to
 3.0 ms a file against 5.8. Direct reads are worth having for speed as well as
 for choosing on the desktop.
 
-**Not yet:** watched between the S23 and the laptop.
+**Watched between the S23 and the laptop, 2026-10-14.** The owner allowed
+"All files access" in the system's page from the phone's Settings; the
+phone listed 28 folders (DCIM/Camera: 1,386 files, 7.5 GB), and the laptop
+had all 28 at its next sync with it, 17:56:28. He ticked DCIM/Screenshots in
+the desktop app; *Back up now* on the phone read its 97 files, 61.5 MB, in
+578 ms, directly, and the laptop held all 97 within seconds.
+
+Two things it found, both changed the same day:
+
+- **The tick did not take the first time.** The sheet saved with a button,
+  and on a list of 28 folders the button was below the sheet's edge; the
+  owner ticked, and nothing was chosen. Every switch in Qurb applies at once,
+  as its stylesheet says; these now do too, with a note saying when the
+  phone picks it up.
+- **A newly chosen folder waited for a background pass**, up to an hour.
+  After a sync now, a folder chosen since the last one starts backing up at
+  once, on Wi-Fi.
+
+And, from the measured speed: where the phone has the permission, WhatsApp's
+folder is listed and read directly too, and a file found at a new address
+with the same size and time is recorded there without being read again
+(`a_file_found_another_way_is_read_from_there_without_reading_it_again`), so
+the 36,031 already kept move to the fast path for nothing.
 
 ## Reversing it
 

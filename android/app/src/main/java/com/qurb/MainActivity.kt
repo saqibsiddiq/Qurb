@@ -587,6 +587,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 result = outcome
                 if (outcome.reached > 0u) Engine.noteSynced(this@MainActivity)
+                withContext(Dispatchers.IO) { Folders.startChosen(this@MainActivity, engine) }
                 // On screen, so nothing is raised; what was shown here is
                 // marked as seen, and not announced later.
                 withContext(Dispatchers.IO) { Notices.tell(this@MainActivity, engine) }

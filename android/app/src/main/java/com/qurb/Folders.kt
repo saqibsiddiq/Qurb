@@ -25,6 +25,7 @@ object Folders {
     private const val PREFS = "folders"
     private const val LISTED = "listed-at"
     private const val NOTICED = "noticed"
+    private const val CHOSEN = "chosen"
 
     /**
      * How often the folders are listed again for the computer. Listing walks
@@ -45,6 +46,22 @@ object Folders {
         if (prefs.getBoolean(NOTICED, false)) return true
         prefs.edit().putBoolean(NOTICED, true).apply()
         return false
+    }
+
+    /**
+     * After a sync: a folder newly chosen on the computer starts backing up
+     * now, on Wi-Fi, rather than at the next background pass up to an hour
+     * later. On the owner's first try (2026-10-14) a folder ticked and synced
+     * waited for a pass that had not come.
+     */
+    fun startChosen(context: Context, engine: Qurb) {
+        if (!allowed()) return
+        val chosen = runCatching { engine.chosenFolders() }.getOrNull() ?: return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val before = prefs.getStringSet(CHOSEN, emptySet()) ?: emptySet()
+        if (chosen.toSet() == before) return
+        prefs.edit().putStringSet(CHOSEN, chosen.toSet()).apply()
+        if ((chosen.toSet() - before).isNotEmpty()) WhatsApp.runNow(context)
     }
 
     /** The root of this phone's shared storage, which folders are named from. */

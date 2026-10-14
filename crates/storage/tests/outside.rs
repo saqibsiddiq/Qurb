@@ -317,3 +317,29 @@ fn timing_many_small_files() {
     }
     println!("total {:?}", started.elapsed());
 }
+
+/// The same file found another way -- WhatsApp's folder listed through a
+/// picked folder, then directly once the phone has "All files access"
+/// (decision 0063) -- is read from where it was found this time, without
+/// reading it again.
+#[test]
+fn a_file_found_another_way_is_read_from_there_without_reading_it_again() {
+    let mut phone = Phone::new();
+    let bytes = noisy(30_000, 9);
+    let direct = phone.write("Media/a.jpg", &bytes, 1);
+    // First found through somewhere else: a copy standing in for the picked
+    // folder's way to the same file.
+    let elsewhere = phone.dir.path().join("lent-a.jpg");
+    std::fs::write(&elsewhere, &bytes).unwrap();
+    let lent = OutsideEntry { source: elsewhere.to_string_lossy().into_owned(), ..direct.clone() };
+    assert_eq!(phone.sync(std::slice::from_ref(&lent), true).added, 1);
+
+    let again = phone.sync(std::slice::from_ref(&direct), true);
+    assert_eq!((again.added, again.changed, again.unchanged, again.bytes_read), (0, 0, 1, 0), "{again:?}");
+    let rows = phone.store.db().outside_under(PREFIX).unwrap();
+    assert_eq!(rows[0].source.as_ref().unwrap().source, direct.source, "still read from where it was found first");
+
+    // And served from there: the first way gone, the file still comes.
+    std::fs::remove_file(&elsewhere).unwrap();
+    assert_eq!(phone.store.read_content(&blake3::hash(&bytes)).unwrap().unwrap(), bytes);
+}
