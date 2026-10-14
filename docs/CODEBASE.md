@@ -874,6 +874,10 @@ qurb/
 │   │           ├── chunkbench.rs measures the five Phase 0 kill criteria
 │   │           ├── sweep.rs      compares chunk size configurations
 │   │           └── quictest.rs   NAT classification + QUIC throughput
+│   ├── file-access-speed/ Throwaway. A one-screen Android app: is reading a
+│   │                      phone's folder with "All files access" faster
+│   │                      than through a picked folder? (the owner's items
+│   │                      1 and 3, 2026-10-14)
 │   ├── phone-serving/     Throwaway. A phone's serving of a large file, timed
 │   │                      on the phone outside the app: what found Cubic
 │   │                      holding transfers to 5 MB/s (decision 0051).
