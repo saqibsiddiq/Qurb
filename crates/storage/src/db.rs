@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -625,6 +625,36 @@ CREATE TABLE IF NOT EXISTS outside_sources (
 ) STRICT;
 "#;
 
+/// The folders to back up chosen on either side, the phone or a computer
+/// keeping its vault (the owner's item 10, 2026-10-14): each choice, ticked or
+/// not, with when it was made, so that the later one wins wherever it was made.
+///
+/// New tables rather than new columns, so that running it again -- an index
+/// rewound by a build undone and then redone -- keeps every choice, an untick
+/// included: `INSERT OR IGNORE` takes the V23 rows, all of them ticks then,
+/// only where there is nothing yet. V23's two tables are left, unused.
+const V25: &str = r#"
+-- On a computer: each phone's choices.
+CREATE TABLE IF NOT EXISTS phone_choices (
+    device_id  BLOB NOT NULL,
+    folder     TEXT NOT NULL,
+    chosen     INTEGER NOT NULL,
+    changed_at INTEGER NOT NULL,
+    PRIMARY KEY (device_id, folder)
+) STRICT;
+INSERT OR IGNORE INTO phone_choices (device_id, folder, chosen, changed_at)
+    SELECT device_id, folder, 1, 0 FROM backup_choices;
+
+-- On a phone: its own choices, made here or on a computer.
+CREATE TABLE IF NOT EXISTS own_choices (
+    folder     TEXT PRIMARY KEY,
+    chosen     INTEGER NOT NULL,
+    changed_at INTEGER NOT NULL
+) STRICT;
+INSERT OR IGNORE INTO own_choices (folder, chosen, changed_at)
+    SELECT folder, 1, 0 FROM chosen_here;
+"#;
+
 /// A file, live or not, whose chunks add up to its size: asked for every file
 /// a device serves. It must be found through an index (V24).
 const ANY_FILE_WITH_CONTENT: &str = "SELECT id FROM files f
@@ -1107,21 +1137,43 @@ impl Db {
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
-    /// The folders a computer keeping this device's vault said were chosen,
-    /// replacing what it said before.
-    pub fn set_chosen_here(&self, folders: &[String]) -> Result<()> {
+    /// Choose, or stop choosing, one of this device's folders to back up,
+    /// here (item 10): the later choice wins wherever it was made.
+    pub fn choose_here(&self, folder: &str, chosen: bool, at_ms: i64) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO own_choices (folder, chosen, changed_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT (folder) DO UPDATE SET chosen = excluded.chosen, changed_at = excluded.changed_at",
+            params![folder, chosen as i64, at_ms],
+        )?;
+        Ok(())
+    }
+
+    /// Every choice made for this device, ticked or not, with when.
+    pub fn choices_here(&self) -> Result<Vec<Choice>> {
+        let mut stmt = self.conn.prepare("SELECT folder, chosen, changed_at FROM own_choices ORDER BY folder")?;
+        let rows = stmt.query_map([], |r| Ok(Choice { folder: r.get(0)?, chosen: r.get::<_, i64>(1)? != 0, changed_at: r.get(2)? }))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// What a computer keeping this device's vault said was chosen, taken
+    /// where it is later than what is here.
+    pub fn merge_choices_here(&self, theirs: &[Choice]) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
-        tx.execute("DELETE FROM chosen_here", [])?;
-        for folder in folders {
-            tx.execute("INSERT OR IGNORE INTO chosen_here (folder) VALUES (?1)", params![folder])?;
+        for choice in theirs {
+            tx.execute(
+                "INSERT INTO own_choices (folder, chosen, changed_at) VALUES (?1, ?2, ?3)
+                 ON CONFLICT (folder) DO UPDATE SET chosen = excluded.chosen, changed_at = excluded.changed_at
+                  WHERE excluded.changed_at > own_choices.changed_at",
+                params![choice.folder, choice.chosen as i64, choice.changed_at],
+            )?;
         }
         tx.commit()?;
         Ok(())
     }
 
-    /// The folders chosen for this device, as last told.
+    /// The folders chosen for this device, wherever they were chosen.
     pub fn chosen_here(&self) -> Result<Vec<String>> {
-        let mut stmt = self.conn.prepare("SELECT folder FROM chosen_here ORDER BY folder")?;
+        let mut stmt = self.conn.prepare("SELECT folder FROM own_choices WHERE chosen = 1 ORDER BY folder")?;
         let rows = stmt.query_map([], |row| row.get(0))?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
@@ -1161,26 +1213,47 @@ impl Db {
         Ok((folders, seen))
     }
 
-    /// Tick, or untick, a phone's folder to back up.
+    /// Tick, or untick, a phone's folder to back up, here, now.
     pub fn choose_folder(&self, device: &DeviceId, folder: &str, chosen: bool) -> Result<()> {
-        if chosen {
-            self.conn.execute(
-                "INSERT OR IGNORE INTO backup_choices (device_id, folder) VALUES (?1, ?2)",
-                params![device.as_bytes().as_slice(), folder],
-            )?;
-        } else {
-            self.conn.execute(
-                "DELETE FROM backup_choices WHERE device_id = ?1 AND folder = ?2",
-                params![device.as_bytes().as_slice(), folder],
-            )?;
-        }
+        self.conn.execute(
+            "INSERT INTO phone_choices (device_id, folder, chosen, changed_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (device_id, folder) DO UPDATE SET chosen = excluded.chosen, changed_at = excluded.changed_at",
+            params![device.as_bytes().as_slice(), folder, chosen as i64, now_ms()],
+        )?;
         Ok(())
     }
 
-    /// The folders ticked for a phone to back up.
+    /// Every choice made for a phone, ticked or not, with when.
+    pub fn choices_for(&self, device: &DeviceId) -> Result<Vec<Choice>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT folder, chosen, changed_at FROM phone_choices WHERE device_id = ?1 ORDER BY folder",
+        )?;
+        let rows = stmt.query_map(params![device.as_bytes().as_slice()], |r| {
+            Ok(Choice { folder: r.get(0)?, chosen: r.get::<_, i64>(1)? != 0, changed_at: r.get(2)? })
+        })?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// What a phone said it chose, taken where it is later than what is here.
+    pub fn merge_choices_for(&self, device: &DeviceId, theirs: &[Choice]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        for choice in theirs {
+            tx.execute(
+                "INSERT INTO phone_choices (device_id, folder, chosen, changed_at) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT (device_id, folder) DO UPDATE SET chosen = excluded.chosen, changed_at = excluded.changed_at
+                  WHERE excluded.changed_at > phone_choices.changed_at",
+                params![device.as_bytes().as_slice(), choice.folder, choice.chosen as i64, choice.changed_at],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The folders ticked for a phone to back up, wherever they were ticked.
     pub fn chosen_for(&self, device: &DeviceId) -> Result<Vec<String>> {
-        let mut stmt =
-            self.conn.prepare("SELECT folder FROM backup_choices WHERE device_id = ?1 ORDER BY folder")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT folder FROM phone_choices WHERE device_id = ?1 AND chosen = 1 ORDER BY folder",
+        )?;
         let rows = stmt.query_map(params![device.as_bytes().as_slice()], |row| row.get(0))?;
         Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
@@ -4230,6 +4303,23 @@ pub struct OutsideRow {
     pub source: Option<OutsideSource>,
 }
 
+/// A folder chosen, or no longer chosen, to back up, and when, in
+/// milliseconds since the epoch: the later choice wins (item 10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Choice {
+    pub folder: String,
+    pub chosen: bool,
+    pub changed_at: i64,
+}
+
+/// Milliseconds since the epoch.
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 /// One of a phone's folders and what is in it, everything beneath it
 /// counted (decision 0063).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -4506,6 +4596,34 @@ mod tests {
         let mut stmt = db.conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
         let rows = stmt.query_map([vec![0u8; 32]], |r| r.get::<_, String>(3)).unwrap();
         rows.map(|r| r.unwrap()).collect::<Vec<_>>().join(" | ")
+    }
+
+    /// A choice made on either side wins where it is the later one, an untick
+    /// as much as a tick, on the phone and on the computer alike (item 10).
+    #[test]
+    fn the_later_choice_wins_wherever_it_was_made() {
+        let phone = Db::open_in_memory().unwrap();
+        phone.choose_here("DCIM/Camera", true, 1_000).unwrap();
+        phone.choose_here("Documents", true, 1_000).unwrap();
+        // The computer's word: Camera unticked later, Documents ticked earlier
+        // (so not taken), Download newly ticked.
+        phone
+            .merge_choices_here(&[
+                Choice { folder: "DCIM/Camera".into(), chosen: false, changed_at: 2_000 },
+                Choice { folder: "Documents".into(), chosen: false, changed_at: 500 },
+                Choice { folder: "Download".into(), chosen: true, changed_at: 1_500 },
+            ])
+            .unwrap();
+        assert_eq!(phone.chosen_here().unwrap(), vec!["Documents".to_string(), "Download".to_string()]);
+
+        let computer = Db::open_in_memory().unwrap();
+        let device = DeviceId::from_bytes([3; 32]);
+        computer.merge_choices_for(&device, &phone.choices_here().unwrap()).unwrap();
+        assert_eq!(computer.chosen_for(&device).unwrap(), vec!["Documents".to_string(), "Download".to_string()]);
+        // Ticked on the computer now: later than anything the phone said.
+        computer.choose_folder(&device, "DCIM/Camera", true).unwrap();
+        phone.merge_choices_here(&computer.choices_for(&device).unwrap()).unwrap();
+        assert!(phone.chosen_here().unwrap().contains(&"DCIM/Camera".to_string()));
     }
 
     /// The questions asked for every file a device serves find their rows

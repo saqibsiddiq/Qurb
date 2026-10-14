@@ -849,10 +849,9 @@ fn folders_chosen_on_the_computer_are_backed_up_where_they_lie() {
 
     // Chosen on the computer: a folder and one inside it, another folder, and
     // one trying to climb out of the phone's storage.
-    store
-        .db()
-        .set_chosen_here(&["DCIM".into(), "DCIM/Camera".into(), "Documents".into(), "../outside".into()])
-        .unwrap();
+    for folder in ["DCIM", "DCIM/Camera", "Documents", "../outside"] {
+        store.db().choose_here(folder, true, 1_000).unwrap();
+    }
     let run = qurb.back_up_chosen(shared.clone(), 60).unwrap();
     assert_eq!((run.added, run.failed, run.remaining), (3, 0, 0), "{run:?}");
     assert_eq!(run.bytes_read, 4 << 20, "each file read once");

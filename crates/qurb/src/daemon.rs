@@ -1014,11 +1014,14 @@ impl Daemon {
                 .flatten()
                 .is_some_and(|known| known.relation.is_other_person());
             if phone && !other_person {
-                if let Ok(Some(folders)) = client.folders().await {
+                if let Ok(Some((folders, choices))) = client.folders().await {
                     let at = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .map_or(0, |d| d.as_secs() as i64);
                     let _ = engine.store().db().set_known_folders(device, &folders, at);
+                    // What was chosen on the phone, where later than here
+                    // (item 10).
+                    let _ = engine.store().db().merge_choices_for(device, &choices);
                 }
             }
         }

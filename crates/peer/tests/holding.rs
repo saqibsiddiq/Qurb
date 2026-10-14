@@ -425,7 +425,7 @@ async fn only_a_computer_keeping_the_vault_sees_a_phones_folders() {
 
     let (addr, fingerprint) = phone.serve(desktop.identity.fingerprint());
     let keeper = PeerClient::connect(addr, &desktop.identity, fingerprint).await.unwrap();
-    assert_eq!(keeper.folders().await.unwrap(), Some(folders));
+    assert_eq!(keeper.folders().await.unwrap().map(|(f, _)| f), Some(folders));
 
     let (addr, fingerprint) = phone.serve(other.identity.fingerprint());
     let stranger = PeerClient::connect(addr, &other.identity, fingerprint).await.unwrap();
@@ -449,9 +449,42 @@ async fn a_phone_is_told_what_was_chosen_for_it_and_nothing_else() {
 
     let (addr, fingerprint) = desktop.serve(phone.identity.fingerprint());
     let asking = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
-    assert_eq!(asking.chosen().await.unwrap(), Some(vec!["DCIM/Camera".to_string()]));
+    let chosen = |c: Option<Vec<qurb_storage::db::Choice>>| -> Vec<String> {
+        c.unwrap().into_iter().filter(|c| c.chosen).map(|c| c.folder).collect()
+    };
+    assert_eq!(chosen(asking.chosen().await.unwrap()), vec!["DCIM/Camera".to_string()]);
 
     let (addr, fingerprint) = desktop.serve(tablet.identity.fingerprint());
     let asking = PeerClient::connect(addr, &tablet.identity, fingerprint).await.unwrap();
-    assert_eq!(asking.chosen().await.unwrap(), Some(vec!["Download".to_string()]));
+    assert_eq!(chosen(asking.chosen().await.unwrap()), vec!["Download".to_string()]);
+}
+
+/// A folder chosen on the phone reaches the computer when it asks for the
+/// phone's folders, and a later change on the computer reaches the phone when
+/// it asks what was chosen: the later choice wins wherever it was made
+/// (the owner's item 10, 2026-10-14).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_choice_made_on_either_side_reaches_the_other() {
+    let phone = Device::new();
+    let desktop = Device::new();
+    introduce(&phone, &desktop);
+    phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+    let (pdb, ddb) = (phone.engine.store().db(), desktop.engine.store().db());
+
+    // Unticked on the computer a while ago; ticked on the phone since.
+    ddb.merge_choices_for(&phone.id(), &[qurb_storage::db::Choice { folder: "Documents".into(), chosen: false, changed_at: 1_000 }]).unwrap();
+    pdb.choose_here("Documents", true, 2_000).unwrap();
+
+    let (addr, fingerprint) = phone.serve(desktop.identity.fingerprint());
+    let asking = PeerClient::connect(addr, &desktop.identity, fingerprint).await.unwrap();
+    let (_, choices) = asking.folders().await.unwrap().expect("the computer keeps its vault");
+    ddb.merge_choices_for(&phone.id(), &choices).unwrap();
+    assert_eq!(ddb.chosen_for(&phone.id()).unwrap(), vec!["Documents".to_string()]);
+
+    // Unticked on the computer now: later than the phone's tick.
+    ddb.choose_folder(&phone.id(), "Documents", false).unwrap();
+    let (addr, fingerprint) = desktop.serve(phone.identity.fingerprint());
+    let asking = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    pdb.merge_choices_here(&asking.chosen().await.unwrap().unwrap()).unwrap();
+    assert!(pdb.chosen_here().unwrap().is_empty(), "the later untick did not reach the phone");
 }

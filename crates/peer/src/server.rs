@@ -379,7 +379,7 @@ async fn serve_request(
         | Response::Mismatch
         | Response::Declined
         | Response::Changed { .. }
-        | Response::Folders(_)
+        | Response::Folders { .. }
         | Response::Chosen(_) => 0,
     };
 
@@ -524,7 +524,7 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // theirs (decision 0063). Anyone else is told nothing is here.
         Request::Folders => match (&owner, other_person) {
             (Some(device), false) if store.db().is_holder(device)? => {
-                Response::Folders(store.db().own_folders()?)
+                Response::Folders { folders: store.db().own_folders()?, choices: store.db().choices_here()? }
             }
             _ => Response::NotFound,
         },
@@ -533,7 +533,7 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // device is the one the connection proves, never one it names. Another
         // person's device is told nothing.
         Request::Chosen => match (&owner, other_person) {
-            (Some(device), false) => Response::Chosen(store.db().chosen_for(device)?),
+            (Some(device), false) => Response::Chosen(store.db().choices_for(device)?),
             _ => Response::NotFound,
         },
 

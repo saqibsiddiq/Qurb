@@ -18,7 +18,7 @@
 
 use crate::error::{Error, Result};
 use qurb_sync::{Content, DeviceId, FileVersion, VersionVector};
-use qurb_storage::db::FolderSummary;
+use qurb_storage::db::{Choice, FolderSummary};
 
 /// Upper bound on any single decoded message.
 ///
@@ -178,11 +178,14 @@ pub enum Response {
     Changed { generation: u64 },
 
     /// This device's folders, two levels deep, each with what is beneath it,
-    /// answering [`Request::Folders`].
-    Folders(Vec<FolderSummary>),
+    /// and the choices made on it of which to back up, with when, answering
+    /// [`Request::Folders`].
+    Folders { folders: Vec<FolderSummary>, choices: Vec<Choice> },
 
-    /// The folders chosen for the asking device, answering [`Request::Chosen`].
-    Chosen(Vec<String>),
+    /// The choices made for the asking device of its folders to back up,
+    /// with when, answering [`Request::Chosen`]. The later choice wins,
+    /// wherever it was made (item 10).
+    Chosen(Vec<Choice>),
 }
 
 const TAG_TREE: u8 = 1;
@@ -348,7 +351,7 @@ impl Response {
                 out.push(STATUS_CHANGED);
                 out.extend_from_slice(&generation.to_le_bytes());
             }
-            Response::Folders(folders) => {
+            Response::Folders { folders, choices } => {
                 out.push(STATUS_FOLDERS);
                 let folders = &folders[..folders.len().min(MAX_FOLDERS)];
                 put_u32(&mut out, folders.len());
@@ -357,14 +360,11 @@ impl Response {
                     out.extend_from_slice(&folder.files.to_le_bytes());
                     out.extend_from_slice(&folder.bytes.to_le_bytes());
                 }
+                put_choices(&mut out, choices);
             }
-            Response::Chosen(folders) => {
+            Response::Chosen(choices) => {
                 out.push(STATUS_CHOSEN);
-                let folders = &folders[..folders.len().min(MAX_FOLDERS)];
-                put_u32(&mut out, folders.len());
-                for folder in folders {
-                    put_name(&mut out, folder);
-                }
+                put_choices(&mut out, choices);
             }
             Response::Paired { device_id, name, kind, key_check } => {
                 out.push(STATUS_PAIRED);
@@ -462,19 +462,9 @@ impl Response {
                 for _ in 0..count {
                     folders.push(FolderSummary { path: r.name()?, files: r.u64()?, bytes: r.u64()? });
                 }
-                Response::Folders(folders)
+                Response::Folders { folders, choices: read_choices(&mut r)? }
             }
-            STATUS_CHOSEN => {
-                let count = r.count()?;
-                if count > MAX_FOLDERS {
-                    return Err(Error::Protocol { detail: format!("{count} folders is not a phone's") });
-                }
-                let mut folders = Vec::with_capacity(count);
-                for _ in 0..count {
-                    folders.push(r.name()?);
-                }
-                Response::Chosen(folders)
-            }
+            STATUS_CHOSEN => Response::Chosen(read_choices(&mut r)?),
             STATUS_DECLINED => Response::Declined,
             STATUS_KEY => Response::Key { key: r.hash()? },
             STATUS_TREE => {
@@ -504,6 +494,29 @@ impl Response {
         r.finished()?;
         Ok(response)
     }
+}
+
+/// Choices of folders to back up: each its folder, whether chosen, and when.
+fn put_choices(out: &mut Vec<u8>, choices: &[Choice]) {
+    let choices = &choices[..choices.len().min(MAX_FOLDERS)];
+    put_u32(out, choices.len());
+    for choice in choices {
+        put_name(out, &choice.folder);
+        out.push(choice.chosen as u8);
+        out.extend_from_slice(&choice.changed_at.to_le_bytes());
+    }
+}
+
+fn read_choices(r: &mut Reader<'_>) -> Result<Vec<Choice>> {
+    let count = r.count()?;
+    if count > MAX_FOLDERS {
+        return Err(Error::Protocol { detail: format!("{count} choices is not a phone's") });
+    }
+    let mut choices = Vec::with_capacity(count);
+    for _ in 0..count {
+        choices.push(Choice { folder: r.name()?, chosen: r.u8()? != 0, changed_at: r.u64()? as i64 });
+    }
+    Ok(choices)
 }
 
 /// A file list as frames for [`Request::TreeStream`]: each its length, then a
@@ -785,12 +798,18 @@ mod tests {
             Response::Welcome { device_id: [3; 32], name: "Laptop".into(), kind: "computer".into(), meeting: [4; 32] },
             Response::Asks { opening: None },
             Response::Asks { opening: Some([5; 16]) },
-            Response::Folders(vec![
-                FolderSummary { path: "DCIM".into(), files: 1200, bytes: 9_000_000_000 },
-                FolderSummary { path: "DCIM/Camera".into(), files: 1100, bytes: 8_800_000_000 },
+            Response::Folders {
+                folders: vec![
+                    FolderSummary { path: "DCIM".into(), files: 1200, bytes: 9_000_000_000 },
+                    FolderSummary { path: "DCIM/Camera".into(), files: 1100, bytes: 8_800_000_000 },
+                ],
+                choices: vec![Choice { folder: "DCIM/Camera".into(), chosen: true, changed_at: 1_791_980_000_123 }],
+            },
+            Response::Folders { folders: vec![], choices: vec![] },
+            Response::Chosen(vec![
+                Choice { folder: "DCIM/Camera".into(), chosen: true, changed_at: 1_791_980_000_123 },
+                Choice { folder: "Documents".into(), chosen: false, changed_at: 1_791_980_100_456 },
             ]),
-            Response::Folders(vec![]),
-            Response::Chosen(vec!["DCIM/Camera".into(), "Documents".into()]),
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);

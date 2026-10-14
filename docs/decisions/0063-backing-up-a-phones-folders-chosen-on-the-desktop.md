@@ -186,6 +186,22 @@ storage for the folder summary in 4.7 s of the same run. Listed by it
 instead, at 18:44 from *Back up now*: 11.5 s, as a background job, against
 39.6 to 57.5 through the picked folder.
 
+## Amended 2026-10-14: chosen on either device
+
+The owner's item 10 of 2026-10-14: the folders are chosen on the phone too,
+and from its Home. Both devices may now change the choice, so each folder's
+choice is kept on both with when it was made, in milliseconds, unticks
+included, and the later one wins wherever it was made (schema V25:
+`phone_choices` on the computer, `own_choices` on the phone). The two asks
+carry them: the phone's answer to `Folders` brings its choices, the
+computer's answer to `Chosen` brings its own, and each side keeps what is
+later than its own. One sync each way and the two agree; still nothing is
+pushed at either. Tested by `the_later_choice_wins_wherever_it_was_made` and,
+through the real requests, `a_choice_made_on_either_side_reaches_the_other`.
+The clocks are the devices' own; two choices of the same folder within a
+clock's error of each other could go either way, which for a choice a person
+makes by hand is accepted.
+
 ## Reversing it
 
 Cheap before step 2. After it, each folder is rows like WhatsApp's: no longer

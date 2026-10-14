@@ -198,9 +198,11 @@ impl PeerClient {
     /// The peer's folders that could be backed up (decision 0063), or `None`
     /// when it will not say: it is not this person's, or this device does not
     /// keep its vault.
-    pub async fn folders(&self) -> Result<Option<Vec<qurb_storage::db::FolderSummary>>> {
+    pub async fn folders(
+        &self,
+    ) -> Result<Option<(Vec<qurb_storage::db::FolderSummary>, Vec<qurb_storage::db::Choice>)>> {
         match self.request(Request::Folders).await? {
-            Response::Folders(folders) => Ok(Some(folders)),
+            Response::Folders { folders, choices } => Ok(Some((folders, choices))),
             Response::NotFound => Ok(None),
             other => Err(unexpected("folders", &other)),
         }
@@ -208,7 +210,7 @@ impl PeerClient {
 
     /// Which of this device's folders the peer was told to back up (decision
     /// 0063), or `None` when it will not say.
-    pub async fn chosen(&self) -> Result<Option<Vec<String>>> {
+    pub async fn chosen(&self) -> Result<Option<Vec<qurb_storage::db::Choice>>> {
         match self.request(Request::Chosen).await? {
             Response::Chosen(folders) => Ok(Some(folders)),
             Response::NotFound => Ok(None),
@@ -527,7 +529,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Mismatch => "key mismatch",
         Response::Declined => "refusal",
         Response::Changed { .. } => "change notification",
-        Response::Folders(_) => "list of folders",
+        Response::Folders { .. } => "list of folders",
         Response::Chosen(_) => "list of chosen folders",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }

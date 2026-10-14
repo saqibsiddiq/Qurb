@@ -222,6 +222,18 @@ pub struct OutsideFile {
     pub modified_ms: i64,
 }
 
+/// One of this phone's folders, for choosing on the phone (item 10).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OwnFolder {
+    /// From the root of shared storage: `DCIM`, `DCIM/Camera`.
+    pub path: String,
+    pub files: u64,
+    pub bytes: u64,
+    pub chosen: bool,
+    /// How many of its files the computer keeps.
+    pub kept_files: u64,
+}
+
 /// What one run of the WhatsApp backup did (decision 0062).
 #[derive(Debug, Clone, Default, uniffi::Record)]
 pub struct BackupRun {
@@ -1899,6 +1911,41 @@ impl Qurb {
         Ok(outermost(chosen.into_iter().filter(|f| choosable(f)).collect()))
     }
 
+    /// This phone's folders as last listed, each with whether it is chosen to
+    /// back up and how much of it the computer keeps: for choosing on the
+    /// phone (the owner's item 10, 2026-10-14).
+    pub fn own_folders(&self) -> Result<Vec<OwnFolder>, QurbError> {
+        let engine = self.engine()?;
+        let db = engine.store().db();
+        let chosen = db.chosen_here()?;
+        Ok(db
+            .own_folders()?
+            .into_iter()
+            .map(|f| {
+                let prefix = format!("{}/storage/{}", qurb_storage::db::OUTSIDE, f.path);
+                let summary = db.outside_summary(&prefix).unwrap_or_default();
+                OwnFolder {
+                    chosen: chosen.contains(&f.path),
+                    path: f.path,
+                    files: f.files,
+                    bytes: f.bytes,
+                    kept_files: summary.held_files,
+                }
+            })
+            .collect())
+    }
+
+    /// Choose, or stop choosing, one of this phone's folders to back up, here
+    /// (item 10). The computer hears it at the next sync; the later choice
+    /// wins wherever it was made.
+    pub fn choose_folder(&self, folder: String, chosen: bool) -> Result<(), QurbError> {
+        if !choosable(&folder) {
+            return Err(QurbError::Other { detail: format!("{folder} is not one of this phone's folders") });
+        }
+        self.engine()?.store().db().choose_here(&folder, chosen, qurb_storage::db::now_ms())?;
+        Ok(())
+    }
+
     /// The chosen folders' backup as it stands: how much, and how much of it
     /// the computer has (decision 0063).
     pub fn folders_backup(&self) -> Result<BackupState, QurbError> {
@@ -2629,8 +2676,10 @@ impl Qurb {
                 let asked = runtime.block_on(async {
                     tokio::time::timeout(std::time::Duration::from_secs(2), client.chosen()).await
                 });
-                if let Ok(Ok(Some(chosen))) = asked {
-                    let _ = engine.store().db().set_chosen_here(&chosen);
+                // Taken where later than what was chosen here: the person
+                // may have chosen on either (item 10).
+                if let Ok(Ok(Some(theirs))) = asked {
+                    let _ = engine.store().db().merge_choices_here(&theirs);
                 }
             }
         }
