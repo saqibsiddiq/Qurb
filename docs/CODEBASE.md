@@ -792,14 +792,20 @@ qurb/
 │       │                  Qurb.kt             the one handle on the engine, off
 │       │                                      the main thread
 │       │                  Errors.kt           an engine error, said for a screen
-│       │                  HomeScreen.kt       is everything okay: one state, one
-│       │                                      action, conflicts, recent
+│       │                  HomeScreen.kt       is everything okay: the state, Sync
+│       │                                      now and Send, conflicts, what is
+│       │                                      waiting, the backups
 │       │                  FilesScreen.kt      Files and Private Vault: one browser,
 │       │                                      two areas, each file's state
 │       │                  DevicesScreen.kt    the devices as cards, who keeps this
 │       │                                      phone's files, removing a device
 │       │                  SettingsScreen.kt   grouped lists: storage, who has each
-│       │                                      folder, privacy, recovery, advanced
+│       │                                      folder, backups, privacy, recovery,
+│       │                                      advanced
+│       │                  Backups.kt          the backups' lines and WhatsApp's
+│       │                                      sheet, for Home and Settings alike
+│       │                  FoldersScreen.kt    Your folders: which of the phone's
+│       │                                      folders back up, chosen here (0063)
 │       │                  ActivityScreen.kt   everything this phone did, from Home
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
 │       │                                      change your mind
@@ -829,8 +835,9 @@ qurb/
 │       │                                      listed each night for its backup
 │       │                                      (decision 0062); the nightly run
 │       │                                      does the chosen folders too
-│       │                  Folders.kt          the phone's folders, chosen on the
-│       │                                      computer, with "All files access"
+│       │                  Folders.kt          the phone's folders, listed and
+│       │                                      backed up with "All files access",
+│       │                                      chosen here or on the computer
 │       │                                      (decision 0063)
 │       │                  Appearance.kt       light, dark, or as the system is set
 │       │                  ManageSpaceActivity.kt

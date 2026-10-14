@@ -39,7 +39,7 @@ disagree, the direction won; the earlier answer is struck through.
 | Desktop navigation | ~~Home, Files, Devices, Activity, Settings~~ → **Home, Files, Devices, Storage; Private Vault set apart; Settings** in a translucent sidebar (§24) |
 | Android navigation | **Home, Files, Devices, Settings** (§25); Transfers appear when active; Private Vault reached from Files |
 | Naming | **Files** on both; the phone's "Vault" becomes **Private Vault**, the device's own area |
-| Home | the state leads, one primary action (*Send to device*), attention only when needed, a subtle Recent (§5) |
+| Home | the state leads, ~~one primary action (*Send to device*)~~ → **two of one size, *Sync now* and *Send*** (the owner's item 8 of 2026-10-14), attention only when needed, ~~a subtle Recent (§5)~~ → **what is waiting to sync, and the backups**; the activity behind a clock (item 4 of 2026-10-13) |
 | Files | a list with file-type icons and a subtle availability state (§18) |
 | Privacy | stated quietly — Private Vault and Security say it; nothing is badged everywhere |
 | Icons | Lucide, 1.75–2 px, the set in §10 |
@@ -85,9 +85,11 @@ bug in the design.
 |---|---|---|
 | is everything okay: synced, syncing, offline, needs attention | **Home** | **Home** |
 | conflicts to settle, *only copy here* files | Home, as attention (§14) | Home, as attention |
-| send to a device | Home's primary action; a Send button; dropping files anywhere | Home's primary action; a file's *Send to…*; the share sheet |
+| send to a device | Home's primary action; a Send button; dropping files anywhere | Home's *Send*; a file's *Send to…*; the share sheet |
+| sync now, and what is still waiting to sync | Home | Home: *Sync now*, and *Waiting* |
+| backups: WhatsApp's, and the phone's folders (0062, 0063) | a phone's panel in Devices: *Choose folders to back up…* | Home and Settings → *Backups*; *Your folders* its own place |
 | transfers in progress and finished; cancelling a send not yet collected | a Transfers panel that appears when active (§21) | a Transfers bar that appears when active, opening a sheet |
-| history of what happened | Home → *Recent* → *See all* | the same |
+| history of what happened | ~~Home → *Recent* → *See all*~~ → Home's clock → Activity | the same |
 | browsing, search, breadcrumbs, folders apart from files | **Files** (§18) | **Files** |
 | file details: type, size, location, availability, devices holding it, modified, conflict versions, transfer state, actions | an elevated panel (§19) | a sheet |
 | open, keep on this device, free local space, rename, move, delete, send, save a copy, move to/from Private Vault | File details and the row's menu | the sheet |

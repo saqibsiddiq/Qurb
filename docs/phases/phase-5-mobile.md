@@ -2299,9 +2299,23 @@ His answers to the questions they raised are with them.
 7. **A six-digit code to pair**, as WhatsApp links a computer. Answer: the
    laptop shows it, the phone types it.
 8. **Home redesigned**: a sync button, a send button, and what is waiting to
-   sync.
+   sync. **Built on the phone 2026-10-14**: *Sync now* and *Send* side by
+   side, of one size; then *Waiting*, the files made here not yet on another
+   device (three, then "N more files"), sends not yet collected, and the
+   backups still on their way, or *Nothing waiting*; then *Backups*,
+   WhatsApp's and the phone's folders, each opening its own place. Checked on
+   the emulator; not yet on the S23. The desktop's Home is next.
 9. **The desktop's Storage redesigned**, thoroughly.
 10. **The folders to back up chosen on the phone too**, and on its Home.
+    **Built 2026-10-14**: either device may choose, the later choice winning
+    wherever it was made (0063, amended). On the phone *Your folders*, from
+    Home and from Settings, says how much the computer holds, offers *Back up
+    now*, and has a switch for each folder, a folder inside a chosen one fixed
+    and saying so, as on the desktop. A choice starts the backup at once and
+    reaches the computer at the next sync. Drawn and switched on the emulator,
+    whose keeper (`test-laptop`) is never on; reaching the computer is tested
+    (`a_choice_made_on_either_side_reaches_the_other`), not yet seen between
+    the S23 and the laptop.
 11. **All of it beautiful, symmetric and elegant.**
 
 Where each stands is kept here as it moves.
