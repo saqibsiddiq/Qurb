@@ -135,6 +135,7 @@ is. This file says how its parts line up.
 | 44 | desktop, showing a code | with no code drawn, *Waiting — …* stayed centred under a left-aligned heading | on the left |
 | 45 | Android, the pairing question, and every dialog | on the S23 in dark, the QR code behind the question read plainly through it, about 8 levels, under the number to compare; and the number was Material's lilac in the system font | dialogs opaque (and a sheet where nothing blurs); the number in the app's colour, Inter, even figures |
 | 46 | Android, every sheet | on the S23 in dark, text behind a sheet read through it: the phone reported blur off (`mBlurEnabled=false`) and the sheet stayed 97%, the case row 45 had made opaque for dialogs only | every sheet opaque; where the phone blurs, the blur shows around it |
+| 47 | both, Home | the owner's item 4 (2026-10-13): no Recent list on Home, a button for the activity instead | a clock at the top right of Home on both: on the phone the Files header's 44 dp button, on the emulator its right edge on the gutter with *Sync now*'s; on the desktop the `icon-btn` beside the state, its right edge on the content's (1135 px of 1135 in the fixtures page). Each opens Activity; back returns Home |
 
 Checked after: the desktop smoke test, in the real window, both modes (*no
 command failed*), and every screen re-measured in the fixtures and on the
