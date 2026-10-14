@@ -103,7 +103,22 @@ The example itself had stopped measuring anything since decision 0024: it
 served from a store not told where its folder was, so the receiving side
 fetched nothing and listed every file as elsewhere. Fixed first (d81da43).
 
-**Not done yet:** the run at 100,000 and at a million files, step 1 proper.
+**100,000 files, after V24**, the same laptop and conditions, against
+Phase 1's run of the same example:
+
+| stage | Phase 1 | 2026-10-14 |
+|---|---|---|
+| first index | 236.8 s, 422 files/s | 87.3 s, 1,146 files/s |
+| re-index, nothing changed | 1.13 s | 1.27 s |
+| file list exchanged | 196 ms | 324 ms |
+| first sync, 4.4 GiB | 476 s | 169.2 s |
+| 1,000 edited: re-index | 4.93 s | 4.24 s |
+| 1,000 edited: sync | 3.50 s, 24.1 MiB | 2.80 s, 24.1 MiB |
+| deep verify | 43.4 s | 26.8 s |
+
+Every check passed, 500 sampled files byte-identical after each sync.
+
+**Not done yet:** the run at a million files.
 
 ## Reversing it
 
