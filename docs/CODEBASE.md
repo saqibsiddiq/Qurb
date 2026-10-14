@@ -661,6 +661,8 @@ qurb/
 │   │       ├── cas.rs       payloads to and from chunks/<2 hex>/<full hex>
 │   │       ├── db.rs        SQLite index; reference counts live here
 │   │       ├── gc.rs        reclaim chunks nothing references
+│   │       ├── person.rs    a person's folder as it is shown, one tree for
+│   │       │                the window and the phone (0067)
 │   │       └── store.rs     public API and the ordering rules
 │   │
 │   ├── watcher/           Turns filesystem events into settled changes.
@@ -811,6 +813,9 @@ qurb/
 │       │                                      sheet, for Home and Settings alike
 │       │                  FoldersScreen.kt    Your folders: which of the phone's
 │       │                                      folders back up, chosen here (0063)
+│       │                  KeptScreen.kt       Your folder on saqib: what the
+│       │                                      computer keeps for this phone,
+│       │                                      downloaded or restored (0067)
 │       │                  ActivityScreen.kt   everything this phone did, from Home
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
 │       │                                      change your mind

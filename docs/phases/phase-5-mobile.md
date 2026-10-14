@@ -2298,7 +2298,10 @@ His answers to the questions they raised are with them.
    whose one note says it opens in Qurb. **Step 3 built the same day**: the
    phone's *Send* and share sheet offer *My folder on saqib* (opens there
    only with the phone's yes) or *saqib's Downloads* (opens freely); not yet
-   seen on the S23. Step 4 (the phone reaching its folder) is next.
+   seen on the S23. **Step 4 built the same day**: Files on the phone has
+   *Your folder on saqib*, browsed live while the laptop is on, each file
+   downloaded or restored where it was, what the S23 kept before it was set
+   up again included; not yet seen on the S23.
 6. **The S23 is listed twice in the laptop's Devices**: its identity from
    before it was set up again, and its new one. **Built 2026-10-14**: a
    device of the same person with the same name and kind, paired after an

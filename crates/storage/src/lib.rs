@@ -27,6 +27,7 @@ pub mod db;
 pub mod error;
 pub mod format;
 pub mod gc;
+pub mod person;
 pub mod sealed;
 pub mod store;
 

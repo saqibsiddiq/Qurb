@@ -125,6 +125,10 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
      *  (decision 0060): the vault is then "your folder" there. */
     private var keptOn: String? = null
 
+    /** This person's computers keeping this phone's folder, reached from the
+     *  top of Files (decision 0067, step 4). */
+    private var keepers: List<uniffi.qurb_mobile.PeerInfo> = emptyList()
+
     override fun refresh() {
         drawCrumbs()
         scope.launch {
@@ -134,6 +138,8 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                     if (private) {
                         val keepers = engine.holders().map { it.fingerprint }.toSet()
                         keptOn = engine.peers().firstOrNull { it.relation == "host" && it.fingerprint in keepers }?.name
+                    } else if (dir.isEmpty()) {
+                        keepers = engine.holders().filter { it.relation == "own" }
                     }
                     if (query.isNotEmpty()) {
                         emptyList<String>() to engine.searchIn(query, SEARCH_LIMIT.toUInt(), private)
@@ -163,6 +169,12 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                     if (!private && dir.isEmpty() && query.isEmpty()) {
                         add(Item.Link(R.drawable.ic_lock_keyhole, "Private Vault",
                             "Private to this phone") { app.push(FilesScreen(app, private = true)) })
+                        // The owner's item 5: the folder a computer keeps for
+                        // this phone, to restore or download from it.
+                        for (keeper in keepers) {
+                            add(Item.Link(R.drawable.ic_hard_drive, "Your folder on ${keeper.name}",
+                                "Backups, WhatsApp, deleted files · while it's on") { app.push(KeptScreen(app, keeper)) })
+                        }
                     }
                     if (folders.isNotEmpty()) add(Item.Label("Folders"))
                     addAll(folders.map { Item.Folder(it, prefix + it) })

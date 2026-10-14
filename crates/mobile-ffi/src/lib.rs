@@ -1565,6 +1565,106 @@ impl Qurb {
     }
 
     /// The devices that keep this phone's own files for it (decision 0036).
+    /// Reach the computer `fingerprint`, which keeps this phone's folder, to
+    /// browse it, within `seconds` (decision 0067, step 4). The computer has
+    /// to be on and running Qurb.
+    pub fn open_kept_folder(&self, fingerprint: String, seconds: u32) -> Result<Arc<KeptFolder>, QurbError> {
+        let budget = std::time::Duration::from_secs(seconds.max(1) as u64);
+        let (peer, name, trusted, meetings, me) = {
+            let engine = self.engine()?;
+            let db = engine.store().db();
+            let peers = db.trusted_peers()?;
+            let found = peers
+                .iter()
+                .find(|p| hex(&p.fingerprint) == fingerprint)
+                .ok_or_else(|| QurbError::NotFound { detail: "no such device".into() })?;
+            (
+                qurb_peer::Fingerprint::from_bytes(found.fingerprint),
+                found.name.clone(),
+                qurb_peer::trusted_fingerprints(engine.store()).map_err(|e| QurbError::Storage { detail: e.to_string() })?,
+                db.meetings().unwrap_or_default(),
+                *engine.store().device_id()?.as_bytes(),
+            )
+        };
+        let identity = self.identity()?;
+        let runtime = self.runtime()?;
+        let relay = match &self.relay {
+            Some(text) => runtime.block_on(qurb_peer::resolve_relay(text)).ok(),
+            None => None,
+        };
+        let trust = qurb_peer::tls::TrustList::new(trusted);
+        // A port of its own: a sync pass may be using the usual one.
+        let connector = runtime
+            .block_on(async {
+                tokio::time::timeout(
+                    budget,
+                    qurb_peer::Connector::start(
+                        "0.0.0.0:0".parse().expect("a literal address"),
+                        identity,
+                        self.master.clone(),
+                        &trust,
+                        self.signal_url.clone(),
+                        qurb_peer::Finding::everything(relay),
+                    ),
+                )
+                .await
+            })
+            .map_err(|_| QurbError::Network { detail: format!("{name} did not answer in time") })?
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        {
+            let _guard = runtime.enter();
+            for (peer, secret) in meetings {
+                connector.meet(qurb_peer::Fingerprint::from_bytes(peer.fingerprint), secret);
+            }
+        }
+        let served = self.shared_store()?;
+        let generation = qurb_peer::Generation::new();
+        let mut accepting = Vec::new();
+        for endpoint in [Some(connector.endpoint().clone()), connector.relay_endpoint().cloned()].into_iter().flatten() {
+            let store = Arc::clone(&served);
+            let generation = Arc::clone(&generation);
+            let trust = trust.clone();
+            let watcher = Arc::clone(&self.serving);
+            accepting.push(runtime.spawn(async move {
+                while let Some(incoming) = endpoint.accept().await {
+                    let store = Arc::clone(&store);
+                    let generation = Arc::clone(&generation);
+                    let trust = trust.clone();
+                    let watcher: Arc<dyn qurb_peer::Served> = watcher.clone();
+                    tokio::spawn(async move {
+                        if let Ok(connection) = incoming.await {
+                            qurb_peer::server::serve_connection_watched(connection, store, generation, watcher, &trust)
+                                .await;
+                        }
+                    });
+                }
+            }));
+        }
+        let connector = Arc::new(connector);
+        let client = runtime
+            .block_on(tokio::time::timeout(budget, connector.reach(peer)))
+            .map_err(|_| QurbError::Network { detail: format!("{name} isn't reachable: it has to be on, with Qurb running") })?
+            .map_err(|e| QurbError::Network { detail: format!("{name} isn't reachable: {e}") });
+        let client = match client {
+            Ok(client) => client,
+            Err(e) => {
+                for task in &accepting {
+                    task.abort();
+                }
+                return Err(e);
+            }
+        };
+        Ok(Arc::new(KeptFolder {
+            runtime,
+            client,
+            _connector: connector,
+            accepting,
+            reader: std::sync::Mutex::new(self.open_store()?),
+            name,
+            me,
+        }))
+    }
+
     pub fn holders(&self) -> Result<Vec<PeerInfo>, QurbError> {
         let holders = self.engine()?.store().db().holders()?;
         Ok(self
@@ -2983,6 +3083,18 @@ fn hex(bytes: &[u8; 32]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// The other way: 64 hex digits as 32 bytes.
+fn unhex(text: &str) -> Option<[u8; 32]> {
+    if text.len() != 64 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(text.get(i * 2..i * 2 + 2)?, 16).ok()?;
+    }
+    Some(out)
+}
+
 /// Unix seconds.
 fn now() -> i64 {
     std::time::SystemTime::now()
@@ -3213,6 +3325,131 @@ pub struct SyncOutcome {
     /// answered is counted in `unreachable` instead, however long it was waited
     /// for.
     pub timed_out: bool,
+}
+
+/// A place in this phone's folder on a computer (decision 0067, step 4).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct KeptListing {
+    pub folders: Vec<String>,
+    pub files: Vec<KeptFile>,
+}
+
+/// One file of this phone's folder on a computer.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct KeptFile {
+    /// Its name, as the folder shows it.
+    pub name: String,
+    /// Where it is kept, in its phone's vault: under `.qurb-outside/whatsapp/`
+    /// for WhatsApp, `.qurb-outside/storage/` for a backed-up folder, else a
+    /// Private Vault path. Where it is restored to follows from this.
+    pub path: String,
+    /// Kept for this phone, rather than for it before it was set up again.
+    pub mine: bool,
+    /// Its content's hash, in hex: what fetching it asks for.
+    pub content: String,
+    pub size: u64,
+    /// Unix seconds.
+    pub modified_at: i64,
+}
+
+/// This phone's folder on a computer, reached once and kept open while it is
+/// browsed: listed a place at a time, and any file in it fetched to where the
+/// app says (decision 0067, step 4). Closed when the app leaves it.
+#[derive(uniffi::Object)]
+pub struct KeptFolder {
+    runtime: Arc<tokio::runtime::Runtime>,
+    client: qurb_peer::PeerClient,
+    /// Held so that what it started -- announcing, the rendezvous connection
+    /// -- lives as long as the folder is open.
+    _connector: Arc<qurb_peer::Connector>,
+    /// Answering the computer too, as a sync pass does: reaching a device
+    /// behind a router is both sides dialling.
+    accepting: Vec<tokio::task::JoinHandle<()>>,
+    reader: std::sync::Mutex<Store>,
+    name: String,
+    me: [u8; 32],
+}
+
+#[uniffi::export]
+impl KeptFolder {
+    /// The computer's name.
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// The folders and files at `dir`: at the top, this phone and, when it
+    /// was set up again, what was kept for it before.
+    pub fn list(&self, dir: String) -> Result<KeptListing, QurbError> {
+        let answer = self
+            .runtime
+            .block_on(self.client.kept(&dir))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let Some((folders, files)) = answer else {
+            return Err(QurbError::NotFound { detail: format!("{} keeps no folder for this phone", self.name) });
+        };
+        Ok(KeptListing {
+            folders,
+            files: files
+                .into_iter()
+                .map(|f| KeptFile {
+                    name: f.name,
+                    path: f.path,
+                    mine: f.owner == self.me,
+                    content: hex(&f.content),
+                    size: f.size,
+                    modified_at: f.modified_at,
+                })
+                .collect(),
+        })
+    }
+
+    /// Fetch `file` from the computer to `to`, an absolute path, checked
+    /// chunk by chunk and whole before it is put there. A file already at
+    /// `to` is not replaced: the fetched one goes beside it, `name (2).ext`.
+    /// Returns where it went.
+    pub fn download(&self, file: KeptFile, to: String) -> Result<String, QurbError> {
+        let content = unhex(&file.content).ok_or_else(|| QurbError::Other { detail: "not a file of the folder".into() })?;
+        let to = free_path(std::path::Path::new(&to));
+        let parent = to.parent().ok_or_else(|| QurbError::Other { detail: "nowhere to put it".into() })?;
+        std::fs::create_dir_all(parent).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+        let partial = parent.join(format!(".{}.qurb-part", to.file_name().and_then(|n| n.to_str()).unwrap_or("file")));
+        let fetched = (|| {
+            let mut out = std::fs::File::create(&partial).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+            let reader = self.reader.lock().map_err(|_| QurbError::Other { detail: "the folder is closed".into() })?;
+            self.runtime
+                .block_on(self.client.fetch_content_into(&reader, content, &mut out))
+                .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+            out.sync_all().map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+            std::fs::rename(&partial, &to).map_err(|e| QurbError::Storage { detail: e.to_string() })
+        })();
+        if fetched.is_err() {
+            let _ = std::fs::remove_file(&partial);
+        }
+        fetched?;
+        Ok(to.display().to_string())
+    }
+
+    /// Stop: the connection closes, and nothing more is answered. Not
+    /// `close`, which every generated object already has.
+    pub fn disconnect(&self) {
+        self.client.close();
+        for task in &self.accepting {
+            task.abort();
+        }
+    }
+}
+
+/// `path`, or the first `name (n).ext` beside it that is free.
+fn free_path(path: &std::path::Path) -> std::path::PathBuf {
+    if !path.exists() {
+        return path.to_path_buf();
+    }
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+    let ext = path.extension().and_then(|e| e.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+    (2..)
+        .map(|n| path.with_file_name(format!("{stem} ({n}){ext}")))
+        .find(|candidate| !candidate.exists())
+        .expect("a free name")
 }
 
 /// An invitation this device is offering, while it waits to be joined.

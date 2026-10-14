@@ -37,6 +37,10 @@ abstract class Screen(protected val app: MainActivity) {
      */
     open fun back(): Boolean = false
 
+    /** Gone from the screen for good: a place reached from another, popped
+     *  or left behind by a change of tab. What it holds open, it closes. */
+    open fun left() {}
+
     protected val kit get() = app.kit
 
     protected val scope get() = app.lifecycleScope

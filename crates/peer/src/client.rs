@@ -218,6 +218,16 @@ impl PeerClient {
         }
     }
 
+    /// What the peer keeps of this phone's at `dir` of its folder there
+    /// (decision 0067, step 4), or `None` when it will not say.
+    pub async fn kept(&self, dir: &str) -> Result<Option<(Vec<String>, Vec<crate::wire::KeptEntry>)>> {
+        match self.request(Request::Kept { dir: dir.to_string() }).await? {
+            Response::Kept { folders, files } => Ok(Some((folders, files))),
+            Response::NotFound => Ok(None),
+            other => Err(unexpected("kept folder", &other)),
+        }
+    }
+
     pub async fn chunk(&self, hash: [u8; 32]) -> Result<Option<Vec<u8>>> {
         match self.request(Request::Chunk { hash }).await? {
             Response::Chunk(bytes) => Ok(Some(bytes)),
@@ -534,6 +544,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Short { .. } => "half of a key exchange",
         Response::Sealed(_) => "sealed code",
         Response::Withdrawn => "refusal of six digits",
+        Response::Kept { .. } => "listing of a kept folder",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }
 }

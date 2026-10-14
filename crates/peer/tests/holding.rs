@@ -488,3 +488,56 @@ async fn a_choice_made_on_either_side_reaches_the_other() {
     pdb.merge_choices_here(&asking.chosen().await.unwrap().unwrap()).unwrap();
     assert!(pdb.chosen_here().unwrap().is_empty(), "the later untick did not reach the phone");
 }
+
+/// A phone browsing its folder on the computer (decision 0067, step 4): it
+/// is shown what the computer keeps for it and for itself before it was set
+/// up again, named as the window names them, and can fetch a file of either.
+/// Another device of the same person is shown neither, and cannot fetch them
+/// by their hash.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_reaches_its_folder_on_the_computer_and_what_it_kept_before() {
+    let mut before = Device::new();
+    before.engine.store_mut().set_new_files_private(true);
+    let mut desktop = Device::new();
+    introduce(&before, &desktop);
+    before.engine.store().db().add_holder(&desktop.id()).unwrap();
+    let diary = b"written before the phone was cleared".repeat(200);
+    fs::write(before.root.join("diary.txt"), &diary).unwrap();
+    before.engine.reconcile().unwrap();
+    desktop.sync_from(&before).await;
+
+    // The same phone, set up again: a new identity of the same name and
+    // kind, paired after the old one was last seen.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let phone = Device::new();
+    introduce(&phone, &desktop);
+    // And a computer of the same person, which is not that phone.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let laptop = Device::new();
+    introduce(&laptop, &desktop);
+    for (device, kind) in [(&before, "phone"), (&phone, "phone"), (&laptop, "computer")] {
+        desktop.engine.store().db().set_peer_kind(&device.id(), kind).unwrap();
+    }
+
+    let (addr, fingerprint) = desktop.serve(phone.identity.fingerprint());
+    let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    let (top, _) = client.kept("").await.unwrap().expect("not told");
+    assert_eq!(top, vec!["the other one".to_string(), "the other one, earlier".to_string()]);
+    let (folders, _) = client.kept("the other one, earlier").await.unwrap().unwrap();
+    assert_eq!(folders, vec!["Private Vault".to_string()]);
+    let (_, files) = client.kept("the other one, earlier/Private Vault").await.unwrap().unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].name, "diary.txt");
+    assert_eq!(files[0].owner, *before.id().as_bytes());
+    let fetched = client.fetch_content(&phone.reader(), files[0].content, files[0].size).await.unwrap();
+    assert_eq!(fetched, diary);
+    client.close();
+    let content = files[0].content;
+
+    let (addr, fingerprint) = desktop.serve(laptop.identity.fingerprint());
+    let client = PeerClient::connect(addr, &laptop.identity, fingerprint).await.unwrap();
+    let (top, _) = client.kept("").await.unwrap().unwrap();
+    assert_eq!(top, vec!["the other one".to_string()], "shown another device's folder");
+    assert!(client.fetch_content(&laptop.reader(), content, diary.len() as u64).await.is_err(), "fetched another device's file");
+    client.close();
+}

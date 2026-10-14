@@ -179,7 +179,7 @@ class MainActivity : AppCompatActivity() {
         views.tabs.selectedItemId = tab
         views.tabs.setOnItemSelectedListener { item ->
             if (!quietly) {
-                stack.clear()
+                clearStack()
                 show(screenFor(item.itemId))
                 current?.refresh()
             }
@@ -187,7 +187,7 @@ class MainActivity : AppCompatActivity() {
         }
         views.tabs.setOnItemReselectedListener {
             if (stack.isNotEmpty()) {
-                stack.clear()
+                clearStack()
                 show(screenFor(it.itemId))
             }
             current?.refresh()
@@ -299,14 +299,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun pop() {
-        stack.removeLast()
+        stack.removeLast().left()
         show(stack.lastOrNull() ?: screenFor(views.tabs.selectedItemId))
         current?.refresh()
     }
 
+    /** Every place reached from another left at once, each told. */
+    private fun clearStack() {
+        stack.forEach { it.left() }
+        stack.clear()
+    }
+
     /** Move to another tab, as a screen's action does ("Choose a device"). */
     fun go(tab: Int) {
-        stack.clear()
+        clearStack()
         if (views.tabs.selectedItemId == tab) show(screenFor(tab)) else views.tabs.selectedItemId = tab
     }
 

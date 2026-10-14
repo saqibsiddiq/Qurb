@@ -1741,21 +1741,6 @@ fn owner_phones(hosted: &Hosted) -> Result<Vec<(String, qurb_cli::Device)>, Stri
     Ok(named)
 }
 
-/// Where a file kept for a phone shows in its folder: WhatsApp under
-/// *WhatsApp*, a backed-up folder under its own name, and the phone's
-/// Private Vault under *Private Vault*.
-fn shown_as(path: &str) -> Option<String> {
-    let outside = format!("{}/", qurb_storage::db::OUTSIDE);
-    match path.strip_prefix(&outside) {
-        Some(rest) => match rest.split_once('/') {
-            Some(("whatsapp", rest)) => Some(format!("WhatsApp/{rest}")),
-            Some(("storage", rest)) => Some(rest.to_string()),
-            _ => None,
-        },
-        None => Some(format!("Private Vault/{path}")),
-    }
-}
-
 /// How a person's folder stands, without using it: a look does not keep it
 /// open. Locked, what was opened from it goes.
 fn folder_state(person: &qurb_sync::DeviceId) -> &'static str {
@@ -1871,35 +1856,36 @@ pub fn person_folder(hosted: Host<'_>, person: String, dir: String) -> Answer<Pe
     let key = qurb_peer::openings::key(&id).ok_or("the folder has just locked itself")?;
     let dir = dir.trim_matches('/');
 
-    // Every file, as (shown path, kept path, phone, size, time).
-    let mut all: Vec<(String, String, Option<String>, u64, i64)> = Vec::new();
     if person == OWNER {
+        // One folder per phone, each phone's files as the phone sees them
+        // too (`qurb_storage::person`).
         let phones = owner_phones(&hosted)?;
-        if dir.is_empty() {
-            return Ok(PersonFolder { state, folders: phones.into_iter().map(|(name, _)| name).collect(), files: Vec::new() });
-        }
-        let (phone, _) = dir.split_once('/').unwrap_or((dir, ""));
-        let (name, device) = phones.into_iter().find(|(name, _)| name == phone).ok_or("no such phone in this folder")?;
-        let kept = hosted.with_store(|store| Ok(store.db().held_files(&device.id)?)).map_err(failed)?;
-        for (path, size, mtime) in kept {
-            if let Some(shown) = shown_as(&path) {
-                all.push((format!("{name}/{shown}"), path, Some(device.fingerprint.clone()), size, mtime / 1_000_000_000));
-            }
-        }
-    } else {
-        let key = qurb_storage::sealed::FolderKey::from_bytes(key);
-        let kept = hosted.with_store(|store| Ok(store.open_kept(&id, &key)?)).map_err(failed)?;
-        for f in kept {
-            all.push((f.path.clone(), f.path, None, f.size, f.modified_at));
-        }
+        let named: Vec<(String, qurb_sync::DeviceId)> = phones.iter().map(|(name, d)| (name.clone(), d.id)).collect();
+        let (folders, shown) = hosted
+            .with_store(|store| Ok(qurb_storage::person::listing(store.db(), &named, dir)?))
+            .map_err(failed)?;
+        let files = shown
+            .into_iter()
+            .map(|f| PersonFile {
+                name: f.name,
+                path: f.path,
+                device: phones.iter().find(|(_, d)| d.id == f.owner).map(|(_, d)| d.fingerprint.clone()),
+                size: big(f.size),
+                modified_at: f.modified_at,
+            })
+            .collect();
+        return Ok(PersonFolder { state, folders, files });
     }
 
+    // A guest's, sealed: one folder of theirs, opened with their key.
+    let key = qurb_storage::sealed::FolderKey::from_bytes(key);
+    let kept = hosted.with_store(|store| Ok(store.open_kept(&id, &key)?)).map_err(failed)?;
     let mut folders = std::collections::BTreeSet::new();
     let mut files = Vec::new();
-    for (shown, path, device, size, modified_at) in all {
+    for f in kept {
         let rest = match dir {
-            "" => shown.as_str(),
-            _ => match shown.strip_prefix(dir).and_then(|r| r.strip_prefix('/')) {
+            "" => f.path.as_str(),
+            _ => match f.path.strip_prefix(dir).and_then(|r| r.strip_prefix('/')) {
                 Some(rest) => rest,
                 None => continue,
             },
@@ -1908,7 +1894,13 @@ pub fn person_folder(hosted: Host<'_>, person: String, dir: String) -> Answer<Pe
             Some((folder, _)) => {
                 folders.insert(folder.to_string());
             }
-            None => files.push(PersonFile { name: rest.to_string(), path, device, size: big(size), modified_at }),
+            None => files.push(PersonFile {
+                name: rest.to_string(),
+                path: f.path.clone(),
+                device: None,
+                size: big(f.size),
+                modified_at: f.modified_at,
+            }),
         }
     }
     Ok(PersonFolder { state, folders: folders.into_iter().collect(), files })

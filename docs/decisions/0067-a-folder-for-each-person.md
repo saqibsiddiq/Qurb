@@ -1,9 +1,9 @@
 # 0067 — A folder for each person, opened with their phone
 
 **Status:** Accepted as a design and an order of work, 2026-10-14, from the
-owner's items 2 to 5 of that day and his answers. Steps 1 to 3 built the
-same day, step 2 run on the owner's laptop; steps 1 and 3 not yet seen with
-the S23; step 4 not built. See *Progress*. Extends
+owner's items 2 to 5 of that day and his answers. All four steps built the
+same day; step 2 run on the owner's laptop; steps 1, 3 and 4 not yet seen
+with the S23. See *Progress*. Extends
 [0060](0060-a-computer-keeps-private-folders-for-several-people.md), which
 built most of this for guests, to every person a computer keeps files for,
 its owner included, and answers 0060's question 3 ("the owner's own files:
@@ -202,6 +202,41 @@ go of the owner's own files without being asked would surprise him; *Free
 local space* does it by hand.
 
 **Not seen** on the S23.
+
+### Step 4, the phone reaches its folder — built 2026-10-14
+
+**A phone sees its own, not its person's.** A phone's Private Vault is
+private to that phone (0036), so from the phone the folder is what the
+computer keeps for *that* phone, and for its earlier selves: the same phone
+set up again, recognised as Devices does (same name and kind, paired after
+the older was last seen; `Db::earlier_selves`). The window, opened with a
+yes, shows every phone of the owner's. That is the S23's case: the first
+WhatsApp backup, 3.7 GB, is kept for the S23 from before its data was
+cleared, and is reachable from the S23 now.
+
+- **One tree for both**: `qurb_storage::person` maps what is kept to where a
+  person looks for it (*WhatsApp*, a backed-up folder under its own name,
+  *Private Vault*), for the window and for the phone alike.
+- **`Request::Kept { dir }`**, answered to a phone of the computer's own
+  person only, with that place's folders and files, each with its content
+  hash. Fetching uses the ordinary manifest and chunks; content kept for an
+  earlier self is now visible to the phone that replaced it, and to no other
+  device.
+- **On the phone**, Files' top has *Your folder on saqib* (*Backups,
+  WhatsApp, deleted files · while it's on*). It reaches the computer once,
+  on a port of its own so as not to collide with a sync pass, keeps the
+  connection while the folder is open, and closes it when it is left. A
+  file offers *Download* (to Downloads/Qurb) or *Restore*: WhatsApp's back
+  into WhatsApp's folder, a backed-up folder's back where it was (both need
+  "All files access"), the Private Vault's back into it. A file already
+  where it is going is not replaced; the fetched one goes beside it. Each
+  is checked chunk by chunk and whole before it is put in place.
+
+Tests: `a_phone_reaches_its_folder_on_the_computer_and_what_it_kept_before`
+(its own and its earlier self's listed and fetched; another device of the
+same person shown neither, and refused the content by hash);
+`kept_paths_show_where_a_person_looks_for_them`. **Not yet seen** on the
+S23, and the emulator cannot play it: its computer is never on.
 
 ## Reversing it
 

@@ -141,6 +141,26 @@ pub enum Request {
     /// This side's confirmation that it derived the same key. Answered with
     /// the long code, [`Response::Sealed`] under that key, or *not found*.
     ShortConfirm { confirm: [u8; 32] },
+
+    /// What a computer keeps of the asking phone's, at `dir` of its folder
+    /// there (decision 0067, step 4): answered with [`Response::Kept`], to a
+    /// phone of the computer's own person only, about itself and its earlier
+    /// selves.
+    Kept { dir: String },
+}
+
+/// One file of a phone's folder on a computer, as listed to the phone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeptEntry {
+    /// Its name, as the folder shows it.
+    pub name: String,
+    /// Where it is kept, in the vault of `owner`.
+    pub path: String,
+    pub owner: [u8; 32],
+    pub content: [u8; 32],
+    pub size: u64,
+    /// Unix seconds.
+    pub modified_at: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,6 +226,9 @@ pub enum Response {
     /// The digits were tried too often, and are no longer taken for this
     /// code. The QR code and the long code still work.
     Withdrawn,
+
+    /// A place in a phone's folder on a computer, answering [`Request::Kept`].
+    Kept { folders: Vec<String>, files: Vec<KeptEntry> },
 }
 
 const TAG_TREE: u8 = 1;
@@ -224,6 +247,11 @@ const TAG_CHOSEN: u8 = 13;
 const TAG_TREE_STREAM: u8 = 14;
 const TAG_SHORT: u8 = 15;
 const TAG_SHORT_CONFIRM: u8 = 16;
+const TAG_KEPT: u8 = 17;
+
+/// The most entries one listing of a phone's folder may hold: a folder of a
+/// hundred thousand photos is a phone's; more is not.
+const MAX_KEPT: usize = 200_000;
 
 /// The length of one side's SPAKE2 message in the Ed25519 group: a byte
 /// saying which side, and a point.
@@ -258,6 +286,7 @@ const STATUS_CHOSEN: u8 = 15;
 const STATUS_SHORT: u8 = 16;
 const STATUS_SEALED: u8 = 17;
 const STATUS_WITHDRAWN: u8 = 18;
+const STATUS_KEPT: u8 = 19;
 
 /// The most folders one answer may list: two levels of a phone's storage come
 /// to a few hundred. A peer claiming more is not describing a phone.
@@ -324,6 +353,10 @@ impl Request {
                 out.push(TAG_SHORT_CONFIRM);
                 out.extend_from_slice(confirm);
             }
+            Request::Kept { dir } => {
+                out.push(TAG_KEPT);
+                put_path(&mut out, dir);
+            }
         }
         out
     }
@@ -358,6 +391,7 @@ impl Request {
             TAG_TREE_STREAM => Request::TreeStream,
             TAG_SHORT => Request::Short { spake: r.array()? },
             TAG_SHORT_CONFIRM => Request::ShortConfirm { confirm: r.hash()? },
+            TAG_KEPT => Request::Kept { dir: r.path()? },
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -398,6 +432,24 @@ impl Response {
                 out.extend_from_slice(sealed);
             }
             Response::Withdrawn => out.push(STATUS_WITHDRAWN),
+            Response::Kept { folders, files } => {
+                out.push(STATUS_KEPT);
+                let folders = &folders[..folders.len().min(MAX_KEPT)];
+                put_u32(&mut out, folders.len());
+                for folder in folders {
+                    put_path(&mut out, folder);
+                }
+                let files = &files[..files.len().min(MAX_KEPT)];
+                put_u32(&mut out, files.len());
+                for f in files {
+                    put_path(&mut out, &f.name);
+                    put_path(&mut out, &f.path);
+                    out.extend_from_slice(&f.owner);
+                    out.extend_from_slice(&f.content);
+                    out.extend_from_slice(&f.size.to_le_bytes());
+                    out.extend_from_slice(&f.modified_at.to_le_bytes());
+                }
+            }
             Response::Noted => out.push(STATUS_NOTED),
             Response::Changed { generation } => {
                 out.push(STATUS_CHANGED);
@@ -548,6 +600,32 @@ impl Response {
                 Response::Sealed(r.take(len)?.to_vec())
             }
             STATUS_WITHDRAWN => Response::Withdrawn,
+            STATUS_KEPT => {
+                let count = r.count()?;
+                if count > MAX_KEPT {
+                    return Err(Error::Protocol { detail: format!("{count} folders in one place") });
+                }
+                let mut folders = Vec::with_capacity(count.min(4096));
+                for _ in 0..count {
+                    folders.push(r.path()?);
+                }
+                let count = r.count()?;
+                if count > MAX_KEPT {
+                    return Err(Error::Protocol { detail: format!("{count} files in one place") });
+                }
+                let mut files = Vec::with_capacity(count.min(4096));
+                for _ in 0..count {
+                    files.push(KeptEntry {
+                        name: r.path()?,
+                        path: r.path()?,
+                        owner: r.hash()?,
+                        content: r.hash()?,
+                        size: r.u64()?,
+                        modified_at: r.u64()? as i64,
+                    });
+                }
+                Response::Kept { folders, files }
+            }
             status => {
                 return Err(Error::Protocol { detail: format!("unknown response status {status}") })
             }
@@ -693,6 +771,14 @@ fn decode_version(r: &mut Reader<'_>) -> Result<FileVersion> {
     })
 }
 
+/// A path, or a name in one, length-prefixed and bounded as a path.
+fn put_path(out: &mut Vec<u8>, path: &str) {
+    let bytes = path.as_bytes();
+    let capped = &bytes[..bytes.len().min(MAX_PATH)];
+    put_u32(out, capped.len());
+    out.extend_from_slice(capped);
+}
+
 /// A device name, length-prefixed and bounded.
 fn put_name(out: &mut Vec<u8>, name: &str) {
     let bytes = name.as_bytes();
@@ -765,6 +851,19 @@ impl<'a> Reader<'a> {
 
     fn hash(&mut self) -> Result<[u8; 32]> {
         self.array()
+    }
+
+    /// A length-prefixed path of at most [`MAX_PATH`] bytes, valid UTF-8.
+    /// Not checked to stay inside a folder: what it names is decided by the
+    /// side that uses it.
+    fn path(&mut self) -> Result<String> {
+        let len = self.count()?;
+        if len > MAX_PATH {
+            return Err(Error::Protocol { detail: format!("path of {len} bytes is implausible") });
+        }
+        std::str::from_utf8(self.take(len)?)
+            .map(|s| s.to_string())
+            .map_err(|_| Error::Protocol { detail: "path is not utf-8".into() })
     }
 
     fn array<const N: usize>(&mut self) -> Result<[u8; N]> {

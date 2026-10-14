@@ -2902,7 +2902,13 @@ impl Db {
                 |r| r.get(0),
             )
             .optional()?;
-        Ok(visible.is_some())
+        if visible.is_some() {
+            return Ok(true);
+        }
+        match audience.device() {
+            Some(device) => self.kept_for_earlier(device, Some(hash), None),
+            None => Ok(false),
+        }
     }
 
     /// Whether a device may resolve this content hash to a chunk list.
@@ -2944,7 +2950,13 @@ impl Db {
                 |r| r.get(0),
             )
             .optional()?;
-        Ok(visible.is_some())
+        if visible.is_some() {
+            return Ok(true);
+        }
+        match audience.device() {
+            Some(device) => self.kept_for_earlier(device, None, Some(content)),
+            None => Ok(false),
+        }
     }
 
     /// Whether the only way `device` could have got this content from here was
@@ -3871,6 +3883,85 @@ impl Db {
             params![owner.as_bytes().as_slice()],
             |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, i64>(1)? as u64)),
         )?)
+    }
+
+    /// Every file this device keeps for `owner`, live, with its content: what
+    /// a phone browsing its folder here may fetch (decision 0067, step 4).
+    pub fn held_entries(&self, owner: &DeviceId) -> Result<Vec<(String, u64, i64, blake3::Hash)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size, mtime_ns, content_hash FROM files
+              WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL
+              ORDER BY path",
+        )?;
+        let rows = stmt.query_map(params![owner.as_bytes().as_slice()], |r| {
+            let hash: Vec<u8> = r.get(3)?;
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)?, hash))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (path, size, mtime, hash) = row?;
+            let Ok(hash) = <[u8; 32]>::try_from(hash.as_slice()) else { continue };
+            out.push((path, size, mtime, blake3::Hash::from(hash)));
+        }
+        Ok(out)
+    }
+
+    /// This person's devices that `device` replaced: the same name and kind,
+    /// paired before it and last seen by the time it was paired -- the same
+    /// phone, its data cleared and set up again (the owner's item 6 of
+    /// 2026-10-14). What is kept for them is that phone's too, and it may
+    /// reach it from its folder (decision 0067).
+    pub fn earlier_selves(&self, device: &DeviceId) -> Result<Vec<DeviceId>> {
+        let peers = self.trusted_peers()?;
+        let Some(me) = peers.iter().find(|p| p.device_id == *device) else { return Ok(Vec::new()) };
+        let kind = self.peer_kind(device)?;
+        if me.relation != Relation::Own || kind.is_none() {
+            return Ok(Vec::new());
+        }
+        let mut earlier = Vec::new();
+        for p in &peers {
+            if p.device_id != *device
+                && p.relation == Relation::Own
+                && p.name == me.name
+                && p.paired_at < me.paired_at
+                && p.last_seen.is_none_or(|seen| seen <= me.paired_at)
+                && self.peer_kind(&p.device_id)? == kind
+            {
+                earlier.push(p.device_id);
+            }
+        }
+        Ok(earlier)
+    }
+
+    /// Whether content is kept here for one of `device`'s earlier selves,
+    /// which [`earlier_selves`](Self::earlier_selves) lets it reach.
+    fn kept_for_earlier(&self, device: &DeviceId, chunk: Option<&blake3::Hash>, content: Option<&blake3::Hash>) -> Result<bool> {
+        for earlier in self.earlier_selves(device)? {
+            let found: Option<i64> = match (chunk, content) {
+                (Some(chunk), _) => self
+                    .conn
+                    .query_row(
+                        "SELECT 1 FROM file_chunks fc JOIN files f ON f.id = fc.file_id
+                          WHERE fc.chunk_hash = ?1 AND f.scope = ?2 AND f.held = 1 LIMIT 1",
+                        params![chunk.as_bytes().as_slice(), earlier.as_bytes().as_slice()],
+                        |r| r.get(0),
+                    )
+                    .optional()?,
+                (None, Some(content)) => self
+                    .conn
+                    .query_row(
+                        "SELECT 1 FROM files WHERE content_hash = ?1 AND scope = ?2 AND held = 1 LIMIT 1",
+                        params![content.as_bytes().as_slice(), earlier.as_bytes().as_slice()],
+                        |r| r.get(0),
+                    )
+                    .optional()?,
+                (None, None) => None,
+            };
+            if found.is_some() {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Every file this device keeps for `owner`, live: path, size, and when it

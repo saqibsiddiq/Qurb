@@ -383,7 +383,8 @@ async fn serve_request(
         | Response::Chosen(_)
         | Response::Short { .. }
         | Response::Sealed(_)
-        | Response::Withdrawn => 0,
+        | Response::Withdrawn
+        | Response::Kept { .. } => 0,
     };
 
     match (&request, &response) {
@@ -525,6 +526,32 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
                 true => Response::Noted,
                 false => Response::NotFound,
             },
+            _ => Response::NotFound,
+        },
+
+        // A phone of this computer's own person, browsing its folder here
+        // (decision 0067, step 4): what is kept for it and for its earlier
+        // selves, as the window shows them. Never another person's device,
+        // and never another phone's folder.
+        Request::Kept { dir } => match (&owner, other_person) {
+            (Some(device), false) => {
+                let phones = qurb_storage::person::own_phones(store.db(), device)?;
+                let (folders, files) = qurb_storage::person::listing(store.db(), &phones, dir)?;
+                Response::Kept {
+                    folders,
+                    files: files
+                        .into_iter()
+                        .map(|f| crate::wire::KeptEntry {
+                            name: f.name,
+                            path: f.path,
+                            owner: *f.owner.as_bytes(),
+                            content: *f.content.as_bytes(),
+                            size: f.size,
+                            modified_at: f.modified_at,
+                        })
+                        .collect(),
+                }
+            }
             _ => Response::NotFound,
         },
 
