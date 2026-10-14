@@ -2370,7 +2370,14 @@ His answers to the questions they raised are with them.
     whose keeper (`test-laptop`) is never on; reaching the computer is tested
     (`a_choice_made_on_either_side_reaches_the_other`), not yet seen between
     the S23 and the laptop.
-11. **All of it beautiful, symmetric and elegant.**
+11. **All of it beautiful, symmetric and elegant.** Held to through each
+    item rather than left to the end: every new screen was looked at as
+    built -- the desktop's in the fixtures page, wide and narrow; the phone's
+    on the emulator (Home, *Your folders*, the *Send* sheet, *Enter a code*
+    with its number pad, *Your folder on …* and its unreachable state) --
+    and what was found and fixed is in consistency rows 49 to 53. **Not
+    looked at on the S23 or in the laptop's own window** with real numbers;
+    that is the next pass, with the phone.
 
 Where each stands is kept here as it moves.
 
