@@ -274,7 +274,11 @@ async function openPhoneFolders(d) {
       const look = button("Open", "btn small ghost");
       look.addEventListener("click", (event) => {
         event.preventDefault();
-        openBackup(d, f.path);
+        // In the owner's folder in Files, which opens with a yes on the
+        // phone (decision 0067).
+        box.close();
+        showScreen("files");
+        filesBrowser.openPerson("owner", `${d.name}/${f.path}`);
       });
       item.append(look);
     }

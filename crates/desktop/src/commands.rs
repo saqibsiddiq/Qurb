@@ -1421,6 +1421,16 @@ fn own_phone(hosted: &Host<'_>, phone: &str) -> Result<qurb_cli::Device, String>
     Ok(device)
 }
 
+/// A phone's backups are the owner's folder's, opened only with a phone's
+/// yes (decision 0067).
+fn owner_folder_open(hosted: &Host<'_>) -> Result<(), String> {
+    let owner = person_of(hosted, OWNER)?;
+    match qurb_peer::openings::key(&owner) {
+        Some(_) => Ok(()),
+        None => Err("your folder is locked: open it in Files, and approve on your phone".to_string()),
+    }
+}
+
 /// Where a phone's chosen folder is kept in its vault.
 fn kept_prefix(folder: &str) -> String {
     format!("{}/storage/{folder}", qurb_storage::db::OUTSIDE)
@@ -1481,6 +1491,7 @@ pub struct BackedUp {
 /// What this computer keeps of a phone's folder.
 #[tauri::command]
 pub fn phone_backup(hosted: Host<'_>, phone: String, folder: String) -> Answer<Vec<BackedUp>> {
+    owner_folder_open(&hosted)?;
     let device = own_phone(&hosted, &phone)?;
     if !qurb_sync::is_safe_path(&folder) {
         return Err("that is not a folder of the phone".to_string());
@@ -1500,6 +1511,7 @@ pub fn phone_backup(hosted: Host<'_>, phone: String, folder: String) -> Answer<V
 /// the runtime directory, which never reaches the disk on a systemd desktop.
 #[tauri::command]
 pub fn open_backed_up(hosted: Host<'_>, phone: String, folder: String, path: String) -> Answer<()> {
+    owner_folder_open(&hosted)?;
     let device = own_phone(&hosted, &phone)?;
     if !qurb_sync::is_safe_path(&path) || !qurb_sync::is_safe_path(&folder) {
         return Err("that is not a file of the backup".to_string());
@@ -1629,6 +1641,306 @@ pub fn lock_guest_folder(hosted: Host<'_>, guest: String) -> Answer<()> {
     qurb_peer::openings::lock(&person);
     let _ = std::fs::remove_dir_all(opened_dir(&person));
     Ok(())
+}
+
+// ---------------------------------------------- a folder for each person
+
+/// One person this computer keeps files for (decision 0067): its owner, with
+/// the owner's phones, and each guest.
+#[derive(Serialize)]
+pub struct Person {
+    /// `owner`, or a guest's person in hex: what the folder's commands take.
+    id: String,
+    name: String,
+    /// "owner" or "guest".
+    relation: &'static str,
+    /// "locked", "asking" or "open".
+    state: &'static str,
+    /// A guest's folder is sealed: nothing here can read it without them.
+    /// The owner's is not, and the window says so.
+    sealed: bool,
+    /// Files kept for them, where that can be counted without opening.
+    files: Option<u64>,
+    size: String,
+    /// Their phones, by the names the folder shows them under.
+    devices: Vec<String>,
+}
+
+/// A person's folder, at one place in it, while it is open.
+#[derive(Serialize)]
+pub struct PersonFolder {
+    state: &'static str,
+    folders: Vec<String>,
+    files: Vec<PersonFile>,
+}
+
+#[derive(Serialize)]
+pub struct PersonFile {
+    /// Its name, as the folder shows it.
+    name: String,
+    /// Where it is kept: what `open_person_file` takes, with `device`.
+    path: String,
+    /// The phone it is kept for, as its fingerprint; none for a guest's.
+    device: Option<String>,
+    size: String,
+    modified_at: i64,
+}
+
+/// The owner's folder is asked for as this, rather than by an identifier.
+const OWNER: &str = "owner";
+
+/// What a person's folder is filed under: the owner's under this computer's
+/// own device, a guest's under their person (decision 0060).
+fn person_of(hosted: &Host<'_>, id: &str) -> Result<qurb_sync::DeviceId, String> {
+    if id == OWNER {
+        return hosted.with_store(|store| Ok(store.device_id()?)).map_err(failed);
+    }
+    qurb_sync::DeviceId::from_hex(id).ok_or_else(|| "no such person".to_string())
+}
+
+/// The owner's name for their folder: the first word of the login's full
+/// name, else the login, capitalised.
+fn owner_name() -> String {
+    let user = std::env::var("USER").unwrap_or_default();
+    let full = std::fs::read_to_string("/etc/passwd").ok().and_then(|passwd| {
+        passwd
+            .lines()
+            .find(|line| line.split(':').next() == Some(user.as_str()))
+            .and_then(|line| line.split(':').nth(4))
+            .and_then(|gecos| gecos.split(',').next())
+            .and_then(|name| name.split_whitespace().next())
+            .map(str::to_string)
+    });
+    let name = full.unwrap_or(user);
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => "You".to_string(),
+    }
+}
+
+/// The owner's phones whose files are kept here, each under the name its
+/// folder shows: one set up again keeps its own folder, as *earlier*.
+fn owner_phones(hosted: &Host<'_>) -> Result<Vec<(String, qurb_cli::Device)>, String> {
+    let devices = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)).map_err(failed)?;
+    let phones: Vec<qurb_cli::Device> = devices
+        .into_iter()
+        .filter(|d| d.relation == qurb_storage::db::Relation::Own && d.kind.as_deref() == Some("phone"))
+        .filter(|d| d.held.is_some() || d.replaced_by.is_none())
+        .collect();
+    let mut named = Vec::new();
+    for phone in phones {
+        let mut name = if phone.replaced_by.is_some() { format!("{}, earlier", phone.name) } else { phone.name.clone() };
+        let mut n = 2;
+        while named.iter().any(|(taken, _): &(String, qurb_cli::Device)| *taken == name) {
+            name = format!("{} ({n})", phone.name);
+            n += 1;
+        }
+        named.push((name, phone));
+    }
+    Ok(named)
+}
+
+/// Where a file kept for a phone shows in its folder: WhatsApp under
+/// *WhatsApp*, a backed-up folder under its own name, and the phone's
+/// Private Vault under *Private Vault*.
+fn shown_as(path: &str) -> Option<String> {
+    let outside = format!("{}/", qurb_storage::db::OUTSIDE);
+    match path.strip_prefix(&outside) {
+        Some(rest) => match rest.split_once('/') {
+            Some(("whatsapp", rest)) => Some(format!("WhatsApp/{rest}")),
+            Some(("storage", rest)) => Some(rest.to_string()),
+            _ => None,
+        },
+        None => Some(format!("Private Vault/{path}")),
+    }
+}
+
+/// How a person's folder stands, without using it: a look does not keep it
+/// open. Locked, what was opened from it goes.
+fn folder_state(person: &qurb_sync::DeviceId) -> &'static str {
+    if qurb_peer::openings::is_open(person) {
+        return "open";
+    }
+    let _ = std::fs::remove_dir_all(opened_dir(person));
+    if qurb_peer::openings::asking(person).is_some() { "asking" } else { "locked" }
+}
+
+/// Everyone this computer keeps files for, the owner first.
+#[tauri::command]
+pub fn people(hosted: Host<'_>) -> Answer<Vec<Person>> {
+    let owner = person_of(&hosted, OWNER)?;
+    let phones = owner_phones(&hosted)?;
+    let (files, bytes) = phones.iter().fold((0, 0), |(f, b), (_, p)| {
+        let (pf, pb) = p.held.unwrap_or((0, 0));
+        (f + pf, b + pb)
+    });
+    let mut people = vec![Person {
+        id: OWNER.to_string(),
+        name: owner_name(),
+        relation: "owner",
+        state: folder_state(&owner),
+        sealed: false,
+        files: Some(files),
+        size: big(bytes),
+        devices: phones.into_iter().map(|(name, _)| name).collect(),
+    }];
+
+    // A guest's devices, gathered under their person.
+    let devices = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)).map_err(failed)?;
+    let mut guests: Vec<(qurb_sync::DeviceId, Vec<qurb_cli::Device>)> = Vec::new();
+    for device in devices.into_iter().filter(|d| d.relation == qurb_storage::db::Relation::Guest) {
+        let person = hosted
+            .with_store(|store| Ok(store.db().person_of(&device.id)?.unwrap_or(device.id)))
+            .map_err(failed)?;
+        match guests.iter_mut().find(|(p, _)| *p == person) {
+            Some((_, theirs)) => theirs.push(device),
+            None => guests.push((person, vec![device])),
+        }
+    }
+    for (person, mut theirs) in guests {
+        theirs.sort_by_key(|d| d.paired_at);
+        let (count, kept) = hosted
+            .with_store(|store| Ok((store.db().kept_names(&person)?.len() as u64, store.db().kept_for_person(&person)?)))
+            .map_err(failed)?;
+        people.push(Person {
+            id: person.to_hex(),
+            name: theirs[0].name.clone(),
+            relation: "guest",
+            state: folder_state(&person),
+            sealed: true,
+            files: Some(count),
+            size: big(kept),
+            devices: theirs.into_iter().map(|d| d.name).collect(),
+        });
+    }
+    Ok(people)
+}
+
+/// A person's folder at `dir`: its folders and files while it is open. The
+/// owner's lists each phone, then what is kept for it; a guest's, sealed, is
+/// one folder of theirs. Listing counts as using the folder.
+#[tauri::command]
+pub fn person_folder(hosted: Host<'_>, person: String, dir: String) -> Answer<PersonFolder> {
+    let id = person_of(&hosted, &person)?;
+    let state = folder_state(&id);
+    if state != "open" {
+        return Ok(PersonFolder { state, folders: Vec::new(), files: Vec::new() });
+    }
+    let key = qurb_peer::openings::key(&id).ok_or("the folder has just locked itself")?;
+    let dir = dir.trim_matches('/');
+
+    // Every file, as (shown path, kept path, phone, size, time).
+    let mut all: Vec<(String, String, Option<String>, u64, i64)> = Vec::new();
+    if person == OWNER {
+        let phones = owner_phones(&hosted)?;
+        if dir.is_empty() {
+            return Ok(PersonFolder { state, folders: phones.into_iter().map(|(name, _)| name).collect(), files: Vec::new() });
+        }
+        let (phone, _) = dir.split_once('/').unwrap_or((dir, ""));
+        let (name, device) = phones.into_iter().find(|(name, _)| name == phone).ok_or("no such phone in this folder")?;
+        let kept = hosted.with_store(|store| Ok(store.db().held_files(&device.id)?)).map_err(failed)?;
+        for (path, size, mtime) in kept {
+            if let Some(shown) = shown_as(&path) {
+                all.push((format!("{name}/{shown}"), path, Some(device.fingerprint.clone()), size, mtime / 1_000_000_000));
+            }
+        }
+    } else {
+        let key = qurb_storage::sealed::FolderKey::from_bytes(key);
+        let kept = hosted.with_store(|store| Ok(store.open_kept(&id, &key)?)).map_err(failed)?;
+        for f in kept {
+            all.push((f.path.clone(), f.path, None, f.size, f.modified_at));
+        }
+    }
+
+    let mut folders = std::collections::BTreeSet::new();
+    let mut files = Vec::new();
+    for (shown, path, device, size, modified_at) in all {
+        let rest = match dir {
+            "" => shown.as_str(),
+            _ => match shown.strip_prefix(dir).and_then(|r| r.strip_prefix('/')) {
+                Some(rest) => rest,
+                None => continue,
+            },
+        };
+        match rest.split_once('/') {
+            Some((folder, _)) => {
+                folders.insert(folder.to_string());
+            }
+            None => files.push(PersonFile { name: rest.to_string(), path, device, size: big(size), modified_at }),
+        }
+    }
+    Ok(PersonFolder { state, folders: folders.into_iter().collect(), files })
+}
+
+/// Ask the person's phone to open their folder here. They approve on it,
+/// behind its screen lock, at its next sync with this computer.
+#[tauri::command]
+pub fn ask_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
+    let id = person_of(&hosted, &person)?;
+    qurb_peer::openings::ask(&id);
+    hosted.sync_now();
+    Ok(())
+}
+
+/// Lock a person's folder: forgotten until asked again, and what was opened
+/// from it removed.
+#[tauri::command]
+pub fn lock_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
+    let id = person_of(&hosted, &person)?;
+    qurb_peer::openings::lock(&id);
+    let _ = std::fs::remove_dir_all(opened_dir(&id));
+    Ok(())
+}
+
+/// Open one file of an open folder: written out, checked, into memory-backed
+/// space, and handed to the desktop's program for it.
+#[tauri::command]
+pub fn open_person_file(hosted: Host<'_>, person: String, device: Option<String>, path: String) -> Answer<()> {
+    let id = person_of(&hosted, &person)?;
+    let key = qurb_peer::openings::key(&id).ok_or("the folder is locked")?;
+    if person != OWNER {
+        return open_sealed(&hosted, &id, key, &path);
+    }
+    let phone = device.ok_or("which phone's file?")?;
+    let phone = own_phone(&hosted, &phone)?;
+    if !qurb_sync::is_safe_path(&path) {
+        return Err("that is not a file of the folder".to_string());
+    }
+    // Under its own path, which `is_safe_path` keeps inside: two files of
+    // one name in different folders are two files.
+    let to = opened_dir(&id).join(phone.id.short()).join(&path);
+    std::fs::create_dir_all(to.parent().ok_or("that file has no folder")?).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(opened_dir(&id), std::fs::Permissions::from_mode(0o700));
+    }
+    let mut out = std::fs::File::create(&to).map_err(|e| e.to_string())?;
+    hosted
+        .with_store(|store| Ok(store.read_held_into(&phone.id, &path, &mut out)?))
+        .map_err(failed)?;
+    reveal(&to)
+}
+
+/// A guest's file, unsealed: as [`open_guest_file`] does.
+fn open_sealed(hosted: &Host<'_>, person: &qurb_sync::DeviceId, key: [u8; 32], path: &str) -> Answer<()> {
+    let key = qurb_storage::sealed::FolderKey::from_bytes(key);
+    let sealed = hosted
+        .with_store(|store| Ok(store.kept_file(person, &key, path)?))
+        .map_err(failed)?
+        .ok_or("that file is not in the folder")?;
+    let name = std::path::Path::new(path).file_name().ok_or("that file has no name")?;
+    let dir = opened_dir(person).join(&sealed.to_hex().as_str()[..12]);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(opened_dir(person), std::fs::Permissions::from_mode(0o700));
+    }
+    let to = dir.join(name);
+    hosted.with_store(|store| Ok(store.unseal_kept(&key, &sealed, path, &to)?)).map_err(failed)?;
+    reveal(&to)
 }
 
 /// Open the folder a file is in, in the file manager.

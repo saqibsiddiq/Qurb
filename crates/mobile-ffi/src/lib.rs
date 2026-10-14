@@ -630,10 +630,9 @@ pub struct Qurb {
     /// The app's way to open again a document it sent from where it is
     /// (decision 0060), given to every store handle opened here.
     documents: Mutex<Option<Arc<dyn qurb_storage::Documents>>>,
-    /// Computers this phone visits that asked, at the last sync with each, to
-    /// open its folder there: by fingerprint, the computer's name and the
-    /// ask's nonce (decision 0060, step 5).
-    open_asks: Mutex<std::collections::HashMap<String, (String, [u8; 16])>>,
+    /// Computers that asked, at the last sync with each, to open this phone's
+    /// folder there: by fingerprint (decisions 0060 and 0067).
+    open_asks: Mutex<std::collections::HashMap<String, Asked>>,
     /// Asks the person approved, answered at the next sync with that computer.
     approved: Mutex<std::collections::HashMap<String, [u8; 16]>>,
     /// What each computer answered when this phone sent the key, for the app
@@ -656,6 +655,10 @@ pub struct OpenAnswer {
     pub opened: bool,
 }
 
+/// An ask to open this phone's folder, as heard: the computer's name, the
+/// ask's nonce, and whether it is one of this person's own computers.
+type Asked = (String, [u8; 16], bool);
+
 /// A computer this phone visits, asking to open the phone's folder there
 /// (decision 0060, step 5).
 #[derive(Debug, Clone, uniffi::Record)]
@@ -663,6 +666,10 @@ pub struct OpenAsk {
     pub fingerprint: String,
     /// The computer's name.
     pub name: String,
+    /// One of this person's own computers, asking for the owner's folder
+    /// (decision 0067), which it keeps unsealed; else a computer this phone
+    /// visits, which keeps its folder sealed.
+    pub own: bool,
 }
 
 /// The app's way to open a document again later (decision 0060). A file sent
@@ -1794,7 +1801,13 @@ impl Qurb {
         self.open_asks
             .lock()
             .map(|asks| {
-                asks.iter().map(|(fingerprint, (name, _))| OpenAsk { fingerprint: fingerprint.clone(), name: name.clone() }).collect()
+                asks.iter()
+                    .map(|(fingerprint, (name, _, own))| OpenAsk {
+                        fingerprint: fingerprint.clone(),
+                        name: name.clone(),
+                        own: *own,
+                    })
+                    .collect()
             })
             .unwrap_or_default()
     }
@@ -1804,7 +1817,7 @@ impl Qurb {
     /// memory while the folder is open.
     pub fn approve_open(&self, fingerprint: String) -> Result<(), QurbError> {
         let ask = self.open_asks.lock().ok().and_then(|mut asks| asks.remove(&fingerprint));
-        let Some((_, nonce)) = ask else {
+        let Some((_, nonce, _)) = ask else {
             return Err(QurbError::NotFound { detail: "that computer is not asking any more".into() });
         };
         if let Ok(mut settled) = self.settled.lock() {
@@ -1825,7 +1838,7 @@ impl Qurb {
     /// The person said no: nothing is sent, and the computer's ask lapses.
     pub fn decline_open(&self, fingerprint: String) {
         let ask = self.open_asks.lock().ok().and_then(|mut asks| asks.remove(&fingerprint));
-        if let (Some((_, nonce)), Ok(mut settled)) = (ask, self.settled.lock()) {
+        if let (Some((_, nonce, _)), Ok(mut settled)) = (ask, self.settled.lock()) {
             settled.insert(fingerprint, nonce);
         }
     }
@@ -2742,16 +2755,28 @@ impl Qurb {
             // A computer of another person keeping this phone's vault, sealed:
             // what it keeps that this phone does not know of -- a phone set up
             // again -- and what was opened and is wanted back (decision 0060).
-            if known.relation == qurb_storage::db::Relation::Host {
+            let host = known.relation == qurb_storage::db::Relation::Host;
+            if host {
                 runtime.block_on(qurb_peer::learn_kept(client, engine.store_mut(), &known.device_id, &tree));
                 runtime.block_on(qurb_peer::fetch_kept(client, engine.store_mut(), &known.device_id, &tree));
-                // Asked to open this phone's folder there (step 5): answered
-                // if the person approved, and the ask noted for the app.
+            }
+            // Asked to open this phone's folder there (0060's step 5): answered
+            // if the person approved, and the ask noted for the app. A
+            // computer of this person's that keeps its vault asks too, for the
+            // owner's folder (decision 0067), and is sent no key: it holds
+            // the same one, so the yes is all it needs.
+            let keeper = known.relation == qurb_storage::db::Relation::Own
+                && engine.store().db().is_holder(&known.device_id).unwrap_or(false);
+            if host || keeper {
                 let fingerprint = hex(&known.fingerprint);
                 let approved = self.approved.lock().ok().and_then(|mut a| a.remove(&fingerprint));
                 if let Some(nonce) = approved {
-                    let key = qurb_storage::sealed::FolderKey::for_host(&engine.store().chunk_key(), &known.device_id);
-                    match runtime.block_on(client.unlock(nonce, key.to_bytes())) {
+                    let key = match host {
+                        true => qurb_storage::sealed::FolderKey::for_host(&engine.store().chunk_key(), &known.device_id)
+                            .to_bytes(),
+                        false => [0; 32],
+                    };
+                    match runtime.block_on(client.unlock(nonce, key)) {
                         Ok(opened) => {
                             tracing::info!(opened, "answered an ask to open this phone's folder");
                             if let Ok(mut answers) = self.open_answers.lock() {
@@ -2779,7 +2804,7 @@ impl Qurb {
                 if let Ok(mut asks) = self.open_asks.lock() {
                     match asked {
                         Some(nonce) if approved != Some(nonce) && answered != Some(nonce) => {
-                            asks.insert(fingerprint, (known.name.clone(), nonce));
+                            asks.insert(fingerprint, (known.name.clone(), nonce, keeper));
                         }
                         _ => {
                             asks.remove(&fingerprint);

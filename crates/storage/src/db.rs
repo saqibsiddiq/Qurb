@@ -3873,6 +3873,20 @@ impl Db {
         )?)
     }
 
+    /// Every file this device keeps for `owner`, live: path, size, and when it
+    /// last changed (decision 0067, a person's folder).
+    pub fn held_files(&self, owner: &DeviceId) -> Result<Vec<(String, u64, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size, mtime_ns FROM files
+              WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL
+              ORDER BY path",
+        )?;
+        let rows = stmt.query_map(params![owner.as_bytes().as_slice()], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)?))
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
     /// Files this device keeps for `owner` beneath `prefix`, live: name from
     /// the prefix, size, and when it last changed (decision 0063).
     pub fn held_under(&self, owner: &DeviceId, prefix: &str) -> Result<Vec<(String, u64, i64)>> {

@@ -469,6 +469,40 @@ async fn a_guests_folder_opens_at_the_computer_only_with_its_key() {
     assert!(qurb_peer::openings::key(&person).is_none(), "the key outlived the lock");
 }
 
+/// The owner's folder (decision 0067): asked for at the computer, and
+/// opened by a yes from one of the owner's own phones, which sends no key --
+/// the computer holds the same one. A guest's yes does not open it, and the
+/// owner's phone is not asked about a guest's folder.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_owners_folder_opens_with_a_yes_from_the_owners_phone() {
+    let host = Device::new(42);
+    let phone = Device::new(42);
+    let guest = Device::new(7);
+    host.engine.store().db().trust_peer(&phone.id(), phone.identity.fingerprint().as_bytes(), "S23").unwrap();
+    welcome(&host, &guest).await;
+
+    let owner = host.id();
+    assert!(!qurb_peer::openings::is_open(&owner));
+    qurb_peer::openings::ask(&owner);
+    let addr = host.serve(&[phone.identity.fingerprint(), guest.identity.fingerprint()]);
+
+    // The guest is not asked about the owner's folder, and cannot open it.
+    let theirs = PeerClient::connect(addr, &guest.identity, host.identity.fingerprint()).await.unwrap();
+    assert_eq!(theirs.asks().await.unwrap(), None, "a guest was asked about the owner's folder");
+    theirs.close();
+
+    let mine = PeerClient::connect(addr, &phone.identity, host.identity.fingerprint()).await.unwrap();
+    let nonce = mine.asks().await.unwrap().expect("the ask did not reach the owner's phone");
+    assert!(!mine.unlock([9; 16], [0; 32]).await.unwrap(), "opened without the ask's nonce");
+    assert!(!qurb_peer::openings::is_open(&owner));
+    assert!(mine.unlock(nonce, [0; 32]).await.unwrap(), "the owner's yes did not open it");
+    mine.close();
+    assert!(qurb_peer::openings::is_open(&owner));
+
+    qurb_peer::openings::lock(&owner);
+    assert!(!qurb_peer::openings::is_open(&owner), "still open after locking");
+}
+
 /// Decision 0061: a guest and the computer it visits, reaching each other
 /// through the relay by their meeting's names -- the way a computer reaches a
 /// guest's phone that it cannot dial, behind a carrier's NAT. Both ways, each

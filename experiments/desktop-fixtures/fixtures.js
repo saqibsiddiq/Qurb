@@ -10,6 +10,17 @@
 // almost boring.
 
 const now = Math.floor(Date.now() / 1000);
+
+/** The owner's folder: asked for when, and whether it opened (decision 0067). */
+let personAskedAt = 0;
+let personOpen = new URLSearchParams(location.search).has("open");
+function personState() {
+  if (personOpen) return "open";
+  if (!personAskedAt) return "locked";
+  if (Date.now() - personAskedAt < 4000) return "asking";
+  personOpen = true;
+  return "open";
+}
 const params = new URLSearchParams(location.search);
 const STATE = params.get("state") ?? "synced";
 const QUIET = params.has("quiet") || STATE === "synced";
@@ -346,6 +357,37 @@ const ANSWERS = {
       { id: 1, at: now - 900100, kind: "deleted", path: "Old/scratch.txt", size: null, device: null, detail: null },
     ];
   },
+
+  // A folder for each person (decision 0067). The owner's opens a few
+  // seconds after it is asked for, as if the phone said yes; `?open` starts
+  // it open.
+  people: () => [
+    { id: "owner", name: "Saqib", relation: "owner", state: personState(), sealed: false, files: 41_210,
+      size: "14100000000", devices: ["Galaxy S23", "Galaxy S23, earlier"] },
+    { id: "c0ffee12".repeat(8), name: "Ammi's phone", relation: "guest", state: "locked", sealed: true, files: 12,
+      size: "12582912", devices: ["Ammi's phone"] },
+  ],
+  person_folder: ({ person, dir }) => {
+    const state = person === "owner" ? personState() : "locked";
+    if (state !== "open") return { state, folders: [], files: [] };
+    const tree = {
+      "": { folders: ["Galaxy S23", "Galaxy S23, earlier"], files: [] },
+      "Galaxy S23": { folders: ["DCIM", "Documents", "Private Vault", "WhatsApp"], files: [] },
+      "Galaxy S23/DCIM": { folders: ["Camera", "Screenshots"], files: [] },
+      "Galaxy S23/WhatsApp": { folders: ["Databases", "Media"], files: [] },
+      "Galaxy S23/Documents": { folders: [], files: [
+        { name: "Lease 2026.pdf", path: ".qurb-outside/storage/Documents/Lease 2026.pdf", device: "a1b2c3d4", size: "2400000", modified_at: now - 86400 * 3 },
+        { name: "Passport.jpg", path: ".qurb-outside/storage/Documents/Passport.jpg", device: "a1b2c3d4", size: "1800000", modified_at: now - 86400 * 40 },
+      ] },
+    };
+    const at = tree[dir] ?? { folders: [], files: Array.from({ length: 6 }, (_, i) => ({
+      name: `IMG_2026${String(i).padStart(4, "0")}.jpg`, path: `x/${i}`, device: "a1b2c3d4", size: String(2_400_000 + i * 1000), modified_at: now - i * 3600,
+    })) };
+    return { state, ...at };
+  },
+  ask_person_folder: () => { personAskedAt = Date.now(); return null; },
+  lock_person_folder: () => { personAskedAt = 0; personOpen = false; return null; },
+  open_person_file: () => null,
 
   // Home's Waiting: files made here that no other device has yet.
   not_elsewhere: () => QUIET ? { first: [], files: 0, size: "0" } : {

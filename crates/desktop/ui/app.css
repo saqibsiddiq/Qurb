@@ -983,6 +983,12 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 .folder:hover { background: linear-gradient(180deg, var(--green-faint), rgba(var(--green-soft-ch), 0.95)); transform: translateY(-1px); }
 .folder svg.i { color: var(--green); }
 .folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Files' top (decision 0067): Shared and each person, a line under each. */
+.folder.area { height: 60px; }
+.folder.area .area-words { display: flex; flex-direction: column; gap: 1px; min-width: 0; line-height: 19px; }
+.folder.area small { color: var(--text-3); font-size: 12px; line-height: 16px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-bar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: 10px var(--s3) 10px var(--s4); border-radius: var(--r-m); background: rgba(var(--green-softer-ch), 0.7); border: 1px solid rgba(var(--green-ch), 0.12); }
+.locked-folder .note { max-width: 420px; margin-top: var(--s3); }
 
 .list-label { margin: var(--s4) 0 var(--s2); color: var(--text-3); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 

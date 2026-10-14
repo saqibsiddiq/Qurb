@@ -150,6 +150,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // connection: say so, with the way to carry on.
             // What is worth telling the person, now nobody is looking.
             Notices.tell(applicationContext, engine)
+            Notices.asked(applicationContext, engine)
 
             if (long || elsewhere || forOthers < LONG_PASS_BYTES) {
                 Transfers.clearPaused(applicationContext)

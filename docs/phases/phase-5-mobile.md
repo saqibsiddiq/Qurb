@@ -2283,6 +2283,18 @@ His answers to the questions they raised are with them.
    2 and 3.
 5. **The phone's Files reaches the person's folder on the desktop** while the
    desktop is online, to restore or download from it.
+
+   Items 2 to 5 are one design,
+   [0067](../decisions/0067-a-folder-for-each-person.md), in four steps.
+   **Step 1 built 2026-10-14** (items 2 and 4 inside Qurb): Files' top is
+   *Shared* and a folder for each person, the owner's included, each opened
+   only with a yes from that person's phone behind its screen lock; open,
+   the owner's lists each phone's WhatsApp, backed-up folders and Private
+   Vault, a file opened decrypted into memory-backed space. The owner's
+   folder is not sealed, since the laptop holds the same key, and the window
+   says so. Not yet seen between the S23 and the laptop. Steps 2 (`~/qurb`
+   laid out by person), 3 (sending to Downloads or one's folder) and 4 (the
+   phone reaching its folder) are next.
 6. **The S23 is listed twice in the laptop's Devices**: its identity from
    before it was set up again, and its new one. **Built 2026-10-14**: a
    device of the same person with the same name and kind, paired after an

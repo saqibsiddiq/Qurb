@@ -344,6 +344,9 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val engine = Engine.open(this@MainActivity)
+                // Asked in the background, and the person came in to answer
+                // (Notices.asked): the question, at once.
+                engine.openAsks().firstOrNull()?.let { askToOpen(engine, it) }
                 val found = withContext(Dispatchers.IO) { engine.scan() }
                 if (found.stored > 0u || found.deleted > 0u) current?.refresh()
                 Engine.keepKeyOnce(this@MainActivity)
@@ -693,8 +696,12 @@ class MainActivity : AppCompatActivity() {
         kit.sheet()
             .header(R.drawable.ic_lock_keyhole, "Open your folder on ${ask.name}?",
                 "${ask.name} is asking")
-            .text("Your folder is kept on ${ask.name} sealed: it can't open it. Approve, and it can — " +
-                "for whoever is at that computer, until it's locked there, or ten minutes unused.\n\n" +
+            // The owner's own computer keeps the folder unsealed, and says
+            // so; a computer this phone visits keeps it sealed (0067, 0060).
+            .text((if (ask.own) "${ask.name} keeps your backups, your WhatsApp and your Private Vault, and " +
+                "shows them only after you say yes here. Approve, and it can"
+                else "Your folder is kept on ${ask.name} sealed: it can't open it. Approve, and it can") +
+                " — for whoever is at that computer, until it's locked there, or ten minutes unused.\n\n" +
                 "Only approve if you're there and asked for it.")
             .buttons("Open it there", secondary = "Not now", onSecondary = {
                 decided = true

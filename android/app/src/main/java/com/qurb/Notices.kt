@@ -89,6 +89,38 @@ object Notices {
         }
     }
 
+    /**
+     * A computer asking to open this person's folder there (decisions 0060
+     * and 0067), heard in the background: the person is at that computer and
+     * waiting, so it is worth interrupting for. Tapped, the app opens and asks
+     * the question behind the screen lock; nothing is approved from here.
+     */
+    fun asked(context: Context, engine: Qurb) {
+        if (onScreen || !permitted(context)) return
+        val ask = runCatching { engine.openAsks() }.getOrNull()?.firstOrNull() ?: return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Once an ask: a phone syncing every quarter of an hour would
+        // otherwise say it again each time.
+        if (prefs.getString(ASKED, null) == ask.fingerprint + ask.name) return
+        prefs.edit().putString(ASKED, ask.fingerprint + ask.name).apply()
+        channel(context)
+        val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.ic_lock_keyhole)
+            .setColor(ContextCompat.getColor(context, R.color.green))
+            .setContentTitle("${ask.name} asks to open your folder")
+            .setContentText("Open Qurb to answer. Only approve if you're there and asked for it.")
+            .setAutoCancel(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context, ASKED_ID,
+                    Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            )
+            .build()
+        NotificationManagerCompat.from(context).notify(ASKED_ID, notification)
+    }
+
     /** The title and words for an entry worth a notification, or null. */
     fun say(h: Happening): Pair<String, String>? {
         val what = h.path?.substringAfterLast('/') ?: ""
@@ -117,4 +149,7 @@ object Notices {
 
     /** Clear of the Transfers notifications' ids. */
     private const val NEWS_BASE = 10_000
+    /** The one notification for an ask to open the folder. */
+    private const val ASKED_ID = 9_000
+    private const val ASKED = "asked"
 }

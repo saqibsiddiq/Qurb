@@ -15,13 +15,22 @@ const wanted = new Set();
 /**
  * One file browser: the shared area (Files) or this computer's own vault
  * (Private Vault). Same query, same rows; only the area differs.
+ *
+ * Files has a level above the shared folder (decision 0067): *Shared*, and a
+ * folder for each person this computer keeps files for. `area` is null
+ * there, "shared" in the shared folder, or a person's id in theirs; `dir`
+ * is the place inside it.
  */
 function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
-  const b = { dir: "", searching: "" };
+  const b = { dir: "", searching: "", area: isPrivate ? "shared" : null };
+  /** The people, as last listed: their names, for the crumbs. */
+  let people = [];
 
   b.draw = async () => {
     const out = $(list);
     try {
+      if (!b.searching && b.area === null) return await drawTop();
+      if (!b.searching && b.area !== "shared") return await drawPerson();
       if (b.searching) {
         const found = await invoke("find", { text: b.searching, private: isPrivate });
         $(crumbs).replaceChildren(el("span", "quiet", `${count(found.length, "result")} for “${b.searching}”`));
@@ -60,8 +69,19 @@ function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
     const parts = b.dir ? b.dir.split("/") : [];
     const go = (dir) => { b.dir = dir; closePanel(); b.draw(); };
     const root = el("button", null, rootName);
-    root.addEventListener("click", () => go(""));
+    root.addEventListener("click", () => {
+      if (!isPrivate) b.area = null;
+      go("");
+    });
     nav.append(root);
+    // The area, between the top and the place in it.
+    if (!isPrivate && b.area !== null) {
+      nav.append(icon("chevron-right"));
+      const named = b.area === "shared" ? "Shared" : (people.find((p) => p.id === b.area)?.name ?? "Folder");
+      const crumb = el("button", null, named);
+      crumb.addEventListener("click", () => go(""));
+      nav.append(crumb);
+    }
     parts.forEach((part, i) => {
       nav.append(icon("chevron-right"));
       const crumb = el("button", null, part);
@@ -85,6 +105,137 @@ function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
     }
     return tile;
   }
+
+  /** Files' top: *Shared*, then a folder for each person, locked or open. */
+  async function drawTop() {
+    drawCrumbs();
+    try { people = await invoke("people"); } catch (e) { people = []; }
+    const box = $(folders);
+    box.replaceChildren(el("div", "list-label", "Folders"));
+    const tile = (name, iconName, meta, open) => {
+      const t = el("button", "folder area");
+      const words = el("div", "area-words");
+      words.append(el("span", null, name), el("small", null, meta));
+      t.append(icon(iconName), words);
+      t.addEventListener("click", open);
+      box.append(t);
+    };
+    tile("Shared", "folder", "On all your devices", () => { b.area = "shared"; b.dir = ""; b.draw(); });
+    for (const p of people) {
+      const phones = p.relation === "owner" && p.devices.length ? count(p.devices.length, "phone") : null;
+      tile(p.name, p.state === "open" ? "folder-open" : "lock-keyhole",
+        [phones, Number(p.size) > 0 ? size(p.size) : null, p.state === "open" ? "Open" : "Locked"].filter(Boolean).join(" · "),
+        () => { b.area = p.id; b.dir = ""; closePanel(); b.draw(); });
+    }
+    $(list).replaceChildren();
+    drawDeletedLink();
+  }
+
+  /** While a person's folder is being asked for: looked at again until it
+   *  opens, or until somebody goes elsewhere. */
+  let asking = null;
+
+  /** A person's folder: locked, asking their phone, or open (decision 0067). */
+  async function drawPerson() {
+    const person = b.area;
+    if (!people.some((p) => p.id === person)) {
+      try { people = await invoke("people"); } catch (e) { /* named Folder */ }
+    }
+    const p = people.find((x) => x.id === person) ?? { id: person, name: "Folder", relation: "guest", devices: [] };
+    drawCrumbs();
+    const answer = await invoke("person_folder", { person, dir: b.dir });
+    if (b.area !== person) return;
+    const box = $(folders);
+    const out = $(list);
+    box.replaceChildren();
+    out.replaceChildren();
+    $("deleted-link").replaceChildren();
+    clearInterval(asking);
+    asking = null;
+
+    if (answer.state !== "open") {
+      out.append(lockedFolder(p, answer.state));
+      if (answer.state === "asking") {
+        asking = setInterval(() => {
+          if (b.area !== person || screen !== "files") { clearInterval(asking); asking = null; return; }
+          b.draw();
+        }, 1500);
+      }
+      return;
+    }
+
+    // Open: how long for, and a way to lock it now.
+    const bar = el("div", "person-bar");
+    const said = el("p", "meta", "Open on this computer. It locks itself after ten minutes unused.");
+    const lock = button("Lock", "btn small", "lock-keyhole");
+    lock.addEventListener("click", async () => {
+      try { await invoke("lock_person_folder", { person }); } catch (e) { toast(String(e), true); }
+      b.dir = "";
+      b.draw();
+    });
+    bar.append(said, lock);
+    box.append(bar);
+    if (answer.folders.length > 0) box.append(el("div", "list-label", b.dir ? "Folders" : (p.relation === "owner" ? "Phones" : "Folders")));
+    for (const name of answer.folders) {
+      const t = el("button", "folder");
+      t.append(icon(!b.dir && p.relation === "owner" ? "smartphone" : "folder"), el("span", null, name));
+      t.addEventListener("click", () => { b.dir = b.dir ? `${b.dir}/${name}` : name; closePanel(); b.draw(); });
+      box.append(t);
+    }
+    if (answer.files.length > 0) out.append(el("div", "list-label", "Files"));
+    for (const f of answer.files.slice(0, 1000)) {
+      out.append(row({
+        iconName: KIND_ICON[kindOf(f.name)],
+        name: f.name,
+        sub: [size(f.size), when(f.modified_at)],
+        onClick: async () => {
+          try {
+            await invoke("open_person_file", { person, device: f.device, path: f.path });
+          } catch (e) {
+            toast(String(e), true);
+          }
+        },
+      }));
+    }
+    if (answer.files.length > 1000) out.append(el("p", "note", `The first 1,000 of ${count(answer.files.length, "file")}.`));
+    if (answer.files.length === 0 && answer.folders.length === 0) {
+      out.append(empty("folder-open", b.dir ? "This folder is empty." : "Nothing is kept here yet."));
+    }
+  }
+
+  /** A person's folder before their phone says yes. */
+  function lockedFolder(p, state) {
+    const own = p.relation === "owner";
+    const box = el("div", "empty locked-folder");
+    const orb = el("span", "orb");
+    orb.append(icon(state === "asking" ? "smartphone" : "lock-keyhole"));
+    box.append(orb);
+    if (state === "asking") {
+      box.append(el("p", null, own
+        ? "Waiting for your phone. Open Qurb on it and approve: it asks as soon as it next syncs with this computer."
+        : `Waiting for ${p.name}. They approve on their phone, which asks when it next syncs with this computer.`));
+      return box;
+    }
+    box.append(el("p", null, own
+      ? "Your folder opens with a yes on your phone: its backups, its WhatsApp and its Private Vault, as this computer keeps them."
+      : `${p.name}'s folder is sealed. It opens only when they approve on their phone.`));
+    const ask = button(own ? "Ask your phone" : `Ask ${p.name}`, "btn primary", "smartphone");
+    ask.addEventListener("click", async () => {
+      ask.disabled = true;
+      try {
+        await invoke("ask_person_folder", { person: p.id });
+      } catch (e) {
+        toast(String(e), true);
+      }
+      b.draw();
+    });
+    box.append(ask);
+    // Said where it matters (decision 0067): the owner's is Qurb's rule.
+    if (own) box.append(el("p", "note", "This computer holds the same key as your phone, so this is Qurb's rule rather than a lock on the files themselves."));
+    return box;
+  }
+
+  b.openPerson = (person, dir = "") => { b.area = person; b.dir = dir; b.searching = ""; b.draw(); };
 
   // Debounced, because every keystroke is a query and a list that redraws
   // under the cursor while somebody is still typing is worse than one that
@@ -461,7 +612,7 @@ async function drawDeletedLink() {
     box.replaceChildren();
     // At the top of Files only, as on the phone: not inside a folder, and
     // not among a search's results.
-    if (filesBrowser.dir || filesBrowser.searching) return;
+    if (filesBrowser.dir || filesBrowser.searching || (filesBrowser.area !== null && filesBrowser.area !== "shared")) return;
     const li = row({
       iconName: "trash-2",
       name: "Recently deleted",
@@ -478,7 +629,7 @@ async function drawDeletedLink() {
 
 $("files-more").addEventListener("click", () => {
   const items = [["Recently deleted", "trash-2", () => showScreen("deleted")]];
-  const top = filesBrowser.dir.split("/")[0];
+  const top = filesBrowser.area === "shared" ? filesBrowser.dir.split("/")[0] : "";
   if (top) items.push(["Options for “" + top + "”", "settings", () => openFolderOptions(top)]);
   items.push(["Show the Qurb folder", "folder-search", () => invoke("show_root").catch((e) => toast(String(e), true))]);
   menu($("files-more"), items);
