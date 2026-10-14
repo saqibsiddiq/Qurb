@@ -81,7 +81,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (mut b, b_identity) = open(&b_root, &b_key)?;
     b.reconcile()?;
 
-    let served = Store::open(&a_root.join(".qurb"), chunk_key(&a_key))?;
+    // In its folder, as the daemon opens it: the folder holds A's bytes
+    // (decision 0024), and a store not told where it is has none to serve.
+    // Without this the run reported every file adopted while B could fetch
+    // none, and listed them all as elsewhere (found 2026-10-14).
+    let served = Store::open(&a_root.join(".qurb"), chunk_key(&a_key))?.in_tree(&a_root);
     let server = PeerServer::bind(
         "127.0.0.1:0".parse()?,
         &a_identity,
@@ -164,7 +168,7 @@ async fn pull(
     let plan = local.plan_against(&tree)?;
     let planned = plan.len();
 
-    let reader = Store::open(&local.root().join(".qurb"), chunk_key(key))?;
+    let reader = Store::open(&local.root().join(".qurb"), chunk_key(key))?.in_tree(local.root());
     let t = Instant::now();
     let stats = {
         let mut source = NetworkSource::new(&client, &reader);
