@@ -77,6 +77,9 @@ fn start_hostile(
                         // never asked for in a sync, and lists are bounded on
                         // the wire.
                         (_, Request::Folders | Request::Chosen) => Some(Response::NotFound.encode()),
+                        // As a device from before streamed lists answers one:
+                        // not as a stream, so the asker falls back to `Tree`.
+                        (_, Request::TreeStream) => Some(Response::NotFound.encode()),
                         // Being told a peer holds something asks nothing of us
                         // and gives a hostile peer nothing to work with: the
                         // report is credited to the connection's certificate,

@@ -141,6 +141,15 @@ Next, in this order: the file list in pages, so a large library syncs at
 all; then only what changed since the last exchange; then the re-index's
 growth.
 
+**The file list in frames, built the same day.** A new request, `TreeStream`,
+answered with the same list as `Tree`, in frames of about 1 MiB each, the
+whole at most 1 GiB, some seven million files. A device asks it first and,
+from a peer that does not answer it, asks `Tree` as before. Tested: a list
+of 20,000 versions across several frames comes back whole and in order
+(`a_file_list_streams_in_frames`), and against a peer answering the old way
+the fallback is taken (the hostile-peer tests). A million files' sync is
+being measured again with it.
+
 ## Reversing it
 
 Targets are cheap to change. Of the work, step 3 changes the protocol and

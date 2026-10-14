@@ -1007,6 +1007,7 @@ for the workspace as it stands.
 | The relay carries meetings | one relay connection, several names: a device's own and one per meeting with another person's device, so a computer reaches a guest it cannot dial — [0061](decisions/0061-the-relay-carries-meetings.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
+| The file list in frames | `TreeStream`: the same list as `Tree`, sent as length-prefixed frames of about 1 MiB, at most 1 GiB in all, so a library too large for one 64 MiB message still syncs; asked first, `Tree` when a peer does not answer it — [0065](decisions/0065-the-scale-qurb-is-built-for.md) |
 | Requests answered in parallel | the index is asked under the store's lock, the bytes read after it is let go (`Store::locate`, `ChunkReader`), so requests made at once are read at once — [0064](decisions/0064-many-small-files-quickly.md) |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |

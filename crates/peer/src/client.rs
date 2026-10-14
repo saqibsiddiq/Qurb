@@ -145,10 +145,44 @@ impl PeerClient {
     }
 
     /// Everything the peer knows about, tombstones included.
+    /// Everything the peer shows this device, in frames (decision 0065): one
+    /// message is capped, and a million files' list did not fit in it, so a
+    /// library that size could not sync. A peer from before frames does not
+    /// answer the request, and is asked the old way.
     pub async fn tree(&self) -> Result<Vec<FileVersion>> {
-        match self.request(Request::Tree).await? {
-            Response::Tree(versions) => Ok(versions),
-            other => Err(unexpected("tree", &other)),
+        match self.tree_stream().await {
+            Ok(versions) => Ok(versions),
+            Err(e) => {
+                tracing::debug!(error = %e, "no streamed file list; asking for it whole");
+                match self.request(Request::Tree).await? {
+                    Response::Tree(versions) => Ok(versions),
+                    other => Err(unexpected("tree", &other)),
+                }
+            }
+        }
+    }
+
+    async fn tree_stream(&self) -> Result<Vec<FileVersion>> {
+        use crate::wire::{decode_tree_frame, MAX_TREE, MAX_TREE_FRAME};
+        let (mut send, mut recv) = self.connection.open_bi().await?;
+        send.write_all(&Request::TreeStream.encode()).await?;
+        send.finish()?;
+        let mut versions = Vec::new();
+        let mut total = 0usize;
+        loop {
+            let mut length = [0u8; 4];
+            recv.read_exact(&mut length).await?;
+            let length = u32::from_le_bytes(length) as usize;
+            if length == 0 {
+                return Ok(versions);
+            }
+            total += length;
+            if length > MAX_TREE_FRAME || total > MAX_TREE {
+                return Err(Error::Protocol { detail: format!("a file list frame of {length} bytes, {total} in all") });
+            }
+            let mut frame = vec![0u8; length];
+            recv.read_exact(&mut frame).await?;
+            versions.extend(decode_tree_frame(&frame)?);
         }
     }
 

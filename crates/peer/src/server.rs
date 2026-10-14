@@ -383,8 +383,16 @@ async fn serve_request(
         | Response::Chosen(_) => 0,
     };
 
-    let encoded = response.encode();
-    send.write_all(&encoded).await?;
+    match (&request, &response) {
+        // In frames, so that a list larger than one message still goes
+        // (decision 0065).
+        (Request::TreeStream, Response::Tree(tree)) => {
+            for frame in crate::wire::tree_frames(tree) {
+                send.write_all(&frame).await?;
+            }
+        }
+        _ => send.write_all(&response.encode()).await?,
+    }
     send.finish()?;
     Ok(())
 }
@@ -434,7 +442,8 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
     };
 
     Ok(Answer::Now(match request {
-        Request::Tree => {
+        // The same list either way; a stream is only how it is sent.
+        Request::Tree | Request::TreeStream => {
             let mut tree = store.tree_for(audience)?;
             if let (true, Some(holder)) = (keeps_mine, &owner) {
                 store.prepare_sealed(holder, SEALING_BUDGET)?;

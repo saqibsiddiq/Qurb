@@ -125,6 +125,13 @@ pub enum Request {
     /// answered with [`Response::Chosen`]. The phone asks; nothing is pushed
     /// at it.
     Chosen,
+
+    /// The same as [`Request::Tree`], answered in frames rather than one
+    /// message (decision 0065): each a length, then a count and that many
+    /// versions, ending with an empty frame. One message is capped at
+    /// [`MAX_MESSAGE`], and a million files' list is larger than that, so a
+    /// library that size could not sync at all.
+    TreeStream,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,6 +198,16 @@ const TAG_ASKS: u8 = 10;
 const TAG_UNLOCK: u8 = 11;
 const TAG_FOLDERS: u8 = 12;
 const TAG_CHOSEN: u8 = 13;
+const TAG_TREE_STREAM: u8 = 14;
+
+/// How large a frame of a streamed file list is made: small enough that the
+/// receiver holds little of it at a time.
+pub const TREE_FRAME_TARGET: usize = 1 << 20;
+/// The largest frame accepted.
+pub const MAX_TREE_FRAME: usize = 4 << 20;
+/// The most a streamed file list may come to: some seven million files. A
+/// peer sending more is not describing a library.
+pub const MAX_TREE: usize = 1 << 30;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
@@ -264,6 +281,7 @@ impl Request {
             Request::About => out.push(TAG_ABOUT),
             Request::Folders => out.push(TAG_FOLDERS),
             Request::Chosen => out.push(TAG_CHOSEN),
+            Request::TreeStream => out.push(TAG_TREE_STREAM),
         }
         out
     }
@@ -295,6 +313,7 @@ impl Request {
             TAG_ABOUT => Request::About,
             TAG_FOLDERS => Request::Folders,
             TAG_CHOSEN => Request::Chosen,
+            TAG_TREE_STREAM => Request::TreeStream,
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -487,6 +506,46 @@ impl Response {
     }
 }
 
+/// A file list as frames for [`Request::TreeStream`]: each its length, then a
+/// count and the versions, about [`TREE_FRAME_TARGET`] at a time, and an empty
+/// frame to end.
+pub fn tree_frames(versions: &[FileVersion]) -> Vec<Vec<u8>> {
+    let mut frames = Vec::new();
+    let mut body = Vec::new();
+    let mut count = 0usize;
+    let flush = |frames: &mut Vec<Vec<u8>>, body: &mut Vec<u8>, count: &mut usize| {
+        let mut frame = Vec::with_capacity(body.len() + 8);
+        put_u32(&mut frame, body.len() + 4);
+        put_u32(&mut frame, *count);
+        frame.append(body);
+        frames.push(frame);
+        *count = 0;
+    };
+    for v in versions {
+        encode_version(&mut body, v);
+        count += 1;
+        if body.len() >= TREE_FRAME_TARGET {
+            flush(&mut frames, &mut body, &mut count);
+        }
+    }
+    if count > 0 {
+        flush(&mut frames, &mut body, &mut count);
+    }
+    frames.push(0u32.to_le_bytes().to_vec());
+    frames
+}
+
+/// One frame's versions, its length already read.
+pub fn decode_tree_frame(bytes: &[u8]) -> Result<Vec<FileVersion>> {
+    let mut r = Reader::new(bytes);
+    let count = r.count()?;
+    let mut versions = Vec::with_capacity(count.min(4096));
+    for _ in 0..count {
+        versions.push(decode_version(&mut r)?);
+    }
+    Ok(versions)
+}
+
 fn encode_version(out: &mut Vec<u8>, v: &FileVersion) {
     let path = v.path.as_bytes();
     put_u32(out, path.len());
@@ -658,6 +717,25 @@ mod tests {
         FileVersion::file(path, [3; 32], 1234, vector, DeviceId::from_bytes([9; 32]), 1_757_462_400)
     }
 
+    /// A file list too large for one frame arrives whole and in order, in
+    /// frames no larger than the cap, the last one empty (decision 0065).
+    #[test]
+    fn a_file_list_streams_in_frames() {
+        let versions: Vec<FileVersion> = (0..20_000).map(|i| version(&format!("dir{}/file{i:06}.bin", i % 7))).collect();
+        let frames = tree_frames(&versions);
+        assert!(frames.len() > 2, "{} frames for 20,000 versions", frames.len());
+        assert_eq!(frames.last().unwrap(), &vec![0, 0, 0, 0], "ends with an empty frame");
+        let mut back = Vec::new();
+        for frame in &frames[..frames.len() - 1] {
+            let length = u32::from_le_bytes(frame[..4].try_into().unwrap()) as usize;
+            assert_eq!(length, frame.len() - 4);
+            assert!(length <= MAX_TREE_FRAME, "a frame of {length} bytes");
+            back.extend(decode_tree_frame(&frame[4..]).unwrap());
+        }
+        assert_eq!(back, versions);
+        assert_eq!(tree_frames(&[]), vec![vec![0, 0, 0, 0]], "nothing is one empty frame");
+    }
+
     #[test]
     fn requests_round_trip() {
         for r in [
@@ -668,6 +746,7 @@ mod tests {
             Request::About,
             Request::Folders,
             Request::Chosen,
+            Request::TreeStream,
             Request::Pair {
                 token: [5; 16],
                 device_id: [6; 32],

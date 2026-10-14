@@ -80,6 +80,9 @@ pub enum Error {
     #[error("reading the response failed: {0}")]
     ReadToEnd(#[from] quinn::ReadToEndError),
 
+    #[error("reading a part of the response failed: {0}")]
+    ReadExact(#[from] quinn::ReadExactError),
+
     #[error("tls setup failed: {0}")]
     Tls(String),
 
