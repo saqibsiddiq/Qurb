@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home (direction §5): is my Qurb space okay? One state, one action, a line
-     of facts, attention only when something needs a decision. What happened
-     lately is a button away, not on Home (the owner, 2026-10-13). Pulling
-     down syncs. -->
+<!-- Home: is my Qurb space okay? The state; Sync now and Send side by side;
+     a line of facts; attention when something needs a decision; what is still
+     waiting to reach the other devices; and the backups (the owner's items 8
+     and 10, 2026-10-14, which widen direction §5's one action). What happened
+     lately is the clock, a button away. Pulling down syncs. -->
 <androidx.swiperefreshlayout.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/refresh"
@@ -94,43 +95,61 @@
                 android:layout_marginTop="6dp"
                 android:textAppearance="@style/Text.Quiet" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/action"
-                style="@style/Widget.Qurb.Button"
-                android:layout_width="match_parent"
-                android:layout_height="54dp"
-                android:layout_marginTop="28dp"
-                android:text="Send to device"
-                app:icon="@drawable/ic_send"
-                app:iconGravity="textStart" />
-
+            <!-- The two things Home is for (the owner's item 8, 2026-10-14):
+                 bring everything up to date, and send something. Equal, side
+                 by side; with no device yet, one: add a device. -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center_vertical"
+                android:layout_marginTop="28dp"
                 android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/facts"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:textAppearance="@style/Text.Meta" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/sync"
-                    style="@style/Widget.Qurb.Button.Text"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginEnd="-12dp"
+                    style="@style/Widget.Qurb.Button.Secondary"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_marginEnd="12dp"
+                    android:layout_weight="1"
                     android:text="Sync now"
                     app:icon="@drawable/ic_refresh_cw"
-                    app:iconSize="18dp" />
+                    app:iconGravity="textStart" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/action"
+                    style="@style/Widget.Qurb.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="54dp"
+                    android:layout_weight="1"
+                    android:text="Send"
+                    app:icon="@drawable/ic_send"
+                    app:iconGravity="textStart" />
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/facts"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:textAppearance="@style/Text.Meta" />
 
             <LinearLayout
                 android:id="@+id/attention"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <!-- What has not reached the other devices yet (item 8). -->
+            <LinearLayout
+                android:id="@+id/waiting"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <!-- WhatsApp and this phone's folders, kept on the computer
+                 (item 10). -->
+            <LinearLayout
+                android:id="@+id/backups"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />

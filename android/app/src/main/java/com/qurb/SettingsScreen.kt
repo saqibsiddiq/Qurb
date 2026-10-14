@@ -23,6 +23,7 @@ import uniffi.qurb_mobile.Usage
 class SettingsScreen(app: MainActivity) : Screen(app) {
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
+    private val backups = Backups(app) { refresh() }
     override val view: View get() = views.root
     override val tab = R.id.tab_settings
 
@@ -124,11 +125,11 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         group = kit.group(page)
         val keeper = state.keepers.joinToString(" and ") { it.name }.ifEmpty { null }
         val backing = WhatsApp.tree(app) != null
-        kit.item(group, "Back up WhatsApp", whatsAppLine(state.whatsApp, keeper, backing)) {
-            whatsApp(state.whatsApp, keeper, backing)
+        kit.item(group, "Back up WhatsApp", backups.whatsAppLine(state.whatsApp, keeper, backing)) {
+            backups.whatsApp(state.whatsApp, keeper, backing)
         }
-        kit.item(group, "Back up your folders", foldersLine(state.chosen, state.folders, keeper)) {
-            folders(state.chosen, state.folders, keeper)
+        kit.item(group, "Back up your folders", backups.foldersLine(state.chosen.size, state.folders, keeper)) {
+            app.push(FoldersScreen(app, "Settings", R.id.tab_settings))
         }
 
         kit.groupTitle(page, "Privacy")
@@ -366,135 +367,6 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                 refresh()
             }
         }
-    }
-
-    private fun whatsAppLine(backup: BackupState, keeper: String?, backing: Boolean): String = when {
-        !backing -> "Off. Keeps WhatsApp's chats and media on ${keeper ?: "your computer"} " +
-            "instead of in your Google account"
-        backup.files == 0uL -> "Starting: it runs on Wi-Fi"
-        backup.heldFiles == backup.files ->
-            "All ${Words.files(backup.files.toInt())}, ${Words.size(backup.bytes)}, on $keeper"
-        else -> "${backup.heldFiles} of ${Words.files(backup.files.toInt())} on ${keeper ?: "your computer"} so far"
-    }
-
-    /** Setting the backup up, or what it is doing (decision 0062). */
-    private fun whatsApp(backup: BackupState, keeper: String?, backing: Boolean) {
-        if (!backing) {
-            val sheet = kit.sheet().header(R.drawable.ic_hard_drive, "Back up WhatsApp",
-                keeper?.let { "To $it" } ?: "")
-            if (keeper == null) {
-                sheet.text("No computer keeps this phone's Private Vault yet. Choose one in Devices: " +
-                    "the backup goes to it.")
-                    .buttons("Devices") { app.go(R.id.tab_devices) }
-                    .show()
-                return
-            }
-            sheet.text("WhatsApp's chats, photos, videos and documents, kept on $keeper in this phone's " +
-                "Private Vault: out of sight there, and nothing copied on this phone. Photos and videos " +
-                "you delete in WhatsApp stay on $keeper.", R.style.Text_Body)
-                .text("Over Wi-Fi only. The first time is everything WhatsApp keeps; after that, " +
-                    "what changed each night.")
-                // Decision 0062, answer 4: said where it is set up, and again
-                // below, until a restore has been watched working.
-                .text("Restoring WhatsApp from it hasn't been tried yet, so keep WhatsApp's own Google " +
-                    "backup on for now. Turning off Include videos there saves the most space.")
-                .text("Next, Android opens WhatsApp's folder: choose Use this folder, then Allow.")
-                // Short: on the S23's 360 dp, "Choose WhatsApp's folder" broke
-                // over two lines inside the button.
-                .buttons("Choose folder", secondary = "Not now") { app.pickWhatsApp() }
-                .show()
-            return
-        }
-
-        val sheet = kit.sheet().header(R.drawable.ic_hard_drive, "WhatsApp backup",
-            keeper?.let { "On $it" } ?: "No computer keeps it yet")
-        val facts = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        val group = kit.group(facts)
-        kit.item(group, "On ${keeper ?: "a computer"}",
-            if (backup.files == 0uL) "Nothing yet"
-            else "${backup.heldFiles} of ${Words.files(backup.files.toInt())}, " +
-                "${Words.size(backup.heldBytes)} of ${Words.size(backup.bytes)}")
-        if (backup.onlyKept > 0uL) {
-            kit.item(group, "Deleted in WhatsApp", "${Words.files(backup.onlyKept.toInt())}, kept on $keeper")
-        }
-        kit.item(group, "Last run", WhatsApp.lastRun(app)?.let { (at, said) -> "${Words.ago(at)}: $said" }
-            ?: "Not yet. It runs on Wi-Fi.")
-        sheet.view(facts, top = 16)
-            .text("Restoring WhatsApp from it hasn't been tried yet: keep WhatsApp's own Google backup on " +
-                "for now.")
-            .action(R.drawable.ic_refresh_cw, "Back up now", meta = "On Wi-Fi") {
-                WhatsApp.runNow(app)
-                app.say("Backing up WhatsApp on Wi-Fi")
-            }
-            .action(R.drawable.ic_x, "Stop backing up…", danger = true) { stopWhatsApp(keeper) }
-            .show()
-    }
-
-    private fun foldersLine(chosen: List<String>, backup: BackupState, keeper: String?): String = when {
-        !Folders.allowed() -> "Off. Photos, documents, any folder, kept on ${keeper ?: "your computer"}"
-        chosen.isEmpty() -> "Choose which on ${keeper ?: "your computer"}, in Qurb's Devices"
-        backup.files == 0uL -> "${Words.folders(chosen.size)}: starting, on Wi-Fi"
-        backup.heldFiles == backup.files ->
-            "${Words.folders(chosen.size)}, all ${Words.files(backup.files.toInt())}, on $keeper"
-        else -> "${Words.folders(chosen.size)}: ${backup.heldFiles} of ${Words.files(backup.files.toInt())} " +
-            "on ${keeper ?: "your computer"} so far"
-    }
-
-    /** Setting the folders' backup up, or what it is doing (decision 0063). */
-    private fun folders(chosen: List<String>, backup: BackupState, keeper: String?) {
-        if (keeper == null) {
-            kit.sheet().header(R.drawable.ic_hard_drive, "Back up your folders")
-                .text("No computer keeps this phone's Private Vault yet. Choose one in Devices: " +
-                    "the backup goes to it, and you choose the folders there.")
-                .buttons("Devices") { app.go(R.id.tab_devices) }
-                .show()
-            return
-        }
-        if (!Folders.allowed()) {
-            kit.sheet().header(R.drawable.ic_hard_drive, "Back up your folders", "To $keeper")
-                .text("Photos, videos, documents, downloads: any folder of this phone, kept on $keeper in " +
-                    "your Private Vault, with nothing copied here. You choose which folders on $keeper. " +
-                    "Files you delete here stay on $keeper.", R.style.Text_Body)
-                .text("Over Wi-Fi only. The first time is everything in the folders you choose; after that, " +
-                    "what's new.")
-                .text("Next, Android asks to let Qurb read all files on this phone. Qurb only reads " +
-                    "the folders you choose, and lists the rest's names and sizes for $keeper to show.")
-                .buttons("Allow", secondary = "Not now") { app.startActivity(Folders.allowing(app)) }
-                .show()
-            return
-        }
-        val sheet = kit.sheet().header(R.drawable.ic_hard_drive, "Your folders", "On $keeper")
-        val facts = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        val group = kit.group(facts)
-        if (chosen.isEmpty()) {
-            kit.item(group, "None chosen yet", "On $keeper, open Qurb, then Devices and this phone")
-        } else {
-            for (folder in chosen) kit.item(group, folder, "Backed up to $keeper")
-            kit.item(group, "On $keeper",
-                if (backup.files == 0uL) "Nothing yet"
-                else "${backup.heldFiles} of ${Words.files(backup.files.toInt())}, " +
-                    "${Words.size(backup.heldBytes)} of ${Words.size(backup.bytes)}")
-            if (backup.onlyKept > 0uL) {
-                kit.item(group, "Deleted on this phone", "${Words.files(backup.onlyKept.toInt())}, kept on $keeper")
-            }
-        }
-        sheet.view(facts, top = 16)
-            .action(R.drawable.ic_refresh_cw, "Back up now", meta = "On Wi-Fi") {
-                WhatsApp.runNow(app)
-                app.say("Backing up on Wi-Fi")
-            }
-            .text("To stop, untick the folders on $keeper. What it keeps already stays there.")
-            .show()
-    }
-
-    private fun stopWhatsApp(keeper: String?) {
-        kit.sheet().header(R.drawable.ic_hard_drive, "Stop backing up WhatsApp?")
-            .text("Nothing new goes to ${keeper ?: "the computer"}. What it keeps already stays there.")
-            .buttons("Stop", danger = true) {
-                WhatsApp.stop(app)
-                refresh()
-            }
-            .show()
     }
 
     private fun tidy() {
