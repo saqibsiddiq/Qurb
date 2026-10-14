@@ -85,7 +85,7 @@ bug in the design.
 |---|---|---|
 | is everything okay: synced, syncing, offline, needs attention | **Home** | **Home** |
 | conflicts to settle, *only copy here* files | Home, as attention (§14) | Home, as attention |
-| send to a device | Home's primary action; a Send button; dropping files anywhere | Home's *Send*; a file's *Send to…*; the share sheet |
+| send to a device | Home's primary action; a Send button; dropping files anywhere | Home's *Send*: to a computer keeping this phone's folder, *My folder on …* (opens only with the phone's yes) or *…'s Downloads* (opens freely), 0067; a file's *Send to…*; the share sheet, the same two |
 | sync now, and what is still waiting to sync | Home | Home: *Sync now*, and *Waiting* |
 | backups: WhatsApp's, and the phone's folders (0062, 0063) | Home → *Backups*; a phone's panel in Devices: *Choose folders to back up…* | Home and Settings → *Backups*; *Your folders* its own place |
 | transfers in progress and finished; cancelling a send not yet collected | a Transfers panel that appears when active (§21) | a Transfers bar that appears when active, opening a sheet |

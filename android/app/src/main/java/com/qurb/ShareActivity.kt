@@ -82,11 +82,18 @@ class ShareActivity : AppCompatActivity() {
             val keepers = runCatching {
                 withContext(Dispatchers.IO) { Engine.open(this@ShareActivity).holders().map { it.fingerprint }.toSet() }
             }.getOrDefault(emptySet())
-            val host = peers.firstOrNull { it.relation == "host" && it.fingerprint in keepers }
+            // And the same two for one of this person's own computers that
+            // keeps this phone's folder (the owner's item 3, decision 0067):
+            // its folder there opens only with this phone's yes, its
+            // Downloads freely.
+            val keeper = peers.firstOrNull { it.relation == "host" && it.fingerprint in keepers }
+                ?: peers.firstOrNull { it.fingerprint in keepers }
             val choices = listOf(
-                host?.let { "Save to my folder on ${it.name}" } ?: "Save to Private Vault",
+                keeper?.let { "Save to my folder on ${it.name}" } ?: "Save to Private Vault",
                 "Save to Files, on all your devices",
-            ) + peers.map { if (it.relation == "host") "Send to ${it.name}'s Downloads" else "Send to ${it.name}" }
+            ) + peers.map {
+                if (it.relation == "host" || it.fingerprint in keepers) "Send to ${it.name}'s Downloads" else "Send to ${it.name}"
+            }
             MaterialAlertDialogBuilder(this@ShareActivity)
                 .setTitle("Where should $what go?")
                 .setItems(choices.toTypedArray()) { _, which ->

@@ -2295,8 +2295,10 @@ His answers to the questions they raised are with them.
    says so. Not yet seen between the S23 and the laptop. **Step 2 built and
    run on the laptop the same day**: `~/qurb` now holds `Shared`, the synced
    folder moved there with its index, and `Saqib`, a read-only placeholder
-   whose one note says it opens in Qurb. Steps 3 (sending to Downloads or
-   one's folder) and 4 (the phone reaching its folder) are next.
+   whose one note says it opens in Qurb. **Step 3 built the same day**: the
+   phone's *Send* and share sheet offer *My folder on saqib* (opens there
+   only with the phone's yes) or *saqib's Downloads* (opens freely); not yet
+   seen on the S23. Step 4 (the phone reaching its folder) is next.
 6. **The S23 is listed twice in the laptop's Devices**: its identity from
    before it was set up again, and its new one. **Built 2026-10-14**: a
    device of the same person with the same name and kind, paired after an

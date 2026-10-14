@@ -280,9 +280,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
     }
 
     /** Send to device: which files, then which device. */
-    private fun sendSomething() {
-        app.chooseDevice("Send to") { peer -> app.pickFilesToSend(peer) }
-    }
+    private fun sendSomething() = app.chooseWhereToSend()
 
     /** Two versions of a file (§14): attention, and a review. */
     private fun showConflicts(conflicts: List<ConflictInfo>) {

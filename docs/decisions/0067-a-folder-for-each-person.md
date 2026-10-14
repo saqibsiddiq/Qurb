@@ -1,9 +1,9 @@
 # 0067 — A folder for each person, opened with their phone
 
 **Status:** Accepted as a design and an order of work, 2026-10-14, from the
-owner's items 2 to 5 of that day and his answers. Steps 1 and 2 built the
-same day, step 2 run on the owner's laptop; step 1 not yet seen with the
-S23; steps 3 and 4 not built. See *Progress*. Extends
+owner's items 2 to 5 of that day and his answers. Steps 1 to 3 built the
+same day, step 2 run on the owner's laptop; steps 1 and 3 not yet seen with
+the S23; step 4 not built. See *Progress*. Extends
 [0060](0060-a-computer-keeps-private-folders-for-several-people.md), which
 built most of this for guests, to every person a computer keeps files for,
 its owner included, and answers 0060's question 3 ("the owner's own files:
@@ -79,8 +79,8 @@ there.
 3. **Sending, two places** (item 3). On the owner's phone, as on a guest's:
    *Send to saqib's Downloads*, which the computer's person opens freely, or
    *Save to my folder on saqib*, which goes into the phone's folder there and
-   is opened only with the phone's yes. Not kept on the phone once the
-   computer has it, as for a guest.
+   is opened only with the phone's yes. (Designed as not kept on the phone
+   once the computer has it; built keeping it -- see *Progress*.)
 4. **The phone reaches its folder on the computer** (item 5). In the phone's
    Files, *On saqib* while the computer is reachable: the folder as the
    computer keeps it, deleted files included, each file *Download*ed to the
@@ -185,6 +185,23 @@ nothing stored or deleted. Nothing in the index or the config named
 `~/qurb` absolutely (checked: no send read from inside it), so nothing else
 had to change. Tests: `a_folder_moves_into_shared_once`,
 `placeholders_follow_the_people`.
+
+### Step 3, sending, two places — built 2026-10-14
+
+On the phone, Home's *Send* lists, for each computer that keeps the phone's
+folder, *My folder on saqib* (*Opens there only with a yes on this phone*)
+and *saqib's Downloads* (*Opens there freely*), then every other device as
+before. The share sheet says the same: *Save to my folder on saqib* and
+*Send to saqib's Downloads*. My folder is the phone's Private Vault, which
+that computer keeps, and shows under the phone in the person's folder.
+
+**Changed from the design:** the owner's phone keeps its own copy of what it
+saves to its folder, as its Private Vault always has (0036), rather than
+letting go of it once the computer has it as a guest's phone does. Letting
+go of the owner's own files without being asked would surprise him; *Free
+local space* does it by hand.
+
+**Not seen** on the S23.
 
 ## Reversing it
 

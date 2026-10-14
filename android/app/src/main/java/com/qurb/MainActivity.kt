@@ -900,6 +900,42 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Home's *Send* (the owner's item 3, decision 0067): to a computer that
+     * keeps this phone's folder, either *My folder on saqib*, which opens
+     * there only with this phone's yes, or *saqib's Downloads*, which opens
+     * freely; to any other device, as before.
+     */
+    fun chooseWhereToSend() {
+        lifecycleScope.launch {
+            val (peers, keepers) = try {
+                withContext(Dispatchers.IO) {
+                    val engine = Engine.open(this@MainActivity)
+                    engine.peers() to engine.holders().map { it.fingerprint }.toSet()
+                }
+            } catch (e: Exception) {
+                fail("Could not read your devices", e)
+                return@launch
+            }
+            val sheet = kit.sheet().header(R.drawable.ic_send, "Send")
+            if (peers.isEmpty()) {
+                sheet.text("No devices yet. Add one first.")
+                    .buttons("Add a device") { pair() }
+            }
+            for (peer in peers.filter { it.fingerprint in keepers }) {
+                sheet.action(R.drawable.ic_lock_keyhole, "My folder on ${peer.name}",
+                    meta = "Opens there only with a yes on this phone") { pickFilesToAdd("", private = true) }
+                sheet.action(R.drawable.ic_download, "${peer.name}'s Downloads",
+                    meta = "Opens there freely · ${Words.seen(peer.lastSeen)}") { pickFilesToSend(peer) }
+            }
+            for (peer in peers.filter { it.fingerprint !in keepers }) {
+                val named = if (peer.relation == "host") "${peer.name}'s Downloads" else peer.name
+                sheet.action(States.device(peer.name, peer.kind), named, meta = Words.seen(peer.lastSeen)) { pickFilesToSend(peer) }
+            }
+            sheet.show()
+        }
+    }
+
     fun pickFilesToSend(to: PeerInfo) {
         sendingTo = to
         sender.launch(arrayOf("*/*"))
