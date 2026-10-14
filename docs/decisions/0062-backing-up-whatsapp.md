@@ -456,3 +456,12 @@ Wi-Fi dropped mid-collection. The log has one failed file and then *the
 device went away part-way; the rest next time, files=11007*, in place of
 11,007 warnings.
 
+**Complete, 2026-10-14 at 10:31 IST.** The laptop held all 36,031 files,
+9.79 GB, of the backup the S23 started from nothing at 18:57 the evening
+before. The night did not help: the laptop suspended itself when idle at
+21:51 and woke at 10:06, with 5,311 files still to come (decision 0064,
+limit 4). Those came between 10:21 and 10:31, about nine files a second,
+the phone not frozen. WhatsApp's next six new files arrived at 13:51 on an
+ordinary pass. Wall time from start to finish: 15.5 hours, of which the
+laptop was asleep for 12.
+
