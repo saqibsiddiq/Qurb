@@ -54,7 +54,9 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let root = directory()?;
+    // `~/qurb` holds people's folders (decision 0067): moved once, before
+    // anything watches it.
+    let root = qurb_cli::layout::settle(directory()?);
 
     if !qurb_cli::is_set_up(&root) {
         anyhow::bail!(

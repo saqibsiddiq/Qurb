@@ -2292,9 +2292,11 @@ His answers to the questions they raised are with them.
    the owner's lists each phone's WhatsApp, backed-up folders and Private
    Vault, a file opened decrypted into memory-backed space. The owner's
    folder is not sealed, since the laptop holds the same key, and the window
-   says so. Not yet seen between the S23 and the laptop. Steps 2 (`~/qurb`
-   laid out by person), 3 (sending to Downloads or one's folder) and 4 (the
-   phone reaching its folder) are next.
+   says so. Not yet seen between the S23 and the laptop. **Step 2 built and
+   run on the laptop the same day**: `~/qurb` now holds `Shared`, the synced
+   folder moved there with its index, and `Saqib`, a read-only placeholder
+   whose one note says it opens in Qurb. Steps 3 (sending to Downloads or
+   one's folder) and 4 (the phone reaching its folder) are next.
 6. **The S23 is listed twice in the laptop's Devices**: its identity from
    before it was set up again, and its new one. **Built 2026-10-14**: a
    device of the same person with the same name and kind, paired after an

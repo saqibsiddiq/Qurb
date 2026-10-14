@@ -145,7 +145,7 @@ fn run() -> Result<()> {
             };
             block_on(join(root, code))
         }
-        "run" => block_on(start(directory(&args)?)),
+        "run" => block_on(start(qurb_cli::layout::settle(directory(&args)?))),
         "replica" => {
             let only: Vec<String> = args
                 .iter()

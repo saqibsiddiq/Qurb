@@ -66,7 +66,9 @@ fn run() -> Result<()> {
     if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") {
         let _ = std::fs::remove_dir_all(std::path::PathBuf::from(runtime).join("qurb-open"));
     }
-    let root = directory();
+    // `~/qurb` holds people's folders (decision 0067): one set up before is
+    // moved into `~/qurb/Shared` here, once, before anything watches it.
+    let root = qurb_cli::layout::settle(directory());
     let hosted = Arc::new(Hosted::new(root.clone()));
     // A key protected by a passphrase waits for the window to ask for it
     // (decision 0046) -- at login too, which is why the window then shows:
@@ -87,6 +89,9 @@ fn run() -> Result<()> {
             tracing::error!(error = %e, "could not start");
         }
     }
+
+    // A placeholder in `~/qurb` for each person kept for (decision 0067).
+    commands::place_people(&hosted);
 
     // Watching for the few things worth interrupting somebody about. Started
     // before the window, because a notification is most useful when nobody is

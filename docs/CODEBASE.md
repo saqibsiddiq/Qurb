@@ -86,7 +86,7 @@ Two consequences follow immediately, and they are the reason for the design:
 
 The picture above is not the whole story, and the part it leaves out matters
 more than it looks. On a device that syncs a folder, the file `Summer.jpg` is
-sitting right there in `~/qurb`, holding exactly the bytes those chunks are
+sitting right there in `~/qurb/Shared`, holding exactly the bytes those chunks are
 made of. Writing an encrypted copy of them into `chunks/` as well would make
 every synced file cost **twice** its size.
 
@@ -751,6 +751,9 @@ qurb/
 │   │   │                    stop if the folder is moved or deleted
 │   │   ├── src/lock.rs      one daemon per folder, enforced not assumed
 │   │   ├── src/profiles.rs  which folders exist, so commands need no path
+│   │   ├── src/layout.rs    `~/qurb` by person: `Shared`, the synced folder,
+│   │   │                    moved there once, and a read-only placeholder
+│   │   │                    for each person (0067)
 │   │   ├── src/qr.rs        a pairing code a camera can read
 │   │   ├── src/send.rs      what sending some files and folders actually sends
 │   │   ├── src/status.rs    what the daemon is doing now, on a watch channel
@@ -1684,7 +1687,7 @@ SMOKE_MODE=theme ./scripts/desktop-smoke.sh
 ```bash
 # The tray icon: the same daemon, smaller. Falls back to a window where there
 # is no system tray, which on GNOME is always.
-cargo run --release -p qurb-tray -- ~/qurb
+cargo run --release -p qurb-tray -- ~/qurb/Shared
 ```
 
 ```bash

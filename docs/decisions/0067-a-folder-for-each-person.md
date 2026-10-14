@@ -1,8 +1,9 @@
 # 0067 — A folder for each person, opened with their phone
 
 **Status:** Accepted as a design and an order of work, 2026-10-14, from the
-owner's items 2 to 5 of that day and his answers. Step 1 built the same day,
-not yet seen with the S23; steps 2 to 4 not built. See *Progress*. Extends
+owner's items 2 to 5 of that day and his answers. Steps 1 and 2 built the
+same day, step 2 run on the owner's laptop; step 1 not yet seen with the
+S23; steps 3 and 4 not built. See *Progress*. Extends
 [0060](0060-a-computer-keeps-private-folders-for-several-people.md), which
 built most of this for guests, to every person a computer keeps files for,
 its owner included, and answers 0060's question 3 ("the owner's own files:
@@ -162,6 +163,28 @@ is not asked about it and cannot open it; a wrong nonce opens nothing).
 Looked at in the fixtures page: the top, a locked folder, an open one. The
 real-window smoke test opens Files with the new top. **Not yet seen**: the
 ask reaching the S23 and its yes opening the folder on the laptop.
+
+### Step 2, `~/qurb` holds people — built 2026-10-14
+
+`qurb_cli::layout`. A folder at the default place, `~/qurb`, still of the
+old shape -- set up, its index at its top -- is moved into `~/qurb/Shared`
+when the window, the tray or `qurb run` starts, before anything watches it:
+every entry, the index last, each a rename, undone as far as it got if one
+fails; the list of known folders then names `Shared`. A folder somebody
+chose elsewhere is not moved. New folders are made at `~/qurb/Shared`.
+Beside it, a read-only placeholder for each person, holding only
+*Opens in Qurb.txt*, which says whose it is and how to open it; a
+placeholder holding nothing but its note goes when its person does, and
+nothing else in `~/qurb` is touched. *Show the Qurb folder* opens `~/qurb`.
+
+Run on the owner's laptop at 20:51 on 2026-10-14: `~/qurb` held only its
+index (9.4 GB; the 18 shared files freed, not on disk) and became
+`~/qurb/Shared/.qurb`, with `~/qurb/Saqib/` beside it; `qurb status` read
+the moved folder, both phones still paired, and the daemon reconciled with
+nothing stored or deleted. Nothing in the index or the config named
+`~/qurb` absolutely (checked: no send read from inside it), so nothing else
+had to change. Tests: `a_folder_moves_into_shared_once`,
+`placeholders_follow_the_people`.
 
 ## Reversing it
 

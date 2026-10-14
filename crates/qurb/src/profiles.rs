@@ -100,13 +100,15 @@ pub fn forget(root: &Path) -> Result<()> {
 
 /// Where to put a folder when the person has not said.
 ///
-/// `~/qurb`. It was `Downloads/qurb` for a while, on the reasoning that files
-/// from another device are files somebody wants to find; decision 0037 gave
-/// that place to files sent *to* this device instead, which are ordinary files
-/// qurb stops tracking, and the two must not overlap. Existing folders in
-/// Downloads stay where they are -- see [`current`].
+/// `~/qurb/Shared`: `~/qurb` holds people's folders, the shared one among
+/// them (decision 0067). It was `~/qurb` until then, and `Downloads/qurb`
+/// before that, on the reasoning that files from another device are files
+/// somebody wants to find; decision 0037 gave that place to files sent *to*
+/// this device instead, which are ordinary files qurb stops tracking, and the
+/// two must not overlap. Existing folders stay where they are until moved --
+/// see [`current`] and [`crate::layout::settle`].
 pub fn default_root() -> Result<PathBuf> {
-    Ok(PathBuf::from(std::env::var("HOME").context("no HOME set")?).join("qurb"))
+    Ok(PathBuf::from(std::env::var("HOME").context("no HOME set")?).join("qurb").join(crate::layout::SHARED))
 }
 
 /// The person's Downloads folder.
@@ -145,7 +147,11 @@ pub fn current() -> Option<PathBuf> {
     }
     // The default, and where the default was before, so an existing install
     // keeps working after it moved.
-    [default_root().ok(), user_downloads().ok().map(|d| d.join("qurb"))]
+    [
+        default_root().ok(),
+        default_root().ok().and_then(|d| d.parent().map(Path::to_path_buf)),
+        user_downloads().ok().map(|d| d.join("qurb")),
+    ]
         .into_iter()
         .flatten()
         .find(|candidate| crate::is_set_up(candidate))
@@ -161,7 +167,7 @@ mod tests {
     #[test]
     fn the_default_folder_is_not_where_deliveries_go() {
         let (Ok(root), Ok(downloads)) = (default_root(), user_downloads()) else { return };
-        assert!(root.ends_with("qurb"), "the folder should be named qurb, got {}", root.display());
+        assert!(root.ends_with("qurb/Shared"), "the folder should be qurb/Shared, got {}", root.display());
         assert!(
             !crate::config::overlaps(&root, &downloads.join("qurb")),
             "the default folder {} overlaps the default downloads directory",

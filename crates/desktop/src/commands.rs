@@ -1423,7 +1423,7 @@ fn own_phone(hosted: &Host<'_>, phone: &str) -> Result<qurb_cli::Device, String>
 
 /// A phone's backups are the owner's folder's, opened only with a phone's
 /// yes (decision 0067).
-fn owner_folder_open(hosted: &Host<'_>) -> Result<(), String> {
+fn owner_folder_open(hosted: &Hosted) -> Result<(), String> {
     let owner = person_of(hosted, OWNER)?;
     match qurb_peer::openings::key(&owner) {
         Some(_) => Ok(()),
@@ -1691,7 +1691,7 @@ const OWNER: &str = "owner";
 
 /// What a person's folder is filed under: the owner's under this computer's
 /// own device, a guest's under their person (decision 0060).
-fn person_of(hosted: &Host<'_>, id: &str) -> Result<qurb_sync::DeviceId, String> {
+fn person_of(hosted: &Hosted, id: &str) -> Result<qurb_sync::DeviceId, String> {
     if id == OWNER {
         return hosted.with_store(|store| Ok(store.device_id()?)).map_err(failed);
     }
@@ -1721,7 +1721,7 @@ fn owner_name() -> String {
 
 /// The owner's phones whose files are kept here, each under the name its
 /// folder shows: one set up again keeps its own folder, as *earlier*.
-fn owner_phones(hosted: &Host<'_>) -> Result<Vec<(String, qurb_cli::Device)>, String> {
+fn owner_phones(hosted: &Hosted) -> Result<Vec<(String, qurb_cli::Device)>, String> {
     let devices = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)).map_err(failed)?;
     let phones: Vec<qurb_cli::Device> = devices
         .into_iter()
@@ -1769,8 +1769,49 @@ fn folder_state(person: &qurb_sync::DeviceId) -> &'static str {
 /// Everyone this computer keeps files for, the owner first.
 #[tauri::command]
 pub fn people(hosted: Host<'_>) -> Answer<Vec<Person>> {
-    let owner = person_of(&hosted, OWNER)?;
-    let phones = owner_phones(&hosted)?;
+    let people = everyone(&hosted)?;
+    lay_out(&hosted, &people);
+    Ok(people)
+}
+
+/// A placeholder in `~/qurb` for each person this computer keeps files for,
+/// when the folder is laid out by person (decision 0067). Best effort: a
+/// placeholder that cannot be written changes nothing that is kept.
+pub fn place_people(hosted: &Hosted) {
+    if let Ok(people) = everyone(hosted) {
+        lay_out(hosted, &people);
+    }
+}
+
+fn lay_out(hosted: &Hosted, people: &[Person]) {
+    let Some(dir) = qurb_cli::layout::people_dir(&hosted.root()) else { return };
+    let notes: Vec<(String, String)> = people
+        .iter()
+        .map(|p| {
+            let note = match p.relation {
+                "owner" => format!(
+                    "{name}'s folder\n\nWhat this computer keeps for {name}'s phones -- their backups, their \
+                     WhatsApp and their Private Vault -- is kept by Qurb, encrypted, and opens only inside Qurb, \
+                     with a yes on {name}'s phone.\n\nOpen Qurb, choose Files, then {name}.\n",
+                    name = p.name
+                ),
+                _ => format!(
+                    "{name}'s folder\n\nKept sealed by Qurb: this computer cannot read it. It opens only inside \
+                     Qurb, when {name} approves on their phone.\n\nOpen Qurb, choose Files, then {name}.\n",
+                    name = p.name
+                ),
+            };
+            (p.name.clone(), note)
+        })
+        .collect();
+    if let Err(e) = qurb_cli::layout::place_people(&dir, &notes) {
+        tracing::warn!(error = %format!("{e:#}"), "could not lay out people's folders");
+    }
+}
+
+fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
+    let owner = person_of(hosted, OWNER)?;
+    let phones = owner_phones(hosted)?;
     let (files, bytes) = phones.iter().fold((0, 0), |(f, b), (_, p)| {
         let (pf, pb) = p.held.unwrap_or((0, 0));
         (f + pf, b + pb)
@@ -1950,10 +1991,13 @@ pub fn show_file(hosted: Host<'_>, path: String) -> Answer<()> {
     reveal(file.parent().ok_or("that file has no folder")?)
 }
 
-/// Open the synced folder itself in the file manager.
+/// Open the Qurb folder in the file manager: `~/qurb`, with *Shared* and
+/// each person's placeholder in it, once laid out by person (decision 0067);
+/// else the synced folder itself.
 #[tauri::command]
 pub fn show_root(hosted: Host<'_>) -> Answer<()> {
-    reveal(&hosted.root())
+    let root = hosted.root();
+    reveal(&qurb_cli::layout::people_dir(&root).unwrap_or(root))
 }
 
 /// Whether files added here go to this device's Private Vault rather than

@@ -10,6 +10,7 @@
 pub mod awake;
 pub mod config;
 pub mod daemon;
+pub mod layout;
 pub mod lock;
 pub mod profiles;
 pub mod qr;
