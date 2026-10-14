@@ -66,6 +66,18 @@ order of expected gain for the least change:
 5. **Many small files in one request**, if steps 1 and 2 leave the round
    trips the largest part.
 
+## Progress
+
+**Step 1, built 2026-10-14.** `Store::locate` asks the index, under the lock,
+where a chunk's bytes may be; a `ChunkReader` reads them after the lock is let
+go. `read_chunk` does both, unchanged for every caller holding the store
+anyway. Proved by `requests_made_at_once_are_read_at_once`: eight files whose
+opening takes 200 ms each come in 0.2 s, and in 1.62 s with the reading put
+back under the lock. On this laptop's loopback, where reading was never the
+slow part, collecting small files is unchanged: 2.18 to 2.48 ms a file over
+three runs, against 2.28 before. **Not yet measured on the S23**, where it is
+meant to matter.
+
 ## Rejected
 
 - **A rewrite.** Nothing measured points at the engine's design; the slowest

@@ -333,10 +333,30 @@ async fn serve_request(
     let response = if let Request::Changes { since } = request {
         Response::Changed { generation: generation.wait_past(since, CHANGES_TIMEOUT).await }
     } else {
-        tokio::task::block_in_place(|| {
+        let answered = tokio::task::block_in_place(|| {
             let store = store.lock().expect("store mutex poisoned");
             answer(&store, &request, asker)
-        })?
+        })?;
+        match answered {
+            Answer::Now(response) => response,
+            // A chunk's bytes, read after the lock is let go, so that the
+            // requests a collecting device makes at once are read at once
+            // (decision 0064). The index is asked again only to mark a send
+            // whose file was found changed.
+            Answer::Read { hash, places, reader } => tokio::task::block_in_place(|| -> Result<Response> {
+                let read = reader.read(&hash, &places);
+                if !read.changed_sends.is_empty() {
+                    store.lock().expect("store mutex poisoned").sends_changed(&read.changed_sends)?;
+                }
+                // Verified against its own hash in the reading, so a corrupt
+                // chunk is reported as missing rather than served.
+                match read.bytes {
+                    Ok(bytes) => Ok(Response::Chunk(bytes)),
+                    Err(qurb_storage::Error::ChunkMissing { .. }) => Ok(Response::NotFound),
+                    Err(e) => Err(e.into()),
+                }
+            })?,
+        }
     };
 
     match &response {
@@ -367,7 +387,14 @@ async fn serve_request(
     Ok(())
 }
 
-fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Result<Response> {
+/// What a request is answered with: at once, or, for a chunk, the bytes once
+/// they are read without the store (decision 0064).
+enum Answer {
+    Now(Response),
+    Read { hash: blake3::Hash, places: Vec<qurb_storage::ChunkAt>, reader: qurb_storage::ChunkReader },
+}
+
+fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Result<Answer> {
     // Which device is asking, as the connection proves rather than as anything
     // claims. Every answer below is scoped to it: the shared area plus that
     // device's own vault, never anybody else's.
@@ -404,7 +431,7 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         _ => false,
     };
 
-    Ok(match request {
+    Ok(Answer::Now(match request {
         Request::Tree => {
             let mut tree = store.tree_for(audience)?;
             if let (true, Some(holder)) = (keeps_mine, &owner) {
@@ -418,7 +445,7 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
             let content = blake3::Hash::from(*content);
             if let (true, Some(holder)) = (keeps_mine, &owner) {
                 if let Some(ids) = store.sealed_manifest(holder, &content)? {
-                    return Ok(Response::Manifest(ids));
+                    return Ok(Answer::Now(Response::Manifest(ids)));
                 }
             }
             if !store.content_visible_to(&content, audience)? {
@@ -426,7 +453,7 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
                 // which is deliberate: "you may not have this" and "there is
                 // no such thing" should look the same from outside, or the
                 // refusal itself tells a peer what exists.
-                return Ok(Response::NotFound);
+                return Ok(Answer::Now(Response::NotFound));
             }
             // Held, not merely known: a file freed here keeps its chunk list,
             // and answering with it sends the peer off to fail at the first
@@ -554,7 +581,7 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         Request::Chunk { hash } => {
             if let (true, Some(holder)) = (keeps_mine, &owner) {
                 if let Some(sealed) = store.sealed_chunk(holder, hash)? {
-                    return Ok(Response::Chunk(sealed));
+                    return Ok(Answer::Now(Response::Chunk(sealed)));
                 }
             }
             let hash = blake3::Hash::from(*hash);
@@ -563,16 +590,10 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
             // this a device could skip the tree entirely and fetch anything it
             // could name, which is exactly what a hash is.
             if !store.chunk_visible_to(&hash, audience)? {
-                return Ok(Response::NotFound);
+                return Ok(Answer::Now(Response::NotFound));
             }
 
-            // read_chunk verifies the payload against its own hash, so a
-            // corrupt chunk is reported as missing rather than served.
-            match store.read_chunk(&hash) {
-                Ok(bytes) => Response::Chunk(bytes),
-                Err(qurb_storage::Error::ChunkMissing { .. }) => Response::NotFound,
-                Err(e) => return Err(e.into()),
-            }
+            return Ok(Answer::Read { places: store.locate(&hash)?, reader: store.reader(), hash });
         }
-    })
+    }))
 }

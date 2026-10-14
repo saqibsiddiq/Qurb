@@ -328,3 +328,81 @@ async fn a_held_file_that_fails_is_not_in_the_history() {
     let history = desktop.engine.store().db().activity(50, None).unwrap();
     assert!(history.iter().all(|a| a.path.as_deref().is_none_or(|p| !p.contains("gone.jpg"))), "{history:?}");
 }
+
+/// Opens a "document" slowly, as a phone's platform does a file in a folder
+/// it was given, and counts how many are open at once.
+struct SlowDocuments {
+    dir: PathBuf,
+    delay: std::time::Duration,
+}
+
+impl qurb_storage::Documents for SlowDocuments {
+    fn open(&self, source: &str) -> Option<std::fs::File> {
+        std::thread::sleep(self.delay);
+        fs::File::open(self.dir.join(source.strip_prefix("content://slow/")?)).ok()
+    }
+    fn release(&self, _source: &str) {}
+}
+
+/// Requests made at once are read at once (decision 0064).
+///
+/// Every request used to hold the store's lock while it read the file's
+/// bytes, so a phone answered a laptop's 32 requests in turn: at the S23's
+/// cost of opening each file, about 25 files a second, which is what the
+/// laptop collected its WhatsApp backup at. Eight files that each take 200 ms
+/// to open must come in well under the 1.6 s they took one at a time.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn requests_made_at_once_are_read_at_once() {
+    let mut phone = Device::new();
+    phone.engine.store_mut().set_new_files_private(true);
+    let desktop = Device::new();
+    introduce(&phone, &desktop);
+    phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+    phone.engine.store().db().set_outside_offered(true).unwrap();
+
+    let lent = phone._dir.path().join("lent");
+    let delay = std::time::Duration::from_millis(200);
+    let listing: Vec<qurb_storage::OutsideEntry> = (0..8u32)
+        .map(|i| {
+            let name = format!("Media/{i}.jpg");
+            let bytes: Vec<u8> = (0..20_000u32).map(|j| (j.wrapping_mul(31).wrapping_add(i * 7)) as u8).collect();
+            fs::create_dir_all(lent.join("Media")).unwrap();
+            fs::write(lent.join(&name), &bytes).unwrap();
+            qurb_storage::OutsideEntry {
+                path: name.clone(),
+                source: format!("content://slow/{name}"),
+                size: bytes.len() as u64,
+                mtime_ns: 1,
+            }
+        })
+        .collect();
+    let documents: Arc<dyn qurb_storage::Documents> = Arc::new(SlowDocuments { dir: lent.clone(), delay });
+    phone.engine.store_mut().set_documents(Arc::clone(&documents));
+    phone.engine.store_mut().keep_outside_folder(".qurb-outside/whatsapp", &listing, &|_| true, None, &|_| false).unwrap();
+
+    let server = PeerServer::bind(
+        LOOPBACK.parse().unwrap(),
+        &phone.identity,
+        &qurb_peer::tls::TrustList::new(vec![desktop.identity.fingerprint()]),
+    )
+    .unwrap();
+    let addr = server.local_addr().unwrap();
+    let mut served = phone.reader();
+    served.set_documents(documents);
+    tokio::spawn(async move { server.serve(Arc::new(Mutex::new(served))).await });
+
+    let client = PeerClient::connect(addr, &desktop.identity, phone.identity.fingerprint()).await.unwrap();
+    let mut chunks = Vec::new();
+    for version in client.tree().await.unwrap() {
+        if let qurb_sync::Content::File { hash, .. } = version.content {
+            chunks.extend(client.manifest(hash).await.unwrap().expect("the phone holds it"));
+        }
+    }
+    assert_eq!(chunks.len(), 8, "one chunk a file");
+
+    let t = std::time::Instant::now();
+    let got = futures_util::future::join_all(chunks.iter().map(|hash| client.chunk(*hash))).await;
+    let took = t.elapsed();
+    assert!(got.iter().all(|c| matches!(c, Ok(Some(_)))), "{got:?}");
+    assert!(took < delay * 4, "eight files took {took:?}, as if read one at a time");
+}

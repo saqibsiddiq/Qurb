@@ -55,6 +55,122 @@ pub trait Documents: Send + Sync {
     fn release(&self, source: &str);
 }
 
+/// One place a chunk's bytes may be, found in the index by [`Store::locate`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChunkAt {
+    /// A file in the folder.
+    Tree { path: PathBuf, offset: u64, len: u64 },
+    /// A send's file, a path or a document the platform lends (decision 0060).
+    Sent { source: String, offset: u64, len: u64 },
+    /// A file kept outside the folder, where it lies (decision 0062).
+    Outside { source: String, offset: u64, len: u64 },
+    /// The chunk store, sealed with the chunk key.
+    Stored,
+}
+
+impl ChunkAt {
+    fn sent_source(&self) -> Option<String> {
+        match self {
+            ChunkAt::Sent { source, .. } => Some(source.clone()),
+            _ => None,
+        }
+    }
+}
+
+/// Reads a chunk from the places [`Store::locate`] found, without the store.
+///
+/// Holds only what reading needs: the chunk store's directory, the key, and
+/// the platform's way of opening a lent document. So a device answering many
+/// requests at once reads for all of them at once, rather than one at a time
+/// behind the store's lock: on a phone opening each file through the platform,
+/// one at a time was the limit on how fast a laptop could collect (decision
+/// 0064).
+#[derive(Clone)]
+pub struct ChunkReader {
+    cas: Cas,
+    key: ChunkKey,
+    documents: Option<std::sync::Arc<dyn Documents>>,
+}
+
+/// A chunk read by a [`ChunkReader`], and the sends whose files were found no
+/// longer to hold what was sent, for [`Store::sends_changed`].
+pub struct ChunkRead {
+    pub bytes: Result<Vec<u8>>,
+    pub changed_sends: Vec<String>,
+}
+
+/// What one place held.
+enum Found {
+    Bytes(Vec<u8>),
+    /// Could not be opened or reached: gone, or not readable now.
+    Unreadable,
+    /// Read, and not these bytes: the file changed.
+    Different,
+}
+
+impl Found {
+    fn bytes(self) -> Option<Vec<u8>> {
+        match self {
+            Found::Bytes(bytes) => Some(bytes),
+            _ => None,
+        }
+    }
+}
+
+impl ChunkReader {
+    /// The chunk's bytes from the first place that still holds them, checked
+    /// against its hash. The chunk store, always last, decides the error when
+    /// none does.
+    pub fn read(&self, hash: &blake3::Hash, places: &[ChunkAt]) -> ChunkRead {
+        let mut changed_sends = Vec::new();
+        for place in places {
+            if *place == ChunkAt::Stored {
+                return ChunkRead { bytes: self.stored(hash), changed_sends };
+            }
+            match self.at(place, hash) {
+                Found::Bytes(bytes) => return ChunkRead { bytes: Ok(bytes), changed_sends },
+                Found::Different => changed_sends.extend(place.sent_source()),
+                Found::Unreadable => {}
+            }
+        }
+        ChunkRead { bytes: self.stored(hash), changed_sends }
+    }
+
+    /// One place's bytes. Not an error when it does not hold them: a file
+    /// edited, moved or deleted since it was indexed is simply not a source.
+    fn at(&self, place: &ChunkAt, hash: &blake3::Hash) -> Found {
+        use std::io::{Read, Seek, SeekFrom};
+        let (opened, offset, len) = match place {
+            ChunkAt::Tree { path, offset, len } => (std::fs::File::open(path), *offset, *len),
+            ChunkAt::Sent { source, offset, len } | ChunkAt::Outside { source, offset, len } => {
+                (open_with(self.documents.as_ref(), source), *offset, *len)
+            }
+            ChunkAt::Stored => {
+                return self.stored(hash).map_or(Found::Unreadable, Found::Bytes);
+            }
+        };
+        let Ok(mut file) = opened else { return Found::Unreadable };
+        if file.seek(SeekFrom::Start(offset)).is_err() {
+            return Found::Unreadable;
+        }
+        let mut buffer = vec![0u8; len as usize];
+        if file.read_exact(&mut buffer).is_err() || blake3::hash(&buffer) != *hash {
+            return Found::Different;
+        }
+        Found::Bytes(buffer)
+    }
+
+    /// From the chunk store: read, decrypt, decompress, and check.
+    fn stored(&self, hash: &blake3::Hash) -> Result<Vec<u8>> {
+        let stored = self.cas.get(hash)?;
+        let plaintext = format::open(&self.key, &stored, &hash.to_hex())?;
+        if blake3::hash(&plaintext) != *hash {
+            return Err(Error::ChunkCorrupt { hash: hash.to_hex().to_string() });
+        }
+        Ok(plaintext)
+    }
+}
+
 /// A send called off because its file changed or went before the recipient
 /// collected it (decision 0060).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -337,6 +453,32 @@ impl Store {
             .unwrap_or(false)
     }
 
+    /// Where a file in the folder holds this chunk, if one does.
+    fn tree_place(&self, hash: &blake3::Hash) -> Result<Option<ChunkAt>> {
+        let Some(tree) = &self.tree else { return Ok(None) };
+        Ok(self
+            .db
+            .locate_chunk(hash)?
+            .map(|(path, offset, len)| ChunkAt::Tree { path: tree.join(path), offset, len }))
+    }
+
+    /// Where a send's file holds this chunk (decision 0060), if one does.
+    fn sent_place(&self, hash: &blake3::Hash) -> Result<Option<ChunkAt>> {
+        Ok(self
+            .db
+            .locate_send_chunk(hash)?
+            .map(|(source, offset, len)| ChunkAt::Sent { source, offset, len }))
+    }
+
+    /// Where a file kept outside the folder holds this chunk (decision 0062),
+    /// if one does.
+    fn outside_place(&self, hash: &blake3::Hash) -> Result<Option<ChunkAt>> {
+        Ok(self
+            .db
+            .locate_outside_chunk(hash)?
+            .map(|(source, offset, len)| ChunkAt::Outside { source, offset, len }))
+    }
+
     /// Read a chunk's plaintext out of the file that holds it.
     ///
     /// Returns `None` when no live file provides it, which is the ordinary
@@ -347,31 +489,7 @@ impl Store {
     /// the content that hash names is genuinely no longer there, and returning
     /// the new bytes under the old name would corrupt whatever asked.
     fn chunk_from_tree(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
-        let Some(tree) = &self.tree else { return Ok(None) };
-        let Some((path, offset, len)) = self.db.locate_chunk(hash)? else { return Ok(None) };
-
-        let full = tree.join(&path);
-        let mut file = match std::fs::File::open(&full) {
-            Ok(file) => file,
-            // Gone or unreadable: not an error here, just not a source.
-            Err(_) => return Ok(None),
-        };
-
-        use std::io::{Read, Seek, SeekFrom};
-        if file.seek(SeekFrom::Start(offset)).is_err() {
-            return Ok(None);
-        }
-        let mut buffer = vec![0u8; len as usize];
-        if file.read_exact(&mut buffer).is_err() {
-            return Ok(None);
-        }
-
-        if blake3::hash(&buffer) != *hash {
-            // The file changed under us. The index will catch up on the next
-            // scan; until then this chunk simply has no source here.
-            return Ok(None);
-        }
-        Ok(Some(buffer))
+        Ok(self.tree_place(hash)?.and_then(|place| self.reader().at(&place, hash).bytes()))
     }
 
     /// A send's chunk, read from the send's file and checked (decision 0060).
@@ -380,21 +498,15 @@ impl Store {
     /// bytes. The send is called off at the next check, and the person told;
     /// here it is only not a source.
     fn chunk_from_source(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
-        let Some((source, offset, len)) = self.db.locate_send_chunk(hash)? else { return Ok(None) };
-        let Ok(mut file) = self.open_source(&source) else { return Ok(None) };
-        use std::io::{Read, Seek, SeekFrom};
-        if file.seek(SeekFrom::Start(offset)).is_err() {
-            return Ok(None);
+        let Some(place) = self.sent_place(hash)? else { return Ok(None) };
+        match self.reader().at(&place, hash) {
+            Found::Bytes(bytes) => Ok(Some(bytes)),
+            Found::Different => {
+                self.sends_changed(&place.sent_source().into_iter().collect::<Vec<_>>())?;
+                Ok(None)
+            }
+            Found::Unreadable => Ok(None),
         }
-        let mut buffer = vec![0u8; len as usize];
-        if file.read_exact(&mut buffer).is_err() || blake3::hash(&buffer) != *hash {
-            // The file is not what was sent any more. Marked, so that the next
-            // check calls the send off even when its size and time say
-            // nothing changed.
-            self.db.send_source_changed(&source)?;
-            return Ok(None);
-        }
-        Ok(Some(buffer))
     }
 
     /// A chunk of a file kept outside the folder, read where it lies and
@@ -402,17 +514,40 @@ impl Store {
     /// bytes: it changed, and the next listing of its folder makes it a new
     /// version.
     fn chunk_from_outside(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
-        let Some((source, offset, len)) = self.db.locate_outside_chunk(hash)? else { return Ok(None) };
-        let Ok(mut file) = self.open_source(&source) else { return Ok(None) };
-        use std::io::{Read, Seek, SeekFrom};
-        if file.seek(SeekFrom::Start(offset)).is_err() {
-            return Ok(None);
+        Ok(self.outside_place(hash)?.and_then(|place| self.reader().at(&place, hash).bytes()))
+    }
+
+    /// Everywhere this chunk's bytes may be, in the order to try them: a file
+    /// in the folder, a send's file, a file kept outside the folder, the chunk
+    /// store. Asks only the index, so that the reading, which is the slow part,
+    /// can be done without holding the store (decision 0064).
+    pub fn locate(&self, hash: &blake3::Hash) -> Result<Vec<ChunkAt>> {
+        // The chunk store alone when it holds the chunk: the same order
+        // `read_chunk` always had, cheap membership test first.
+        if self.cas.contains(hash) {
+            return Ok(vec![ChunkAt::Stored]);
         }
-        let mut buffer = vec![0u8; len as usize];
-        if file.read_exact(&mut buffer).is_err() || blake3::hash(&buffer) != *hash {
-            return Ok(None);
+        let mut places = Vec::with_capacity(4);
+        places.extend(self.tree_place(hash)?);
+        places.extend(self.sent_place(hash)?);
+        places.extend(self.outside_place(hash)?);
+        places.push(ChunkAt::Stored);
+        Ok(places)
+    }
+
+    /// What reading a chunk needs once the store is let go.
+    pub fn reader(&self) -> ChunkReader {
+        ChunkReader { cas: self.cas.clone(), key: self.key.clone(), documents: self.documents.clone() }
+    }
+
+    /// Sends whose files were found no longer to hold what was sent: marked,
+    /// so that the next check calls them off even when their size and time
+    /// say nothing changed.
+    pub fn sends_changed(&self, sources: &[String]) -> Result<()> {
+        for source in sources {
+            self.db.send_source_changed(source)?;
         }
-        Ok(Some(buffer))
+        Ok(())
     }
 
     /// A chunk that is not in the chunk store, from wherever this device has
@@ -1012,22 +1147,15 @@ impl Store {
 
     /// Fetch one chunk: read, decrypt, decompress, and check it is what it
     /// claims to be.
+    ///
+    /// [`locate`](Self::locate) and [`ChunkReader::read`] in one, for a caller
+    /// holding the store anyway. One answering another device lets go of the
+    /// store between the two (decision 0064).
     pub fn read_chunk(&self, hash: &blake3::Hash) -> Result<Vec<u8>> {
-        // The tree first when the chunk store does not hold it. Ordered this
-        // way round -- cheap membership test, then the file -- so a replica and
-        // any content the tree cannot supply take the original path unchanged.
-        if !self.cas.contains(hash) {
-            if let Some(plaintext) = self.chunk_from_disk(hash)? {
-                return Ok(plaintext);
-            }
-        }
-
-        let stored = self.cas.get(hash)?;
-        let plaintext = format::open(&self.key, &stored, &hash.to_hex())?;
-        if blake3::hash(&plaintext) != *hash {
-            return Err(Error::ChunkCorrupt { hash: hash.to_hex().to_string() });
-        }
-        Ok(plaintext)
+        let places = self.locate(hash)?;
+        let read = self.reader().read(hash, &places);
+        self.sends_changed(&read.changed_sends)?;
+        read.bytes
     }
 
     /// Mark a file deleted.
