@@ -1,9 +1,9 @@
 # 0065 — The scale qurb is built for
 
 **Status:** Accepted as targets and an order of work, 2026-10-14. Measured at
-100,000 and a million files the same day: **above a few hundred thousand
-files a library cannot sync at all yet**, the whole file list being too large
-for one message. Fixing that is next.
+100,000 and a million files the same day. A million files could not sync at
+all, the file list too large for one message; with the list in frames they
+do, in 38 minutes the first time. Next: only what changed, and re-indexing.
 **Date:** 2026-10-14
 
 ## What was asked
@@ -147,8 +147,27 @@ whole at most 1 GiB, some seven million files. A device asks it first and,
 from a peer that does not answer it, asks `Tree` as before. Tested: a list
 of 20,000 versions across several frames comes back whole and in order
 (`a_file_list_streams_in_frames`), and against a peer answering the old way
-the fallback is taken (the hostile-peer tests). A million files' sync is
-being measured again with it.
+the fallback is taken (the hostile-peer tests).
+
+**A million files sync, measured with it the same day**, the same laptop
+and conditions as above (a build of the desktop app ran during part of the
+deep verify):
+
+| stage | measured | target |
+|---|---|---|
+| first index | 1,547.5 s, 646 files/s | -- |
+| re-index, nothing changed | 23.6 s | within 15 s: missed |
+| file list exchanged | 4.96 s | -- |
+| first sync, 44 GiB | 2,305 s, 2.3 ms a file | twice a plain copy: not yet measured against one |
+| 10,000 edited: re-index | 83.8 s | -- |
+| 10,000 edited: sync | 58.2 s, 254 MiB on the wire | 1,000 within 10 s: not run at 1,000 |
+| deep verify, after each sync | 532.7 s, 492.4 s | -- |
+
+Every check passed after both syncs, 500 sampled files byte-identical each
+time. So the hard limit is gone: a library of a million files syncs. What
+is left of it is cost: 4.7 to 5.0 s of every sync is the whole list going
+across, before anything has changed, which exchanging only what changed
+removes; and re-indexing an unchanged million is 23.6 s against 15.
 
 ## Reversing it
 
