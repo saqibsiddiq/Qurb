@@ -84,7 +84,7 @@ document.querySelectorAll("[data-go]").forEach((b) => {
 
 function refreshScreen() {
   if (settingUp) return;
-  if (screen === "home") drawHome();
+  if (screen === "home") { drawHome(); drawHomeLists(); }
   if (screen === "files") { filesBrowser.draw(); drawDeletedLink(); }
   if (screen === "vault") vaultBrowser.draw();
   if (screen === "devices") drawDevices();
@@ -114,6 +114,7 @@ setInterval(() => {
   // Conflicts every third beat: finding them reads every path.
   if (++slowTicks % 3 === 0) drawAttention();
   if (document.querySelector(".menu, .scrim") || openPanel) return;
+  if (screen === "home") drawHomeLists();
   if (screen === "storage") drawStorage();
   if ((screen === "files" || screen === "vault") && wanted.size) refreshScreen();
   if (screen === "devices" && !watching && !removing) drawDevices();

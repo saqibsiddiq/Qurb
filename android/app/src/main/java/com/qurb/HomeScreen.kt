@@ -22,11 +22,13 @@ import uniffi.qurb_mobile.Waiting
 /**
  * Home (direction §5): is my Qurb space okay?
  *
- * One state, one action -- *Send to device*, or *Add a device* until there is
- * one -- a line of secondary facts, and attention only when something needs a
- * decision. A healthy Home should be almost boring. Pulling down syncs, and so
- * does *Sync now*. What happened lately is the clock at the top, a button
- * away: the owner wanted it off Home (2026-10-13).
+ * The state, a line of secondary facts, and attention only when something
+ * needs a decision; a healthy Home should be almost boring. The owner widened
+ * it (item 8 of 2026-10-14), as on the desktop: *Sync now* and *Send* side by
+ * side, of one size -- *Add a device* alone until there is one -- then what
+ * is still waiting to reach the other devices, and the backups. Pulling down
+ * syncs too. What happened lately is the clock at the top, a button away: the
+ * owner wanted it off Home (2026-10-13).
  *
  * A phone has no daemon running to ask whether it is up to date, so the state
  * is built from what it does know: whether it is syncing now, whether
@@ -181,6 +183,11 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         for (w in state.sends.take(WAITING_ROWS)) {
             kit.row(rows, States.icon(w.path), w.path.substringAfterLast('/'),
                 "Sent to ${w.to}, not collected yet  ·  ${Words.size(w.size)}")
+        }
+        if (state.sends.size > WAITING_ROWS) {
+            val more = state.sends.size - WAITING_ROWS
+            kit.row(rows, R.drawable.ic_send, if (more == 1) "1 more send" else "$more more sends",
+                "Not collected yet")
         }
         val whatsApp = state.whatsApp
         if (keeper != null && whatsApp.files > 0uL && whatsApp.heldFiles < whatsApp.files) {

@@ -117,6 +117,10 @@ pub struct Daemon {
     /// the same process -- a device paired, a file sent -- so it looks now
     /// rather than at the next [`TRUST_INTERVAL`].
     nudge: Option<std::sync::Arc<tokio::sync::Notify>>,
+    /// Said to when the person asks for a sync now (the owner's item 8 of
+    /// 2026-10-14): every device tried at once, whatever its backoff, and
+    /// told there is news, which wakes a phone that is asleep.
+    asked: Option<std::sync::Arc<tokio::sync::Notify>>,
     /// Set when this daemon is a storage-only replica, and then saying what it
     /// holds. `None` is an ordinary device with a folder someone looks at.
     ///
@@ -143,6 +147,7 @@ impl Daemon {
             config,
             status: None,
             nudge: None,
+            asked: None,
             pins: None,
         }
     }
@@ -151,6 +156,12 @@ impl Daemon {
     /// as on the slow timer.
     pub fn nudged_by(mut self, nudge: std::sync::Arc<tokio::sync::Notify>) -> Self {
         self.nudge = Some(nudge);
+        self
+    }
+
+    /// Sync with every device whenever `asked` is notified: *Sync now*.
+    pub fn sync_when_asked(mut self, asked: std::sync::Arc<tokio::sync::Notify>) -> Self {
+        self.asked = Some(asked);
         self
     }
 
@@ -576,6 +587,7 @@ impl Daemon {
         let mut trust_timer = tokio::time::interval(TRUST_INTERVAL);
         let mut links_timer = tokio::time::interval(LINKS_INTERVAL);
         let nudge = self.nudge.clone();
+        let asked = self.asked.clone();
         let mut maintenance = tokio::time::interval(MAINTENANCE_INTERVAL);
         maintenance.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -665,6 +677,23 @@ impl Daemon {
                         self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                     }
                     self.announce_deliveries(&engine, &connector, &peers);
+                }
+
+                // *Sync now*. Waiting out a backoff is the opposite of what
+                // was asked, and a phone asleep would never be reached at all,
+                // so every device is tried at once and each is told there is
+                // news: a phone woken by it comes, and is synced with then.
+                _ = async {
+                    match &asked {
+                        Some(asked) => asked.notified().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    tracing::info!("asked to sync now");
+                    self.refresh_trust(&trust, &mut peers, &connector);
+                    peers.all_ready_now();
+                    self.announce_news(&connector, &peers, None).await;
+                    self.sync_all(&mut engine, &connector, &mut peers, &generation).await;
                 }
 
                 // Which devices are connected, kept current between sync
@@ -1331,6 +1360,11 @@ impl Peers {
     fn ready_now(&mut self, peer: Fingerprint) {
         self.backoff.remove(&peer);
         self.announced.insert(peer);
+    }
+
+    /// Forget every waiting period: the person asked for a sync now.
+    fn all_ready_now(&mut self) {
+        self.backoff.clear();
     }
 
     /// Wait until some peer reports a change.

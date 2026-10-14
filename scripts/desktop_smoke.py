@@ -11,7 +11,8 @@ What it does, in the real application with the real engine behind it:
 3. Adds a device: shows a pairing code, has a second device (the command line,
    in a folder not set up) join with it and take the key, and approves it in
    the window once the two numbers match (decision 0053).
-4. Sends that device a file, and sees it waiting under Transfers.
+4. Sends that device a file, and sees it waiting under Transfers and on
+   Home, then presses *Sync now*.
 5. Removes that device, from its details, answering the question.
 6. Protects the key with a passphrase from Settings, starts again, and
    unlocks from the window -- a wrong passphrase refused first.
@@ -285,6 +286,18 @@ def send(window, device):
     window.js("closePanel()")
 
 
+def home(window):
+    """Home lists the send under Waiting, and Sync now is taken (the owner's
+    item 8 of 2026-10-14). The other device never runs, so nothing is
+    synced: what this checks is that asking works."""
+    go(window, "home")
+    window.until("the send under Waiting",
+        "const w = document.getElementById('home-waiting'); return w && w.textContent.includes('to-send.txt')")
+    window.click("home-sync")
+    window.until("Sync now taken",
+        "const t = document.querySelector('.toast:not(.warn)'); return t && t.textContent.includes('Syncing with your devices')")
+
+
 def remove(window, device):
     """Remove the paired device through its details, and see it gone.
 
@@ -409,6 +422,8 @@ def run_through(window):
     device = named.split(" (")[0]
     send(window, device)
     print(f"sent a file to {device}")
+    home(window)
+    print("Home lists it as waiting, and Sync now is taken")
     remove(window, device)
     print(f"removed {device}, and its waiting send with it")
     # The wrong passphrase is a command that fails on purpose.

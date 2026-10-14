@@ -1,10 +1,12 @@
 // Home, Activity, conflicts and transfers.
 //
 // Home answers one question -- is my Qurb space okay? -- and in the healthy
-// state it should be almost boring (direction §5): the state, one action, a
-// line of secondary facts, and attention only when something needs a
-// decision. What happened lately is the clock beside the state, a button away:
-// the owner wanted it off Home (2026-10-13), as on the phone.
+// state it should be almost boring (direction §5): the state, a line of
+// secondary facts, and attention only when something needs a decision. The
+// owner widened it (item 8 of 2026-10-14), as on the phone: *Sync now* and
+// *Send* side by side, of one size; what is still waiting to reach the other
+// devices; and the backups this computer keeps for a phone. What happened
+// lately is the clock beside the state, a button away (2026-10-13).
 
 /** The last state drawn, to notice the moment everything becomes synced. */
 let lastState = null;
@@ -20,7 +22,7 @@ function heroFor(s, st, conflicts) {
       action: ["Add a device", "plus", () => openAddDevice()],
     };
   }
-  const send = ["Send to device", "send", () => openSend()];
+  const send = ["Send", "send", () => openSend()];
   switch (s.state) {
     case "up to date":
       return {
@@ -57,8 +59,8 @@ function heroFor(s, st, conflicts) {
       return {
         mark: "attention", icon: "triangle-alert",
         title: "Something needs attention.",
-        says: s.problem ?? "Qurb couldn't finish something. Activity says what.",
-        action: ["Open activity", "history", () => showScreen("activity")],
+        says: s.problem ?? "Qurb couldn't finish something. Activity, at the clock, says what.",
+        action: send,
       };
     default:
       return {
@@ -88,6 +90,10 @@ async function drawHome() {
 
   const hero = heroFor(s, st, conflictCount);
   setHero(hero);
+  // Nothing to sync with until there is a device; then Add a device alone.
+  const sync = $("home-sync");
+  sync.classList.toggle("hidden", s.peers === 0);
+  sync.disabled = s.state === "syncing" || Date.now() < askedAt + ASKED_FOR;
 
   // §33: the moment everything becomes synced, a light passes once through
   // the environment. Not on opening the window to an already-synced state:
@@ -131,6 +137,145 @@ function settle() {
 }
 
 $("home-activity").addEventListener("click", () => showScreen("activity"));
+
+/** When *Sync now* was last pressed, and how long it stays pressed: the
+ *  daemon may take a moment to start, and a second press would only queue. */
+let askedAt = 0;
+const ASKED_FOR = 3000;
+
+$("home-sync").addEventListener("click", async () => {
+  askedAt = Date.now();
+  $("home-sync").disabled = true;
+  try {
+    await invoke("sync_now");
+    toast("Syncing with your devices");
+  } catch (e) {
+    toast(String(e), true);
+  }
+  setTimeout(drawHome, ASKED_FOR);
+});
+
+/** How many of the waiting files and sends Home names; the rest are counted. */
+const WAITING_ROWS = 3;
+
+/** What Home's lists last drew, so that a beat with nothing new leaves them
+ *  alone rather than redrawing under the pointer. */
+let homeListsDrawn = "";
+
+/**
+ * What has not reached the other devices yet, and the backups kept here
+ * (the owner's items 8 and 10 of 2026-10-14). On the slow beat: the backups
+ * ask the index once for each of a phone's folders.
+ */
+async function drawHomeLists() {
+  let devices, outstanding, sends;
+  try {
+    [devices, outstanding, sends] = await Promise.all([invoke("devices"), invoke("not_elsewhere"), invoke("outgoing")]);
+  } catch (e) {
+    return;
+  }
+  const others = devices.filter((d) => (d.relation ?? "own") === "own" && !d.replaced_by);
+  const phones = others.filter((d) => d.kind === "phone");
+  const folders = await Promise.all(phones.map((d) =>
+    invoke("phone_folders", { phone: d.fingerprint }).catch(() => null)));
+  const drawn = JSON.stringify([others, outstanding, sends, folders]);
+  if (drawn === homeListsDrawn) return;
+  homeListsDrawn = drawn;
+  drawWaiting(others, outstanding, sends, phones, folders);
+  drawBackups(phones, folders);
+}
+
+/** A phone's chosen folders, those inside another chosen one counted with
+ *  it: how many files it listed, and how many are kept here. */
+function chosenOf(answer) {
+  const chosen = (answer?.folders ?? []).filter((f) => f.chosen);
+  const outer = chosen.filter((f) => !chosen.some((o) => o !== f && f.path.startsWith(`${o.path}/`)));
+  return {
+    folders: outer.length,
+    files: outer.reduce((n, f) => n + f.files, 0),
+    kept: outer.reduce((n, f) => n + f.kept_files, 0),
+  };
+}
+
+function drawWaiting(others, outstanding, sends, phones, folders) {
+  const box = $("home-waiting");
+  box.replaceChildren();
+  if (others.length === 0) return;
+  const going = others.map((d) => d.name).join(" and ");
+  box.append(el("div", "group-title", "Waiting"));
+  const list = el("ul", "rows");
+  box.append(list);
+
+  for (const f of outstanding.first) {
+    list.append(row({ iconName: KIND_ICON[kindOf(f.path)], name: base(f.path), sub: [`Not on ${going} yet`, size(f.size)] }));
+  }
+  if (outstanding.files > outstanding.first.length) {
+    const more = outstanding.files - outstanding.first.length;
+    const rest = Number(outstanding.size) - outstanding.first.reduce((n, f) => n + Number(f.size), 0);
+    list.append(row({ iconName: "upload", name: count(more, "more file"), sub: [`Not on ${going} yet`, size(rest)] }));
+  }
+  for (const o of sends.slice(0, WAITING_ROWS)) {
+    list.append(row({ iconName: KIND_ICON[kindOf(o.path)], name: base(o.path), sub: [`Sent to ${o.to}, not collected yet`, size(o.size)] }));
+  }
+  if (sends.length > WAITING_ROWS) {
+    const more = sends.length - WAITING_ROWS;
+    list.append(row({
+      iconName: "send", name: count(more, "more send"), sub: ["Not collected yet"],
+      onClick: () => $("transfers-chip").click(),
+    }));
+  }
+  // A phone's folders still to come. Counted from what the phone last listed
+  // and what is kept here, which includes files since deleted on it: so this
+  // can say too little, never too much.
+  phones.forEach((d, i) => {
+    const { folders: n, files, kept } = chosenOf(folders[i]);
+    if (n > 0 && files > kept) {
+      list.append(row({
+        iconName: "folder", name: `${d.name}'s folders`,
+        sub: [`${count(files - kept, "file")} still to come from it`],
+        onClick: () => openPhoneFolders(d),
+      }));
+    }
+  });
+  if (list.childElementCount === 0) {
+    const done = row({ iconName: "circle-check", name: "Nothing waiting", sub: [`Everything here has reached ${going}.`] });
+    done.querySelector(".tile").style.color = "var(--healthy)";
+    list.append(done);
+  }
+}
+
+/** WhatsApp and the folders this computer keeps for each of your phones
+ *  (decisions 0062 and 0063), as the phone's Home shows them from its side. */
+function drawBackups(phones, folders) {
+  const box = $("home-backups");
+  box.replaceChildren();
+  if (phones.length === 0) return;
+  box.append(el("div", "group-title", "Backups"));
+  const group = el("div", "group glass-frosted");
+  box.append(group);
+  const item = (title, says, act) => {
+    const it = el("div", "item");
+    const label = el("div", "label");
+    label.append(el("strong", null, title), el("span", null, says));
+    it.append(label);
+    if (act) it.append(act);
+    group.append(it);
+  };
+  phones.forEach((d, i) => {
+    item(`WhatsApp, from ${d.name}`, d.whatsapp
+      ? `${count(d.whatsapp.files, "file")}, ${size(d.whatsapp.bytes)}, kept here in its Private Vault, out of sight`
+      : `Off. Turned on in Qurb on ${d.name}, under Backups`);
+    const answer = folders[i];
+    const { folders: n, files, kept } = chosenOf(answer);
+    const choose = button(n > 0 ? "Change…" : "Choose…", "btn small");
+    choose.addEventListener("click", () => openPhoneFolders(d));
+    item(`Folders, from ${d.name}`,
+      answer?.seen_at == null ? `${d.name} hasn't listed its folders here yet`
+        : n === 0 ? "None chosen yet: photos, documents, any folder of the phone"
+        : `${count(n, "folder")}: ${kept >= files ? `all ${count(files, "file")}` : `${kept.toLocaleString()} of ${count(files, "file")}`} kept here`,
+      choose);
+  });
+}
 
 /** What needs a decision: conflicts, and only those (§5, §14). */
 async function drawAttention() {

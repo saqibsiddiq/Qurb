@@ -1700,6 +1700,46 @@ pub fn activity(
         .collect())
 }
 
+/// Files this computer made that no other device has yet, for Home's
+/// *Waiting* (the owner's item 8 of 2026-10-14): the first few, and how many
+/// in all.
+#[derive(Serialize)]
+pub struct NotElsewhere {
+    first: Vec<Pending>,
+    files: usize,
+    size: String,
+}
+
+#[derive(Serialize)]
+pub struct Pending {
+    path: String,
+    size: String,
+}
+
+/// How many of them Home names; the rest are counted.
+const NOT_ELSEWHERE_NAMED: usize = 3;
+
+#[tauri::command]
+pub fn not_elsewhere(hosted: Host<'_>) -> Answer<NotElsewhere> {
+    let waiting = hosted.with_store(|store| Ok(store.undelivered()?)).map_err(failed)?;
+    Ok(NotElsewhere {
+        files: waiting.len(),
+        size: big(waiting.iter().map(|(_, size)| size).sum()),
+        first: waiting
+            .into_iter()
+            .take(NOT_ELSEWHERE_NAMED)
+            .map(|(path, size)| Pending { path, size: big(size) })
+            .collect(),
+    })
+}
+
+/// *Sync now*: every device tried at once, and told there is news.
+#[tauri::command]
+pub fn sync_now(hosted: Host<'_>) -> Answer<()> {
+    hosted.sync_now();
+    Ok(())
+}
+
 #[tauri::command]
 pub fn outgoing(hosted: Host<'_>) -> Answer<Vec<Outgoing>> {
     // Resolved to the name the person gave the device. A vault is scoped by

@@ -128,6 +128,8 @@ pub struct Hosted {
     /// Tells the daemon to look now, when the window has just paired a device
     /// or sent a file, instead of at its next slow check.
     nudge: Arc<tokio::sync::Notify>,
+    /// *Sync now*: the daemon syncs with every device at once.
+    asked: Arc<tokio::sync::Notify>,
 }
 
 impl Hosted {
@@ -137,7 +139,14 @@ impl Hosted {
             running: Mutex::new(None),
             pairing: Mutex::new(None),
             nudge: Arc::new(tokio::sync::Notify::new()),
+            asked: Arc::new(tokio::sync::Notify::new()),
         }
+    }
+
+    /// Have the daemon sync with every device now. Kept, as a nudge is, if it
+    /// is in the middle of a sync.
+    pub fn sync_now(&self) {
+        self.asked.notify_one();
     }
 
     /// Have the daemon look for new pairings and sends now. Kept if the daemon
@@ -232,6 +241,7 @@ impl Hosted {
         let daemon_root = root.clone();
         let daemon_store_dir = store_dir(&root);
         let nudge = self.nudger();
+        let asked = Arc::clone(&self.asked);
         std::thread::Builder::new()
             .name("qurb-daemon".into())
             .spawn(move || {
@@ -245,7 +255,8 @@ impl Hosted {
                 };
                 let daemon = Daemon::new(&daemon_root, &daemon_store_dir, master, identity, config)
                     .reporting_to(publisher)
-                    .nudged_by(nudge);
+                    .nudged_by(nudge)
+                    .sync_when_asked(asked);
                 if let Err(e) = runtime.block_on(daemon.run()) {
                     tracing::error!(error = %e, "the daemon stopped");
                 }

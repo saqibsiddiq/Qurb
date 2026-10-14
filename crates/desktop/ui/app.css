@@ -945,8 +945,10 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 .hero h1 { font-size: 32px; line-height: 38px; font-weight: 600; letter-spacing: -0.025em; }
 .hero p { margin-top: 6px; color: var(--text-2); font-size: 15.5px; }
 .hero .hero-aside { margin-left: auto; align-self: flex-start; }
-.hero-actions { display: flex; align-items: center; gap: var(--s4); margin: var(--s5) 0 0 calc(56px + var(--s5)); }
+/* Two of one size, side by side: Sync now and Send (the owner's item 8). */
+.hero-actions { display: grid; grid-template-columns: repeat(2, 184px); gap: var(--s3); margin: var(--s5) 0 0 calc(56px + var(--s5)); }
 .secondary-facts { color: var(--text-3); font-size: 13px; }
+#home-facts { margin: var(--s3) 0 0 calc(56px + var(--s5)); min-height: 18px; }
 .home-body { margin-left: calc(56px + var(--s5)); }
 
 /* ------------------------------------------------------------------- files */
@@ -1234,6 +1236,7 @@ input[type="range"] { width: 100%; accent-color: var(--green); }
   .sidebar .nav span, .sidebar .label, .brand span, .nav .count { display: none; }
   .nav { justify-content: center; padding: 0; }
   .scroll { padding: var(--s2) var(--s4) var(--s6); }
-  .hero-actions, .home-body { margin-left: 0; }
+  .hero-actions, #home-facts, .home-body { margin-left: 0; }
+  .hero-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .words { grid-template-columns: repeat(3, 1fr); }
 }

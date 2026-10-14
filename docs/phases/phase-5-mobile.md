@@ -2304,7 +2304,17 @@ His answers to the questions they raised are with them.
    device (three, then "N more files"), sends not yet collected, and the
    backups still on their way, or *Nothing waiting*; then *Backups*,
    WhatsApp's and the phone's folders, each opening its own place. Checked on
-   the emulator; not yet on the S23. The desktop's Home is next.
+   the emulator; not yet on the S23. **The desktop's, 2026-10-14**: the same
+   two buttons, *Waiting* in the same words, and *Backups* — WhatsApp and the
+   folders kept here for each of your phones, with *Choose…* to change them.
+   *Sync now* is new to the daemon: every device's backoff dropped, each told
+   there is news (which wakes a phone asleep), and all synced. Checked in the
+   fixtures page (wide and narrow) and by the real-window smoke test, which
+   now finds a send under *Waiting* and presses *Sync now*; installed on the
+   laptop, not yet pressed with the S23 there. A phone's folders "still to
+   come" is what the phone last listed less what is kept here, and what is
+   kept includes files since deleted on the phone, so it can say too few,
+   never too many.
 9. **The desktop's Storage redesigned**, thoroughly.
 10. **The folders to back up chosen on the phone too**, and on its Home.
     **Built 2026-10-14**: either device may choose, the later choice winning

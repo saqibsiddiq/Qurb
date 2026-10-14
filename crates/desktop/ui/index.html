@@ -159,8 +159,10 @@
       </div>
 
       <div class="scroll" id="scroll">
-        <!-- §5: is my Qurb space okay? One state, one action, attention only
-             when needed. What happened lately is the clock, a button away. -->
+        <!-- §5: is my Qurb space okay? The state, Sync now and Send (the
+             owner's item 8 of 2026-10-14), attention only when needed, then
+             what is waiting and the backups. What happened lately is the
+             clock, a button away. -->
         <section id="home" class="screen on">
           <div class="hero">
             <div id="mark" class="mark"><svg class="i"><use href="#i-check"/></svg></div>
@@ -171,13 +173,18 @@
             <button class="icon-btn hero-aside" id="home-activity" aria-label="Activity" title="Activity"><svg class="i"><use href="#i-clock"/></svg></button>
           </div>
           <div class="hero-actions">
-            <button class="btn primary large" id="home-action">
-              <svg class="i"><use href="#i-send"/></svg><span>Send to device</span>
+            <button class="btn large" id="home-sync">
+              <svg class="i"><use href="#i-refresh-cw"/></svg><span>Sync now</span>
             </button>
-            <span class="secondary-facts num" id="home-facts"></span>
+            <button class="btn primary large" id="home-action">
+              <svg class="i"><use href="#i-send"/></svg><span>Send</span>
+            </button>
           </div>
+          <p class="secondary-facts num" id="home-facts"></p>
           <div class="home-body">
             <div id="attention"></div>
+            <div id="home-waiting"></div>
+            <div id="home-backups"></div>
           </div>
         </section>
 

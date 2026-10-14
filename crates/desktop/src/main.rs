@@ -187,6 +187,8 @@ fn run() -> Result<()> {
             commands::devices,
             commands::activity,
             commands::outgoing,
+            commands::not_elsewhere,
+            commands::sync_now,
             commands::fetch,
             commands::set_limit,
             commands::quit,

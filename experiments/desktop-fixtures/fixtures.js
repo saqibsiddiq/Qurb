@@ -344,6 +344,17 @@ const ANSWERS = {
     ];
   },
 
+  // Home's Waiting: files made here that no other device has yet.
+  not_elsewhere: () => QUIET ? { first: [], files: 0, size: "0" } : {
+    first: [
+      { path: "Budget 2026.xlsx", size: "88000" },
+      { path: "Photos/Holiday/beach.jpg", size: "900000" },
+      { path: "Notes/ideas.md", size: "2400" },
+    ],
+    files: 7,
+    size: "5300000",
+  },
+  sync_now: () => null,
   outgoing: () => QUIET ? [] : [
     { path: "Tickets.pdf", size: "700416", to: "Galaxy S23", to_id: "4cef0d89" },
   ],
