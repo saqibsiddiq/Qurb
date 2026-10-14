@@ -89,6 +89,6 @@ is worth more than a tidy directory.
 | [0060](0060-a-computer-keeps-private-folders-for-several-people.md) | A computer keeps private folders for several people, and qurb keeps no copy of what it sends | Accepted — steps 1–5 built, step 6 (watched on hardware) not yet; supersedes 0023 for guests, amends 0030 rules 1 and 4 |
 | [0061](0061-the-relay-carries-meetings.md) | The relay carries meetings: one connection, several names | Accepted — amends 0017; closes 0060's relay gap |
 | [0062](0062-backing-up-whatsapp.md) | Backing up WhatsApp to a computer, not to the Google account | Accepted — kept in the phone's Private Vault on the laptop; restoring unproven |
-| [0063](0063-backing-up-a-phones-folders-chosen-on-the-desktop.md) | Backing up a phone's folders, chosen on the desktop | Accepted as a design — not built; waits on the S23 run of the file-access spike |
-| [0064](0064-many-small-files-quickly.md) | Many small files, quickly: what limits it, and the order of work | Accepted as a plan — step 1, answering requests in parallel, first |
-| [0065](0065-the-scale-qurb-is-built-for.md) | The scale qurb is built for: big libraries, a family server, a service | Accepted as targets — nothing built; measuring at a million files first |
+| [0063](0063-backing-up-a-phones-folders-chosen-on-the-desktop.md) | Backing up a phone's folders, chosen on the desktop | Accepted — built and seen on the S23 and the laptop; chosen on either device |
+| [0064](0064-many-small-files-quickly.md) | Many small files, quickly: what limits it, and the order of work | Accepted as a plan — step 1, answering requests in parallel, built; not yet measured on the S23 |
+| [0065](0065-the-scale-qurb-is-built-for.md) | The scale qurb is built for: big libraries, a family server, a service | Accepted as targets — measured at 100,000 and a million files; the file list in frames, and V24's index, built |

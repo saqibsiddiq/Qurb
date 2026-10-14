@@ -1,9 +1,11 @@
 # 0063 — Backing up a phone's folders, chosen on the desktop
 
-**Status:** Accepted as a design, 2026-10-14, with the owner's answers below.
-**Nothing is built.** It depends on "All files access" reading a real phone
-quickly enough, which is measured on the emulator and not yet on the S23
-([experiments/file-access-speed](../../experiments/file-access-speed/README.md)).
+**Status:** Accepted, 2026-10-14, with the owner's answers below. Built the
+same day, all four steps, and seen on the S23 and the laptop: "All files
+access" measured on the S23 first
+([experiments/file-access-speed](../../experiments/file-access-speed/README.md)),
+then a folder ticked on the laptop backed up from the phone. Amended the same
+day: chosen on either device, the later choice winning.
 **Date:** 2026-10-14
 
 ## What was asked
