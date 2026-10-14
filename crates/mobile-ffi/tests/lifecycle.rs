@@ -806,3 +806,62 @@ fn a_file_gone_before_it_is_read_does_not_stop_the_run() {
     assert_eq!((run.added, run.failed, run.remaining), (40, 1, 0), "{run:?}");
     assert!(run.first_failure.unwrap().starts_with("Media/WhatsApp Images/IMG-03.jpg"));
 }
+
+/// Folders chosen on a computer are listed for it, and backed up where they
+/// lie, once each, and only the phone's own (decision 0063).
+#[test]
+fn folders_chosen_on_the_computer_are_backed_up_where_they_lie() {
+    let dir = scratch();
+    let storage = scratch();
+    let root = dir.path().display().to_string();
+    create(root.clone()).unwrap();
+    let laptop = pair_with_somebody(dir.path(), "laptop", 0x3C);
+    let qurb = Qurb::open(root, None).unwrap();
+    qurb.add_holder(laptop).unwrap();
+
+    let put = |relative: &str, size: usize| {
+        let path = storage.path().join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        write_incompressible(&path, size);
+    };
+    put("DCIM/Camera/IMG-1.jpg", 2 << 20);
+    put("DCIM/Camera/IMG-2.jpg", 1 << 20);
+    put("DCIM/.thumbnails/t.jpg", 1 << 20);
+    put("Documents/report.pdf", 1 << 20);
+    put("Download/setup.zip", 1 << 20);
+    put("top.txt", 1 << 20);
+    let shared = storage.path().display().to_string();
+
+    // What the computer is shown: folders two deep, hidden ones left out.
+    qurb.list_folders(shared.clone()).unwrap();
+    let store = Store::open(&dir.path().join(".qurb"), chunk_key_of(dir.path())).unwrap();
+    let shown: Vec<(String, u64, u64)> =
+        store.db().own_folders().unwrap().into_iter().map(|f| (f.path, f.files, f.bytes)).collect();
+    assert_eq!(
+        shown,
+        vec![
+            ("DCIM".into(), 2, 3 << 20),
+            ("DCIM/Camera".into(), 2, 3 << 20),
+            ("Documents".into(), 1, 1 << 20),
+            ("Download".into(), 1, 1 << 20),
+        ]
+    );
+
+    // Chosen on the computer: a folder and one inside it, another folder, and
+    // one trying to climb out of the phone's storage.
+    store
+        .db()
+        .set_chosen_here(&["DCIM".into(), "DCIM/Camera".into(), "Documents".into(), "../outside".into()])
+        .unwrap();
+    let run = qurb.back_up_chosen(shared.clone(), 60).unwrap();
+    assert_eq!((run.added, run.failed, run.remaining), (3, 0, 0), "{run:?}");
+    assert_eq!(run.bytes_read, 4 << 20, "each file read once");
+
+    // Unchanged, nothing is read again.
+    let again = qurb.back_up_chosen(shared, 60).unwrap();
+    assert_eq!((again.added, again.unchanged, again.bytes_read), (0, 3, 0), "{again:?}");
+
+    // Not among the person's own files.
+    assert!(qurb.browse_in(String::new(), true).unwrap().folders.is_empty());
+    assert_eq!(qurb.usage().unwrap().logical, 0);
+}

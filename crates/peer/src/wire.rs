@@ -18,6 +18,7 @@
 
 use crate::error::{Error, Result};
 use qurb_sync::{Content, DeviceId, FileVersion, VersionVector};
+use qurb_storage::db::FolderSummary;
 
 /// Upper bound on any single decoded message.
 ///
@@ -113,6 +114,17 @@ pub enum Request {
     /// The guest approved, behind its screen lock: the folder's key, for the
     /// ask with this nonce. Held in memory only, while the folder is open.
     Unlock { nonce: [u8; 16], key: [u8; 32] },
+
+    /// What folders this device has that could be backed up (decision 0063).
+    /// Asked by a computer that keeps its vault, and answered to that computer
+    /// only, with [`Response::Folders`].
+    Folders,
+
+    /// Which of the asking device's folders this computer was told to back
+    /// up (decision 0063). Asked by a phone of the computer keeping its vault,
+    /// answered with [`Response::Chosen`]. The phone asks; nothing is pushed
+    /// at it.
+    Chosen,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +169,13 @@ pub enum Response {
     /// Returned both when something changed and when the wait timed out, since
     /// the asking device wants the current value either way.
     Changed { generation: u64 },
+
+    /// This device's folders, two levels deep, each with what is beneath it,
+    /// answering [`Request::Folders`].
+    Folders(Vec<FolderSummary>),
+
+    /// The folders chosen for the asking device, answering [`Request::Chosen`].
+    Chosen(Vec<String>),
 }
 
 const TAG_TREE: u8 = 1;
@@ -170,6 +189,8 @@ const TAG_ABOUT: u8 = 8;
 const TAG_VISIT: u8 = 9;
 const TAG_ASKS: u8 = 10;
 const TAG_UNLOCK: u8 = 11;
+const TAG_FOLDERS: u8 = 12;
+const TAG_CHOSEN: u8 = 13;
 
 const STATUS_TREE: u8 = 1;
 const STATUS_MANIFEST: u8 = 2;
@@ -184,6 +205,12 @@ const STATUS_MISMATCH: u8 = 10;
 const STATUS_DECLINED: u8 = 11;
 const STATUS_WELCOME: u8 = 12;
 const STATUS_ASKS: u8 = 13;
+const STATUS_FOLDERS: u8 = 14;
+const STATUS_CHOSEN: u8 = 15;
+
+/// The most folders one answer may list: two levels of a phone's storage come
+/// to a few hundred. A peer claiming more is not describing a phone.
+const MAX_FOLDERS: usize = 4096;
 
 impl Request {
     pub fn encode(&self) -> Vec<u8> {
@@ -235,6 +262,8 @@ impl Request {
                 put_name(&mut out, kind);
             }
             Request::About => out.push(TAG_ABOUT),
+            Request::Folders => out.push(TAG_FOLDERS),
+            Request::Chosen => out.push(TAG_CHOSEN),
         }
         out
     }
@@ -264,6 +293,8 @@ impl Request {
                 Request::Join { token, name: r.name()?, kind: r.name()? }
             }
             TAG_ABOUT => Request::About,
+            TAG_FOLDERS => Request::Folders,
+            TAG_CHOSEN => Request::Chosen,
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -297,6 +328,24 @@ impl Response {
             Response::Changed { generation } => {
                 out.push(STATUS_CHANGED);
                 out.extend_from_slice(&generation.to_le_bytes());
+            }
+            Response::Folders(folders) => {
+                out.push(STATUS_FOLDERS);
+                let folders = &folders[..folders.len().min(MAX_FOLDERS)];
+                put_u32(&mut out, folders.len());
+                for folder in folders {
+                    put_name(&mut out, &folder.path);
+                    out.extend_from_slice(&folder.files.to_le_bytes());
+                    out.extend_from_slice(&folder.bytes.to_le_bytes());
+                }
+            }
+            Response::Chosen(folders) => {
+                out.push(STATUS_CHOSEN);
+                let folders = &folders[..folders.len().min(MAX_FOLDERS)];
+                put_u32(&mut out, folders.len());
+                for folder in folders {
+                    put_name(&mut out, folder);
+                }
             }
             Response::Paired { device_id, name, kind, key_check } => {
                 out.push(STATUS_PAIRED);
@@ -385,6 +434,28 @@ impl Response {
                 meeting: r.hash()?,
             },
             STATUS_MISMATCH => Response::Mismatch,
+            STATUS_FOLDERS => {
+                let count = r.count()?;
+                if count > MAX_FOLDERS {
+                    return Err(Error::Protocol { detail: format!("{count} folders is not a phone's") });
+                }
+                let mut folders = Vec::with_capacity(count);
+                for _ in 0..count {
+                    folders.push(FolderSummary { path: r.name()?, files: r.u64()?, bytes: r.u64()? });
+                }
+                Response::Folders(folders)
+            }
+            STATUS_CHOSEN => {
+                let count = r.count()?;
+                if count > MAX_FOLDERS {
+                    return Err(Error::Protocol { detail: format!("{count} folders is not a phone's") });
+                }
+                let mut folders = Vec::with_capacity(count);
+                for _ in 0..count {
+                    folders.push(r.name()?);
+                }
+                Response::Chosen(folders)
+            }
             STATUS_DECLINED => Response::Declined,
             STATUS_KEY => Response::Key { key: r.hash()? },
             STATUS_TREE => {
@@ -595,6 +666,8 @@ mod tests {
             Request::Chunk { hash: [2; 32] },
             Request::Join { token: [3; 16], name: "Phone".into(), kind: "phone".into() },
             Request::About,
+            Request::Folders,
+            Request::Chosen,
             Request::Pair {
                 token: [5; 16],
                 device_id: [6; 32],
@@ -633,6 +706,12 @@ mod tests {
             Response::Welcome { device_id: [3; 32], name: "Laptop".into(), kind: "computer".into(), meeting: [4; 32] },
             Response::Asks { opening: None },
             Response::Asks { opening: Some([5; 16]) },
+            Response::Folders(vec![
+                FolderSummary { path: "DCIM".into(), files: 1200, bytes: 9_000_000_000 },
+                FolderSummary { path: "DCIM/Camera".into(), files: 1100, bytes: 8_800_000_000 },
+            ]),
+            Response::Folders(vec![]),
+            Response::Chosen(vec!["DCIM/Camera".into(), "Documents".into()]),
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);

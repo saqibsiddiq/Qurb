@@ -73,6 +73,10 @@ fn start_hostile(
                         }
                         // Pairing has its own listener; this one never serves it.
                         (_, Request::Pair { .. } | Request::Join { .. } | Request::Visit { .. } | Request::About | Request::Asks | Request::Unlock { .. }) => Some(Response::NotFound.encode()),
+                        // A hostile peer's folders, or choices for us, are
+                        // never asked for in a sync, and lists are bounded on
+                        // the wire.
+                        (_, Request::Folders | Request::Chosen) => Some(Response::NotFound.encode()),
                         // Being told a peer holds something asks nothing of us
                         // and gives a hostile peer nothing to work with: the
                         // report is credited to the connection's certificate,

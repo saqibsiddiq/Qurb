@@ -112,6 +112,29 @@ His answers the same day:
    files.
 5. Watched between the S23 and the laptop.
 
+## Progress
+
+**Step 2, the engine, built 2026-10-14.** Tables (schema V23): on the phone,
+its own folders as last listed (`own_folders`) and the folders last said to
+be chosen (`chosen_here`); on the computer, each phone's folders as it last
+said (`known_folders`) and the ticks (`backup_choices`). Two requests,
+`Folders` and `Chosen`, each answered only to whom it belongs. The phone asks
+`Chosen` on every pass with a computer keeping its vault; the desktop asks a
+phone of its person's `Folders` on every sync. On the phone, `list_folders`
+walks shared storage once and counts what is beneath each folder two levels
+deep, and `back_up_chosen` keeps each chosen folder where it lies under
+`.qurb-outside/storage/<folder>/`, with WhatsApp's tested loop. A folder
+inside another chosen one is backed up once; anything absolute, climbing out,
+hidden, or in `Android/data` or `Android/obb` is refused, so a computer can
+only point the phone at its own ordinary folders. Tested: who may see a
+phone's folders and choices (`only_a_computer_keeping_the_vault_sees_a_phones_folders`,
+`a_phone_is_told_what_was_chosen_for_it_and_nothing_else`), and the phone's
+side end to end (`folders_chosen_on_the_computer_are_backed_up_where_they_lie`).
+
+**Not built yet:** asking for "All files access" on the phone, calling these
+from the app, and the desktop's screens: steps 3 and 4. The S23 run of the
+spike (step 1) is still to do.
+
 ## Reversing it
 
 Cheap before step 2. After it, each folder is rows like WhatsApp's: no longer

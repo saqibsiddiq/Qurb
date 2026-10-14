@@ -1001,6 +1001,26 @@ impl Daemon {
                     let _ = engine.store().learn_kind(device, &kind);
                 }
             }
+            // A phone of this person's: its folders, for choosing which it
+            // backs up here (decision 0063). It says only to a computer that
+            // keeps its vault, and an older build cannot say at all; either
+            // way, what it said last stands.
+            let phone = matches!(engine.store().db().peer_kind(device), Ok(Some(kind)) if kind == "phone");
+            let other_person = engine
+                .store()
+                .db()
+                .peer_by_fingerprint(peer.as_bytes())
+                .ok()
+                .flatten()
+                .is_some_and(|known| known.relation.is_other_person());
+            if phone && !other_person {
+                if let Ok(Some(folders)) = client.folders().await {
+                    let at = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_secs() as i64);
+                    let _ = engine.store().db().set_known_folders(device, &folders, at);
+                }
+            }
         }
 
         // Files somebody asked to have back are in the plan too; see

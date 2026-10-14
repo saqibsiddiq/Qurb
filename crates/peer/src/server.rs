@@ -378,7 +378,9 @@ async fn serve_request(
         | Response::About { .. }
         | Response::Mismatch
         | Response::Declined
-        | Response::Changed { .. } => 0,
+        | Response::Changed { .. }
+        | Response::Folders(_)
+        | Response::Chosen(_) => 0,
     };
 
     let encoded = response.encode();
@@ -506,6 +508,24 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         Request::About => match store.db().local_kind()? {
             Some(kind) => Response::About { kind },
             None => Response::NotFound,
+        },
+
+        // This device's folders, to a computer of the same person that keeps
+        // its vault, and to nobody else: the names of someone's folders are
+        // theirs (decision 0063). Anyone else is told nothing is here.
+        Request::Folders => match (&owner, other_person) {
+            (Some(device), false) if store.db().is_holder(device)? => {
+                Response::Folders(store.db().own_folders()?)
+            }
+            _ => Response::NotFound,
+        },
+
+        // What was chosen for the asking device, and only for itself: the
+        // device is the one the connection proves, never one it names. Another
+        // person's device is told nothing.
+        Request::Chosen => match (&owner, other_person) {
+            (Some(device), false) => Response::Chosen(store.db().chosen_for(device)?),
+            _ => Response::NotFound,
         },
 
         // Handled before the store is locked, since it waits.

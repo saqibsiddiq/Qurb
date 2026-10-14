@@ -347,10 +347,11 @@ space runs short on a desktop, or when asked for by name on a phone
 (`sent_copies`, `release_sent_copies`).
 
 **A file of a device's own vault can live outside its folder**
-([decisions/0062](decisions/0062-backing-up-whatsapp.md)): on a phone,
+([decisions/0062](decisions/0062-backing-up-whatsapp.md) and
+[0063](decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)): on a phone,
 WhatsApp's folder, which Android lets the app read through a grant the person
 gives once. Such a file is a row in the device's vault under a prefix
-(`WhatsApp backup/`), its chunks recorded and none stored, and `outside_sources`
+(`.qurb-outside/whatsapp/`), its chunks recorded and none stored, and `outside_sources`
 says where it is read from -- whenever a device keeping the vault asks, and
 checked against its hashes, for as long as the file is there.
 `Store::keep_outside_folder` brings the rows into line with a listing of the
@@ -1005,6 +1006,7 @@ for the workspace as it stands.
 | Requests answered in parallel | the index is asked under the store's lock, the bytes read after it is let go (`Store::locate`, `ChunkReader`), so requests made at once are read at once — [0064](decisions/0064-many-small-files-quickly.md) |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
+| A phone's folders, chosen on a computer | `Folders`: a computer keeping a phone's vault asks what folders it has, answered to that computer only; `Chosen`: the phone asks which were ticked for it, about itself only. Backed up under `.qurb-outside/storage/<folder>/`, kept when deleted on the phone — [0063](decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md) |
 | Every reachable address offered | LAN, overlay network and public, raced in parallel; the local ones offered again within seconds of changing |
 | Signalling that reconnects | a rendezvous restart costs seconds, not a daemon restart |
 | Local discovery | encrypted beacons; two devices on one network need no server at all |

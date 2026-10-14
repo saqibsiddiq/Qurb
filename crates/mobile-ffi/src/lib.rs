@@ -258,6 +258,89 @@ fn whatsapp_prefix() -> String {
     format!("{}/whatsapp", qurb_storage::db::OUTSIDE)
 }
 
+/// Whether a folder a computer chose can be backed up: a plain folder of the
+/// phone's shared storage, named from its root. Nothing absolute, nothing
+/// climbing out with `..`, nothing hidden, and not the two folders Android
+/// keeps from every app (decision 0063). A computer, even a compromised one,
+/// can only point at the phone's own ordinary folders.
+fn choosable(folder: &str) -> bool {
+    !folder.is_empty()
+        && !folder.starts_with('/')
+        && folder.split('/').all(|part| !part.is_empty() && part != ".." && !part.starts_with('.'))
+        && !folder.starts_with("Android/data")
+        && !folder.starts_with("Android/obb")
+}
+
+/// The chosen folders with any inside another chosen one left out: its files
+/// are backed up with the outer one already.
+fn outermost(mut folders: Vec<String>) -> Vec<String> {
+    folders.sort();
+    let mut kept: Vec<String> = Vec::new();
+    for folder in folders {
+        if !kept.iter().any(|outer| folder.starts_with(&format!("{outer}/"))) {
+            kept.push(folder);
+        }
+    }
+    kept
+}
+
+/// Every file beneath `dir`, as entries of a folder kept where it lies: named
+/// from the folder, read from where it is. Hidden names are skipped, as
+/// WhatsApp's caches are, and links are not followed.
+fn walk_files(dir: &Path, under: &str, into: &mut Vec<qurb_storage::OutsideEntry>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
+        let Ok(meta) = std::fs::symlink_metadata(entry.path()) else { continue };
+        let path = if under.is_empty() { name } else { format!("{under}/{name}") };
+        if meta.is_dir() {
+            walk_files(&entry.path(), &path, into);
+        } else if meta.is_file() {
+            let mtime_ns = meta
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map_or(0, |d| d.as_nanos() as i64);
+            into.push(qurb_storage::OutsideEntry {
+                path,
+                source: entry.path().to_string_lossy().into_owned(),
+                size: meta.len(),
+                mtime_ns,
+            });
+        }
+    }
+}
+
+/// The folders of `root` and of each folder in it, with the files and bytes
+/// beneath each, from one walk (decision 0063). Hidden folders, and the two
+/// Android keeps from every app, are left out.
+fn folder_summaries(root: &Path) -> Vec<qurb_storage::db::FolderSummary> {
+    let mut files = Vec::new();
+    walk_files(root, "", &mut files);
+    let mut folders: std::collections::BTreeMap<String, (u64, u64)> = std::collections::BTreeMap::new();
+    for file in &files {
+        let parts: Vec<&str> = file.path.split('/').collect();
+        // A file at the top belongs to no folder; one in a folder counts for
+        // it, and one deeper counts for its second-level folder as well.
+        for depth in 1..=2.min(parts.len().saturating_sub(1)) {
+            let folder = parts[..depth].join("/");
+            if !choosable(&folder) {
+                break;
+            }
+            let entry = folders.entry(folder).or_default();
+            entry.0 += 1;
+            entry.1 += file.size;
+        }
+    }
+    folders
+        .into_iter()
+        .map(|(path, (files, bytes))| qurb_storage::db::FolderSummary { path, files, bytes })
+        .collect()
+}
+
 /// One word of the recovery phrase, as somebody typed it back from paper.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct PhraseAnswer {
@@ -1754,36 +1837,39 @@ impl Qurb {
         let media = |path: &str| path.starts_with("Media/");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds.into());
         let mut run = BackupRun::default();
-        // Files that could not be read this run: skipped for the rest of it,
-        // and tried again next time. Mostly ones WhatsApp moved or deleted in
-        // the minute it took to list the folder -- ordinary, and on the S23
-        // it stopped every run after the first at one such file.
-        let mut unreadable = std::collections::HashSet::new();
-        loop {
-            // A few seconds at a time, letting go of the engine in between, so
-            // that the app is never kept waiting on it for a whole first run.
-            let slice = (std::time::Instant::now() + std::time::Duration::from_secs(3)).min(deadline);
-            let skip = |path: &str| unreadable.contains(path);
-            let report =
-                self.engine()?.store_mut().keep_outside_folder(&prefix, &listing, &media, Some(slice), &skip)?;
-            run.added += report.added as u32;
-            run.changed += report.changed as u32;
-            run.kept += report.kept as u32;
-            run.deleted += report.deleted as u32;
-            run.bytes_read += report.bytes_read;
-            run.remaining = report.remaining as u32;
-            run.failed += report.failed.len() as u32;
-            if run.first_failure.is_none() {
-                run.first_failure = report.failed.first().map(|(path, why)| format!("{path}: {why}"));
-            }
-            unreadable.extend(report.failed.into_iter().map(|(path, _)| path));
-            if report.remaining == 0 || std::time::Instant::now() >= deadline {
+        self.keep_folder(&prefix, &listing, &media, deadline, &mut run)?;
+        Ok(run)
+    }
+
+
+    /// This phone's folders, two levels deep from `root`, its shared storage,
+    /// with what is beneath each: what a computer keeping its vault is shown
+    /// to choose from (decision 0063). Needs "All files access"; without it
+    /// nothing can be listed, and the computer is told there is nothing.
+    pub fn list_folders(&self, root: String) -> Result<u32, QurbError> {
+        let folders = folder_summaries(Path::new(&root));
+        self.engine()?.store().db().set_own_folders(&folders)?;
+        Ok(folders.len() as u32)
+    }
+
+    /// Back up the folders chosen for this phone on a computer keeping its
+    /// vault (decision 0063), each kept where it lies under `root`, as
+    /// WhatsApp's is. A file deleted here stays on the computer. A run that
+    /// runs out of time says how many it left, and the next carries on.
+    pub fn back_up_chosen(&self, root: String, seconds: u32) -> Result<BackupRun, QurbError> {
+        let chosen = outermost(self.engine()?.store().db().chosen_here()?.into_iter().filter(|f| choosable(f)).collect());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds.into());
+        let mut run = BackupRun::default();
+        for folder in chosen {
+            if std::time::Instant::now() >= deadline {
                 break;
             }
+            let base = Path::new(&root).join(&folder);
+            let mut listing = Vec::new();
+            walk_files(&base, "", &mut listing);
+            let prefix = format!("{}/storage/{folder}", qurb_storage::db::OUTSIDE);
+            self.keep_folder(&prefix, &listing, &|_| true, deadline, &mut run)?;
         }
-        // Unchanged since before this run: each slice also counts the files
-        // an earlier slice of it just read.
-        run.unchanged = (listing.len() as u32).saturating_sub(run.added + run.changed + run.remaining + run.failed);
         Ok(run)
     }
 
@@ -1873,6 +1959,54 @@ impl Qurb {
 /// applied to, and neither a `MutexGuard` nor a four-argument constructor
 /// taking an optional callback interface can cross an FFI boundary.
 impl Qurb {
+    /// Keep one folder where it lies, a few seconds at a time until
+    /// `deadline`, adding what was done to `run` (decisions 0062 and 0063).
+    fn keep_folder(
+        &self,
+        prefix: &str,
+        listing: &[qurb_storage::OutsideEntry],
+        keep_when_gone: &dyn Fn(&str) -> bool,
+        deadline: std::time::Instant,
+        run: &mut BackupRun,
+    ) -> Result<(), QurbError> {
+        let before = (run.added, run.changed, run.failed);
+        let remaining_before = run.remaining;
+        // Files that could not be read this run: skipped for the rest of it,
+        // and tried again next time. Mostly ones WhatsApp moved or deleted in
+        // the minute it took to list the folder -- ordinary, and on the S23
+        // it stopped every run after the first at one such file.
+        let mut unreadable = std::collections::HashSet::new();
+        let mut remaining;
+        loop {
+            // A few seconds at a time, letting go of the engine in between, so
+            // that the app is never kept waiting on it for a whole first run.
+            let slice = (std::time::Instant::now() + std::time::Duration::from_secs(3)).min(deadline);
+            let skip = |path: &str| unreadable.contains(path);
+            let report =
+                self.engine()?.store_mut().keep_outside_folder(prefix, listing, keep_when_gone, Some(slice), &skip)?;
+            run.added += report.added as u32;
+            run.changed += report.changed as u32;
+            run.kept += report.kept as u32;
+            run.deleted += report.deleted as u32;
+            run.bytes_read += report.bytes_read;
+            remaining = report.remaining as u32;
+            run.failed += report.failed.len() as u32;
+            if run.first_failure.is_none() {
+                run.first_failure = report.failed.first().map(|(path, why)| format!("{path}: {why}"));
+            }
+            unreadable.extend(report.failed.into_iter().map(|(path, _)| path));
+            if report.remaining == 0 || std::time::Instant::now() >= deadline {
+                break;
+            }
+        }
+        run.remaining = remaining_before + remaining;
+        // Unchanged since before this run: each slice also counts the files
+        // an earlier slice of it just read.
+        let done = (run.added - before.0) + (run.changed - before.1) + remaining + (run.failed - before.2);
+        run.unchanged += (listing.len() as u32).saturating_sub(done);
+        Ok(())
+    }
+
     /// One directory, from the index: every area, or one (see
     /// [`browse_in`](Self::browse_in)).
     fn directory(&self, dir: String, area: Option<bool>) -> Result<Directory, QurbError> {
@@ -2445,6 +2579,18 @@ impl Qurb {
                 });
                 if let Ok(Ok(Some(kind))) = asked {
                     let _ = engine.store().learn_kind(device, &kind);
+                }
+            }
+            // Which folders the person chose for this phone on a computer
+            // keeping its vault (decision 0063): asked, never pushed. Kept, so
+            // that a backup run with the computer away still knows. Briefly,
+            // and a computer that cannot say leaves what was last said.
+            if engine.store().db().is_holder(device).unwrap_or(false) {
+                let asked = runtime.block_on(async {
+                    tokio::time::timeout(std::time::Duration::from_secs(2), client.chosen()).await
+                });
+                if let Ok(Ok(Some(chosen))) = asked {
+                    let _ = engine.store().db().set_chosen_here(&chosen);
                 }
             }
         }
@@ -3119,6 +3265,26 @@ mod tests {
         // A later ordinary look keeps the excuse; it does not cut it short.
         let next = thawed + LOOK_EVERY;
         assert_eq!(excused_until(thawed, next, excused), excused);
+    }
+
+    /// A computer can point a phone only at its own ordinary folders
+    /// (decision 0063): nothing absolute, climbing out, hidden, or kept from
+    /// every app by Android.
+    #[test]
+    fn a_chosen_folder_is_one_of_the_phones_own() {
+        for good in ["DCIM", "DCIM/Camera", "Documents", "Android/media/com.whatsapp/WhatsApp", "Pictures/Screenshots"] {
+            assert!(choosable(good), "{good} refused");
+        }
+        for bad in ["", "/data/data/com.qurb", "../secrets", "DCIM/../..", "DCIM//Camera", ".thumbnails", "DCIM/.trash", "Android/data/com.whatsapp", "Android/obb"] {
+            assert!(!choosable(bad), "{bad} accepted");
+        }
+    }
+
+    /// A folder inside another chosen one is backed up with it, once.
+    #[test]
+    fn a_folder_inside_a_chosen_one_is_not_backed_up_twice() {
+        let chosen = vec!["DCIM/Camera".to_string(), "DCIM".to_string(), "DCIMX".to_string(), "Documents".to_string()];
+        assert_eq!(outermost(chosen), vec!["DCIM", "DCIMX", "Documents"]);
     }
 
     /// Collected from, a pass stays whether or not it reached anybody itself;

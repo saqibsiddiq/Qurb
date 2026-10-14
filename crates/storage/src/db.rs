@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -625,6 +625,40 @@ CREATE TABLE IF NOT EXISTS outside_sources (
 ) STRICT;
 "#;
 
+/// Folders a phone backs up, chosen on a computer (decision 0063).
+const V23: &str = r#"
+-- On a phone: its own folders, two levels deep, as it last listed them; what
+-- a computer keeping its vault is shown when it asks.
+CREATE TABLE IF NOT EXISTS own_folders (
+    path  TEXT PRIMARY KEY,
+    files INTEGER NOT NULL,
+    bytes INTEGER NOT NULL
+) STRICT;
+
+-- On a phone: the folders a computer keeping its vault last said were chosen,
+-- kept so that a run with the computer away still backs them up.
+CREATE TABLE IF NOT EXISTS chosen_here (
+    folder TEXT PRIMARY KEY
+) STRICT;
+
+-- On a computer: each of its person's phones' folders, as the phone last said.
+CREATE TABLE IF NOT EXISTS known_folders (
+    device_id BLOB NOT NULL,
+    path      TEXT NOT NULL,
+    files     INTEGER NOT NULL,
+    bytes     INTEGER NOT NULL,
+    seen_at   INTEGER NOT NULL,
+    PRIMARY KEY (device_id, path)
+) STRICT;
+
+-- On a computer: the folders the person ticked for each phone.
+CREATE TABLE IF NOT EXISTS backup_choices (
+    device_id BLOB NOT NULL,
+    folder    TEXT NOT NULL,
+    PRIMARY KEY (device_id, folder)
+) STRICT;
+"#;
+
 /// A copy this device could ask for: on a device it is paired with, and not
 /// known to be out of reach (decision 0055). For a query over `replicas r`.
 ///
@@ -1017,6 +1051,108 @@ impl Db {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// This device's own folders, as just listed: replacing what was there
+    /// (decision 0063).
+    pub fn set_own_folders(&self, folders: &[FolderSummary]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM own_folders", [])?;
+        for folder in folders {
+            tx.execute(
+                "INSERT INTO own_folders (path, files, bytes) VALUES (?1, ?2, ?3)",
+                params![folder.path, folder.files as i64, folder.bytes as i64],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// This device's own folders, as last listed.
+    pub fn own_folders(&self) -> Result<Vec<FolderSummary>> {
+        let mut stmt = self.conn.prepare("SELECT path, files, bytes FROM own_folders ORDER BY path")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(FolderSummary { path: row.get(0)?, files: row.get::<_, i64>(1)? as u64, bytes: row.get::<_, i64>(2)? as u64 })
+        })?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// The folders a computer keeping this device's vault said were chosen,
+    /// replacing what it said before.
+    pub fn set_chosen_here(&self, folders: &[String]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM chosen_here", [])?;
+        for folder in folders {
+            tx.execute("INSERT OR IGNORE INTO chosen_here (folder) VALUES (?1)", params![folder])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The folders chosen for this device, as last told.
+    pub fn chosen_here(&self) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare("SELECT folder FROM chosen_here ORDER BY folder")?;
+        let rows = stmt.query_map([], |row| row.get(0))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
+    }
+
+    /// A phone's folders as it just said, replacing what it said before.
+    pub fn set_known_folders(&self, device: &DeviceId, folders: &[FolderSummary], seen_at: i64) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM known_folders WHERE device_id = ?1", params![device.as_bytes().as_slice()])?;
+        for folder in folders {
+            tx.execute(
+                "INSERT INTO known_folders (device_id, path, files, bytes, seen_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![device.as_bytes().as_slice(), folder.path, folder.files as i64, folder.bytes as i64, seen_at],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// A phone's folders as it last said, and when.
+    pub fn known_folders(&self, device: &DeviceId) -> Result<(Vec<FolderSummary>, Option<i64>)> {
+        let mut stmt = self.conn.prepare(
+            "SELECT path, files, bytes, seen_at FROM known_folders WHERE device_id = ?1 ORDER BY path",
+        )?;
+        let mut seen = None;
+        let rows = stmt.query_map(params![device.as_bytes().as_slice()], |row| {
+            Ok((
+                FolderSummary { path: row.get(0)?, files: row.get::<_, i64>(1)? as u64, bytes: row.get::<_, i64>(2)? as u64 },
+                row.get::<_, i64>(3)?,
+            ))
+        })?;
+        let mut folders = Vec::new();
+        for row in rows {
+            let (folder, at) = row?;
+            seen = Some(at);
+            folders.push(folder);
+        }
+        Ok((folders, seen))
+    }
+
+    /// Tick, or untick, a phone's folder to back up.
+    pub fn choose_folder(&self, device: &DeviceId, folder: &str, chosen: bool) -> Result<()> {
+        if chosen {
+            self.conn.execute(
+                "INSERT OR IGNORE INTO backup_choices (device_id, folder) VALUES (?1, ?2)",
+                params![device.as_bytes().as_slice(), folder],
+            )?;
+        } else {
+            self.conn.execute(
+                "DELETE FROM backup_choices WHERE device_id = ?1 AND folder = ?2",
+                params![device.as_bytes().as_slice(), folder],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// The folders ticked for a phone to back up.
+    pub fn chosen_for(&self, device: &DeviceId) -> Result<Vec<String>> {
+        let mut stmt =
+            self.conn.prepare("SELECT folder FROM backup_choices WHERE device_id = ?1 ORDER BY folder")?;
+        let rows = stmt.query_map(params![device.as_bytes().as_slice()], |row| row.get(0))?;
+        Ok(rows.collect::<std::result::Result<_, _>>()?)
     }
 
     /// Remember where a file kept outside the folder is read from, as it was
@@ -4040,6 +4176,16 @@ pub struct OutsideRow {
     /// Where it is read from, while it is still there: `None` once it has
     /// gone from there and is kept by another device only.
     pub source: Option<OutsideSource>,
+}
+
+/// One of a phone's folders and what is in it, everything beneath it
+/// counted (decision 0063).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FolderSummary {
+    /// From the root of the phone's shared storage: `DCIM`, `DCIM/Camera`.
+    pub path: String,
+    pub files: u64,
+    pub bytes: u64,
 }
 
 /// Counted by [`Db::outside_summary`].

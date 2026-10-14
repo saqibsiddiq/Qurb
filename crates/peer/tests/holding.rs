@@ -406,3 +406,52 @@ async fn requests_made_at_once_are_read_at_once() {
     assert!(got.iter().all(|c| matches!(c, Ok(Some(_)))), "{got:?}");
     assert!(took < delay * 4, "eight files took {took:?}, as if read one at a time");
 }
+
+/// A computer keeping a phone's vault is told the phone's folders; one that
+/// does not keep it is told nothing (decision 0063).
+#[tokio::test(flavor = "multi_thread")]
+async fn only_a_computer_keeping_the_vault_sees_a_phones_folders() {
+    let phone = Device::new();
+    let desktop = Device::new();
+    let other = Device::new();
+    introduce(&phone, &desktop);
+    introduce(&phone, &other);
+    phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+    let folders = vec![
+        qurb_storage::db::FolderSummary { path: "DCIM".into(), files: 3, bytes: 9_000 },
+        qurb_storage::db::FolderSummary { path: "DCIM/Camera".into(), files: 3, bytes: 9_000 },
+    ];
+    phone.engine.store().db().set_own_folders(&folders).unwrap();
+
+    let (addr, fingerprint) = phone.serve(desktop.identity.fingerprint());
+    let keeper = PeerClient::connect(addr, &desktop.identity, fingerprint).await.unwrap();
+    assert_eq!(keeper.folders().await.unwrap(), Some(folders));
+
+    let (addr, fingerprint) = phone.serve(other.identity.fingerprint());
+    let stranger = PeerClient::connect(addr, &other.identity, fingerprint).await.unwrap();
+    assert_eq!(stranger.folders().await.unwrap(), None, "a device not keeping the vault was shown its folders");
+}
+
+/// A phone asks what was chosen for it, and is told only its own (decision
+/// 0063): the device is the one the connection proves.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_is_told_what_was_chosen_for_it_and_nothing_else() {
+    let phone = Device::new();
+    let tablet = Device::new();
+    let desktop = Device::new();
+    introduce(&phone, &desktop);
+    introduce(&tablet, &desktop);
+    let db = desktop.engine.store().db();
+    db.choose_folder(&phone.id(), "DCIM/Camera", true).unwrap();
+    db.choose_folder(&phone.id(), "Documents", true).unwrap();
+    db.choose_folder(&phone.id(), "Documents", false).unwrap();
+    db.choose_folder(&tablet.id(), "Download", true).unwrap();
+
+    let (addr, fingerprint) = desktop.serve(phone.identity.fingerprint());
+    let asking = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    assert_eq!(asking.chosen().await.unwrap(), Some(vec!["DCIM/Camera".to_string()]));
+
+    let (addr, fingerprint) = desktop.serve(tablet.identity.fingerprint());
+    let asking = PeerClient::connect(addr, &tablet.identity, fingerprint).await.unwrap();
+    assert_eq!(asking.chosen().await.unwrap(), Some(vec!["Download".to_string()]));
+}
