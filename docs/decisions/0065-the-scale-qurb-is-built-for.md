@@ -1,0 +1,86 @@
+# 0065 — The scale qurb is built for
+
+**Status:** Accepted as targets and an order of work, 2026-10-14. Nothing here
+is built; the first step is measuring, because two of the three limits below
+are expected rather than measured.
+**Date:** 2026-10-14
+
+## What was asked
+
+Item 2 of the owner's list of 2026-10-13: "i want to make it scalable". Asked
+which scale he meant first, he chose three: **big libraries** (one person with
+a very large collection), **a family or team server** (several people sharing
+one always-on computer or his VPS), and **a service for many users**
+(thousands of separate people on servers he runs). Not chosen: many devices
+for one person.
+
+## Where qurb stands
+
+| | measured | conditions |
+|---|---|---|
+| 100,000 files: re-indexing unchanged | 1.13 s | Phase 1: one Linux desktop, 12 cores, 15 GiB, NVMe, both devices in one process over loopback ([phase 1](../phases/phase-1-engine.md#the-kill-criterion-100k-files)) |
+| 100,000 files: syncing 1,000 edited | 3.50 s, 24 MiB on the wire | the same |
+| 100,000 files: first index and sync | 237 s and 476 s, 4.4 GiB; per file, mostly syscalls and a `fsync` per chunk | the same |
+| the rendezvous service | 9,000 devices in 208 MB, 22 KiB each, introductions 0.10 ms | [service-capacity](../../experiments/service-capacity/README.md) |
+| the relay | limited by its bandwidth, not its CPU or memory | the same |
+| a device answering requests | one at a time, whatever it is asked | [0064](0064-many-small-files-quickly.md), limit 1 |
+
+## Targets
+
+**Big libraries.** One person, **1,000,000 files and 1 TB**:
+
+- re-indexing an unchanged library within 15 seconds;
+- syncing 1,000 changed files within 10 seconds, on a local network;
+- a first sync limited by the disk and the network, not by per-file
+  overhead: within twice what copying the same files would take;
+- browsing and searching on the desktop without waiting.
+
+**A family or team server.** One always-on computer or VPS keeping the files
+of **10 people and 50 devices**, each person's private, as
+[0060](0060-a-computer-keeps-private-folders-for-several-people.md) already
+keeps guests' vaults:
+
+- every device served at once rather than in turn (0064, step 1);
+- a separate allowance per person, and the computer saying who uses what;
+- running without a screen, as a service.
+
+**A service for many users.** Servers the owner runs for **10,000 people**:
+
+- meeting and relaying them: the rendezvous and relay already carry this on
+  one small server by the measurements above;
+- keeping their files: a storage server holding many people's sealed vaults,
+  which it cannot read, as a guest's computer holds them now (0060). This
+  part does not exist and is the largest piece of work here;
+- what a service needs beyond software, accounts, payment and terms, is the
+  owner's to decide and is not designed here.
+
+## Expected limits, to be measured first
+
+1. **The whole file list is exchanged on every sync.** 100,000 paths took 196
+   ms on loopback; a million, over Wi-Fi to a phone, every pass, will not do.
+   A device should send only what changed since the last exchange.
+2. **One file in the chunk store per chunk**, written with its own `fsync`:
+   at a million small files, a million files and syscalls in qurb's store.
+   Small chunks packed together would cut both.
+3. **One lock and one database connection per store**, which serialise every
+   request (0064). A server with fifty devices meets this first.
+
+## Order of work
+
+1. **Measure at a million files** on this laptop with the existing `scale`
+   example, and record each stage against the targets.
+2. Answer requests in parallel (0064, step 1). It serves item 1 and every
+   target here.
+3. Exchange only what changed since the last sync.
+4. Pack small chunks.
+5. A server role: qurb running headless on the VPS, keeping several people's
+   sealed vaults with an allowance each, measured with 10 people and 50
+   devices.
+6. The storage service for many users: designed in its own record once the
+   owner has decided what the service is.
+
+## Reversing it
+
+Targets are cheap to change. Of the work, step 3 changes the protocol and
+step 4 the chunk store's format, each with its own record and a migration
+when it comes to that.

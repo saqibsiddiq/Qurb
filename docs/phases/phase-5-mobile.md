@@ -2228,6 +2228,35 @@ laptop could reach the phone. A connector now reads its addresses again
 every five seconds and offers the new ones at once (0062, *Found*). The
 public address found by STUN at start is still not looked at again.
 
+## The owner's list of 2026-10-13
+
+Five items, given while the WhatsApp backup was crawling under Samsung's
+freezer. Where each stands:
+
+1. **"this sync speed is really bad"**: not a rewrite. Measured and planned in
+   [decision 0064](../decisions/0064-many-small-files-quickly.md): the
+   largest limit is a device answering one request at a time, then the phone
+   opening each file through a picked folder, then Samsung. Not built yet.
+2. **"i want to make it scalable"**: big libraries, a family or team server,
+   and a service for many users, his three choices. Targets and the order of
+   work in [decision 0065](../decisions/0065-the-scale-qurb-is-built-for.md).
+   Not built yet.
+3. **Backing up other files and media, chosen on the desktop**: designed in
+   [decision 0063](../decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)
+   with his answers (chosen on the desktop, kept when deleted on the phone,
+   browsable there). Waits on the S23 run of
+   [file-access-speed](../../experiments/file-access-speed/README.md). Not
+   built yet.
+4. **No Recent on Home, a button for it instead**: built on both apps, a
+   clock at the top right of Home opening Activity, checked on the emulator
+   and in the desktop fixtures (consistency row 47). On the laptop since
+   2026-10-14; not yet on the S23.
+5. **"what is the point of having private vault inside the phone?"**:
+   answered. Its point is files that are the phone's own, not in the other
+   devices' folders, with a computer keeping a sealed backup so the phone can
+   free its copy. Reshaping it is left until item 3 exists, which is where
+   phone backups will live.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
