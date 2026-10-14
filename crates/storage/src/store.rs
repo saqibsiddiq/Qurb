@@ -1117,6 +1117,29 @@ impl Store {
         Ok(written)
     }
 
+    /// Write out a file this device keeps for `owner`, checked as
+    /// [`read_file_into`](Self::read_file_into) checks: each chunk, and the
+    /// whole (decision 0063, opening a phone's backup on the computer).
+    pub fn read_held_into(&self, owner: &DeviceId, logical_path: &str, out: &mut impl std::io::Write) -> Result<u64> {
+        let file = self
+            .db
+            .live_row_in(logical_path, Some(owner))?
+            .filter(|_| self.db.is_held(logical_path, owner).unwrap_or(false))
+            .ok_or_else(|| Error::NotFound { path: logical_path.to_string() })?;
+        let mut whole = blake3::Hasher::new();
+        let mut written = 0u64;
+        for hash in self.db.chunk_hashes_for(file.id)? {
+            let plaintext = self.read_chunk(&hash)?;
+            whole.update(&plaintext);
+            out.write_all(&plaintext).map_err(|e| Error::io(logical_path, e))?;
+            written += plaintext.len() as u64;
+        }
+        if whole.finalize() != file.content_hash {
+            return Err(Error::ChunkCorrupt { hash: file.content_hash.to_hex().to_string() });
+        }
+        Ok(written)
+    }
+
     /// Reassemble a stored file, verifying it end to end.
     ///
     /// Every chunk is checked against its own hash, and the reassembled whole

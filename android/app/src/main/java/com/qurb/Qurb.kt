@@ -324,9 +324,14 @@ object Engine {
      * of metered, which is Wi-Fi unless the person marked it otherwise.
      */
     fun noteNetwork(context: Context) {
-        val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
-        val unmetered = connectivity != null && !connectivity.isActiveNetworkMetered
+        val unmetered = unmetered(context)
         runCatching { handle?.setUnmetered(unmetered) }
+    }
+
+    /** Whether the phone is on a network that does not count what it uses: Wi-Fi, in practice. */
+    fun unmetered(context: Context): Boolean {
+        val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
+        return connectivity != null && !connectivity.isActiveNetworkMetered
     }
 
     /**

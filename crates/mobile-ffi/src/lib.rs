@@ -1873,6 +1873,27 @@ impl Qurb {
         Ok(run)
     }
 
+    /// The folders chosen for this phone on a computer keeping its vault, as
+    /// it last said (decision 0063), the ones that can be backed up.
+    pub fn chosen_folders(&self) -> Result<Vec<String>, QurbError> {
+        let chosen = self.engine()?.store().db().chosen_here()?;
+        Ok(outermost(chosen.into_iter().filter(|f| choosable(f)).collect()))
+    }
+
+    /// The chosen folders' backup as it stands: how much, and how much of it
+    /// the computer has (decision 0063).
+    pub fn folders_backup(&self) -> Result<BackupState, QurbError> {
+        let prefix = format!("{}/storage", qurb_storage::db::OUTSIDE);
+        let summary = self.engine()?.store().db().outside_summary(&prefix)?;
+        Ok(BackupState {
+            files: summary.files,
+            bytes: summary.bytes,
+            held_files: summary.held_files,
+            held_bytes: summary.held_bytes,
+            only_kept: summary.only_kept,
+        })
+    }
+
     /// The WhatsApp backup as it stands: how much, and how much of it the
     /// computer has (decision 0062).
     pub fn whatsapp_backup(&self) -> Result<BackupState, QurbError> {

@@ -87,7 +87,9 @@ object WhatsApp {
             }
         }
         prefs(context).edit().clear().apply()
-        WorkManager.getInstance(context).cancelUniqueWork(NIGHTLY)
+        // The same nightly run backs up the folders chosen on the computer
+        // (decision 0063), which go on without WhatsApp.
+        if (!Folders.allowed()) WorkManager.getInstance(context).cancelUniqueWork(NIGHTLY)
     }
 
     /** When it last ran, in unix seconds, and what it did, in words. */
@@ -160,7 +162,8 @@ object WhatsApp {
      * once -- a periodic request runs straight away, beside the first run
      * [runNow] starts, and two ran together on the emulator.
      */
-    private fun schedule(context: Context) {
+    /** The nightly run, while charging on Wi-Fi: WhatsApp's folder and the chosen ones. */
+    fun schedule(context: Context) {
         val request = PeriodicWorkRequestBuilder<Nightly>(24, TimeUnit.HOURS)
             .setInitialDelay(12, TimeUnit.HOURS)
             .setConstraints(
@@ -199,7 +202,16 @@ object WhatsApp {
         override suspend fun doWork(): Result {
             val run = runCatching { run(applicationContext) }
                 .onFailure { Log.w(TAG, "the backup did not run", it) }
-                .getOrNull() ?: return Result.success()
+                .getOrNull()
+            // The folders chosen on the computer, with as long again: a first
+            // backup of a camera folder is the heavy part, and this is the run
+            // made while charging (decision 0063).
+            val folders = withContext(Dispatchers.IO) {
+                runCatching { Folders.run(applicationContext, Engine.open(applicationContext), RUN_SECONDS, listNow = true) }
+                    .onFailure { Log.w(TAG, "the chosen folders did not run", it) }
+                    .getOrNull()
+            }
+            if (run == null && folders == null) return Result.success()
             // Always: what an earlier run found may still be on its way.
             SyncWorker.runNow(applicationContext)
             // A first run reads more than one window allows -- 3.5 GB of the
@@ -207,7 +219,7 @@ object WhatsApp {
             // Wi-Fi, rather than over the nights that follow.
             // A file that could not be read does not hold the rest up: it is
             // tried again next run.
-            if (run.remaining > 0u) carryOn(applicationContext)
+            if ((run?.remaining ?: 0u) > 0u || (folders?.remaining ?: 0u) > 0u) carryOn(applicationContext)
             return Result.success()
         }
     }

@@ -825,7 +825,11 @@ qurb/
 │       │                  SentCopies.kt       copies of sent files, let go of by name
 │       │                  WhatsApp.kt         WhatsApp's folder, picked once and
 │       │                                      listed each night for its backup
-│       │                                      (decision 0062)
+│       │                                      (decision 0062); the nightly run
+│       │                                      does the chosen folders too
+│       │                  Folders.kt          the phone's folders, chosen on the
+│       │                                      computer, with "All files access"
+│       │                                      (decision 0063)
 │       │                  Appearance.kt       light, dark, or as the system is set
 │       │                  ManageSpaceActivity.kt
 │       │                                      what Android's Clear data opens: what

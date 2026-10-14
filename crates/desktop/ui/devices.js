@@ -108,6 +108,13 @@ async function openDevice(d) {
   const body = el("div", "panel-body");
   const facts = el("dl", "facts");
   const p = presence(d);
+  // One of this person's phones: its folders, chosen here (decision 0063).
+  const ownPhone = d.relation === "own" && d.kind === "phone";
+  let folders = null;
+  if (ownPhone) {
+    try { folders = await invoke("phone_folders", { phone: d.fingerprint }); } catch (e) { /* not shown */ }
+  }
+  const chosen = folders ? folders.folders.filter((f) => f.chosen) : [];
   const who = {
     guest: "A guest: another person's device, with its own key. It sees only what you send it.",
     host: "Another person's computer, which you visit as a guest. It sees only what you send it.",
@@ -127,6 +134,10 @@ async function openDevice(d) {
     // brought back only through Qurb on a phone (decision 0062).
     ...(d.whatsapp
       ? [["WhatsApp", `${count(d.whatsapp.files, "file")}, ${size(d.whatsapp.bytes)}, kept here for it, out of sight`]]
+      : []),
+    ...(chosen.length
+      ? [["Folders", `${count(chosen.length, "folder")} backed up here: ` +
+          `${count(chosen.reduce((n, f) => n + f.kept_files, 0), "file")} so far`]]
       : []),
   ]) facts.append(el("dt", null, term), el("dd", null, value));
   body.append(facts);
@@ -154,6 +165,12 @@ async function openDevice(d) {
     look.addEventListener("click", () => openGuestFolder(d));
     actions.append(look);
   }
+  if (ownPhone) {
+    const back = button("Choose folders to back up…", "btn", "hard-drive");
+    back.style.justifyContent = "flex-start";
+    back.addEventListener("click", () => openPhoneFolders(d));
+    actions.append(back);
+  }
   // Removing it, from here rather than anywhere more prominent: it is rare,
   // and it is the one thing on this screen that cannot be undone without the
   // other device in hand.
@@ -178,6 +195,144 @@ async function openDevice(d) {
   body.append(tech);
 
   box.append(head, body);
+}
+
+/**
+ * A phone's folders, for choosing which it backs up here (decision 0063).
+ * The phone lists them for this computer once it has "All files access";
+ * ticked ones reach it the next time it syncs, and it keeps them where they
+ * lie, files deleted on it staying here.
+ */
+async function openPhoneFolders(d) {
+  const box = sheet({ wide: true, onClose: () => refreshScreen() });
+  box.append(el("h2", null, `Back up ${d.name}'s folders`));
+  let answer;
+  try {
+    answer = await invoke("phone_folders", { phone: d.fingerprint });
+  } catch (e) {
+    oops(box, e);
+    return;
+  }
+  if (answer.seen_at == null || answer.folders.length === 0) {
+    box.append(el("p", "lead",
+      `${d.name} hasn't listed its folders here yet. On the phone, open Qurb, then Settings, ` +
+      "Backups, Back up your folders, and allow it to read this phone's files. Its folders " +
+      "appear here after it next syncs."));
+    const actions = el("div", "actions end");
+    const close = button("Close", "btn primary");
+    close.addEventListener("click", () => box.close());
+    actions.append(close);
+    box.append(actions);
+    return;
+  }
+  box.append(el("p", "lead",
+    `The folders you choose are kept here, in ${d.name}'s Private Vault: over Wi-Fi, and files ` +
+    "deleted on the phone stay here."));
+  box.append(el("div", "list-label", `On ${d.name}, as it said ${when(answer.seen_at)}`));
+  const picks = el("div", "group glass-frosted");
+  const inputs = [];
+  for (const f of answer.folders) {
+    const item = el("label", "item");
+    const label = el("div", "label");
+    const depth = f.path.split("/").length;
+    if (depth > 1) label.style.paddingLeft = "24px";
+    label.append(el("strong", null, depth > 1 ? base(f.path) : f.path));
+    const facts = `${count(f.files, "file")}, ${size(f.size)}` + (f.kept_files ? ` · ${count(f.kept_files, "file")} kept here` : "");
+    const meta = el("p", "meta", facts);
+    label.append(meta);
+    const sw = el("span", "switch");
+    const input = el("input");
+    input.type = "checkbox";
+    input.value = f.path;
+    input.checked = f.chosen;
+    sw.append(input, el("span"));
+    item.append(icon("folder"), label);
+    // Before the switch, so that the switches stay in one column.
+    if (f.chosen && f.kept_files) {
+      const look = button("Open", "btn small ghost");
+      look.addEventListener("click", (event) => {
+        event.preventDefault();
+        openBackup(d, f.path);
+      });
+      item.append(look);
+    }
+    item.append(sw);
+    picks.append(item);
+    inputs.push({ input, meta, facts });
+  }
+  // A folder inside a chosen one is backed up with it: shown ticked, fixed,
+  // and saying so, so that the two cannot disagree.
+  const cover = () => {
+    for (const one of inputs) {
+      const outer = inputs.find((o) => o !== one && o.input.checked && !o.input.disabled
+        && one.input.value.startsWith(`${o.input.value}/`));
+      one.input.disabled = Boolean(outer);
+      if (outer) one.input.checked = true;
+      one.meta.textContent = outer ? `Backed up with ${outer.input.value}` : one.facts;
+    }
+  };
+  inputs.forEach(({ input }) => input.addEventListener("change", cover));
+  cover();
+  box.append(picks);
+  box.append(el("p", "note", "Unticked, a folder backs up nothing new. What is kept here already stays."));
+  const says = el("p", "says warn hidden");
+  const actions = el("div", "actions end");
+  const save = button("Save", "btn primary");
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    try {
+      for (const { input } of inputs) {
+        const was = answer.folders.find((f) => f.path === input.value).chosen;
+        const now = input.checked && !input.disabled;
+        if (now !== was) await invoke("choose_phone_folder", { phone: d.fingerprint, folder: input.value, chosen: now });
+      }
+      toast(`Saved. ${d.name} picks it up the next time it syncs`);
+      box.close();
+    } catch (e) {
+      save.disabled = false;
+      says.textContent = String(e);
+      says.classList.remove("hidden");
+    }
+  });
+  actions.append(save);
+  box.append(says, actions);
+}
+
+/** What this computer keeps of one of a phone's folders, each file openable. */
+async function openBackup(d, folder) {
+  const box = sheet({ wide: true });
+  box.append(el("h2", null, folder));
+  box.append(el("p", "lead", `Kept here from ${d.name}, including files deleted on the phone.`));
+  const label = el("div", "list-label", "Files");
+  const list = el("ul", "rows");
+  box.append(label, list);
+  let files;
+  try {
+    files = await invoke("phone_backup", { phone: d.fingerprint, folder });
+  } catch (e) {
+    oops(list, e);
+    return;
+  }
+  label.textContent = count(files.length, "file");
+  if (files.length === 0) {
+    list.append(empty("hard-drive", "Nothing kept here yet. It comes over Wi-Fi.", null, true));
+    return;
+  }
+  for (const f of files.slice(0, 500)) {
+    list.append(row({
+      iconName: KIND_ICON[kindOf(f.path)],
+      name: base(f.path),
+      sub: [folderOf(f.path) || folder, size(f.size), when(f.modified_at)],
+      onClick: async () => {
+        try {
+          await invoke("open_backed_up", { phone: d.fingerprint, folder, path: f.path });
+        } catch (e) {
+          toast(String(e), true);
+        }
+      },
+    }));
+  }
+  if (files.length > 500) box.append(el("p", "note", `The first 500 of ${count(files.length, "file")}.`));
 }
 
 /**

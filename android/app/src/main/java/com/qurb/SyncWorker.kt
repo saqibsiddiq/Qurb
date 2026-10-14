@@ -72,6 +72,15 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // Wi-Fi or not first: the WhatsApp backup waits for Wi-Fi, and is
             // counted only then (decision 0062).
             Engine.noteNetwork(applicationContext)
+            // The folders chosen on the computer (decision 0063), on Wi-Fi
+            // only, as the WhatsApp backup is: new files kept before the pass
+            // counts what is waiting, so they go in this pass. Briefly; a
+            // large first backup carries on over the following passes and the
+            // nightly run. Its failure is not the sync's.
+            if (Engine.unmetered(applicationContext)) {
+                runCatching { Folders.run(applicationContext, engine, FOLDERS_SECONDS) }
+                    .onFailure { Log.w(TAG, "backing up the chosen folders failed", it) }
+            }
             val forOthers = runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
             val long = forOthers >= LONG_PASS_BYTES && startLong(forOthers, started)
             // Another pass is the long one, and is already answering.
@@ -242,6 +251,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
 
     companion object {
         private const val TAG = "qurb"
+
+        /** What a pass spends on the chosen folders before syncing. */
+        private val FOLDERS_SECONDS = 15u
 
         /** The longest the notice's figures go without being brought up to date. */
         private const val FIGURES_EVERY_MS = 10_000L

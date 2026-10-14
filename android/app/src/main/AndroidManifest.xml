@@ -35,6 +35,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Decision 0063: the phone's own folders, chosen on the computer that
+         keeps its Private Vault and read where they lie. Granted by the person
+         in the system's page, after Settings says why; without it, only
+         WhatsApp's folder, picked once, is read. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application

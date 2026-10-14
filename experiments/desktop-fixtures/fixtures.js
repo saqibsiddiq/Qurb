@@ -179,6 +179,29 @@ const ANSWERS = {
   },
   ask_guest_folder: () => { guestAskedAt = Date.now(); return null; },
   open_guest_file: () => null,
+  // A phone's folders, chosen here (decision 0063). `?nofolders` for a phone
+  // that has not listed them yet.
+  phone_folders: () => new URLSearchParams(location.search).has("nofolders")
+    ? { seen_at: null, folders: [] }
+    : {
+      seen_at: now - 1800,
+      folders: [
+        { path: "DCIM", files: 4210, size: 18_400_000_000, chosen: true, kept_files: 3105, kept: 13_900_000_000 },
+        { path: "DCIM/Camera", files: 4022, size: 18_100_000_000, chosen: false, kept_files: 2990, kept: 13_700_000_000 },
+        { path: "DCIM/Screenshots", files: 188, size: 300_000_000, chosen: false, kept_files: 115, kept: 200_000_000 },
+        { path: "Documents", files: 61, size: 240_000_000, chosen: true, kept_files: 61, kept: 240_000_000 },
+        { path: "Download", files: 940, size: 5_100_000_000, chosen: false, kept_files: 0, kept: 0 },
+        { path: "Pictures", files: 312, size: 610_000_000, chosen: false, kept_files: 0, kept: 0 },
+        { path: "Pictures/Instagram", files: 207, size: 410_000_000, chosen: false, kept_files: 0, kept: 0 },
+      ],
+    },
+  choose_phone_folder: () => null,
+  phone_backup: (args) => Array.from({ length: args.folder === "Documents" ? 61 : 3105 }, (_, i) => ({
+    path: args.folder === "Documents" ? `report-${i}.pdf` : `Camera/IMG_2026${String(i).padStart(4, "0")}.jpg`,
+    size: 2_400_000 + i * 1000,
+    modified_at: now - i * 3600,
+  })),
+  open_backed_up: () => null,
   lock_guest_folder: () => { guestAskedAt = 0; return null; },
 
   // A file called tickets.pdf went to the device three days ago, so the
@@ -284,7 +307,7 @@ const ANSWERS = {
 
   devices: () => STATE === "alone" ? [] : [
     { id: "4cef0d89", name: "Galaxy S23", fingerprint: "a1b2c3d4", paired_at: now - 900000, last_seen: now - 300,
-      route: STATE === "away" ? null : "direct", address: "192.168.1.2:57199", kind: "phone",
+      route: STATE === "away" ? null : "direct", address: "192.168.1.2:57199", kind: "phone", relation: "own",
       // Its WhatsApp, kept here (decision 0062).
       whatsapp: { files: 37722, bytes: "10361274163" } },
     { id: "77b10e2a", name: "Study desktop", fingerprint: "e5f60718", paired_at: now - 3600, last_seen: now - 7200,

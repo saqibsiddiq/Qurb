@@ -79,6 +79,32 @@ keeps guests' vaults:
 6. The storage service for many users: designed in its own record once the
    owner has decided what the service is.
 
+## Progress
+
+**A first sync had become quadratic, found measuring for step 1,
+2026-10-14.** On this laptop (i5-13420H, 12 threads, 15 GiB, NVMe, btrfs),
+both devices in one process over loopback, with the scale example:
+
+| files | first sync, before | per file | after V24 | per file |
+|---|---|---|---|---|
+| 5,000 | 12.1 s | 2.4 ms | 7.7 s | 1.5 ms |
+| 10,000 | 35.7 s | 3.6 ms | 15.2 s | 1.5 ms |
+| 20,000 | 95.8 s | 4.8 ms | 30.6 s | 1.5 ms |
+
+A 100,000-file run before the fix had slowed to about 20 files a second by
+its 25,000th file. Sampled with gdb, the serving side spent its time in
+`Db::any_file_with_content`, asked for every file served: the index on
+`content_hash` had been narrowed to live rows by a later migration, so a
+question that also accepts deleted rows read the whole of `files` each
+time, under the store's lock. Schema V24 indexes every row; a test reads
+SQLite's plan and fails on a scan (`content_is_found_through_an_index`).
+
+The example itself had stopped measuring anything since decision 0024: it
+served from a store not told where its folder was, so the receiving side
+fetched nothing and listed every file as elsewhere. Fixed first (d81da43).
+
+**Not done yet:** the run at 100,000 and at a million files, step 1 proper.
+
 ## Reversing it
 
 Targets are cheap to change. Of the work, step 3 changes the protocol and

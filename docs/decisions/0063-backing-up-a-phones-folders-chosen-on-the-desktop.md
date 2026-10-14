@@ -131,9 +131,25 @@ phone's folders and choices (`only_a_computer_keeping_the_vault_sees_a_phones_fo
 `a_phone_is_told_what_was_chosen_for_it_and_nothing_else`), and the phone's
 side end to end (`folders_chosen_on_the_computer_are_backed_up_where_they_lie`).
 
-**Not built yet:** asking for "All files access" on the phone, calling these
-from the app, and the desktop's screens: steps 3 and 4. The S23 run of the
-spike (step 1) is still to do.
+**Steps 3 and 4, the phone and the desktop, built 2026-10-14.** On the
+phone, Settings' WhatsApp group became *Backups*, with *Back up your folders*:
+without the permission it says what it is for and opens Android's own page;
+once granted, the folders are listed at once and the nightly run scheduled.
+Each sync pass on Wi-Fi lists the folders at most every six hours and backs
+up what was chosen for 15 seconds, before counting what is waiting, so new
+files go in the same pass; the nightly run, while charging, gives it seven
+minutes, as WhatsApp's. On the desktop, a phone of the person's own shows
+how many folders are backed up here, and *Choose folders to back up…* opens
+its folders with a switch each, two levels deep; a folder inside a chosen one
+is shown ticked, fixed and dimmed, *Backed up with DCIM*. A chosen folder's
+*Open* lists what is kept here, and a file opens by being written out under
+the runtime directory, as a guest's file is (0060). Checked on the emulator
+(the sheet, the system's page, the folders listed in 109 ms once allowed)
+and in the desktop fixtures (the panel, the folders, the listing, a phone
+that has not listed them yet).
+
+**Not yet:** watched between the S23 and the laptop, and the spike's S23 run
+(step 1).
 
 ## Reversing it
 

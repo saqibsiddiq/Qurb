@@ -609,6 +609,9 @@ textarea.input { height: auto; padding: 10px var(--s3); resize: vertical; line-h
 .switch input:checked + span { background: var(--green); }
 .switch input:checked + span::after { transform: translateX(16px); }
 .switch input:focus-visible + span { outline: 2px solid var(--green); outline-offset: 2px; }
+/* Fixed by something else, as a folder inside a chosen one is (decision 0063). */
+.switch input:disabled { cursor: default; }
+.switch input:disabled + span { opacity: 0.45; }
 
 /* ------------------------------------------------------ file state §11 */
 

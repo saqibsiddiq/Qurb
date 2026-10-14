@@ -52,6 +52,7 @@ object Words {
     private fun plural(n: Long, unit: String) = "$n $unit${if (n == 1L) "" else "s"} ago"
 
     fun files(n: Int) = if (n == 1) "1 file" else "$n files"
+    fun folders(n: Int) = if (n == 1) "1 folder" else "$n folders"
 
     fun devices(n: Int) = if (n == 1) "1 device" else "$n devices"
 

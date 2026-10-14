@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -623,6 +623,36 @@ CREATE TABLE IF NOT EXISTS outside_sources (
     size     INTEGER NOT NULL,
     mtime_ns INTEGER NOT NULL
 ) STRICT;
+"#;
+
+/// A file, live or not, whose chunks add up to its size: asked for every file
+/// a device serves. It must be found through an index (V24).
+const ANY_FILE_WITH_CONTENT: &str = "SELECT id FROM files f
+  WHERE content_hash = ?1
+    AND size = (SELECT coalesce(sum(c.size), 0)
+                  FROM file_chunks fc JOIN chunks c ON c.hash = fc.chunk_hash
+                 WHERE fc.file_id = f.id)
+  ORDER BY deleted_at IS NOT NULL, id
+  LIMIT 1";
+
+/// A path with this content, live first. Also through an index (V24).
+const ANY_PATH_WITH_CONTENT: &str = "SELECT path FROM files
+  WHERE content_hash = ?1
+  ORDER BY (deleted_at IS NULL) DESC
+  LIMIT 1";
+
+/// Every row's content findable without reading them all.
+///
+/// The index on `content_hash` covered live rows only, and the questions that
+/// accept a deleted row too -- `any_file_with_content`, asked for every file
+/// a device serves, and `any_path_with_content` -- could not use it: each read
+/// the whole of `files`. Measured on 2026-10-14 with the scale example, a first
+/// sync took 2.4 ms a file at 5,000 files, 3.6 at 10,000 and 4.8 at 20,000,
+/// most of it in that scan, under the store's lock (decision 0065). One index
+/// over every row serves both kinds of question.
+const V24: &str = r#"
+DROP INDEX IF EXISTS idx_files_content;
+CREATE INDEX IF NOT EXISTS idx_files_content ON files (content_hash);
 "#;
 
 /// Folders a phone backs up, chosen on a computer (decision 0063).
@@ -3037,13 +3067,7 @@ impl Db {
     pub fn any_file_with_content(&self, hash: &blake3::Hash) -> Result<Option<i64>> {
         self.conn
             .query_row(
-                "SELECT id FROM files f
-                  WHERE content_hash = ?1
-                    AND size = (SELECT coalesce(sum(c.size), 0)
-                                  FROM file_chunks fc JOIN chunks c ON c.hash = fc.chunk_hash
-                                 WHERE fc.file_id = f.id)
-                  ORDER BY deleted_at IS NOT NULL, id
-                  LIMIT 1",
+                ANY_FILE_WITH_CONTENT,
                 params![hash.as_bytes().as_slice()],
                 |r| r.get(0),
             )
@@ -3054,10 +3078,7 @@ impl Db {
     pub fn any_path_with_content(&self, hash: &blake3::Hash) -> Result<Option<String>> {
         self.conn
             .query_row(
-                "SELECT path FROM files
-                  WHERE content_hash = ?1
-                  ORDER BY (deleted_at IS NULL) DESC
-                  LIMIT 1",
+                ANY_PATH_WITH_CONTENT,
                 params![hash.as_bytes().as_slice()],
                 |r| r.get(0),
             )
@@ -3769,6 +3790,27 @@ impl Db {
         )?)
     }
 
+    /// Files this device keeps for `owner` beneath `prefix`, live: name from
+    /// the prefix, size, and when it last changed (decision 0063).
+    pub fn held_under(&self, owner: &DeviceId, prefix: &str) -> Result<Vec<(String, u64, i64)>> {
+        let prefix = prefix.trim_end_matches('/');
+        let pattern = format!("{prefix}/%");
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size, mtime_ns FROM files
+              WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL AND path LIKE ?2 ESCAPE '\\'
+              ORDER BY path",
+        )?;
+        let rows = stmt.query_map(params![owner.as_bytes().as_slice(), escape_like(&pattern)], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)?))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (path, size, mtime) = row?;
+            out.push((path[prefix.len() + 1..].to_string(), size, mtime));
+        }
+        Ok(out)
+    }
+
     /// The folders kept outside beneath `prefix`, counted: every file and its
     /// bytes, those a computer is known to hold, and those kept there only,
     /// gone from the outside folder (decision 0062).
@@ -4441,6 +4483,32 @@ impl<'a> Audience<'a> {
         match self {
             Audience::Device(device) | Audience::Guest(device) => Some(device),
             _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// How SQLite would answer `sql`, in its own words.
+    fn plan(db: &Db, sql: &str) -> String {
+        let mut stmt = db.conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+        let rows = stmt.query_map([vec![0u8; 32]], |r| r.get::<_, String>(3)).unwrap();
+        rows.map(|r| r.unwrap()).collect::<Vec<_>>().join(" | ")
+    }
+
+    /// The questions asked for every file a device serves find their rows
+    /// through an index, not by reading all of `files`. With a scan, a first
+    /// sync's time a file grew with the library: 2.4 ms at 5,000 files, 4.8 at
+    /// 20,000 (decision 0065, V24).
+    #[test]
+    fn content_is_found_through_an_index() {
+        let db = Db::open_in_memory().unwrap();
+        for sql in [ANY_FILE_WITH_CONTENT, ANY_PATH_WITH_CONTENT] {
+            let plan = plan(&db, sql);
+            assert!(plan.contains("USING INDEX idx_files_content"), "{plan}");
+            assert!(!plan.contains("SCAN f") && !plan.contains("SCAN files"), "{plan}");
         }
     }
 }

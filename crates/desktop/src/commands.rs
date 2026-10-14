@@ -1349,6 +1349,142 @@ pub fn open_file(hosted: Host<'_>, path: String) -> Answer<()> {
     reveal(&on_disk(&hosted, &path)?)
 }
 
+// ------------------------------------------------- a phone's folders (0063)
+
+/// One of a phone's folders as it last said, whether it is chosen to be
+/// backed up here, and how much of it this computer keeps.
+#[derive(Serialize)]
+pub struct PhoneFolder {
+    path: String,
+    files: u64,
+    size: String,
+    chosen: bool,
+    kept_files: u64,
+    kept: String,
+}
+
+/// A phone's folders, for choosing which it backs up here (decision 0063).
+#[derive(Serialize)]
+pub struct PhoneFolders {
+    /// When the phone last said what folders it has. Absent when it never
+    /// has: it has not been given "All files access", or does not keep its
+    /// Private Vault here, or runs a build from before.
+    seen_at: Option<i64>,
+    folders: Vec<PhoneFolder>,
+}
+
+/// One of the person's own phones, never another person's device.
+fn own_phone(hosted: &Host<'_>, phone: &str) -> Result<qurb_cli::Device, String> {
+    let device = recipient(hosted, phone)?;
+    if device.relation != qurb_storage::db::Relation::Own {
+        return Err(format!("{} is another person's device", device.name));
+    }
+    Ok(device)
+}
+
+/// Where a phone's chosen folder is kept in its vault.
+fn kept_prefix(folder: &str) -> String {
+    format!("{}/storage/{folder}", qurb_storage::db::OUTSIDE)
+}
+
+#[tauri::command]
+pub fn phone_folders(hosted: Host<'_>, phone: String) -> Answer<PhoneFolders> {
+    let device = own_phone(&hosted, &phone)?;
+    hosted
+        .with_store(|store| {
+            let db = store.db();
+            let (folders, seen_at) = db.known_folders(&device.id)?;
+            let chosen = db.chosen_for(&device.id)?;
+            let folders = folders
+                .into_iter()
+                .map(|f| {
+                    let (kept_files, kept) = db.held_outside_for(&device.id, &kept_prefix(&f.path)).unwrap_or((0, 0));
+                    PhoneFolder {
+                        chosen: chosen.contains(&f.path),
+                        size: big(f.bytes),
+                        kept: big(kept),
+                        path: f.path,
+                        files: f.files,
+                        kept_files,
+                    }
+                })
+                .collect();
+            Ok(PhoneFolders { seen_at, folders })
+        })
+        .map_err(failed)
+}
+
+/// Tick, or untick, a phone's folder. Only one the phone said it has: the
+/// phone checks again what it is pointed at, and this keeps the list clean.
+#[tauri::command]
+pub fn choose_phone_folder(hosted: Host<'_>, phone: String, folder: String, chosen: bool) -> Answer<()> {
+    let device = own_phone(&hosted, &phone)?;
+    hosted
+        .with_store(|store| {
+            let db = store.db();
+            if chosen && !db.known_folders(&device.id)?.0.iter().any(|f| f.path == folder) {
+                return Err(anyhow::anyhow!("{} has no folder {folder}", device.name));
+            }
+            Ok(db.choose_folder(&device.id, &folder, chosen)?)
+        })
+        .map_err(failed)
+}
+
+/// A file of a phone's backup kept here.
+#[derive(Serialize)]
+pub struct BackedUp {
+    /// From the folder: `IMG-1.jpg`, `2026/notes.pdf`.
+    path: String,
+    size: String,
+    modified_at: i64,
+}
+
+/// What this computer keeps of a phone's folder.
+#[tauri::command]
+pub fn phone_backup(hosted: Host<'_>, phone: String, folder: String) -> Answer<Vec<BackedUp>> {
+    let device = own_phone(&hosted, &phone)?;
+    if !qurb_sync::is_safe_path(&folder) {
+        return Err("that is not a folder of the phone".to_string());
+    }
+    hosted
+        .with_store(|store| Ok(store.db().held_under(&device.id, &kept_prefix(&folder))?))
+        .map_err(failed)
+        .map(|files| {
+            files
+                .into_iter()
+                .map(|(path, size, mtime)| BackedUp { path, size: big(size), modified_at: mtime / 1_000_000_000 })
+                .collect()
+        })
+}
+
+/// Open a file of a phone's backup: written out where opened files go, under
+/// the runtime directory, which never reaches the disk on a systemd desktop.
+#[tauri::command]
+pub fn open_backed_up(hosted: Host<'_>, phone: String, folder: String, path: String) -> Answer<()> {
+    let device = own_phone(&hosted, &phone)?;
+    if !qurb_sync::is_safe_path(&path) || !qurb_sync::is_safe_path(&folder) {
+        return Err("that is not a file of the backup".to_string());
+    }
+    let name = std::path::Path::new(&path).file_name().ok_or("that file has no name")?;
+    let dir = opened_dir(&device.id).join("backup");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(opened_dir(&device.id), std::fs::Permissions::from_mode(0o700));
+    }
+    let to = dir.join(name);
+    let kept = format!("{}/{path}", kept_prefix(&folder));
+    hosted
+        .with_store(|store| {
+            let mut out = std::fs::File::create(&to)?;
+            store.read_held_into(&device.id, &kept, &mut out)?;
+            Ok(())
+        })
+        .map_err(failed)?;
+    reveal(&to)
+}
+
 // ------------------------------------------------- a guest's folder, opened
 
 /// A guest's folder at this computer (decision 0060, step 5): "locked",
