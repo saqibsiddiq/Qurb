@@ -178,6 +178,14 @@ with the same size and time is recorded there without being read again
 (`a_file_found_another_way_is_read_from_there_without_reading_it_again`), so
 the 36,031 already kept move to the fast path for nothing.
 
+Watched on the S23 at 18:36: all 36,152 kept files' addresses became direct
+paths, none read again (`unchanged=36055`, recorded in 2.5 s). The listing
+itself took 24 s, the app asking each file for its kind, size and time
+separately; the Rust walk, one look at each entry, listed all of the phone's
+storage for the folder summary in 4.7 s of the same run. Listed by it
+instead, at 18:44 from *Back up now*: 11.5 s, as a background job, against
+39.6 to 57.5 through the picked folder.
+
 ## Reversing it
 
 Cheap before step 2. After it, each folder is rows like WhatsApp's: no longer

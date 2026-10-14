@@ -128,12 +128,12 @@ object WhatsApp {
         run
     }
 
-    private fun list(context: Context, tree: Uri): List<OutsideFile> {
+    private suspend fun list(context: Context, tree: Uri): List<OutsideFile> {
         // Directly where the phone has "All files access" (decision 0063): on
         // the S23, WhatsApp's 36,055 files listed in 4.3 to 5.3 s this way
         // against 39.6 to 57.5 through the picked folder, and each read in
         // half the time.
-        if (Folders.allowed()) listDirectly()?.let { return it }
+        if (Folders.allowed()) listDirectly(context)?.let { return it }
         val out = ArrayList<OutsideFile>(40_000)
         val columns = arrayOf(
             Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE,
@@ -164,26 +164,15 @@ object WhatsApp {
         return out
     }
 
-    /** The same listing, read by path. `null` when the folder is not there. */
-    private fun listDirectly(): List<OutsideFile>? {
+    /**
+     * The same listing, read by path, in Rust: one look at each entry. Walked
+     * here, asking each file for its kind, size and time separately, it took
+     * 24 s on the S23. `null` when the folder is not there.
+     */
+    private suspend fun listDirectly(context: Context): List<OutsideFile>? {
         val base = File(Environment.getExternalStorageDirectory(), FOLDER.substringAfter(':'))
         if (!base.isDirectory) return null
-        val out = ArrayList<OutsideFile>(40_000)
-        fun walk(dir: File, path: String) {
-            for (entry in dir.listFiles() ?: return) {
-                if (entry.name.startsWith(".")) continue
-                val here = if (path.isEmpty()) entry.name else "$path/${entry.name}"
-                if (entry.isDirectory) walk(entry, here)
-                else out += OutsideFile(
-                    path = here,
-                    uri = entry.path,
-                    size = entry.length().toULong(),
-                    modifiedMs = entry.lastModified(),
-                )
-            }
-        }
-        walk(base, "")
-        return out
+        return Engine.open(context).listDirectly(base.path)
     }
 
     /**
