@@ -242,14 +242,16 @@
           <div class="page-head">
             <div class="titles">
               <h1>Storage</h1>
-              <p>Free space without losing your files.</p>
+              <p>What Qurb keeps on this computer, and how to make room without losing anything.</p>
             </div>
           </div>
+          <!-- The owner's item 9 (2026-10-14): how much, then what it is,
+               then what can go, then the limit. -->
           <div class="card glass-frosted">
             <div class="recommend">
               <div class="text">
-                <div class="big-number num" id="freeable-big">–</div>
-                <p class="quiet" id="freeable-says"></p>
+                <div class="big-number num" id="used-big">–</div>
+                <p class="quiet num" id="used-says"></p>
               </div>
               <button class="btn primary" id="free-all">Free local space</button>
             </div>
@@ -258,7 +260,11 @@
               <div class="legend num" id="legend"></div>
             </div>
           </div>
-          <div class="list-label">Files you can free</div>
+          <div class="group-title">What is kept here</div>
+          <div class="parts" id="parts"></div>
+          <p class="note" id="parts-note"></p>
+          <div class="group-title">Files you can free</div>
+          <p class="quiet" id="freeable-says"></p>
           <ul class="rows" id="freeable-list"></ul>
 
           <div class="group-title">Storage limit</div>

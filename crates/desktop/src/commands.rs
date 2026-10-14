@@ -1103,6 +1103,82 @@ pub fn storage(hosted: Host<'_>) -> Answer<Storage> {
     })
 }
 
+/// What Qurb keeps on this computer, by kind, for Storage (the owner's item 9
+/// of 2026-10-14). By the size of the files: on disk they take less, after
+/// compression and what they share, which `storage` gives.
+#[derive(Serialize)]
+pub struct StorageParts {
+    phones: Vec<PhoneParts>,
+    guests: Vec<GuestPart>,
+    /// The shared folder: how many files, and how much of them is here.
+    shared_files: usize,
+    shared_here: String,
+    /// Recently deleted, kept thirty days.
+    deleted_files: usize,
+    deleted: String,
+}
+
+/// One of the owner's phones, and what is kept here for it.
+#[derive(Serialize)]
+pub struct PhoneParts {
+    name: String,
+    whatsapp_files: u64,
+    whatsapp: String,
+    folders_files: u64,
+    folders: String,
+    vault_files: u64,
+    vault: String,
+}
+
+#[derive(Serialize)]
+pub struct GuestPart {
+    name: String,
+    size: String,
+}
+
+#[tauri::command]
+pub fn storage_parts(hosted: Host<'_>) -> Answer<StorageParts> {
+    let phones = owner_phones(&hosted)?;
+    let mut parts = Vec::new();
+    for (name, phone) in phones {
+        let (all_files, all) = hosted.with_store(|s| Ok(s.db().held_for(&phone.id)?)).map_err(failed)?;
+        if all_files == 0 {
+            continue;
+        }
+        let outside = |prefix: &str| {
+            hosted
+                .with_store(|s| Ok(s.db().held_outside_for(&phone.id, &format!("{}/{prefix}", qurb_storage::db::OUTSIDE))?))
+                .map_err(failed)
+        };
+        let (whatsapp_files, whatsapp) = outside("whatsapp")?;
+        let (folders_files, folders) = outside("storage")?;
+        parts.push(PhoneParts {
+            name,
+            whatsapp_files,
+            whatsapp: big(whatsapp),
+            folders_files,
+            folders: big(folders),
+            vault_files: all_files.saturating_sub(whatsapp_files + folders_files),
+            vault: big(all.saturating_sub(whatsapp + folders)),
+        });
+    }
+    let guests = everyone(&hosted)?
+        .into_iter()
+        .filter(|p| p.relation == "guest")
+        .map(|p| GuestPart { name: p.name, size: p.size })
+        .collect();
+    let numbers = hosted.with_store(|s| Ok(View::new(s, 0).storage()?)).map_err(failed)?;
+    let deleted = hosted.with_store(|s| Ok(s.recently_deleted()?)).map_err(failed)?;
+    Ok(StorageParts {
+        phones: parts,
+        guests,
+        shared_files: numbers.file_count,
+        shared_here: big(numbers.files),
+        deleted_files: deleted.len(),
+        deleted: big(deleted.iter().map(|d| d.size).sum()),
+    })
+}
+
 /// One file as the file browser draws it (docs/design/brief.md §3).
 #[derive(Serialize)]
 pub struct Entry {

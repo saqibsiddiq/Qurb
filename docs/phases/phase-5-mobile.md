@@ -2346,7 +2346,20 @@ His answers to the questions they raised are with them.
    come" is what the phone last listed less what is kept here, and what is
    kept includes files since deleted on the phone, so it can say too few,
    never too many.
-9. **The desktop's Storage redesigned**, thoroughly.
+9. **The desktop's Storage redesigned**, thoroughly. **Built 2026-10-14**:
+   it said only what could be freed and the limit, while on the laptop nearly
+   all of Qurb's 9.2 GB is the S23's backups, which it did not mention. Now:
+   how much Qurb takes, against the limit or the disk, with what could go;
+   then *What is kept here*, four cards of one size -- *Your phones'
+   backups* (each phone's WhatsApp, folders and Private Vault, the S23 from
+   before it was set up again on its own line), *Shared files* (how many,
+   how much of them is here, how many freed), *Guests' folders* (sealed),
+   *Recently deleted* -- each with where to go for it; a line saying the
+   cards count files at their own size while the disk holds them compressed
+   and shared once; the five largest files that can be freed, all of them
+   freed by the button above; and the limit. Looked at in the fixtures page;
+   the smoke test opens it against the real engine with no command failing.
+   Not yet looked at on the laptop with its real numbers.
 10. **The folders to back up chosen on the phone too**, and on its Home.
     **Built 2026-10-14**: either device may choose, the later choice winning
     wherever it was made (0063, amended). On the phone *Your folders*, from

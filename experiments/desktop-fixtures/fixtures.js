@@ -276,6 +276,19 @@ const ANSWERS = {
     only_here: 2,
   }),
 
+  // Storage's cards (item 9): what is kept here, by kind.
+  storage_parts: () => ({
+    phones: [
+      { name: "Galaxy S23", whatsapp_files: 36055, whatsapp: "6200000000", folders_files: 97, folders: "61500000", vault_files: 214, vault: "1100000000" },
+      { name: "Galaxy S23, earlier", whatsapp_files: 6637, whatsapp: "3700000000", folders_files: 0, folders: "0", vault_files: 0, vault: "0" },
+    ],
+    guests: [{ name: "Ammi's phone", size: "12582912" }],
+    shared_files: 12,
+    shared_here: "5400000000",
+    deleted_files: 3,
+    deleted: "2400000",
+  }),
+
   browse,
   find: ({ text, private: priv }) => {
     // One deliberate failure, to see what a rejected command looks like on

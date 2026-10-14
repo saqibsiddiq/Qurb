@@ -1163,6 +1163,16 @@ button.device:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(
 .legend .free i { background: rgba(var(--ink), 0.1); }
 
 .big-number { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.02em; }
+/* Storage, what is kept here (item 9): four cards of one size, two by two. */
+.parts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s3); }
+.part { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s4) var(--s5); }
+.part-head { display: flex; align-items: center; gap: var(--s3); }
+.part-head .tile { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: rgba(var(--green-softer-ch), 0.9); color: var(--green); }
+.part-size { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.015em; margin-top: 2px; }
+.part-lines { flex: 1; }
+.part-lines .meta + .meta { margin-top: 2px; }
+.part-foot { display: flex; justify-content: flex-end; margin-top: var(--s2); }
+@media (max-width: 760px) { .parts { grid-template-columns: minmax(0, 1fr); } }
 .recommend { display: flex; align-items: center; gap: var(--s4); }
 .recommend .text { flex: 1; }
 

@@ -180,6 +180,7 @@ fn run() -> Result<()> {
             commands::save_settings,
             commands::summary,
             commands::storage,
+            commands::storage_parts,
             commands::browse,
             commands::find,
             commands::details,

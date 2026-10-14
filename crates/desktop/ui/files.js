@@ -236,6 +236,7 @@ function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
   }
 
   b.openPerson = (person, dir = "") => { b.area = person; b.dir = dir; b.searching = ""; b.draw(); };
+  b.openShared = () => { b.area = "shared"; b.dir = ""; b.searching = ""; b.draw(); };
 
   // Debounced, because every keystroke is a query and a list that redraws
   // under the cursor while somebody is still typing is worse than one that

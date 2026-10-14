@@ -10,29 +10,30 @@ const GIB = 1024 ** 3;
 let disk = 0;
 
 async function drawStorage() {
-  let st, fr;
+  let st, fr, parts;
   try {
-    [st, fr] = await Promise.all([invoke("storage"), invoke("freeable")]);
+    [st, fr, parts] = await Promise.all([invoke("storage"), invoke("freeable"), invoke("storage_parts")]);
   } catch (e) {
-    $("freeable-says").textContent = String(e);
+    $("used-says").textContent = String(e);
     return;
   }
   disk = Number(st.disk);
   const used = Number(st.used);
   const freeable = Number(fr.bytes);
   const free = Number(st.free_disk);
+  const limit = Number(st.limit);
 
-  $("freeable-big").textContent = freeable > 0 ? size(fr.bytes) : "Nothing to free";
-  $("freeable-says").textContent = freeable > 0
-    ? `can be freed safely, from ${count(fr.count, "file")}. They stay in Qurb, available from your other devices.`
-    : st.only_here > 0
-      ? `${count(st.only_here, "file")} ${st.only_here === 1 ? "is" : "are"} only on this computer, so ${st.only_here === 1 ? "it stays" : "they stay"} until another device has ${st.only_here === 1 ? "it" : "them"}.`
-      : "Everything here is either needed here or already freed.";
+  // How much: what Qurb takes on this disk, against what it may take.
+  $("used-big").textContent = size(st.used);
+  $("used-says").textContent = [
+    limit > 0 ? `of ${size(st.limit)} allowed${st.over ? ", over the limit" : ""}` : "with no limit set",
+    `${size(st.free_disk)} free on this disk`,
+  ].join(" · ");
   $("free-all").classList.toggle("hidden", freeable === 0);
 
-  // One bar: what Qurb uses, the part of it that could go, and the rest of
-  // the disk. Against the disk, since that is what is being spent.
-  const whole = Math.max(disk, used + free, 1);
+  // One bar, against the allowance when there is one, else the disk: what
+  // Qurb uses, the part of it that could go, and the room left.
+  const whole = Math.max(limit > 0 ? limit : Math.max(disk, used + free), used, 1);
   $("meter-used").style.width = `${(100 * (used - freeable)) / whole}%`;
   $("meter-freeable").style.left = `${(100 * (used - freeable)) / whole}%`;
   $("meter-freeable").style.width = `${(100 * freeable) / whole}%`;
@@ -45,19 +46,26 @@ async function drawStorage() {
   };
   key("used", `Qurb uses ${size(st.used)}`);
   if (freeable > 0) key("freeable", `${size(fr.bytes)} can be freed`);
-  if (free > 0) key("free", `${size(st.free_disk)} free on this disk`);
+  key("free", limit > 0 ? `${size(String(Math.max(0, limit - used)))} left of the limit` : `${size(st.free_disk)} free on this disk`);
 
+  drawParts(parts, st, fr);
+  // The cards count files at their size; the disk holds them compressed,
+  // and what files share once, so the two need not add up.
+  $("parts-note").textContent = `Sizes above are the files' own. On this disk Qurb takes ${size(st.used)} for all of it: compressed, and what files share kept once.`;
+
+  $("freeable-says").textContent = freeable > 0
+    ? `${size(fr.bytes)} from ${count(fr.count, "file")}. They stay in Qurb, available from your other devices.`
+    : st.only_here > 0
+      ? `${count(st.only_here, "file")} ${st.only_here === 1 ? "is" : "are"} only on this computer, so ${st.only_here === 1 ? "it stays" : "they stay"} until another device has ${st.only_here === 1 ? "it" : "them"}.`
+      : "Nothing right now: everything here is either needed here or already freed.";
   const list = $("freeable-list");
   list.replaceChildren();
-  if (fr.files.length === 0) {
-    list.append(empty("hard-drive", "No files to free right now.", null, true));
-  }
-  for (const f of fr.files) {
+  for (const f of fr.files.slice(0, FREEABLE_SHOWN)) {
     const go = button("Free local space", "btn small", "cloud-off");
     const li = row({
       iconName: KIND_ICON[kindOf(f.path)],
       name: base(f.path),
-      sub: [stateTag(f.availability), size(f.size), folderOf(f.path) || "Qurb"],
+      sub: [stateTag(f.availability), size(f.size), folderOf(f.path) || "Shared"],
       trail: [go],
       onClick: () => openDetails(f.path),
     });
@@ -65,20 +73,95 @@ async function drawStorage() {
     go.addEventListener("click", () => freeLocal(f.path, li, drawStorage));
     list.append(li);
   }
+  if (fr.count > FREEABLE_SHOWN) {
+    list.append(el("p", "note", `The largest ${FREEABLE_SHOWN} of ${count(fr.count, "file")}. Free local space, above, frees them all.`));
+  }
 
-  $("usage").textContent = Number(st.limit) > 0
+  $("usage").textContent = limit > 0
     ? `${size(st.used)} of ${size(st.limit)}${st.over ? " — over the limit" : ""}`
     : "No limit set";
 
   // Not touched while somebody is dragging: rewriting the control they are
   // holding is the single most irritating thing a live-updating screen does.
   if (document.activeElement !== $("limit")) {
-    const limit = Number(st.limit);
     $("capped").checked = limit > 0;
     $("limit-controls").classList.toggle("hidden", limit === 0);
     $("limit").value = String(toTrack(limit > 0 ? limit / GIB : disk / GIB / 10));
     showLimitLabel();
   }
+}
+
+/** Files listed under *Files you can free*; the button frees them all. */
+const FREEABLE_SHOWN = 5;
+
+/** What is kept here, four of one size: the phones' backups, the shared
+ *  files, guests' folders and Recently deleted, each with what to do. */
+function drawParts(parts, st, fr) {
+  const box = $("parts");
+  box.replaceChildren();
+  const card = ({ iconName, title, big, lines, action }) => {
+    const c = el("div", "part card glass-frosted");
+    const head = el("div", "part-head");
+    const tile = el("span", "tile");
+    tile.append(icon(iconName));
+    head.append(tile, el("strong", null, title));
+    c.append(head, el("div", "part-size num", big));
+    const said = el("div", "part-lines");
+    for (const line of lines) said.append(el("p", "meta", line));
+    c.append(said);
+    if (action) {
+      const [label, act] = action;
+      const b = button(label, "btn small");
+      b.addEventListener("click", act);
+      const foot = el("div", "part-foot");
+      foot.append(b);
+      c.append(foot);
+    }
+    box.append(c);
+  };
+  const sum = (key) => parts.phones.reduce((n, p) => n + Number(p[key]), 0);
+
+  const phoneBytes = sum("whatsapp") + sum("folders") + sum("vault");
+  card({
+    iconName: "smartphone",
+    title: "Your phones' backups",
+    big: parts.phones.length ? size(String(phoneBytes)) : "None yet",
+    lines: parts.phones.length
+      ? parts.phones.map((p) => `${p.name}: ` + [
+        Number(p.whatsapp) > 0 ? `WhatsApp ${size(p.whatsapp)}` : null,
+        Number(p.folders) > 0 ? `folders ${size(p.folders)}` : null,
+        Number(p.vault) > 0 ? `Private Vault ${size(p.vault)}` : null,
+      ].filter(Boolean).join(" · "))
+      : ["A phone's backups come here once it keeps its Private Vault on this computer."],
+    action: parts.phones.length ? ["Open in Files", () => { showScreen("files"); filesBrowser.openPerson("owner"); }] : null,
+  });
+  card({
+    iconName: "folder",
+    title: "Shared files",
+    big: `${size(parts.shared_here)} here`,
+    lines: [
+      `${count(parts.shared_files, "file")}, on all your devices`,
+      st.evicted > 0 ? `${count(st.evicted, "file")} freed here, fetched when opened` : "Every one of them on this computer",
+    ],
+    action: ["Open in Files", () => { showScreen("files"); filesBrowser.openShared(); }],
+  });
+  const guestBytes = parts.guests.reduce((n, g) => n + Number(g.size), 0);
+  card({
+    iconName: "user-plus",
+    title: "Guests' folders",
+    big: parts.guests.length ? size(String(guestBytes)) : "None",
+    lines: parts.guests.length
+      ? parts.guests.map((g) => `${g.name}: ${size(g.size)}, sealed`)
+      : ["Nobody else keeps a folder here. A guest's is sealed: you can't open it."],
+    action: ["Devices", () => showScreen("devices")],
+  });
+  card({
+    iconName: "trash-2",
+    title: "Recently deleted",
+    big: size(parts.deleted),
+    lines: [parts.deleted_files ? `${count(parts.deleted_files, "file")}, each kept 30 days` : "Nothing deleted lately"],
+    action: ["Open", () => showScreen("deleted")],
+  });
 }
 
 $("free-all").addEventListener("click", async () => {

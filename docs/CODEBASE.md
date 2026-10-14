@@ -1358,7 +1358,7 @@ network. iOS needs Xcode, which needs a Mac. See
 | Private Vault | this computer's own files, browsed the same way; *Move to shared* takes one back out ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md)) |
 | Devices | who is paired, whether each is connected now and whether directly or through the relay, when each was last reached; removing one, with what that will and will not do said first |
 | Activity | reached from Home: what this device did, paged, with the reason where there is one |
-| Storage | how much can be freed without losing anything, the largest files that would free it, and the allowance |
+| Storage | how much Qurb takes against the limit or the disk; what is kept here by kind -- each phone's backups (WhatsApp, folders, Private Vault), the shared files, guests' sealed folders, Recently deleted (`storage_parts`); the largest files that can be freed without losing anything; and the allowance |
 | Settings | grouped lists: this device and its key, devices and pairings, where files sent here go, keep new files private, notifications, the 24 words, appearance — system, light or dark ([0056](decisions/0056-dark-mode.md)) — and the advanced settings — rendezvous, relay, port, start at login, version, Quit |
 | Setting a device up | make a new one, with nothing to write down, or join with another device's code, which brings the key ([0052](decisions/0052-the-key-travels-with-the-code.md)); the storage question asked; the 24 words a fallback |
 | Locked | a key protected by a passphrase is unlocked in the window; at login the window shows itself to ask |
