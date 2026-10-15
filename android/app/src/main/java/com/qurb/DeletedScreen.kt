@@ -33,7 +33,7 @@ class DeletedScreen(app: MainActivity, fromSettings: Boolean = false) : Screen(a
     }
 
     override fun refresh() {
-        scope.launch {
+        refreshing {
             try {
                 val deleted = withContext(Dispatchers.IO) { engine().recentlyDeleted() }
                 val page = views.sections

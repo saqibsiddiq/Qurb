@@ -43,7 +43,7 @@ class DevicesScreen(app: MainActivity) : Screen(app) {
     }
 
     override fun refresh() {
-        scope.launch {
+        refreshing {
             try {
                 val (peers, holders) = withContext(Dispatchers.IO) {
                     val engine = engine()

@@ -49,7 +49,7 @@ pub mod tls;
 pub mod wire;
 
 pub use client::PeerClient;
-pub use connect::{relay_address_ok, resolve_relay, Connector, Finding};
+pub use connect::{relay_address_ok, relay_for, resolve_relay, Connector, Finding, RelayAt};
 pub use error::{Error, Result};
 pub use identity::{Fingerprint, Identity};
 pub use local::Beacon;

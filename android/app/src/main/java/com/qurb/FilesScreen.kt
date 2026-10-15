@@ -131,7 +131,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
 
     override fun refresh() {
         drawCrumbs()
-        scope.launch {
+        refreshing {
             try {
                 val (folders, files) = withContext(Dispatchers.IO) {
                     val engine = engine()

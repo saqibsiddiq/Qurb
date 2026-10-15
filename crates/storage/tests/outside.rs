@@ -343,3 +343,43 @@ fn a_file_found_another_way_is_read_from_there_without_reading_it_again() {
     std::fs::remove_file(&elsewhere).unwrap();
     assert_eq!(phone.store.read_content(&blake3::hash(&bytes)).unwrap().unwrap(), bytes);
 }
+
+/// What the folder is expected to hold leaves out files kept where they lie.
+/// They are never in qurb's own folder, so a scan looking for deleted files
+/// has nothing to find among them; on the S23 it used to look anyway, one
+/// question per file, 37,500 of them, and each scan held the engine for
+/// over a second (2026-10-15).
+#[test]
+fn files_kept_where_they_lie_are_not_expected_in_the_folder() {
+    let mut phone = Phone::new();
+    let entry = phone.write("Media/WhatsApp Images/IMG-1.jpg", &noisy(1000, 3), 1);
+    phone.sync(&[entry], true);
+    let notes = phone.dir.path().join("folder/notes.txt");
+    std::fs::write(&notes, b"in the folder").unwrap();
+    phone.store.put_file("notes.txt", &notes).unwrap();
+
+    assert!(phone.live("Media/WhatsApp Images/IMG-1.jpg").is_some());
+    assert_eq!(phone.store.db().folder_paths().unwrap(), vec!["notes.txt".to_string()]);
+}
+
+/// The index's change mark moves with every change -- made through this
+/// connection, or committed through another, as the server answering a
+/// computer records what it holds -- and with nothing else. A summary is
+/// kept on the strength of it (the phone's backups on Home), so a change it
+/// missed would leave a screen saying something no longer true.
+#[test]
+fn the_change_mark_moves_with_any_change_to_the_index() {
+    let mut phone = Phone::new();
+    let before = phone.store.db().change_mark().unwrap();
+    assert_eq!(phone.store.db().change_mark().unwrap(), before, "moved with nothing changed");
+
+    let entry = phone.write("Media/a.jpg", &noisy(1000, 4), 1);
+    phone.sync(&[entry], true);
+    let after = phone.store.db().change_mark().unwrap();
+    assert_ne!(after, before, "missed a change made here");
+
+    let other = Store::open(phone.store.root(), ChunkKey::from_bytes([21; 32])).unwrap();
+    other.db().add_holder(&computer()).unwrap();
+    assert_eq!(phone.store.db().holders().unwrap(), vec![computer()], "not the same index");
+    assert_ne!(phone.store.db().change_mark().unwrap(), after, "missed another connection's change");
+}

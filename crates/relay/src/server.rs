@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
 /// What the relay has carried. The number that becomes a bill.
@@ -59,26 +59,23 @@ impl Outbox {
 
 pub struct RelayServer {
     listener: TcpListener,
+    relay: Relay,
+}
+
+/// The relay itself, whatever its connections arrive by: who is registered
+/// under which names, and what it has carried. A `RelayServer` gives it
+/// connections from its own TCP port; a rendezvous service that relays as
+/// well gives it the WebSockets opened at its `/relay`
+/// (`qurb_signal::tunnel`). Cheap to clone: the clones are one relay.
+#[derive(Clone, Default)]
+pub struct Relay {
     registered: Arc<Mutex<HashMap<RelayId, Outbox>>>,
     stats: Arc<RelayStats>,
 }
 
-impl RelayServer {
-    /// Listen on `addr`.
-    ///
-    /// Plain TCP here; in production this belongs behind TLS on port 443, which
-    /// is the entire reason the relay is TCP rather than UDP — it exists for
-    /// networks that block everything else.
-    pub async fn bind(addr: SocketAddr) -> Result<Self> {
-        Ok(Self {
-            listener: TcpListener::bind(addr).await?,
-            registered: Arc::new(Mutex::new(HashMap::new())),
-            stats: Arc::new(RelayStats::default()),
-        })
-    }
-
-    pub fn local_addr(&self) -> Result<SocketAddr> {
-        Ok(self.listener.local_addr()?)
+impl Relay {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn stats(&self) -> Arc<RelayStats> {
@@ -89,29 +86,60 @@ impl RelayServer {
         self.registered.lock().expect("registry").len()
     }
 
-    pub async fn serve(&self) {
-        while let Ok((stream, from)) = self.listener.accept().await {
-            self.stats.connections.fetch_add(1, Ordering::Relaxed);
-            let registered = Arc::clone(&self.registered);
-            let stats = Arc::clone(&self.stats);
-            tokio::spawn(async move {
-                if let Err(e) = serve_one(stream, registered, stats).await {
-                    tracing::debug!(%from, error = %e, "relay connection ended");
-                }
-            });
+    /// Carry one connection until it ends.
+    pub async fn serve<S>(&self, stream: S)
+    where
+        S: AsyncRead + AsyncWrite + Send + 'static,
+    {
+        self.stats.connections.fetch_add(1, Ordering::Relaxed);
+        if let Err(e) = serve_one(stream, Arc::clone(&self.registered), Arc::clone(&self.stats)).await {
+            tracing::debug!(error = %e, "relay connection ended");
         }
     }
 }
 
-async fn serve_one(
-    stream: TcpStream,
+impl RelayServer {
+    /// Listen on `addr`.
+    ///
+    /// Plain TCP here; in production this belongs behind TLS on port 443, which
+    /// is the entire reason the relay is TCP rather than UDP — it exists for
+    /// networks that block everything else.
+    pub async fn bind(addr: SocketAddr) -> Result<Self> {
+        Ok(Self { listener: TcpListener::bind(addr).await?, relay: Relay::new() })
+    }
+
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        Ok(self.listener.local_addr()?)
+    }
+
+    pub fn stats(&self) -> Arc<RelayStats> {
+        self.relay.stats()
+    }
+
+    pub fn registered_count(&self) -> usize {
+        self.relay.registered_count()
+    }
+
+    pub async fn serve(&self) {
+        while let Ok((stream, _from)) = self.listener.accept().await {
+            // Relayed traffic is many small packets where latency is already
+            // bad; waiting to coalesce them makes it worse.
+            let _ = stream.set_nodelay(true);
+            let relay = self.relay.clone();
+            tokio::spawn(async move { relay.serve(stream).await });
+        }
+    }
+}
+
+async fn serve_one<S>(
+    stream: S,
     registered: Arc<Mutex<HashMap<RelayId, Outbox>>>,
     stats: Arc<RelayStats>,
-) -> Result<()> {
-    // Relayed traffic is many small packets where latency is already bad;
-    // waiting to coalesce them makes it worse.
-    let _ = stream.set_nodelay(true);
-    let (mut reader, mut writer) = stream.into_split();
+) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    let (mut reader, mut writer) = tokio::io::split(stream);
 
     let (channel, mut outgoing) = mpsc::unbounded_channel::<Frame>();
     let outbox = Outbox { channel, many: Arc::new(AtomicBool::new(false)) };

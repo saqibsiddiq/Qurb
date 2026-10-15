@@ -54,7 +54,7 @@ const CANDIDATE_TIMEOUT: Duration = Duration::from_secs(8);
 /// Grouped because they are one decision rather than three: a test on one
 /// machine wants none of it, a phone on a carrier network wants all of it, and
 /// the combinations in between are what a deployment chooses.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Finding {
     /// Ask a STUN server what this device looks like from outside.
     pub stun: bool,
@@ -62,13 +62,23 @@ pub struct Finding {
     /// discovery off, which tests want and nothing else does.
     pub beacons: Option<u16>,
     /// Where to fall back to when no direct path can be made.
-    pub relay: Option<SocketAddr>,
+    pub relay: Option<RelayAt>,
+}
+
+/// Where a relay is: on a port of its own, or carried by a rendezvous service
+/// at `/relay` on its own address (`qurb_signal::tunnel`), which is what gets
+/// through a network that lets only web traffic out, and a proxy that
+/// publishes only TLS by name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RelayAt {
+    Tcp(SocketAddr),
+    Tunnel(String),
 }
 
 impl Finding {
     /// Everything: STUN, local beacons on the standard port, and a relay if
     /// one is configured. What a real device wants.
-    pub fn everything(relay: Option<SocketAddr>) -> Self {
+    pub fn everything(relay: Option<RelayAt>) -> Self {
         Self { stun: true, beacons: Some(local::PORT), relay }
     }
 
@@ -182,7 +192,8 @@ fn hex_short(bytes: &[u8; 32]) -> String {
     bytes[..4].iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Whether `text` has the shape of a relay's address: a host and a port.
+/// Whether `text` has the shape of a relay's address: a host and a port, or
+/// a `ws://` or `wss://` URL for one carried by a rendezvous service.
 ///
 /// The host may be a name or an address -- `relay.example.com:9001`,
 /// `203.0.113.5:9001`, `[2001:db8::1]:9001` -- because a relay on a server of
@@ -192,6 +203,17 @@ fn hex_short(bytes: &[u8; 32]) -> String {
 /// device starts syncing.
 pub fn relay_address_ok(text: &str) -> std::result::Result<(), String> {
     let text = text.trim();
+    // None at all, not even the one beside the rendezvous ([`relay_for`]).
+    if text == "off" {
+        return Ok(());
+    }
+    if let Some(rest) = text.strip_prefix("wss://").or_else(|| text.strip_prefix("ws://")) {
+        let host = rest.split(['/', '#', '?']).next().unwrap_or("");
+        if host.is_empty() || rest.contains(char::is_whitespace) {
+            return Err(format!("{text} has no host"));
+        }
+        return Ok(());
+    }
     let Some((host, port)) = text.rsplit_once(':') else {
         return Err(format!("{text} has no port — a relay is host:port, like relay.example.com:9001"));
     };
@@ -220,8 +242,12 @@ pub fn relay_address_ok(text: &str) -> std::result::Result<(), String> {
 /// nothing, which the relay closes. Bounded throughout, since a resolver or
 /// an address that does not answer must not hold up a sync that may not need
 /// the relay at all.
-pub async fn resolve_relay(text: &str) -> Result<SocketAddr> {
+pub async fn resolve_relay(text: &str) -> Result<RelayAt> {
     relay_address_ok(text).map_err(|detail| Error::Signalling { detail: format!("relay: {detail}") })?;
+    let text = text.trim();
+    if text.starts_with("ws://") || text.starts_with("wss://") {
+        return Ok(RelayAt::Tunnel(text.to_string()));
+    }
     let answers: Vec<SocketAddr> =
         tokio::time::timeout(Duration::from_secs(5), tokio::net::lookup_host(text.trim()))
             .await
@@ -231,7 +257,7 @@ pub async fn resolve_relay(text: &str) -> Result<SocketAddr> {
     for address in &answers {
         let probe = tokio::time::timeout(Duration::from_secs(3), tokio::net::TcpStream::connect(address));
         if let Ok(Ok(_)) = probe.await {
-            return Ok(*address);
+            return Ok(RelayAt::Tcp(*address));
         }
     }
     Err(Error::Signalling {
@@ -240,6 +266,37 @@ pub async fn resolve_relay(text: &str) -> Result<SocketAddr> {
             false => format!("relay: nothing answers at {text}"),
         },
     })
+}
+
+/// The relay a device uses: the one its settings name, or else the one beside
+/// its rendezvous service, at `/relay` (`qurb_signal::tunnel::beside`), so
+/// that a device has a way round with nothing set. `off` is none. A relay
+/// named and not found is none too, said in the log: a sync that may not
+/// need it is not held up by it.
+pub async fn relay_for(setting: Option<&str>, signal_url: &str) -> Option<RelayAt> {
+    match setting.map(str::trim).filter(|s| !s.is_empty()) {
+        Some("off") => None,
+        Some(text) => match resolve_relay(text).await {
+            Ok(relay) => Some(relay),
+            Err(e) => {
+                tracing::warn!(error = %e, "the relay set is not reachable; direct paths only");
+                None
+            }
+        },
+        None if !signal_url.trim().is_empty() => Some(RelayAt::Tunnel(qurb_signal::tunnel::beside(signal_url))),
+        None => None,
+    }
+}
+
+/// Open a relay connection and register on it as `me`.
+async fn open_relay(at: RelayAt, me: qurb_relay::RelayId) -> std::result::Result<Arc<qurb_relay::RelaySocket>, String> {
+    match at {
+        RelayAt::Tcp(address) => qurb_relay::RelaySocket::connect(address, me).await.map_err(|e| e.to_string()),
+        RelayAt::Tunnel(url) => {
+            let stream = qurb_signal::tunnel::open(&url).await.map_err(|e| e.to_string())?;
+            qurb_relay::RelaySocket::over(stream, me).await.map_err(|e| e.to_string())
+        }
+    }
 }
 
 /// What the signalling task is asked to do.
@@ -273,6 +330,16 @@ impl Connector {
         finding: Finding,
     ) -> Result<Self> {
         let Finding { stun: discover, beacons: beacon_port, relay } = finding;
+        // The relay path registers under the same identifier the rendezvous
+        // service uses, so a peer that knows where to look for us there knows
+        // it already. Opened now, alongside asking STUN below, since through
+        // a rendezvous service that relays it is a TLS WebSocket's round trips
+        // -- at the start of every pass a phone makes.
+        let me = *MemberId::derive(&master, identity.fingerprint().as_bytes()).as_bytes();
+        let opening = relay.map(|at| {
+            let shown = format!("{at:?}");
+            (shown, tokio::spawn(open_relay(at, me)))
+        });
         let socket = std::net::UdpSocket::bind(bind)
             .map_err(|e| Error::Io { path: bind.to_string().into(), source: e })?;
         let local = socket
@@ -299,31 +366,28 @@ impl Connector {
         let server_config = tls::server_config(&identity, allowed)?;
         let endpoint = nat::endpoint_from(socket, Some(server_config))?;
 
-        // The relay path registers under the same identifier the rendezvous
-        // service uses, so a peer that knows where to look for us there knows it
-        // already.
-        //
         // Best effort, like the rendezvous below. A relay that cannot be
         // reached costs the fallback, not the device: it used to stop a device
         // starting at all, so a server of one's own being down meant a phone
         // could not sync with the laptop beside it on the same Wi-Fi.
-        let relay = match relay {
-            Some(address) => {
-                let me = *MemberId::derive(&master, identity.fingerprint().as_bytes()).as_bytes();
-                match qurb_relay::RelaySocket::connect(address, me).await {
-                    Ok(socket) => {
-                        let server_config = tls::server_config(&identity, allowed)?;
-                        let endpoint =
-                            qurb_relay::endpoint_over(Arc::clone(&socket), Some(server_config))
-                                .map_err(|e| Error::Signalling { detail: format!("relay: {e}") })?;
-                        Some(RelayPath { socket, endpoint })
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, %address, "the relay cannot be reached; direct paths only");
-                        None
-                    }
+        let relay = match opening {
+            Some((shown, opening)) => match opening.await {
+                Ok(Ok(socket)) => {
+                    let server_config = tls::server_config(&identity, allowed)?;
+                    let endpoint = qurb_relay::endpoint_over(Arc::clone(&socket), Some(server_config))
+                        .map_err(|e| Error::Signalling { detail: format!("relay: {e}") })?;
+                    tracing::debug!(relay = %shown, "on the relay");
+                    Some(RelayPath { socket, endpoint })
                 }
-            }
+                Ok(Err(e)) => {
+                    tracing::warn!(error = %e, relay = %shown, "the relay cannot be reached; direct paths only");
+                    None
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, relay = %shown, "opening the relay failed; direct paths only");
+                    None
+                }
+            },
             None => None,
         };
 
@@ -1203,10 +1267,19 @@ mod tests {
 
     #[test]
     fn a_relay_address_is_a_host_and_a_port() {
-        for good in ["relay.example.com:9001", "203.0.113.5:9001", "[2001:db8::1]:9001", " r.example:443 "] {
+        for good in [
+            "relay.example.com:9001",
+            "203.0.113.5:9001",
+            "[2001:db8::1]:9001",
+            " r.example:443 ",
+            "wss://rendezvous.example.com/relay",
+            "wss://203.0.113.5:9000/relay#4047ab",
+            "ws://localhost:9000/relay",
+            "off",
+        ] {
             assert!(relay_address_ok(good).is_ok(), "{good} refused");
         }
-        for bad in ["relay.example.com", "203.0.113.5", ":9001", "relay.example.com:0", "relay.example.com:99999", "a b:9001", ""] {
+        for bad in ["relay.example.com", "203.0.113.5", ":9001", "relay.example.com:0", "relay.example.com:99999", "a b:9001", "", "wss://", "wss:///relay"] {
             assert!(relay_address_ok(bad).is_err(), "{bad} accepted");
         }
     }
@@ -1219,7 +1292,7 @@ mod tests {
         let port = listening.local_addr().unwrap().port();
 
         let by_address = resolve_relay(&format!("127.0.0.1:{port}")).await.unwrap();
-        assert_eq!(by_address, format!("127.0.0.1:{port}").parse().unwrap());
+        assert_eq!(by_address, RelayAt::Tcp(format!("127.0.0.1:{port}").parse().unwrap()));
         let by_name = resolve_relay(&format!("localhost:{port}")).await.unwrap();
         assert_eq!(by_name, by_address, "took an address that does not answer");
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Files fetched from a computer to be opened in another app (KeptScreen):
+     only this cache folder is ever handed out, and only for one opening. -->
+<paths>
+    <cache-path name="opened" path="opened/" />
+</paths>

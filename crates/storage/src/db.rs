@@ -2601,19 +2601,36 @@ impl Db {
             .map_err(Into::into)
     }
 
+    /// Where the index stands: the rows changed through this connection, and
+    /// the count SQLite moves whenever another connection commits. Equal
+    /// twice, nothing in the index changed in between -- which is what lets a
+    /// summary that reads every row be kept and given again (the phone's
+    /// backups, read on every refresh of its Home).
+    pub fn change_mark(&self) -> Result<(u64, i64)> {
+        let theirs: i64 = self.conn.query_row("PRAGMA data_version", [], |r| r.get(0))?;
+        Ok((self.conn.total_changes(), theirs))
+    }
+
     /// Every live path materialised in this device's folder, shared or sent
     /// here. What a scan of the folder should expect to find.
     ///
     /// Used to notice deletions: a path the index lists and the walk did not
     /// find is gone. Before this included received files, deleting one went
     /// unnoticed and it stayed in the index for ever.
+    ///
+    /// Files kept where they lie (`OUTSIDE`, decision 0062) are left out:
+    /// they are never in the folder, and until 2026-10-15 the scan asked
+    /// about each of them in turn -- 37,500 questions on the S23, holding
+    /// the engine over a second every time the app came back.
     pub fn folder_paths(&self) -> Result<Vec<String>> {
         let me = self.local_device()?;
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT DISTINCT path FROM files
               WHERE deleted_at IS NULL AND (scope IS NULL OR scope = ?1)
+                AND substr(path, 1, {len}) <> '{OUTSIDE}/'
               ORDER BY path",
-        )?;
+            len = OUTSIDE.len() + 1,
+        ))?;
         let rows = stmt.query_map(params![me.as_bytes().as_slice()], |r| r.get(0))?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }

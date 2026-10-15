@@ -37,6 +37,7 @@ class SetupActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         views = ActivitySetupBinding.inflate(layoutInflater)
         setContentView(views.root)
+        Appearance.paintEnvironment(this)
 
         // Android 15 draws edge to edge whether an app asks or not; without
         // this the first button sits under the status bar.

@@ -533,7 +533,7 @@ async fn a_guest_and_its_computer_reach_each_other_through_the_relay() {
             qurb_keys::MasterKey::from_bytes(device.key),
             &qurb_peer::tls::TrustList::new(allowed),
             signal_url.clone(),
-            qurb_peer::Finding { stun: false, beacons: None, relay: Some(relay_addr) },
+            qurb_peer::Finding { stun: false, beacons: None, relay: Some(qurb_peer::RelayAt::Tcp(relay_addr)) },
         )
         .await
         .unwrap();

@@ -37,7 +37,7 @@ class FoldersScreen(app: MainActivity, from: String, override val tab: Int) : Sc
     private class State(val folders: List<OwnFolder>, val keeper: String?, val backup: BackupState)
 
     override fun refresh() {
-        scope.launch {
+        refreshing {
             try {
                 val state = withContext(Dispatchers.IO) {
                     val engine = engine()

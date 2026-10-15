@@ -36,6 +36,15 @@ exactly the case it exists for.
 `the_relay_never_sees_the_content` sends a distinctive string through a relay
 that records every byte it forwards, and asserts the string never appears.
 
+## Over any byte stream, and beside the rendezvous
+
+`RelaySocket::over` and `Relay::serve` take any byte stream, not only TCP.
+`RelayServer` gives a `Relay` the connections on its own port; a rendezvous
+service that relays as well gives it the WebSockets opened at its `/relay`
+(`qurb_signal::tunnel`, [decision 0068](../../docs/decisions/0068-the-rendezvous-service-relays.md)),
+which is how the owner's runs, published with the rendezvous through a proxy
+that carries only TLS by name. The frames are the same either way.
+
 ## TCP, when everything else is UDP
 
 The data plane is QUIC over UDP because it is faster. The relay is TCP because

@@ -41,7 +41,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
@@ -112,7 +112,18 @@ impl RelaySocket {
     pub async fn connect(relay: SocketAddr, me: RelayId) -> Result<Arc<Self>> {
         let stream = TcpStream::connect(relay).await?;
         let _ = stream.set_nodelay(true);
-        let (mut reader, mut writer) = stream.into_split();
+        Self::over(stream, me).await
+    }
+
+    /// The same, over a byte stream already open to a relay: TCP, or a
+    /// WebSocket carried by a rendezvous service that relays as well, which
+    /// is what passes through the proxies and firewalls that let only web
+    /// traffic out (`qurb_signal::tunnel`).
+    pub async fn over<S>(stream: S, me: RelayId) -> Result<Arc<Self>>
+    where
+        S: AsyncRead + AsyncWrite + Send + 'static,
+    {
+        let (mut reader, mut writer) = tokio::io::split(stream);
 
         let (outgoing, mut to_send) = mpsc::unbounded_channel::<Frame>();
         let (received, incoming) = mpsc::unbounded_channel::<(Pair, Vec<u8>)>();

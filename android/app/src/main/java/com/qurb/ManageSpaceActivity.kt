@@ -46,6 +46,7 @@ class ManageSpaceActivity : AppCompatActivity() {
             setBackgroundColor(ContextCompat.getColor(this@ManageSpaceActivity, R.color.bg))
         }
         setContentView(scroll)
+        Appearance.paintEnvironment(this)
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.updatePadding(top = bars.top, bottom = bars.bottom)

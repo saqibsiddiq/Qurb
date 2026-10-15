@@ -258,6 +258,14 @@ carries the handshake without being party to it. The relay connection is held
 open rather than dialled on demand, since being reachable is not something that
 can be arranged after someone has already failed to reach you.
 
+A relay is `RelayAt::Tcp`, on a port of its own, or `RelayAt::Tunnel`, a
+`ws://` or `wss://` URL for one a rendezvous service carries. With none set, a
+device uses the one beside its rendezvous service, at `/relay` (`relay_for`,
+[decision 0068](../../docs/decisions/0068-the-rendezvous-service-relays.md));
+`off` is none. The connector opens it while STUN is asked, since through a
+proxy it is a TLS WebSocket's round trips at the start of every pass a phone
+makes.
+
 **Dropping a connector stops everything it started.** The rendezvous
 reconnect loop, the beacon sender and listener, and with them the socket. A
 daemon keeps one connector for hours and would not notice; a phone builds one

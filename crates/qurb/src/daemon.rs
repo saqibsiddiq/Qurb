@@ -468,24 +468,16 @@ impl Daemon {
         report_collisions(&engine);
 
         // Looked up now, and a failure costs only the fallback: devices that
-        // can reach each other directly still do.
-        let relay = match &self.config.relay {
-            Some(text) => match qurb_peer::resolve_relay(text).await {
-                Ok(address) => Some(address),
-                Err(e) => {
-                    tracing::warn!(error = %e, "no relay this time; direct paths only");
-                    None
-                }
-            },
-            None => None,
-        };
+        // can reach each other directly still do. None set is the relay
+        // beside the rendezvous service, at `/relay`.
+        let relay = qurb_peer::relay_for(self.config.relay.as_deref(), &self.config.signal).await;
         let connector = match Connector::start(
             format!("0.0.0.0:{}", self.config.port).parse()?,
             self.identity.clone(),
             self.master.clone(),
             &trust,
             &self.config.signal,
-            qurb_peer::Finding::everything(relay),
+            qurb_peer::Finding::everything(relay.clone()),
         )
         .await
         {

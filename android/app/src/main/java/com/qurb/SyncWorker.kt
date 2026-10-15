@@ -173,7 +173,10 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // file's chunks for good. Its failure is not the sync's: the sync
             // already happened, and the next run tries again.
             runCatching { engine.housekeep() }
-                .onSuccess { if (it.freed > 0uL) Log.i(TAG, "freed ${it.freed} bytes nothing needed") }
+                .onSuccess {
+                    Engine.noteHousekept(applicationContext)
+                    if (it.freed > 0uL) Log.i(TAG, "freed ${it.freed} bytes nothing needed")
+                }
                 .onFailure { Log.w(TAG, "housekeeping failed", it) }
 
             when {

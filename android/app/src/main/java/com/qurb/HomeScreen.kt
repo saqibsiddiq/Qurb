@@ -74,7 +74,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
     )
 
     override fun refresh() {
-        scope.launch {
+        refreshing {
             try {
                 val state = withContext(Dispatchers.IO) {
                     val engine = engine()

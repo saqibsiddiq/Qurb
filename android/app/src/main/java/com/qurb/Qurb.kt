@@ -391,6 +391,21 @@ object Engine {
             .putLong("last_reached_at", System.currentTimeMillis() / 1000).apply()
     }
 
+    /** That `housekeep` just ran, here or in the worker. */
+    fun noteHousekept(context: Context) {
+        context.getSharedPreferences("qurb", Context.MODE_PRIVATE).edit()
+            .putLong("housekept_at", System.currentTimeMillis()).apply()
+    }
+
+    /**
+     * Whether `housekeep` ran in the last six hours. It holds the engine
+     * for most of a second on the S23, and every screen waits behind it, so
+     * opening the app runs it only when the worker has not lately.
+     */
+    fun housekeptLately(context: Context): Boolean =
+        System.currentTimeMillis() - context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
+            .getLong("housekept_at", 0L) < 6L * 60 * 60 * 1000
+
     /**
      * Whether a file added on this phone stays private to it rather than going
      * to every device (decision 0036). On unless the person turns it off: a

@@ -68,11 +68,13 @@ qurb — private cloud storage
 
 Running the services yourself:
 
-  qurb signal [addr] [options]        the rendezvous service (default :9000)
+  qurb signal [addr] [options]        the rendezvous service (default :9000),
+                                        and a relay at /relay beside it
                                         --tls            present its own certificate
                                         --cert p --key p use a real one instead
                                         --host name      what devices will type
                                         --push <json>    wake sleeping devices
+                                        --no-relay       carry no relay
   qurb relay [addr]                   the relay (default :9001)
   qurb netcheck                       what this network will let you do
 
@@ -348,6 +350,7 @@ fn run() -> Result<()> {
                     // printed URL something to copy rather than fill in.
                     host: after("--host"),
                 },
+                !args.iter().any(|a| a == "--no-relay"),
             ))
         }
         "relay" => block_on(relay(args.get(1).cloned())),
@@ -1819,6 +1822,7 @@ async fn signal(
     addr: Option<String>,
     push_credentials: Option<String>,
     tls: Tls,
+    relaying: bool,
 ) -> Result<()> {
     let addr: std::net::SocketAddr =
         addr.unwrap_or_else(|| "0.0.0.0:9000".into()).parse().context("bad address")?;
@@ -1865,8 +1869,26 @@ async fn signal(
         None => server,
     };
 
+    // A relay too, at `/relay` on this same address, unless asked not to: the
+    // way round for a device that cannot reach the other directly, found
+    // there with nothing to configure (qurb_signal::tunnel). It sees what
+    // the rendezvous sees, and carries ciphertext it cannot read.
+    let server = match relaying {
+        true => {
+            let relay = qurb_relay::Relay::new();
+            server.relaying(std::sync::Arc::new(move |stream| {
+                let relay = relay.clone();
+                tokio::spawn(async move { relay.serve(stream).await });
+            }))
+        }
+        false => server,
+    };
+
     let port = server.local_addr()?.port();
     println!("rendezvous service on {}", server.local_addr()?);
+    if relaying {
+        println!("and a relay, at /relay on the same address (--no-relay for none)");
+    }
     println!();
 
     let server = match certificate {

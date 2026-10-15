@@ -189,7 +189,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             desktop.master.clone(),
             &qurb_peer::tls::TrustList::new(desktop.trusted()),
             &signal_url,
-            qurb_peer::Finding { stun: false, beacons: None, relay: Some(relay_addr) },
+            qurb_peer::Finding { stun: false, beacons: None, relay: Some(qurb_peer::RelayAt::Tcp(relay_addr)) },
         )
         .await?,
     );
@@ -200,7 +200,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             laptop.master.clone(),
             &qurb_peer::tls::TrustList::new(laptop.trusted()),
             &signal_url,
-            qurb_peer::Finding { stun: false, beacons: None, relay: Some(relay_addr) },
+            qurb_peer::Finding { stun: false, beacons: None, relay: Some(qurb_peer::RelayAt::Tcp(relay_addr)) },
         )
         .await?,
     );

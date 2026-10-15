@@ -2422,6 +2422,81 @@ His answers to the questions they raised are with them.
 
 Where each stands is kept here as it moves.
 
+## The owner's list of 2026-10-15
+
+Given after the S23 and the laptop were run together that morning, with an
+item added during the work.
+
+1. **No sync on another phone's hotspot**, "even though the application is
+   designed in a way that it can sync file as long as both the devices are
+   online". Nothing of the attempt survived to read (the phone's log had
+   rotated, the laptop's was going nowhere after a restart). What stood: no
+   relay ran anywhere, and the relay could not have been published through
+   the Funnel that publishes the rendezvous, since it spoke plain TCP. **Built
+   and deployed the same day**
+   ([0068](../decisions/0068-the-rendezvous-service-relays.md)): the
+   rendezvous service carries a relay at `/relay` over a WebSocket, and a
+   device with no relay set uses the one beside its rendezvous. On the laptop:
+   `wss://saqib.tail86283c.ts.net/relay` answers `101 Switching Protocols`
+   through the Funnel, the daemon is registered on it, and the S23 registered
+   on it from home. **Not yet seen carrying a sync** from the S23 on another
+   network. Noted on the way: a hotspot is metered, so the WhatsApp and
+   folder backups wait for Wi-Fi there by design; shared files and sends do
+   not.
+2. **"The app feels really buggy and not smooth"**: optimised without losing
+   a feature. Measured on the S23 through the same journey each time -- five
+   cold starts, then three rounds of the four tabs with scrolling, read from
+   `dumpsys gfxinfo` -- two runs each:
+
+   | | the debug build the S23 ran | after |
+   |---|---|---|
+   | cold start, median of 5 | 545 ms, 590 ms | 182 ms, 179 ms |
+   | janky frames | 0.60%, 0.66% | 0.31%, 0.39% |
+   | the window's background, painted per frame | 5 times | once |
+   | engine held over 0.5 s, per run | dozens, up to 1.2 s | a few, under 0.76 s, all syncs |
+
+   What did it:
+   - **A release build signed with the debug key** (`fast`): R8, not
+     debuggable, installed over the debug build without losing the phone's
+     key or index. Cold start 3.1 times faster on its own; frames unchanged
+     by it.
+   - **The background drawn once**: five full-screen layers, redrawn under
+     every frame (the overdraw view showed every pixel painted four times or
+     more), now one bitmap a quarter of the screen across, stretched.
+   - **The engine's lock, measured**: every call that held it over 0.5 s or
+     waited over 0.25 s logged with where (`Held`). That found the stalls:
+     every return to the app rescanned the folder, asking about each of the
+     37,500 backup entries that are never in it (1.0–1.2 s; now left out);
+     Home's WhatsApp summary read every one of them on each refresh (1.2 s)
+     and Settings' copies of sent files walked every file's chunks
+     (0.7–0.9 s), now both kept while the index is unchanged
+     (`Db::change_mark`, tested to move with a change made through any
+     connection); the rescan on coming back skipped within 30 s of the last;
+     storage tidying at launch only when the worker has not lately, and
+     after the first screen.
+   - **Screens refresh one at a time** (`Screen.refreshing`): a burst of
+     changes used to queue that many rounds of queries, finishing out of
+     order.
+   - **A big folder on the computer drawn a hundred rows at a time**, and
+     counts written as the desktop writes them.
+
+   GPU milliseconds per frame swung between runs of the same build (6 and
+   14 ms at the 90th percentile) with nothing on screen moving; the phone's
+   GPU clock follows the work, so they are not reported as a result. Earlier
+   the same day, found with the S23: asks never shown while the app was open,
+   asks unheard for a long pass, *Your folder on saqib* panicking on every
+   open, and Home's headline over a Waiting list -- all fixed (0067).
+3. **A spare phone for further testing.** Not yet connected: it needs
+   wireless debugging paired with the laptop, which needs its pairing code.
+   First uses: six digits typed on a device not yet paired, and two phones
+   together.
+4. **Media in the phone's folder on the computer could not be viewed or
+   played**, only downloaded or restored. **Built the same day**: a file's
+   sheet starts with *Open*, fetched whole and checked into the app's cache
+   under its content's hash and handed to the app for its type through a
+   `FileProvider`; opened again, it is not fetched again; let go of a day
+   later. Not yet tried on the S23.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

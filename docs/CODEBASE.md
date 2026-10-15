@@ -780,6 +780,8 @@ qurb/
 │   │   ├── src/client.rs      announce, ask, punch when told
 │   │   ├── src/wake.rs        the seam: how an absent device gets poked
 │   │   ├── src/fcm.rs         that seam, filled in by Firebase (feature `push`)
+│   │   ├── src/tunnel.rs      the relay it carries, at `/relay`, as a WebSocket
+│   │   │                      byte stream (0068)
 │   │   └── src/tls.rs         a certificate of its own, for a bare IP address
 │   │
 │   ├── relay/             The fallback when no direct path exists.
@@ -906,7 +908,8 @@ qurb/
 │       │                                      backed up with "All files access",
 │       │                                      chosen here or on the computer
 │       │                                      (decision 0063)
-│       │                  Appearance.kt       light, dark, or as the system is set
+│       │                  Appearance.kt       light, dark, or as the system is set;
+│       │                                      the background, drawn once
 │       │                  ManageSpaceActivity.kt
 │       │                                      what Android's Clear data opens: what
 │       │                                      only this phone has, before it goes
@@ -1183,7 +1186,12 @@ offering the old one, so the phone could not reach it
 **And a relay carries what cannot go directly.** It forwards opaque datagrams
 with an ordinary QUIC session running inside, so it sees ciphertext addressed to
 an identifier it cannot link to a person. It is TCP, on port 443, because it
-exists for networks where UDP does not work.
+exists for networks where UDP does not work. Since 2026-10-15 a rendezvous
+service carries one too, at `/relay` on its own address over a WebSocket, and
+a device with no relay set uses that one: nothing to configure, and published
+wherever the rendezvous is, through a proxy that carries only TLS by name
+([decisions/0068](decisions/0068-the-rendezvous-service-relays.md)). The
+owner's runs that way on the laptop, behind its Tailscale Funnel.
 
 **And the two are joined.** Reaching a peer tries every direct address at once
 and falls back to the relay when none answers, with identity pinned exactly as
@@ -1366,6 +1374,18 @@ and
 `#[uniffi::export] impl` block for an object and silently discards the others,
 so eight methods were missing from the generated Kotlin and Swift while every
 Rust test passed.
+
+**The engine is one lock, and the screens wait behind it.** Every call into
+the phone's engine that reads or changes the index takes it in turn
+(`Qurb::engine`), so one slow call holds up every screen. A call that holds
+it over half a second, or waits over a quarter, is logged with the line it
+was taken at (`Held`). Summaries that read every row -- a backup's, the copies
+of sent files -- are kept while the index is unchanged (`Remembered`,
+`Db::change_mark`: rows changed through this connection, and SQLite's
+`data_version` for commits through another). A screen's refresh runs one at
+a time, one asked for meanwhile run once after it (`Screen.refreshing`).
+Measured on the S23 on 2026-10-15, phase 5, *The owner's list of
+2026-10-15*.
 
 The app syncs on its own through WorkManager — every fifteen minutes when
 Android allows it, or every hour once a push has arrived in the last week,

@@ -1,6 +1,7 @@
 # 0039 — A light Android app, on the platform's own views
 
-**Status:** Accepted
+**Status:** Accepted. Amended 2026-10-15: the development phone runs a release
+built with the debug key — see [The phone ran a debug build](#the-phone-ran-a-debug-build).
 **Date:** 2026-09-27
 
 ## Decision
@@ -176,3 +177,15 @@ turned out to be.
 
 Cheap for the build settings, which are a few lines each. Moving to Compose
 later would be a rewrite of the screens, which is the cost this decision avoids.
+
+## The phone ran a debug build
+
+Everything measured here was of the release build, and until 2026-10-15 the
+S23 ran nothing but debug builds: moving it to the release meant
+uninstalling, since Android takes an update only signed by the same key,
+which would have deleted its key and index. The owner found the app "buggy
+and not smooth". The `fast` build type is the release with the debug key:
+R8, not debuggable, installed over the debug build with everything kept.
+Measured on the S23, five cold starts, median: 545 ms debuggable, 174 ms
+`fast`. Frames were the same in both; what improved them was drawing less
+(phase 5, *The owner's list of 2026-10-15*).

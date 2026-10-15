@@ -272,13 +272,18 @@ async fn connected(
     signal_url: &str,
     relay_addr: std::net::SocketAddr,
 ) -> Arc<Connector> {
+    connected_via(device, signal_url, Some(qurb_peer::RelayAt::Tcp(relay_addr))).await
+}
+
+/// The same, with the relay given as it is found.
+async fn connected_via(device: &Device, signal_url: &str, relay: Option<qurb_peer::RelayAt>) -> Arc<Connector> {
     let connector = Connector::start(
         "127.0.0.1:0".parse().unwrap(),
         device.identity.clone(),
         device.master.clone(),
         &qurb_peer::tls::TrustList::new(device.trusted()),
         signal_url,
-        qurb_peer::Finding { stun: false, beacons: None, relay: Some(relay_addr) },
+        qurb_peer::Finding { stun: false, beacons: None, relay },
     )
     .await
     .unwrap();
@@ -665,3 +670,89 @@ async fn a_device_that_reaches_the_instant_it_starts_still_finds_its_peer() {
     let tree = client.tree().await.expect("tree");
     assert_eq!(tree[0].path, "notes.txt");
 }
+
+/// The relay a rendezvous service carries, at `/relay` on its own address
+/// (`qurb_signal::tunnel`): two devices with no relay set find it beside the
+/// rendezvous they use, and a file crosses through it as through a relay on
+/// a port of its own. What a phone on a hotspot needs, and on 2026-10-15 did
+/// not have: the relay ran nowhere, and spoke plain TCP, which the proxy
+/// publishing the owner's rendezvous does not carry.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_file_syncs_through_the_relay_the_rendezvous_carries() {
+    let relay = qurb_relay::Relay::new();
+    let carried = relay.clone();
+    let signal = SignalServer::bind("127.0.0.1:0".parse().unwrap()).await.unwrap().relaying(Arc::new(
+        move |stream| {
+            let relay = carried.clone();
+            tokio::spawn(async move { relay.serve(stream).await });
+        },
+    ));
+    let signal = Arc::new(signal);
+    let signal_url = format!("ws://{}", signal.local_addr().unwrap());
+    let running = Arc::clone(&signal);
+    tokio::spawn(async move { running.serve().await });
+
+    // Nothing set: the relay beside the rendezvous.
+    let beside = qurb_peer::relay_for(None, &signal_url).await;
+    assert_eq!(beside, Some(qurb_peer::RelayAt::Tunnel(format!("{signal_url}/relay"))));
+
+    let (desktop, phrase) = Device::first();
+    let laptop = Device::enrolled(&phrase);
+    fs::write(desktop.root.join("notes.txt"), b"carried by the rendezvous").unwrap();
+    desktop.engine().reconcile().unwrap();
+    pair(&desktop, &laptop).await;
+
+    let desktop_conn = connected_via(&desktop, &signal_url, beside.clone()).await;
+    let laptop_conn = connected_via(&laptop, &signal_url, beside).await;
+    assert!(desktop_conn.relay_endpoint().is_some() && laptop_conn.relay_endpoint().is_some());
+    // Registered once each takes its first turn; a moment for the frames.
+    for _ in 0..50 {
+        if relay.registered_count() == 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(relay.registered_count(), 2, "not both on the relay");
+
+    let client = tokio::time::timeout(
+        Duration::from_secs(20),
+        laptop_conn.reach_via_relay(desktop.identity.fingerprint()),
+    )
+    .await
+    .expect("the relayed connection timed out")
+    .expect("could not reach the desktop through the rendezvous's relay");
+    assert!(client.is_relayed());
+
+    let tree = client.tree().await.expect("tree over the relay");
+    let mut laptop_engine = laptop.engine();
+    let plan = laptop_engine.plan_against(&tree).unwrap();
+    let reader = Store::open(
+        &laptop.root.join(".qurb"),
+        ChunkKey::from_bytes(laptop.master.derive(Purpose::ChunkEncryption).to_bytes()),
+    )
+    .unwrap()
+    .in_tree(&laptop.root);
+    let mut source = qurb_peer::NetworkSource::new(&client, &reader);
+    let stats = laptop_engine.apply_plan(&plan, &mut source).unwrap();
+    assert!(stats.is_clean(), "{:?}", stats.failures);
+    assert_eq!(fs::read(laptop.root.join("notes.txt")).unwrap(), b"carried by the rendezvous");
+    assert!(relay.stats().bytes() > 0, "nothing went through the relay");
+}
+
+/// A rendezvous service that carries no relay refuses `/relay`, and a device
+/// that looked for one there starts without it, at once, rather than
+/// registered with something that never answers.
+#[tokio::test(flavor = "multi_thread")]
+async fn no_relay_beside_a_rendezvous_that_carries_none() {
+    let signal = Arc::new(SignalServer::bind("127.0.0.1:0".parse().unwrap()).await.unwrap());
+    let signal_url = format!("ws://{}", signal.local_addr().unwrap());
+    let running = Arc::clone(&signal);
+    tokio::spawn(async move { running.serve().await });
+    let (desktop, _) = Device::first();
+
+    let started = std::time::Instant::now();
+    let connector = connected_via(&desktop, &signal_url, qurb_peer::relay_for(None, &signal_url).await).await;
+    assert!(connector.relay_endpoint().is_none(), "took a relay that is not there");
+    assert!(started.elapsed() < Duration::from_secs(3), "waited for a relay that is not there");
+}
+

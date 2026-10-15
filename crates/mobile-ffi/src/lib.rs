@@ -642,6 +642,8 @@ pub struct Qurb {
     /// computer goes on asking for five minutes; the same ask is not put to
     /// the person twice.
     settled: Mutex<std::collections::HashMap<String, [u8; 16]>>,
+    /// Summaries that read every row, kept while the index is unchanged.
+    remembered: Remembered,
 }
 
 /// A computer's answer to the key this phone sent it, once approved
@@ -1497,7 +1499,17 @@ impl Qurb {
     /// freeing space in general. The laptop had since lost its copy of that
     /// video, and the phone's was probably the last.
     pub fn sent_copies(&self) -> Result<u64, QurbError> {
-        Ok(self.engine()?.store().releasable_held_bytes()?)
+        // Which chunks, from the index, kept while it is unchanged: the query
+        // walks every file's chunks, 0.7 to 0.9 s on the S23 each time
+        // Settings was drawn (2026-10-15). Whether each is still stored is
+        // asked of the chunk store every time, since freeing them is not a
+        // change to the index alone.
+        let engine = self.engine()?;
+        let store = engine.store();
+        let chunks = self.remembered.answer("releasable", store.db().change_mark()?, || {
+            Ok(store.db().releasable_held_chunks()?)
+        })?;
+        Ok(chunks.iter().filter(|h| store.cas().contains(h)).map(|h| store.cas().stored_size(h).unwrap_or(0)).sum())
     }
 
     /// Let go of [`sent_copies`](Self::sent_copies). Only sends the recipient
@@ -1588,10 +1600,7 @@ impl Qurb {
         };
         let identity = self.identity()?;
         let runtime = self.runtime()?;
-        let relay = match &self.relay {
-            Some(text) => runtime.block_on(qurb_peer::resolve_relay(text)).ok(),
-            None => None,
-        };
+        let relay = runtime.block_on(qurb_peer::relay_for(self.relay.as_deref(), &self.signal_url));
         let trust = qurb_peer::tls::TrustList::new(trusted);
         // A port of its own: a sync pass may be using the usual one.
         let connector = runtime
@@ -2080,28 +2089,13 @@ impl Qurb {
     /// The chosen folders' backup as it stands: how much, and how much of it
     /// the computer has (decision 0063).
     pub fn folders_backup(&self) -> Result<BackupState, QurbError> {
-        let prefix = format!("{}/storage", qurb_storage::db::OUTSIDE);
-        let summary = self.engine()?.store().db().outside_summary(&prefix)?;
-        Ok(BackupState {
-            files: summary.files,
-            bytes: summary.bytes,
-            held_files: summary.held_files,
-            held_bytes: summary.held_bytes,
-            only_kept: summary.only_kept,
-        })
+        self.backup_state("folders", &format!("{}/storage", qurb_storage::db::OUTSIDE))
     }
 
     /// The WhatsApp backup as it stands: how much, and how much of it the
     /// computer has (decision 0062).
     pub fn whatsapp_backup(&self) -> Result<BackupState, QurbError> {
-        let summary = self.engine()?.store().db().outside_summary(&whatsapp_prefix())?;
-        Ok(BackupState {
-            files: summary.files,
-            bytes: summary.bytes,
-            held_files: summary.held_files,
-            held_bytes: summary.held_bytes,
-            only_kept: summary.only_kept,
-        })
+        self.backup_state("whatsapp", &whatsapp_prefix())
     }
 
     /// Whether this phone is on a network that does not count what it carries
@@ -2341,6 +2335,7 @@ impl Qurb {
             open_asks: Mutex::new(std::collections::HashMap::new()),
             approved: Mutex::new(std::collections::HashMap::new()),
             open_answers: Mutex::new(Vec::new()),
+            remembered: Remembered::default(),
             settled: Mutex::new(std::collections::HashMap::new()),
         })
     }
@@ -2498,17 +2493,10 @@ impl Qurb {
         // Looked up on every pass: a phone moves between networks, and a
         // relay on a server of one's own is known by its name. A lookup that
         // fails costs this pass its fallback, not the pass -- a device on the
-        // same network, or with a path that punches, is still reached.
-        let relay = match &self.relay {
-            Some(text) => match runtime.block_on(qurb_peer::resolve_relay(text)) {
-                Ok(address) => Some(address),
-                Err(e) => {
-                    tracing::warn!(error = %e, "no relay this pass");
-                    None
-                }
-            },
-            None => None,
-        };
+        // same network, or with a path that punches, is still reached. None
+        // set is the relay beside the rendezvous service, at `/relay`: the
+        // way round from a hotspot or a carrier, with nothing to configure.
+        let relay = runtime.block_on(qurb_peer::relay_for(self.relay.as_deref(), &self.signal_url));
 
         // Built per pass rather than kept. A phone's address changes with every
         // move between Wi-Fi and cellular, and a connector holding a stale
@@ -3030,14 +3018,119 @@ impl Qurb {
         Ok(Some(stats))
     }
 
-    fn engine(&self) -> Result<std::sync::MutexGuard<'_, Engine>, QurbError> {
-        // A poisoned lock means an earlier call panicked while holding it. The
-        // engine's state is then unknown, so this reports rather than recovers.
-        self.inner.lock().map_err(|_| QurbError::Other {
-            detail: "the engine is in an unknown state after an earlier failure".into(),
+    /// A backup's summary, kept while the index is unchanged: it reads every
+    /// row of the backup, 36,062 of them for the S23's WhatsApp, and Home
+    /// asks on every refresh. Computed each time, it held the engine 1.2 s
+    /// on the S23, and every screen waited behind it (2026-10-15).
+    fn backup_state(&self, what: &'static str, prefix: &str) -> Result<BackupState, QurbError> {
+        let engine = self.engine()?;
+        let db = engine.store().db();
+        self.remembered.answer(what, db.change_mark()?, || {
+            let summary = db.outside_summary(prefix)?;
+            Ok(BackupState {
+                files: summary.files,
+                bytes: summary.bytes,
+                held_files: summary.held_files,
+                held_bytes: summary.held_bytes,
+                only_kept: summary.only_kept,
+            })
         })
     }
+
+    /// The engine, held until the guard goes. Every call that reads or
+    /// changes the index comes through here, one at a time, so a slow one
+    /// holds up every screen waiting behind it. A wait or a hold that runs
+    /// long is logged with where in this file it was taken, which is how the
+    /// S23's first minute after opening the app was taken apart (2026-10-15).
+    #[track_caller]
+    fn engine(&self) -> Result<Held<'_>, QurbError> {
+        let at = std::panic::Location::caller();
+        let asked = std::time::Instant::now();
+        // A poisoned lock means an earlier call panicked while holding it. The
+        // engine's state is then unknown, so this reports rather than recovers.
+        let guard = self.inner.lock().map_err(|_| QurbError::Other {
+            detail: "the engine is in an unknown state after an earlier failure".into(),
+        })?;
+        let waited = asked.elapsed();
+        if waited >= WAITED_LONG {
+            tracing::info!(waited_ms = waited.as_millis() as u64, at = at.line(), "waited for the engine");
+        }
+        Ok(Held { guard, since: std::time::Instant::now(), at })
+    }
 }
+
+/// Answers kept while the index is unchanged (`Db::change_mark`): a summary
+/// that reads every row is computed once per change rather than once per
+/// look.
+#[derive(Default)]
+struct Remembered {
+    answers: Mutex<std::collections::HashMap<&'static str, Kept>>,
+}
+
+/// One kept answer: the index's mark when it was worked out, and the answer.
+type Kept = ((u64, i64), Arc<dyn std::any::Any + Send + Sync>);
+
+impl Remembered {
+    /// The answer to `what` as of `version`: the one kept, if the index has
+    /// not changed since, or `work`'s, kept for next time.
+    fn answer<T: Clone + Send + Sync + 'static>(
+        &self,
+        what: &'static str,
+        version: (u64, i64),
+        work: impl FnOnce() -> Result<T, QurbError>,
+    ) -> Result<T, QurbError> {
+        if let Ok(answers) = self.answers.lock() {
+            if let Some((at, kept)) = answers.get(what) {
+                if *at == version {
+                    if let Some(kept) = kept.downcast_ref::<T>() {
+                        return Ok(kept.clone());
+                    }
+                }
+            }
+        }
+        let fresh = work()?;
+        if let Ok(mut answers) = self.answers.lock() {
+            answers.insert(what, (version, Arc::new(fresh.clone())));
+        }
+        Ok(fresh)
+    }
+}
+
+/// The engine, held: the lock's guard, and where and when it was taken.
+struct Held<'a> {
+    guard: std::sync::MutexGuard<'a, Engine>,
+    since: std::time::Instant,
+    at: &'static std::panic::Location<'static>,
+}
+
+impl std::ops::Deref for Held<'_> {
+    type Target = Engine;
+    fn deref(&self) -> &Engine {
+        &self.guard
+    }
+}
+
+impl std::ops::DerefMut for Held<'_> {
+    fn deref_mut(&mut self) -> &mut Engine {
+        &mut self.guard
+    }
+}
+
+impl Drop for Held<'_> {
+    fn drop(&mut self) {
+        let held = self.since.elapsed();
+        if held >= HELD_LONG {
+            tracing::info!(held_ms = held.as_millis() as u64, at = self.at.line(), "held the engine");
+        }
+    }
+}
+
+/// A wait for the engine worth a line in the log: a screen waiting this long
+/// has visibly not answered.
+const WAITED_LONG: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// A hold worth a line: everything else that wants the engine waits this long.
+const HELD_LONG: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// The longest a pass stays open after its own syncing, for devices it
 /// reached to come back for what it has for them. Long enough for a daemon

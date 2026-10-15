@@ -92,6 +92,21 @@ android {
             }
             isMinifyEnabled = false
         }
+        // A release in everything but its key: shrunk and optimised by R8,
+        // not debuggable, and signed with the debug key, so it installs over
+        // a phone that has run debug builds without uninstalling -- which
+        // would delete that phone's key and index. Android runs a debuggable
+        // app with much of ART's optimisation off; the S23 ran nothing else
+        // until 2026-10-15. Profileable, so its frames and start can still be
+        // measured; not `run-as`-able, so a debug build goes back on when the
+        // index has to be read.
+        create("fast") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            isProfileable = true
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {

@@ -1,7 +1,10 @@
 package com.qurb
 
+import android.content.Intent
 import android.os.Environment
 import android.view.View
+import android.webkit.MimeTypeMap
+import androidx.core.content.FileProvider
 import android.widget.LinearLayout
 import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +42,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         views.subtitle.visibility = View.VISIBLE
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
+        scope.launch(Dispatchers.IO) { tidyOpened() }
     }
 
     override fun back(): Boolean {
@@ -126,15 +130,62 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         }
     }
 
-    /** One file: where it would go, either way. */
+    /** One file: opened here, or where it would go, either way. */
     private fun choose(file: KeptFile) {
         kit.sheet()
             .header(States.icon(file.name), file.name, "${Words.size(file.size)}  ·  ${Words.ago(file.modifiedAt)}")
+            .action(R.drawable.ic_external_link, "Open", meta = "In an app on this phone, without saving a copy") {
+                open(file)
+            }
             .action(R.drawable.ic_download, "Download", meta = "A copy in this phone's Downloads, in Qurb") {
                 fetch(file, downloads(file), "Saved to Downloads")
             }
             .action(R.drawable.ic_rotate_ccw, "Restore", meta = restoredTo(file)) { restore(file) }
             .show()
+    }
+
+    /**
+     * Shown or played here, as Files opens a file (the owner's item of
+     * 2026-10-15: a photo or a song in this folder could only be downloaded
+     * or restored). Fetched whole and checked, as a download is, into the
+     * app's cache under its content's hash -- so a file opened again is not
+     * fetched again -- and handed to the app for its type through a
+     * FileProvider, readable through that one URI only. Let go of a day
+     * later (`tidyOpened`), or sooner if Android needs the space.
+     */
+    private fun open(file: KeptFile) {
+        val dir = java.io.File(app.cacheDir, "$OPENED/${file.content.take(16)}")
+        val here = java.io.File(dir, file.name)
+        if (!here.exists()) app.say("Fetching ${file.name}…")
+        scope.launch {
+            try {
+                val local = withContext(Dispatchers.IO) {
+                    if (here.exists()) return@withContext here
+                    val open = folder ?: error("the folder is closed")
+                    dir.mkdirs()
+                    java.io.File(open.download(file, here.path))
+                }
+                val uri = FileProvider.getUriForFile(app, "${app.packageName}.opened", local)
+                val type = MimeTypeMap.getSingleton()
+                    .getMimeTypeFromExtension(file.name.substringAfterLast('.', "").lowercase()) ?: "*/*"
+                val view = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, type)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                app.startActivity(Intent.createChooser(view, "Open with"))
+            } catch (e: android.content.ActivityNotFoundException) {
+                app.fail("Nothing on this phone can open ${file.name}", e)
+            } catch (e: Exception) {
+                app.fail("Could not open ${file.name}", e)
+            }
+        }
+    }
+
+    /** Files opened from here more than a day ago, let go of. */
+    private fun tidyOpened() {
+        val opened = java.io.File(app.cacheDir, OPENED)
+        val old = System.currentTimeMillis() - 24L * 60 * 60 * 1000
+        opened.listFiles()?.filter { it.lastModified() < old }?.forEach { it.deleteRecursively() }
     }
 
     private fun downloads(file: KeptFile): String =
@@ -201,6 +252,8 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         /** Rows drawn at a time; a folder of WhatsApp images can hold thousands. */
         private const val PAGE = 100
         private const val WHATSAPP = ".qurb-outside/whatsapp/"
+        /** Under the app's cache: files fetched to be opened (`opened_paths.xml`). */
+        private const val OPENED = "opened"
         private const val STORAGE = ".qurb-outside/storage/"
     }
 }

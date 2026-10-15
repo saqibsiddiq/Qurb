@@ -215,7 +215,7 @@ file, a filename or who a person is
 | service | what it does | where it runs today |
 |---|---|---|
 | **Rendezvous** (`qurb signal`) | introduces devices on different networks, tells a device at once when another has work for it, keeps that message for a device that is away, and wakes a sleeping phone by push ([0022](decisions/0022-the-service-announces-arrivals.md), [0028](decisions/0028-waking-a-sleeping-device.md)) | on the laptop, as a user unit, reachable from outside through Tailscale Funnel ✅ |
-| **Relay** (`qurb relay`) | carries encrypted traffic when no direct path exists, over TCP 443 | built and tested 🧪; carries guests' meetings too ([0061](decisions/0061-the-relay-carries-meetings.md)); **not running anywhere yet** — next after design |
+| **Relay** | carries encrypted traffic when no direct path exists: inside the rendezvous service at `/relay`, over a WebSocket, found by every device with nothing set ([0068](decisions/0068-the-rendezvous-service-relays.md)); or `qurb relay` on a port of its own | 🧪 end to end in tests; **running on the laptop since 2026-10-15**, reachable through its Funnel; not yet seen carrying a sync from the S23 on another network |
 | **Local discovery** | devices on the same Wi-Fi find each other with encrypted beacons and no server at all ([0034](decisions/0034-finding-each-other-with-no-server.md)) | ✅ |
 
 `packaging/server/` has the units, TLS and firewall rules for a server of your
@@ -265,8 +265,11 @@ The parts nobody sees, and the reason the features above can be trusted.
 
 Stated plainly so that a design does not assume it:
 
-- **The relay on a server.** Next, after design and UX. Until then a phone on a
-  network that blocks a direct path cannot sync.
+- **The relay on a server of the owner's own.** Since 2026-10-15 the
+  rendezvous service on the laptop carries one, reached through its Funnel,
+  so a phone on a network that blocks a direct path syncs through the laptop
+  itself, while the laptop is on; not yet seen doing so on the S23. A VPS is
+  still the plan for the services.
 - **The owner's review of the design**, on both.
 - **A formal release** — after the relay.
 - **iOS, macOS and Windows.** Linux and Android first.

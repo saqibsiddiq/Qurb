@@ -216,7 +216,7 @@ impl SignalClient {
 /// Conservative by construction: anything it cannot confidently place on a
 /// local network is treated as remote, because being wrong that way costs a
 /// refused connection and being wrong the other way leaks a secret.
-fn is_local(url: &str) -> bool {
+pub(crate) fn is_local(url: &str) -> bool {
     // The fingerprint is a fact about the server, not part of its address.
     let (url, _) = crate::tls::split_pin(url);
     let rest = url.strip_prefix("ws://").unwrap_or(url);

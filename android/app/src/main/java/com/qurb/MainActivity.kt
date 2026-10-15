@@ -93,6 +93,9 @@ class MainActivity : AppCompatActivity() {
     /** Whether this launch has freed what nothing needs yet. Once is enough. */
     private var housekept = false
 
+    /** When `catchUp` last scanned the folder, on the uptime clock; 0 for never. */
+    private var scannedAt = 0L
+
     /** Where files being picked go, while the picker is open. */
     private var addingInto = ""
     private var addingPrivate = false
@@ -169,6 +172,7 @@ class MainActivity : AppCompatActivity() {
         views = ActivityMainBinding.inflate(layoutInflater)
         kit = Kit(this)
         setContentView(views.root)
+        Appearance.paintEnvironment(this)
         insetContent()
 
         // Registered on every launch: `KEEP` makes it a no-op when the work is
@@ -379,9 +383,13 @@ class MainActivity : AppCompatActivity() {
      *
      * The screen has already drawn what the index knows. Then the scan, because
      * nothing delivers filesystem events to a process that was not running;
-     * redrawn only if it found something. Then, once per launch, freeing what
-     * nothing needs -- the routine the background worker runs after each sync,
-     * here too so a phone the worker has not reached lately does not wait.
+     * redrawn only if it found something. Not again within half a minute: a
+     * fingerprint prompt, the file picker or a glance at another app each
+     * bring the app back, and on the S23 each scan held the engine, and every
+     * screen behind it, for 0.5 to 0.75 s (2026-10-15). Then, once per
+     * launch, freeing what nothing needs -- the routine the background worker
+     * runs after each sync -- when the worker has not lately, and after the
+     * first screen has had its answers.
      */
     private fun catchUp() {
         lifecycleScope.launch {
@@ -390,16 +398,24 @@ class MainActivity : AppCompatActivity() {
                 // Asked in the background, and the person came in to answer
                 // (Notices.asked): the question, at once.
                 engine.openAsks().firstOrNull()?.let { askToOpen(engine, it) }
-                val found = withContext(Dispatchers.IO) { engine.scan() }
-                if (found.stored > 0u || found.deleted > 0u) current?.refresh()
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (scannedAt == 0L || now - scannedAt >= SCAN_AGAIN_MS) {
+                    scannedAt = now
+                    val found = withContext(Dispatchers.IO) { engine.scan() }
+                    if (found.stored > 0u || found.deleted > 0u) current?.refresh()
+                }
                 Engine.keepKeyOnce(this@MainActivity)
 
                 if (!housekept) {
                     housekept = true
-                    val tidied = withContext(Dispatchers.IO) {
-                        runCatching { engine.housekeep() }.getOrNull()
+                    if (!Engine.housekeptLately(this@MainActivity)) {
+                        delay(HOUSEKEEP_AFTER_MS)
+                        val tidied = withContext(Dispatchers.IO) {
+                            runCatching { engine.housekeep() }.getOrNull()
+                        }
+                        if (tidied != null) Engine.noteHousekept(this@MainActivity)
+                        if (tidied != null && tidied.freed > 0uL) current?.refresh()
                     }
-                    if (tidied != null && tidied.freed > 0uL) current?.refresh()
                 }
             } catch (e: Exception) {
                 Words.fail(this@MainActivity, "Could not read this phone's files", e)
@@ -1190,5 +1206,12 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val TAB = "tab"
         val TABS = setOf(R.id.tab_home, R.id.tab_files, R.id.tab_devices, R.id.tab_settings)
+
+        /** The folder is scanned again on coming back only after this long. */
+        const val SCAN_AGAIN_MS = 30_000L
+
+        /** How long after opening the app's own `housekeep` waits, so the first
+         *  screen has its answers before the engine is taken for most of a second. */
+        const val HOUSEKEEP_AFTER_MS = 5_000L
     }
 }

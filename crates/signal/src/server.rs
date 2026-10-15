@@ -336,7 +336,14 @@ pub struct SignalServer {
     /// How to reach devices that are not connected. Does nothing unless the
     /// deployment supplies one — see [`crate::wake`].
     waker: crate::wake::SharedWaker,
+    /// Where a WebSocket opened at `/relay` goes, as a byte stream: to a
+    /// relay, when this service carries one ([`crate::tunnel`]).
+    relaying: Option<Relaying>,
 }
+
+/// What takes the byte stream of a WebSocket opened at `/relay`. Given the
+/// stream, it carries it and returns at once.
+pub type Relaying = Arc<dyn Fn(tokio::io::DuplexStream) + Send + Sync>;
 
 impl SignalServer {
     /// Listen on `addr`.
@@ -355,6 +362,13 @@ impl SignalServer {
     /// what a deployment with no push credentials gets.
     pub fn waking_with(mut self, waker: crate::wake::SharedWaker) -> Self {
         self.waker = waker;
+        self
+    }
+
+    /// Carry a relay as well, at `/relay` on this service's own address
+    /// ([`crate::tunnel`]): `relaying` is given each such connection's bytes.
+    pub fn relaying(mut self, relaying: Relaying) -> Self {
+        self.relaying = Some(relaying);
         self
     }
 
@@ -397,6 +411,7 @@ impl SignalServer {
             acceptor: None,
             connections: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             waker: crate::wake::none(),
+            relaying: None,
         })
     }
 
@@ -430,14 +445,15 @@ impl SignalServer {
             let waker = Arc::clone(&self.waker);
             let counter = Arc::clone(&self.connections);
             let acceptor = self.acceptor.clone();
+            let relaying = self.relaying.clone();
             counter.fetch_add(1, Ordering::Relaxed);
 
             tokio::spawn(async move {
                 let outcome = match acceptor {
-                    None => serve_one(stream, directory, limits, waker).await,
+                    None => route(stream, directory, limits, waker, relaying).await,
                     Some(acceptor) => match acceptor.accept(stream).await {
                         Ok(encrypted) => {
-                            serve_one(encrypted, directory, limits, waker).await
+                            route(encrypted, directory, limits, waker, relaying).await
                         }
                         // Ordinary, and not worth a warning: a port scan, a
                         // browser, or a device that has been told the wrong
@@ -451,6 +467,110 @@ impl SignalServer {
                 counter.fetch_sub(1, Ordering::Relaxed);
             });
         }
+    }
+}
+
+/// Signalling, or the relay: decided by the path the WebSocket is asked for
+/// on, read from the request line before the handshake and handed back to it
+/// ([`Rewind`]). Anything but `/relay` (or a path ending in it, behind a
+/// proxy that adds its own prefix) is signalling, as everything was before.
+/// `/relay` on a service that carries no relay is refused with a 404, so a
+/// device looking for one there is told so at once, rather than left
+/// registered with something that never answers.
+async fn route<S>(
+    mut stream: S,
+    directory: Arc<Mutex<Directory>>,
+    limits: Limits,
+    waker: crate::wake::SharedWaker,
+    relaying: Option<Relaying>,
+) -> Result<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    let mut start = Vec::with_capacity(REQUEST_LINE);
+    let read = tokio::time::timeout(crate::client::HANDSHAKE_TIMEOUT, async {
+        let mut byte = [0u8; 1];
+        while start.len() < REQUEST_LINE && !start.ends_with(b"\r\n") {
+            if tokio::io::AsyncReadExt::read(&mut stream, &mut byte).await? == 0 {
+                break;
+            }
+            start.push(byte[0]);
+        }
+        Ok::<_, std::io::Error>(())
+    })
+    .await;
+    if !matches!(read, Ok(Ok(()))) {
+        return Ok(());
+    }
+    let path = std::str::from_utf8(&start)
+        .ok()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .map(|target| target.split('?').next().unwrap_or(target).trim_end_matches('/').to_string())
+        .unwrap_or_default();
+    let mut stream = Rewind { start, at: 0, inner: stream };
+    match (path.ends_with(crate::tunnel::PATH), relaying) {
+        (true, Some(relaying)) => {
+            relaying(crate::tunnel::accept(stream).await?);
+            Ok(())
+        }
+        (true, None) => {
+            let refused = b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = tokio::io::AsyncWriteExt::write_all(&mut stream, refused).await;
+            Ok(())
+        }
+        (false, _) => serve_one(stream, directory, limits, waker).await,
+    }
+}
+
+/// The longest request line read before deciding: a method, a path, a
+/// version. A longer one is no request this service answers.
+const REQUEST_LINE: usize = 1024;
+
+/// A stream with its first bytes already read, given back first.
+struct Rewind<S> {
+    start: Vec<u8>,
+    at: usize,
+    inner: S,
+}
+
+impl<S: tokio::io::AsyncRead + Unpin> tokio::io::AsyncRead for Rewind<S> {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+        buffer: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        if self.at < self.start.len() {
+            let n = buffer.remaining().min(self.start.len() - self.at);
+            let at = self.at;
+            buffer.put_slice(&self.start[at..at + n]);
+            self.at += n;
+            return std::task::Poll::Ready(Ok(()));
+        }
+        std::pin::Pin::new(&mut self.inner).poll_read(context, buffer)
+    }
+}
+
+impl<S: tokio::io::AsyncWrite + Unpin> tokio::io::AsyncWrite for Rewind<S> {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+        bytes: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.inner).poll_write(context, bytes)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_flush(context)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_shutdown(context)
     }
 }
 

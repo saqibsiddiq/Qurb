@@ -51,7 +51,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
     )
 
     override fun refresh() {
-        scope.launch {
+        refreshing {
             try {
                 val state = withContext(Dispatchers.IO) {
                     // `state` waits on WorkManager's own database; off the main
@@ -198,7 +198,11 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         group = kit.group(page)
         kit.item(group, "Background sync", state.background) { explainBackground() }
         kit.item(group, "Rendezvous service", Engine.signalUrl(app)) { editSignal() }
-        kit.item(group, "Relay", Engine.relayAddress(app) ?: "None — devices must reach each other directly") { editRelay() }
+        kit.item(group, "Relay", when (val relay = Engine.relayAddress(app)) {
+            null -> "Beside your rendezvous service"
+            "off" -> "None — devices must reach each other directly"
+            else -> relay
+        }) { editRelay() }
         val version = runCatching {
             app.packageManager.getPackageInfo(app.packageName, 0).versionName
         }.getOrNull() ?: "unknown"
@@ -453,8 +457,9 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
             .header(R.drawable.ic_arrow_up_down, "Relay")
             .text("When this phone and another device can't reach each other directly — common on " +
                 "mobile data — their encrypted traffic goes through a relay instead. It can't read it.\n\n" +
-                "Run `qurb relay` on a server of your own and enter its address and port. Leave it " +
-                "empty for none.")
+                "Leave it empty to use the relay beside your rendezvous service, which is what " +
+                "most people want. Or enter the address of a relay of your own — " +
+                "relay.example.com:9001, or a wss:// address — or off for none.")
             .view(input, top = 14)
             .view(says, top = 6)
         val save = kit.button("Save") {
@@ -467,7 +472,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
             }
             Engine.setRelayAddress(app, text.ifEmpty { null })
             sheet.dismiss()
-            app.say(if (text.isEmpty()) "No relay" else "Saved")
+            app.say(if (text.isEmpty()) "Using the relay beside your rendezvous service" else "Saved")
             refresh()
         }
         sheet.view(save, top = 16).show()

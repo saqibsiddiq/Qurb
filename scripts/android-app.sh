@@ -8,6 +8,10 @@
 #                                       # the engine built with the `mobile`
 #                                       # profile, the code shrunk by R8
 #   ./scripts/android-app.sh install    # debug APK, installed on a connected device
+#   ./scripts/android-app.sh fast       # a release built with the debug key: shrunk,
+#                                       # optimised and not debuggable, yet it
+#                                       # installs over a debug build's data
+#                                       # (app/build.gradle.kts, "fast")
 #
 # Three steps, kept separate on purpose. Cargo is not wired into Gradle: a Rust
 # change is an explicit step here rather than something that happens invisibly
@@ -35,7 +39,7 @@ echo "== 1/3  native libraries"
 # is, and the engine built for size and speed rather than for build time. A
 # debug build carries x86_64 as well, for the emulator, and builds quicker.
 # See decision 0039.
-if [[ $MODE == release ]]; then
+if [[ $MODE == release || $MODE == fast ]]; then
     PROFILE=mobile
     declare -A ABI=( [arm64-v8a]=aarch64-linux-android )
     ANDROID_TARGETS=aarch64-linux-android ./scripts/android-build.sh --profile mobile
@@ -85,6 +89,7 @@ GRADLE=${GRADLE:-$(command -v gradle || true)}
 cd android
 case "$MODE" in
     release) "$GRADLE" --no-daemon assembleRelease ;;
+    fast)    "$GRADLE" --no-daemon assembleFast ;;
     install) "$GRADLE" --no-daemon installDebug ;;
     *)       "$GRADLE" --no-daemon assembleDebug ;;
 esac

@@ -32,7 +32,7 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
     }
 
     override fun refresh() {
-        scope.launch {
+        refreshing {
             try {
                 val history = withContext(Dispatchers.IO) { engine().history(shown.toUInt(), null) }
                 val page = views.sections

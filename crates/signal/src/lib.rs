@@ -30,6 +30,7 @@ pub mod message;
 pub mod rendezvous;
 pub mod server;
 pub mod tls;
+pub mod tunnel;
 pub mod wake;
 
 /// Waking a device through Firebase. Needs the `push` feature and credentials.
@@ -40,5 +41,5 @@ pub use client::SignalClient;
 pub use error::{Error, Result};
 pub use message::{Endpoints, FromClient, FromServer, Presence};
 pub use rendezvous::{GroupId, MemberId};
-pub use server::{Limits, SignalServer};
+pub use server::{Limits, Relaying, SignalServer};
 pub use tls::Certificate;

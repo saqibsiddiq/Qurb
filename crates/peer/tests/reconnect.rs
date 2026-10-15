@@ -97,7 +97,7 @@ async fn a_relay_that_does_not_answer_does_not_stop_a_device() {
         MasterKey::generate(),
         &qurb_peer::tls::TrustList::default(),
         "ws://127.0.0.1:1",
-        qurb_peer::Finding { stun: false, beacons: None, relay: Some(nobody) },
+        qurb_peer::Finding { stun: false, beacons: None, relay: Some(qurb_peer::RelayAt::Tcp(nobody)) },
     )
     .await
     .expect("a relay that does not answer stopped the device starting");

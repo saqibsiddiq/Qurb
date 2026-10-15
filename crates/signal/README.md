@@ -75,6 +75,20 @@ enumerate that group's addresses. `SignalClient::connect` refuses a plain
 `ws://` URL to anywhere but the local network; `connect_insecure` exists for
 tests and says what it is.
 
+## It relays too
+
+`SignalServer::relaying` gives it a relay to carry: a WebSocket opened at
+`/relay` -- or a path ending in it, behind a proxy that adds a prefix -- is
+handed over as a byte stream (`tunnel.rs`), decided from the request line
+before the handshake. `qurb signal` does this unless given `--no-relay`, and
+without a relay `/relay` is refused with a 404, so a device looking for one
+is told at once. That is what lets a relay be published wherever the
+rendezvous is: through a proxy that carries only TLS by name, on port 443,
+past networks that let only web traffic out. On the client, `tunnel::open`
+opens it under the rendezvous connection's rules, and `tunnel::beside` says
+where it is from the rendezvous URL. See
+[decision 0068](../../docs/decisions/0068-the-rendezvous-service-relays.md).
+
 ## Arrivals are pushed, not polled
 
 When a device announces itself, every other member of its group is told, with
