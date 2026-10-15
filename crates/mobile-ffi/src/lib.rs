@@ -2976,6 +2976,15 @@ impl Qurb {
             // And the other way: what it is recorded as holding for files
             // freed here, asked a few at a time (decision 0055).
             runtime.block_on(qurb_peer::check_holders(client, &reader, &known.device_id, 16));
+            // And what a computer keeping this phone's vault keeps that the
+            // phone was not told of, a `Got` lost on the way: asked about, a
+            // few each pass (`confirm_kept`).
+            if engine.store().db().is_holder(&known.device_id).unwrap_or(false) {
+                let learned = runtime.block_on(qurb_peer::confirm_kept(client, &reader, &known.device_id, 64));
+                if learned > 0 {
+                    tracing::info!(learned, "learned of files a computer keeps that this phone was not told of");
+                }
+            }
             // A computer of another person keeping this phone's vault, sealed:
             // what it keeps that this phone does not know of -- a phone set up
             // again -- and what was opened and is wanted back (decision 0060).

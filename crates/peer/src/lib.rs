@@ -57,5 +57,5 @@ pub use nat::{NatBehaviour, Reflexive};
 pub use pairing::{accept, join, pairing_number, visit, Asking, Invite, Ours, Paired, PairingHost};
 pub use server::{trusted_fingerprints, Generation, PeerServer, Served, ServerStats};
 pub use kept::{fetch_kept, learn_kept};
-pub use source::{check_holders, report_holdings, NetworkSource};
+pub use source::{check_holders, confirm_kept, report_holdings, NetworkSource};
 pub use wire::{Request, Response};

@@ -120,6 +120,37 @@ pub async fn check_holders(
     asked
 }
 
+/// Ask `peer`, which keeps this device's vault, whether it holds files of
+/// that vault this device has no record of it holding (decision 0036).
+///
+/// The record is made from the peer's `Got` as it collects. One lost on the
+/// way -- the connection dropped between fetching and telling -- left the
+/// file counted here as still to go for good: 130 of the S23's WhatsApp
+/// files on 2026-10-15, kept on the laptop for hours, whose 54 MB made every
+/// pass on the phone a long one. A few each pass, asked at once; a yes is
+/// recorded, a no left alone, being most often a file not collected yet,
+/// which its own `Got` will tell. Returns how many were found held.
+pub async fn confirm_kept(client: &PeerClient, store: &Store, peer: &qurb_sync::DeviceId, limit: usize) -> usize {
+    let unsure = match store.db().kept_unconfirmed(peer, limit) {
+        Ok(unsure) => unsure,
+        Err(e) => {
+            tracing::debug!(error = %e, "could not work out what to ask");
+            return 0;
+        }
+    };
+    let answers = futures_util::future::join_all(unsure.iter().map(|content| client.manifest(*content.as_bytes()))).await;
+    let mut held = 0;
+    for (content, answer) in unsure.iter().zip(answers) {
+        if let Ok(Some(_)) = answer {
+            match store.db().note_held(peer, content) {
+                Ok(()) => held += 1,
+                Err(e) => tracing::debug!(error = %e, "could not record what the peer said"),
+            }
+        }
+    }
+    held
+}
+
 /// Serves the engine's content requests from a connected peer.
 ///
 /// Holds the local store as well as the connection, because most of what a

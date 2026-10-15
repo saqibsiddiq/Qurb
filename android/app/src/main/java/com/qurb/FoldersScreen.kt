@@ -88,7 +88,7 @@ class FoldersScreen(app: MainActivity, from: String, override val tab: Int) : Sc
             val facts = kit.group(page)
             kit.item(facts, "On $keeper",
                 if (state.backup.files == 0uL) "Nothing yet. It goes over Wi-Fi."
-                else "${state.backup.heldFiles} of ${Words.files(state.backup.files.toInt())}, " +
+                else "${Words.count(state.backup.heldFiles)} of ${Words.files(state.backup.files.toInt())}, " +
                     "${Words.size(state.backup.heldBytes)} of ${Words.size(state.backup.bytes)}")
             if (state.backup.onlyKept > 0uL) {
                 kit.item(facts, "Deleted on this phone", "${Words.files(state.backup.onlyKept.toInt())}, kept on $keeper")

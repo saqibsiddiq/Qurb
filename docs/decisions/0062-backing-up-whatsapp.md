@@ -465,3 +465,25 @@ the phone not frozen. WhatsApp's next six new files arrived at 13:51 on an
 ordinary pass. Wall time from start to finish: 15.5 hours, of which the
 laptop was asleep for 12.
 
+### Files kept and not known to be -- 2026-10-15
+
+All morning the S23's Home said 130 WhatsApp files were still to go to the
+laptop (97 in *WhatsApp Documents/Private*, 31 excluded stickers, a sent
+document and a database), while the laptop's index held every one of the
+36,062, the same content, marked kept. The phone had never been told: the
+laptop says *got it* in batches as it collects, and a batch lost with its
+connection was only logged. The holdings report that makes up for lost
+ones covers only what a computer holds in its own folder, and a phone's
+vault never is. Being 54 MB, more than the 32 MB that makes a pass a long
+one, they also made every pass on the phone a long one, under its
+*Sending to your devices* notification, waiting for the laptop to collect
+what it already had.
+
+Now the phone asks: each sync, up to 64 of its vault's files with no record
+of the computer keeping them, at random, all at once (`confirm_kept`).
+Installed on the S23 at 11:30: 121 then 59 then 0 in two syncs; Home
+said *Everything is synced* and *All 36,062 files, 10.1 GB, on saqib*, and
+the notification was gone. Test:
+`a_kept_file_the_phone_was_not_told_of_is_learned_of_by_asking`, where a
+file not collected yet is asked about and left as it was.
+

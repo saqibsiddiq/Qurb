@@ -51,7 +51,11 @@ object Words {
 
     private fun plural(n: Long, unit: String) = "$n $unit${if (n == 1L) "" else "s"} ago"
 
-    fun files(n: Int) = if (n == 1) "1 file" else "$n files"
+    /** A count as the desktop writes it, its thousands apart: 36,062. */
+    fun count(n: Long): String = String.format(java.util.Locale.US, "%,d", n)
+    fun count(n: ULong): String = count(n.toLong())
+
+    fun files(n: Int) = if (n == 1) "1 file" else "${count(n.toLong())} files"
     fun folders(n: Int) = if (n == 1) "1 folder" else "$n folders"
 
     fun devices(n: Int) = if (n == 1) "1 device" else "$n devices"

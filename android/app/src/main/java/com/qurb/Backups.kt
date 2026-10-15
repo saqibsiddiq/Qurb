@@ -20,7 +20,7 @@ class Backups(private val app: MainActivity, private val refresh: () -> Unit) {
         backup.files == 0uL -> "${Words.folders(chosen)}: starting, on Wi-Fi"
         backup.heldFiles == backup.files ->
             "${Words.folders(chosen)}, all ${Words.files(backup.files.toInt())}, on $keeper"
-        else -> "${Words.folders(chosen)}: ${backup.heldFiles} of ${Words.files(backup.files.toInt())} " +
+        else -> "${Words.folders(chosen)}: ${Words.count(backup.heldFiles)} of ${Words.files(backup.files.toInt())} " +
             "on ${keeper ?: "your computer"} so far"
     }
 
@@ -30,7 +30,7 @@ class Backups(private val app: MainActivity, private val refresh: () -> Unit) {
         backup.files == 0uL -> "Starting: it runs on Wi-Fi"
         backup.heldFiles == backup.files ->
             "All ${Words.files(backup.files.toInt())}, ${Words.size(backup.bytes)}, on $keeper"
-        else -> "${backup.heldFiles} of ${Words.files(backup.files.toInt())} on ${keeper ?: "your computer"} so far"
+        else -> "${Words.count(backup.heldFiles)} of ${Words.files(backup.files.toInt())} on ${keeper ?: "your computer"} so far"
     }
 
     /** Setting the backup up, or what it is doing (decision 0062). */
@@ -68,7 +68,7 @@ class Backups(private val app: MainActivity, private val refresh: () -> Unit) {
         val group = kit.group(facts)
         kit.item(group, "On ${keeper ?: "a computer"}",
             if (backup.files == 0uL) "Nothing yet"
-            else "${backup.heldFiles} of ${Words.files(backup.files.toInt())}, " +
+            else "${Words.count(backup.heldFiles)} of ${Words.files(backup.files.toInt())}, " +
                 "${Words.size(backup.heldBytes)} of ${Words.size(backup.bytes)}")
         if (backup.onlyKept > 0uL) {
             kit.item(group, "Deleted in WhatsApp", "${Words.files(backup.onlyKept.toInt())}, kept on $keeper")

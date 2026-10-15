@@ -101,12 +101,28 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
             }
         }
         if (listing.files.isNotEmpty()) kit.section(rows, "Files")
-        for (file in listing.files.take(MOST)) {
+        showFiles(rows, listing.files, 0)
+    }
+
+    /**
+     * Files from `from`, a page at a time, and a row for the next page. A
+     * folder of WhatsApp images holds thousands, and drawn 500 at once the
+     * S23 stopped for 0.8 s (2026-10-15); Files' own list recycles its rows,
+     * this one draws what is asked for.
+     */
+    private fun showFiles(rows: LinearLayout, files: List<KeptFile>, from: Int) {
+        val upTo = minOf(files.size, from + PAGE)
+        for (file in files.subList(from, upTo)) {
             kit.row(rows, States.icon(file.name), file.name,
                 "${Words.size(file.size)}  ·  ${Words.ago(file.modifiedAt)}") { choose(file) }
         }
-        if (listing.files.size > MOST) {
-            kit.text(rows, "The first $MOST of ${Words.files(listing.files.size)}.")
+        if (upTo < files.size) {
+            var more: View? = null
+            more = kit.row(rows, R.drawable.ic_ellipsis, "Show ${minOf(PAGE, files.size - upTo)} more",
+                "${Words.count(upTo.toLong())} of ${Words.files(files.size)} shown") {
+                more?.let { rows.removeView(it) }
+                showFiles(rows, files, upTo)
+            }.root
         }
     }
 
@@ -182,8 +198,8 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
     }
 
     companion object {
-        /** Rows drawn at most; a folder of WhatsApp images can hold thousands. */
-        private const val MOST = 500
+        /** Rows drawn at a time; a folder of WhatsApp images can hold thousands. */
+        private const val PAGE = 100
         private const val WHATSAPP = ".qurb-outside/whatsapp/"
         private const val STORAGE = ".qurb-outside/storage/"
     }

@@ -3,9 +3,9 @@
 **Status:** Accepted as a design and an order of work, 2026-10-14, from the
 owner's items 2 to 5 of that day and his answers. All four steps built the
 same day; step 2 run on the owner's laptop; step 1 run between the S23 and
-the laptop on 2026-10-15, after two fixes found doing it; steps 3 and 4 not
-yet seen working on the S23 (step 4 failed there, and is fixed). See
-*Progress*. Extends
+the laptop on 2026-10-15, after two fixes found doing it; step 4 browsed on
+the S23 the same day once a panic was fixed, downloading from it not yet
+seen; step 3 not yet seen. See *Progress*. Extends
 [0060](0060-a-computer-keeps-private-folders-for-several-people.md), which
 built most of this for guests, to every person a computer keeps files for,
 its owner included, and answers 0060's question 3 ("the owner's own files:
@@ -188,9 +188,11 @@ S23 showed *Open your folder on saqib?* within six seconds; the owner
 approved behind the screen lock; the folder was open in the window at
 10:55:55. Open, it listed *SM-S911B* (*DCIM*, *WhatsApp*, with that
 morning's 525 MB message database) and *SM-S911B, earlier* (*WhatsApp*,
-*Private Vault* with 5 files), as the tests expect. **Not checked**:
-opening a file from it in the window -- the owner locked the folder before
-that was tried. The tile said *2 phones* for the S23 and its earlier self
+*Private Vault* with 5 files), as the tests expect. Asked again at
+11:40:53 and approved, open by 11:41:03. A file opened from it (a 538,906
+byte screenshot from *DCIM*) was written whole to
+`$XDG_RUNTIME_DIR/qurb-open/`, on `tmpfs`, and handed to the image viewer;
+the owner opened three camera photos the same way. The tile said *2 phones* for the S23 and its earlier self
 and cut off its last word; it now counts phones in use, lists them first,
 and leaves locked or open to its icon.
 
@@ -275,8 +277,13 @@ tests above go through the peer crate, not the engine the app calls, so
 none opened the folder as the phone does. Fixed, and
 `a_phone_opens_its_folder_on_the_computer` now does: through the engine,
 opened, listed from the top, a file fetched and checked, a second fetch put
-beside the first. It fails with the same panic without the fix. **Not yet
-seen working on the S23.**
+beside the first. It fails with the same panic without the fix.
+
+Fixed and installed, the S23 reached the laptop in 0.1 s and the owner went
+through its folders. A folder of thousands stopped the screen for 0.8 s
+("skipped 78 frames"), every row of up to 500 drawn at once; it now draws
+100 at a time, with *Show 100 more*. **Downloading and restoring from it
+not yet seen on the S23.**
 
 ## Reversing it
 

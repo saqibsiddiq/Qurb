@@ -1538,6 +1538,34 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
+    /// Files of this device's own vault -- its Private Vault, and WhatsApp's
+    /// and chosen folders' kept where they lie -- with no record of `device`
+    /// holding them: up to `limit`, chosen at random, to ask it about
+    /// (`qurb_peer::confirm_kept`). At random, so that files it has not
+    /// collected yet, asked and answered no, do not stand in front of the
+    /// rest pass after pass.
+    pub fn kept_unconfirmed(&self, device: &DeviceId, limit: usize) -> Result<Vec<blake3::Hash>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT content_hash FROM (
+                 SELECT f.content_hash
+                   FROM files f
+                  WHERE f.scope = (SELECT device_id FROM local WHERE id = 1)
+                    AND f.deleted_at IS NULL
+                    AND NOT EXISTS (
+                          SELECT 1 FROM replicas r
+                           WHERE r.content_hash = f.content_hash AND r.device_id = ?1 AND r.private = 0
+                        )
+                  ORDER BY random()
+                  LIMIT ?2
+             )",
+        )?;
+        let rows = stmt.query_map(params![device.as_bytes().as_slice(), limit as i64], |r| {
+            let raw: Vec<u8> = r.get(0)?;
+            Ok(to_hash(&raw))
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
     /// `device`, asked, said it holds this content: a copy this device can ask
     /// for, whatever its record said before, and recorded if there was none.
     pub fn note_held(&self, device: &DeviceId, content: &blake3::Hash) -> Result<()> {

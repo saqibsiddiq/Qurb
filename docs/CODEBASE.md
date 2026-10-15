@@ -187,6 +187,17 @@ The same report tells a sender about each send this device took, once, in
 case the word sent as it took it was lost (`report_holdings` is given the
 peer's tree).
 
+That report covers only what a device holds in its own folder. A computer
+keeping a phone's vault holds those files without materialising them, so a
+`Got` for one lost on the way -- the connection dropped between fetching
+and telling -- was never made good, and the phone counted the file as still
+to go for good: 130 of the S23's WhatsApp files on 2026-10-15. So the phone
+asks instead. At each sync with a computer keeping its vault, it asks about
+up to 64 of its vault's files with no record of that computer holding them,
+chosen at random and asked at once, and records each yes (`confirm_kept`,
+`Db::kept_unconfirmed`). A no is left alone: most often the file is not
+collected yet, and its own `Got` will tell.
+
 **A send is not its bytes.** A delivery is taken once, and the record of it
 is keyed by who sent it, under what name, and which version of that name
 (the `deliveries` table). A send offered again whenever its sender reappears

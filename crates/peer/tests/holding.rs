@@ -541,3 +541,43 @@ async fn a_phone_reaches_its_folder_on_the_computer_and_what_it_kept_before() {
     assert!(client.fetch_content(&laptop.reader(), content, diary.len() as u64).await.is_err(), "fetched another device's file");
     client.close();
 }
+
+/// A file the desktop keeps for the phone, whose `Got` the phone never heard
+/// -- the connection lost between fetching and telling -- is learned of when
+/// the phone asks, so the phone stops counting it as still to go. On the S23
+/// on 2026-10-15, 130 WhatsApp files the laptop had kept for hours were still
+/// "to go" on the phone, and their 54 MB made every pass a long one. A file
+/// the desktop has not collected yet is asked about and left as it was.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_kept_file_the_phone_was_not_told_of_is_learned_of_by_asking() {
+    let mut phone = Device::new();
+    let mut desktop = Device::new();
+    introduce(&phone, &desktop);
+    phone.engine.store().db().add_holder(&desktop.id()).unwrap();
+
+    fs::write(phone.root.join("notes.txt"), b"kept, and not told").unwrap();
+    phone.engine.reconcile().unwrap();
+    assert!(phone.engine.store_mut().move_area("notes.txt", true).unwrap());
+    desktop.sync_from(&phone).await;
+    let content = blake3::hash(b"kept, and not told");
+    assert!(desktop.engine.store().db().holds_for(&content, &phone.id()).unwrap());
+    assert_eq!(phone.engine.store().db().holders_of_content(&content).unwrap(), vec![desktop.id()]);
+
+    // The phone never heard; and a second file is not collected yet.
+    phone.engine.store().db().note_not_held(&desktop.id(), &content).unwrap();
+    assert!(phone.engine.store().db().holders_of_content(&content).unwrap().is_empty());
+    fs::write(phone.root.join("later.txt"), b"not collected yet").unwrap();
+    phone.engine.reconcile().unwrap();
+    assert!(phone.engine.store_mut().move_area("later.txt", true).unwrap());
+    let later = blake3::hash(b"not collected yet");
+
+    // At its next sync the phone asks.
+    let (addr, fingerprint) = desktop.serve(phone.identity.fingerprint());
+    let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    let held = qurb_peer::confirm_kept(&client, &phone.reader(), &desktop.id(), 64).await;
+    client.close();
+    assert_eq!(held, 1, "the kept file was not learned of");
+    assert_eq!(phone.engine.store().db().holders_of_content(&content).unwrap(), vec![desktop.id()]);
+    assert!(phone.engine.store().db().holders_of_content(&later).unwrap().is_empty());
+    assert_eq!(phone.engine.store().db().kept_unconfirmed(&desktop.id(), 64).unwrap(), vec![later]);
+}
