@@ -37,7 +37,7 @@ public address that terminates TLS in front of it; two free ones, with no card:
 ```bash
 packaging/install-rendezvous.sh      # qurb signal 127.0.0.1:9000, at login, with push if it can
 tailscale funnel --bg 9000           # the first time, approve Funnel for the tailnet
-qurb config ~/qurb signal=ws://localhost:9000
+qurb config signal=ws://localhost:9000   # the folder already set up
 ```
 
 and on the phone, Settings → Rendezvous service: `wss://<name>.<tailnet>.ts.net`.
@@ -159,8 +159,8 @@ sudo systemctl restart caddy
 ```
 
 ```bash
-qurb config ~/qurb signal=wss://rendezvous.example.com
-qurb config ~/qurb relay=rendezvous.example.com:9001
+qurb config signal=wss://rendezvous.example.com
+qurb config relay=rendezvous.example.com:9001
 ```
 
 The relay can be given by name, as here, or by address. A name is looked up
@@ -201,8 +201,8 @@ Devices reach it as:
 Copy that line, in full, onto each device:
 
 ```bash
-qurb config ~/qurb 'signal=wss://203.0.113.5:9000#4047…2e41'
-qurb config ~/qurb relay=203.0.113.5:9001
+qurb config 'signal=wss://203.0.113.5:9000#4047…2e41'
+qurb config relay=203.0.113.5:9001
 ```
 
 Quote it in a shell: `#` starts a comment otherwise, and a setting silently
@@ -315,7 +315,8 @@ instructions.
 
 ```bash
 # Enrolled by hand, because a recovery phrase in a systemd file would be in the
-# journal and in every backup of /etc.
+# journal and in every backup of /etc. The words are in the window, under
+# Settings → the recovery phrase; nothing asks you to write them down.
 sudo -u qurb qurb enrol /var/lib/qurb-replica "<your 24 words>"
 
 sudo install -m644 packaging/server/qurb-replica.service /etc/systemd/system/
@@ -327,7 +328,7 @@ Then pair it with one of your devices, as you would any other:
 
 ```bash
 sudo -u qurb qurb pair /var/lib/qurb-replica     # shows a code
-qurb join ~/qurb <that code>                    # on your laptop
+qurb join <that code>                           # on your laptop
 ```
 
 A replica has no folder and shows nobody any files. It stores chunks it cannot

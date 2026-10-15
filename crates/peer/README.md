@@ -128,6 +128,19 @@ shows (`Invite::number_for`). Each side sends a one-way check of the key
 each says whether it is a `phone`, `computer` or `replica`. Devices paired
 before that ask once with `Request::About`.
 
+**Six digits** ([decision 0066](../../docs/decisions/0066-six-digits-to-pair.md),
+`short.rs`). While a code is shown, `PairingHost` offers it on the local
+network by multicast (`239.255.113.7:47318`) under six random digits. A
+device typing them finds the offer (`short::resolve`), proves it knows them
+by SPAKE2 with the digits as the password and both TLS fingerprints as the
+identities, and is given the long code sealed under the key that exchange
+agreed; from there it pairs exactly as if it had scanned the QR code, with
+the same approval. Each wrong try is spent, and after five the digits stop
+working for that code; the code itself still does. Knowing the digits is
+not enough to stand in for the device showing them: the code they fetch
+names its fingerprint, which the connection then checks. Tested in
+`tests/six_digits.rs`, over multicast loopback.
+
 ## The wire format
 
 Hand-rolled and explicit. Every field is length-prefixed and bounded, so a
@@ -163,7 +176,17 @@ A second goes the other way since decision 0060, and is narrower still.
 ask to open that guest's folder: it changes no file and no version, only
 whether a key is held in memory (`openings`), and only if the nonce is the
 ask's and the key opens one of that guest's sealed names. A device can open
-only its own person's folder, and only when this side asked.
+only its own person's folder, and only when this side asked. Since decision
+0067 the computer's owner's phones answer the same way for the owner's
+folder, with no key: the computer holds the same one, so the yes is all
+that is needed. A phone collects `Asks` at each sync and, during a long
+pass, every ten seconds.
+
+And a phone of the computer's own person asks for **its folder there**,
+`Kept { dir }`: the folders and files kept for that phone, and for it
+before it was set up again, at one place in the tree a person sees
+(`qurb_storage::person`), each with its content hash, fetched through the
+ordinary manifest and chunks. Answered to that phone only.
 
 ## Trying it
 
@@ -275,7 +298,16 @@ welcome, since the service groups devices by their person's key.
 `kept.rs` is the guest's side of a folder kept sealed by a host: fetching a
 file back and unsealing it, checked against its sealed header, and learning
 what the host keeps after the phone was set up again. `openings.rs` is the
-host's side of opening that folder with the guest's approval.
+host's side of opening that folder with the guest's approval, and of the
+owner's own folder with a yes from one of the owner's phones
+([decision 0067](../../docs/decisions/0067-a-folder-for-each-person.md)).
+
+`source.rs` keeps the record of who holds what. A collector says `Got` as
+each file arrives; `report_holdings` makes up for ones lost, for a device's
+own folder; and `confirm_kept` is a phone asking the computer keeping its
+vault about files it has no record of it holding, a few at random each
+sync, since a computer never holds those in its folder and a lost `Got`
+otherwise left them "still to go" for good.
 
 ## The guest list is live
 
@@ -315,8 +347,11 @@ a set that only grew would keep letting it in.
   removing a device is done on each device that trusted it
   ([decision 0041](../../docs/decisions/0041-removing-a-device.md)); nothing
   tells the others.
-- **Tree paging.** The whole tree is sent in one message, capped at 64 MiB. A
-  large library needs incremental exchange rather than a full dump per sync.
+- **Only what changed.** The whole tree is sent each sync, in frames of
+  about 1 MiB since a million files' list outgrew one 64 MiB message
+  ([decision 0065](../../docs/decisions/0065-the-scale-qurb-is-built-for.md));
+  a large library still needs an incremental exchange rather than a full
+  list per sync.
 - **A measured gain from the two sections above** over a real link. They
   were built after an 800 MB video failed to cross from a phone; the speed
   before and after, on that phone and Wi-Fi, has not been measured yet.

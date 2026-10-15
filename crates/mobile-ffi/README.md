@@ -137,7 +137,7 @@ qurb.removeDevice(peer.fingerprint, deleteKept = false)
 ```
 
 And two free functions: `engineVersion()` — `qurb 0.1.0 · protocol qurb/2 ·
-index schema 17` — and `qrCode(text)`, the matrix a phone draws to show a
+index schema 25` on 2026-10-15 — and `qrCode(text)`, the matrix a phone draws to show a
 pairing code, so the app needs no image library.
 
 `outstanding()` is the honest answer to "did it get there yet": live files this
@@ -160,6 +160,8 @@ offer.spoken()                        //   ...or read this out
 val peer = offer.wait()               // blocks until someone joins
 
 qurb.joinPairing(scannedCode)         // the other direction, usually the phone's
+qurb.joinPairing("240667")            //   ...or six digits on the same Wi-Fi (0066)
+offer.digits()                        // the six digits this device's code offers
 qurb.peers()                          // who this device trusts
 
 qurb.syncWithin(25)                   // one pass, giving up after 25 seconds
@@ -170,15 +172,53 @@ qurb.serving()                        // bytes handed over so far; no lock, so a
                                       //   notification can ask while a pass runs
 ```
 
+A typed code is read the same way everywhere (`joinNew` and `pairingNumber`
+too): the long code as it is; six digits found by multicast on the network,
+fetched by SPAKE2, and then used as the long code. Hold Android's multicast
+lock while they are looked for, or the offers are not heard.
+
+Backups, kept by a computer of this person's that keeps the phone's vault
+(decisions 0062 and 0063), read from where they lie, on unmetered networks:
+
+```kotlin
+qurb.setUnmetered(true)               // offered only on Wi-Fi
+qurb.backUpWhatsapp(listing, 15)      // WhatsApp's folder, as the app lists it
+qurb.chosenFolders(); qurb.chooseFolder("DCIM/Camera", true)
+qurb.backUpChosen(storageRoot, 15)    // the folders chosen, here or on the computer
+qurb.whatsappBackup(); qurb.foldersBackup()   // how many files, how many kept there
+```
+
+A computer asking to open this phone's folder there (decisions 0060 and
+0067), and the phone's own folder on that computer:
+
+```kotlin
+qurb.openAsks()                       // collected at each sync, and every ten
+                                      //   seconds of a long pass
+qurb.approveOpen(ask.fingerprint)     // after the screen lock; sent at once
+qurb.declineOpen(ask.fingerprint)
+qurb.openAnswers()                    // whether each computer opened it
+
+val folder = qurb.openKeptFolder(computer.fingerprint, 20)   // one connection,
+folder.list("SM-S911B/WhatsApp")      //   kept while the folder is open
+folder.download(file, "/sdcard/Download/Qurb/${file.name}")  // checked, never over
+folder.disconnect()                   //   a file already there
+```
+
+Each sync with a computer keeping the vault also asks it about up to 64 of
+the vault's files with no record of it keeping them (`confirm_kept`), so a
+*got it* lost on the way does not leave a file "still to go".
+
 `Settings.wakeToken` carries the platform's push token, so the rendezvous
 service can poke this device when another has something and this one is asleep.
 `null` — the default, and right on a desktop — means it is never woken and
 syncs when it next looks.
 
 The pairing code carries this device's **full** fingerprint and must travel out
-of band — a QR code on screen, or digits read aloud. Sending it over the network
+of band — a QR code on screen, or read aloud. Sending it over the network
 being paired defeats the point: someone who can change what you see has already
-won.
+won. The six digits do travel over the network, which is why they only fetch
+the code, through an exchange that gives nothing to whoever does not know
+them, and stop working after five wrong tries.
 
 ## Four constraints, all from the platforms
 

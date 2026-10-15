@@ -17,10 +17,11 @@ const USAGE: &str = "\
 qurb — private cloud storage
 
   qurb init [dir]                     set up a device and create a key
-                                    (defaults to ~/qurb)
+                                        (defaults to ~/qurb/Shared)
   qurb enrol <dir> \"<24 words>\"       set up a device with an existing key
-  qurb pair [dir] [--guest]           show a code and wait for a device to join;
-                                        --guest: another person's, keeping its key
+  qurb pair [dir] [--guest]           show a code and its six digits, and wait
+                                        for a device to join; --guest: another
+                                        person's, keeping its key
   qurb visit [dir] <code>             visit another person's computer as a guest
   qurb join [dir] <code>              join a device showing a code, or its six
                                         digits on the same network; a folder not

@@ -105,7 +105,9 @@ warned.
 
 ## Not done
 
-- **Light only**, like the apps, until their dark mode is designed.
+- **Light only.** The apps have had a dark mode since 2026-10-08
+  ([decision 0056](../docs/decisions/0056-dark-mode.md)); the website has
+  not followed.
 - **Checked in Chromium only**, at 1440 and 390 pixels wide, from screenshots
   of the production build on 2026-10-03. Not looked at in Firefox or Safari,
   or by the owner.

@@ -1347,6 +1347,39 @@ measurement, and what is not checked yet -- the window under the desktop's
 text scaling among it -- are in
 [design/consistency.md](../design/consistency.md).
 
+## The owner's lists of 2026-10-13 and 2026-10-14, on the desktop
+
+Recorded item by item where the lists are kept,
+[phase 5](phase-5-mobile.md#the-owners-list-of-2026-10-14), since most items
+span both apps. What they changed here:
+
+- **`~/qurb` holds people**: the synced folder moved, index and all, into
+  `~/qurb/Shared`, with a read-only placeholder for each person beside it;
+  run on the laptop on 2026-10-14
+  ([0067](../decisions/0067-a-folder-for-each-person.md)).
+- **Files opens on *Shared* and a folder for each person**, the owner's
+  included, opened only with a yes on that person's phone; run between the
+  S23 and the laptop's window on 2026-10-15, after two faults on the phone's
+  side were fixed.
+- **Home**: *Sync now* beside *Send*, *Waiting*, and *Backups*; *Sync now*
+  drops every backoff and wakes the phones.
+- **Storage** says what is kept here — the phones' backups, shared files,
+  guests' folders, Recently deleted — not only what could be freed; looked
+  at with the laptop's real numbers on 2026-10-15.
+- **Six digits to pair** beside the QR code
+  ([0066](../decisions/0066-six-digits-to-pair.md)); the smoke test pairs by
+  them.
+- **Staying awake while collecting**, on mains power (`awake.rs`), and **a
+  phone set up again shown as one device**.
+- **WhatsApp and a phone's folders kept here**
+  ([0062](../decisions/0062-backing-up-whatsapp.md),
+  [0063](../decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)),
+  chosen from Home or a device's panel.
+
+On 2026-10-15 the laptop's real window was driven through WebKit's
+WebDriver on the owner's display, with his own folder, for the laptop's side
+of the run with the S23 ([desktop README](../../crates/desktop/README.md#driving-the-real-window)).
+
 ## Still to do
 
 - **Running the *daemon* as a service** — a user unit, a launch agent, a

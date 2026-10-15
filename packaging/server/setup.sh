@@ -140,7 +140,7 @@ cat <<DONE
 
 On your computer:
 
-  qurb config ~/qurb 'signal=$url' relay=$ADDRESS:9001
+  qurb config 'signal=$url' relay=$ADDRESS:9001
 
   then quit qurb from its Settings and open it again.
 

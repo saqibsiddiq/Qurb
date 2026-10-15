@@ -19,12 +19,12 @@ order to read them in.
 
 | crate | package | what it is |
 |---|---|---|
-| [storage/](storage/) | `qurb-storage` | chunking, compression and encryption at rest, the content-addressable store, the SQLite index |
+| [storage/](storage/) | `qurb-storage` | chunking, compression and encryption at rest, the content-addressable store, the SQLite index, and a person's folder as it is shown |
 | [watcher/](watcher/) | `qurb-watcher` | filesystem events turned into settled changes |
 | [sync/](sync/) | `qurb-sync` | version vectors, conflicts, reconciling two trees — pure logic, no disk or network |
 | [engine/](engine/) | `qurb-engine` | what a change means, and doing it: the run loop, a replica, repair, syncing with a peer |
 | [keys/](keys/) | `qurb-keys` | the master key, the 24 words, and how the key is kept on disk |
-| [peer/](peer/) | `qurb-peer` | reaching another device: QUIC, pinned identity, pairing, NAT traversal, local discovery |
+| [peer/](peer/) | `qurb-peer` | reaching another device: QUIC, pinned identity, pairing (by code or six digits), NAT traversal, local discovery, opening a person's folder with their phone's yes |
 | [signal/](signal/) | `qurb-signal` | the rendezvous service, and waking a sleeping phone |
 | [relay/](relay/) | `qurb-relay` | forwarding encrypted traffic when no direct path exists |
 | [qurb/](qurb/) | `qurb-cli` | the program a person runs — the `qurb` command and the daemon, as a library too |

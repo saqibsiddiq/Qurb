@@ -3,9 +3,13 @@
 Six phases. Each has an explicit **kill criterion**: the result that means stop
 and reconsider rather than push on.
 
-**Where it stands, 2026-10-08:** Phases 0–2 complete; Phase 3 built with its
+**Where it stands, 2026-10-15:** Phases 0–2 complete; Phase 3 built with its
 kill criterion unmeasured; Phases 4 and 5 working on Linux and Android. What
-comes next was set by the project owner on 2026-09-28, in this order:
+comes next was set by the project owner on 2026-09-28, in this order, with
+his numbered lists since (2026-10-13 and 2026-10-14) taken first as they
+came — backing up WhatsApp and a phone's folders to a computer, six digits to
+pair, a folder for each person, and Home and Storage redesigned; each item's
+state is kept in [phases/phase-5-mobile.md](phases/phase-5-mobile.md):
 
 1. **Design and UX** of the desktop window and the Android app. Every feature
    the product brief asks for is built — [features.md](features.md) lists them.
@@ -13,7 +17,8 @@ comes next was set by the project owner on 2026-09-28, in this order:
    ([0048](decisions/0048-the-design-direction.md)), and have had a dark mode
    since 2026-10-08 ([0056](decisions/0056-dark-mode.md)). What has and has
    not been watched between the Galaxy S23 and the laptop is marked row by
-   row in features.md. What remains is the owner's review.
+   row in features.md. The owner reviews as he uses them, and his lists
+   are what he found.
 2. **The relay on a server of the owner's own**, so the phone and the laptop
    reach each other from any network, not only where a direct path exists.
 3. **A formal release for Linux and Android.**
@@ -160,23 +165,30 @@ The interface went through two shapes. First a tray icon with a small GTK
 window — status and a storage slider — which GNOME, having no tray, could not
 show. Then the desktop window, in Tauri, which hosts the daemon
 ([0032](decisions/0032-the-interface-hosts-the-daemon.md)) and does what the
-command line does: setting up with the recovery phrase shown and confirmed,
-pairing by QR code, files and where their bytes are, sending, transfers,
-recently deleted, settling conflicts, sharing folders with chosen devices, a
+command line does: setting up with nothing to write down, pairing by QR code
+or six digits, files and where their bytes are, sending, transfers, recently
+deleted, settling conflicts, sharing folders with chosen devices, a
 passphrase on the key. Storage caps, single-copy storage and a replica anybody
-can run all landed here too, none of them planned.
+can run all landed here too, none of them planned. Since 2026-10-12 a
+computer also keeps a phone's WhatsApp and chosen folders, and since
+2026-10-14 Files opens on *Shared* and a folder for each person, opened only
+with that person's yes on their phone
+([0067](decisions/0067-a-folder-for-each-person.md)).
 
 Installing is a pacman package on Arch and an install script elsewhere. Signed
 updates with rollback are deliberately not built
 ([0047](decisions/0047-versions-and-upgrades.md)): the index is copied before
 it migrates, which is the rollback that matters most. Still missing: packages
 for other distributions, and observability beyond a log and the activity
-history. The window was designed on 2026-09-29 and awaits the owner's review.
+history. The window was designed on 2026-09-29 and is changed as the owner
+uses it.
 
 Onboarding for a zero-knowledge product is uniquely hard: a non-technical person
 must be persuaded to write down a recovery phrase *before* they have any
-investment in the product, because afterwards nobody can help them. That screen
-will take many drafts.
+investment in the product, because afterwards nobody can help them. Answered
+for now by not asking: the key travels with the pairing code, and a phone
+keeps it in Block Store ([0052](decisions/0052-the-key-travels-with-the-code.md));
+a person with only computers who loses them all still loses it.
 
 **Ship here.** Desktop-only, to a small group of real users on real hardware.
 
@@ -216,6 +228,11 @@ also browses by folder, settles conflicts, restores deleted files, shows a
 pairing code as well as scanning one, and chooses which devices have each
 folder. On 2026-09-29 it was rebuilt to the same design as the desktop — four
 tabs, Private Vault inside Files — and walked on the phone on 2026-10-03.
+Since 2026-10-12 it backs up WhatsApp's folder (36,062 files, 10.1 GB on the
+S23) and chosen folders to the laptop without copying them on the phone,
+and reaches its folder there to download or restore a file; **restoring
+WhatsApp from it is unproven**
+([0062](decisions/0062-backing-up-whatsapp.md)).
 
 What does not exist is iOS, in any form. The prediction about `BGTaskScheduler`
 is answered on the Rust side by a sync that takes a deadline, and is untested on

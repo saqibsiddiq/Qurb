@@ -21,11 +21,11 @@ one frosted stage the content floats in:
 
 | place | what it answers |
 |---|---|
-| Home | is my Qurb space okay? One state (synced, syncing, devices away, add your first device, needs attention), one action — *Send to device* — a line of secondary facts, attention only when something needs a decision, and a little that is recent |
-| Files | the shared area as a file browser: search, breadcrumbs, folders apart from files, and for every file **where its bytes are** — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* — with *Keep here*, *Free local space*, *Send*, *Delete* in its menu. Conflicts at the top ([0043](../../docs/decisions/0043-settling-a-conflict.md)); a folder's options — which devices have it, whether this computer keeps it ([0044](../../docs/decisions/0044-sharing-with-chosen-devices.md), [0045](../../docs/decisions/0045-a-folder-kept-remotely.md)) — from its right-click menu; Recently deleted at the foot ([0042](../../docs/decisions/0042-recently-deleted.md)) |
+| Home | is my Qurb space okay? One state (synced, syncing, devices away, add your first device, needs attention); *Sync now* and *Send* side by side — *Sync now* drops every device's backoff, tells each there is news (which wakes a phone asleep) and syncs; a line of secondary facts; attention only when something needs a decision; *Waiting* — what has not reached another device, sends not collected, a phone's backups still to come; *Backups* — WhatsApp and the folders kept here for each phone, with *Choose…* |
+| Files | at the top, *Shared* and a folder for each person this computer keeps files for, the owner's included, locked until a yes on one of that person's phones ([0067](../../docs/decisions/0067-a-folder-for-each-person.md)): *Ask your phone*, then each phone's *WhatsApp*, backed-up folders and *Private Vault*, a file opened written into `$XDG_RUNTIME_DIR/qurb-open/` and deleted on *Lock*, ten minutes unused or quitting. Inside *Shared*, the shared area as a file browser: search, breadcrumbs, folders apart from files, and for every file **where its bytes are** — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* — with *Keep here*, *Free local space*, *Send*, *Delete* in its menu. Conflicts at the top ([0043](../../docs/decisions/0043-settling-a-conflict.md)); a folder's options — which devices have it, whether this computer keeps it ([0044](../../docs/decisions/0044-sharing-with-chosen-devices.md), [0045](../../docs/decisions/0045-a-folder-kept-remotely.md)) — from its right-click menu; Recently deleted at the foot ([0042](../../docs/decisions/0042-recently-deleted.md)) |
 | file details | a panel over the list: type, size, location, which devices hold it, when it changed, its history, and what can be done to it |
-| Devices | this computer and each paired device, whether each is here now; a device's details (send to it, remove it after saying what that does — [0041](../../docs/decisions/0041-removing-a-device.md)); *Add a device* by showing a code or entering one |
-| Storage | free space without losing files: how much can be freed safely, the largest files that would free it, and the allowance |
+| Devices | this computer and each paired device, whether each is here now, a phone set up again as one; a device's details (send to it, its backups, remove it after saying what that does — [0041](../../docs/decisions/0041-removing-a-device.md)); *Add a device* by showing a code — a QR code and six digits ([0066](../../docs/decisions/0066-six-digits-to-pair.md)) — or entering one |
+| Storage | what Qurb takes against the limit or the disk; *What is kept here* — your phones' backups, shared files, guests' folders, Recently deleted, each with where to go for it; the largest files that could be freed without losing anything; and the allowance |
 | Private Vault | this computer's own files, in the same browser as Files |
 | Settings | grouped lists: this device and its key's protection, devices and pairings, storage, privacy, notifications, recovery, appearance, advanced |
 | Activity | reached from Home: everything this device did — the answer to "why is my file not here?" |
@@ -127,6 +127,15 @@ and dark again, and checks a choice made in Settings holds over either. It fails
 page calls returns an error — the page keeps the last fifty as
 `window.qurbFailures` for that, and for reading from the web inspector.
 
+The same WebDriver can drive the **real** window on the owner's display,
+with his own folder: run `WebKitWebDriver` with
+`TAURI_WEBVIEW_AUTOMATION=true` and open a session on
+`~/.local/bin/qurb-desktop`. That is how the laptop's side of the
+2026-10-15 run with the S23 was done — asking the phone to open the owner's
+folder, opening a file from it, *Sync now* — with the commands called as the
+page calls them (`window.__TAURI__.core.invoke`). It quits the running
+window first, since there is one qurb per person.
+
 The fixture page cannot do this, because it answers the commands itself. For
 five days, from 2026-09-23, *Show a code* failed in the application every time
 ("no async runtime found": a synchronous command binding a QUIC endpoint
@@ -149,8 +158,12 @@ in debugging output.
 
 ## Pairing
 
-Show a code — a QR to scan, the same code to type, and a spoken form to read
-down a telephone — or enter one from another device. The screen counts down to
+Show a code — a QR to scan, six digits for a device on the same Wi-Fi to
+type ([decision 0066](../../docs/decisions/0066-six-digits-to-pair.md)), and,
+folded away, the same code to type and a spoken form to read down a
+telephone — or enter one from another device, the long code or its digits.
+Typed wrongly five times, the digits stop working and say *Scan the code
+instead*. The screen counts down to
 the code's expiry rather than saying "waiting" under a code that stopped
 working five minutes ago. A device that uses the code appears on the sheet with
 the six digits it should be showing, and is let in only on *Approve*
@@ -197,6 +210,23 @@ names until *Lock* or ten minutes unused, and files opened are unsealed
 under `$XDG_RUNTIME_DIR/qurb-open/` and deleted on locking
 ([decision 0060](../../docs/decisions/0060-a-computer-keeps-private-folders-for-several-people.md)).
 
+## A folder for each person
+
+Files' top is *Shared* and a folder per person
+([decision 0067](../../docs/decisions/0067-a-folder-for-each-person.md)): the
+owner's, named from the login, and each guest's. *Ask your phone* files an
+ask under that person (`ask_person_folder`) and presses *Sync now*, which
+wakes the phone; the phone shows the ask behind its screen lock and sends
+its yes at its next exchange with this computer, within ten seconds even
+while it is sending a backup. Open, the owner's folder lists each phone
+(`person_folder`, `qurb_storage::person`), and a file opened is written,
+checked chunk by chunk and whole, into `$XDG_RUNTIME_DIR/qurb-open/`
+(`open_person_file`). A phone's backups no longer open from Devices without
+that yes. The owner's folder is not sealed — this computer holds the same
+key — and the locked screen says the lock is Qurb's rule; a guest's is.
+Beside the shared folder on disk, `~/qurb/<person>` is a read-only
+placeholder for each (`place_people`).
+
 ## Notifications
 
 Three things, and nothing else:
@@ -233,8 +263,8 @@ Settings turns off. See [decision 0040](../../docs/decisions/0040-the-menu-opens
   One the other device is collecting may still finish, and a file arriving
   cannot be stopped from this end. A failed file is retried at the next sync
   on its own; there is no button for it.
-- **No folder picker.** A text field, read from the home folder: `~/qurb`,
-  `qurb` and `Documents/qurb` all mean folders in it. Beneath it, what is
+- **No folder picker.** A text field, read from the home folder:
+  `~/qurb/Shared`, `qurb/Shared` and `Documents/qurb` all mean folders in it. Beneath it, what is
   already there — and the full path whenever it differs from what was typed,
   since a relative path once made a second, empty device the window then ran
   at every login (see [phase 4](../../docs/phases/phase-4-product.md#a-folder-typed-without-a-slash)).
@@ -242,5 +272,6 @@ Settings turns off. See [decision 0040](../../docs/decisions/0040-the-menu-opens
   cross-platform; this has never been built or run on Windows or macOS.
 - **Checked by eye only in a renderer without compositing.** The screens were
   looked at in WebKitGTK offscreen, which draws no backdrop blur and no
-  running animations; the real window has both, and the owner has not yet
-  looked at it.
+  running animations; the real window has both. The owner uses it, and the
+  real window was looked at with its real numbers on 2026-10-15 (Home,
+  Files, Storage).

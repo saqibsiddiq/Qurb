@@ -2311,8 +2311,23 @@ His answers to the questions they raised are with them.
    shown while the app was open, and a long pass did not look for asks for
    up to half an hour. Step 4 panicked on every open (a timeout built
    outside the engine's runtime; the emulator had shown it as "isn't
-   reachable"), fixed and now tested through the engine. Opening a file in
-   the window, and steps 3 and 4 working on the S23, not yet seen.
+   reachable"), fixed and now tested through the engine. Later the same
+   morning: asked again and approved, open in ten seconds; a file opened
+   from it in the window, written whole to memory-backed space; and, with
+   the fix installed, the S23 reached its folder on the laptop in 0.1 s and
+   the owner browsed it. A folder of thousands stopped the phone's screen
+   for 0.8 s and now draws a hundred rows at a time. **Not yet seen on the
+   S23**: downloading or restoring from its folder, and step 3, sending to
+   *My folder on saqib*.
+
+   Found on the way, and fixed: 130 of the S23's WhatsApp files read
+   "still to go" all morning while the laptop held every one. The laptop's
+   *got it* for them had been lost with a connection, and nothing made
+   good a lost one for files kept for a phone; at 54 MB they also made
+   every pass on the phone a long one. The phone now asks the computer
+   about files it has no record of it keeping, 64 a sync; on the S23 the
+   count went 121, 59, 0 in two syncs, and Home said *Everything is
+   synced* ([0062](../decisions/0062-backing-up-whatsapp.md)).
 6. **The S23 is listed twice in the laptop's Devices**: its identity from
    before it was set up again, and its new one. **Built 2026-10-14**: a
    device of the same person with the same name and kind, paired after an
@@ -2400,8 +2415,10 @@ His answers to the questions they raised are with them.
     the S23 and the laptop's own window, 2026-10-15**: the phone's Home and
     the laptop's Home, Files and Storage looked at with real numbers; found
     and fixed, Home's headline over a Waiting list, and the person tile's
-    count and cut-off line (rows 54 and 55). The phone's *Your folder on
-    saqib*, Send sheet and *Enter a code* not yet looked at on the S23.
+    count and cut-off line (rows 54 and 55); the phone's folder drawn a
+    page at a time, and counts written *36,062* as the desktop writes them
+    (row 56). The phone's Send sheet and *Enter a code* not yet looked at on
+    the S23.
 
 Where each stands is kept here as it moves.
 
@@ -2446,3 +2463,14 @@ Where each stands is kept here as it moves.
   2026-10-08 it also previews each version that is here, an image or a
   text's start (`Previews.kt`). A version not on the phone is not fetched to
   be previewed.
+- **Restoring WhatsApp from the computer.** The backup is kept and known
+  kept, every file of it (2026-10-15); nobody has yet put it back on a phone
+  and watched WhatsApp read it ([decision 0062](../decisions/0062-backing-up-whatsapp.md)).
+  Until that is done, nothing here says to turn WhatsApp's Google backup off.
+- **The owner's folder sealed from the owner's own computer.** It opens with a
+  yes on the phone, which is Qurb's rule: the computer holds the same key
+  ([decision 0067](../decisions/0067-a-folder-for-each-person.md)).
+- **Six digits beyond one network.** They are found by multicast on the same
+  Wi-Fi; elsewhere, or where multicast is blocked, the QR code
+  ([decision 0066](../decisions/0066-six-digits-to-pair.md)). Not yet typed on
+  the S23.

@@ -98,6 +98,11 @@ names the devices that would hand a file's bytes back, which is what a file's
 details list under the devices that have it. The desktop's Storage place and
 details panel are built on them; `tests/storage_cap.rs` covers both.
 
+What the cap may free is only this device's own files: never one kept for
+another device's vault, a phone's backup above all (`Db::evictable` takes
+only rows of this device's own scope). Over the limit with backups, it stays
+over, as decision 0025 allows.
+
 ## Concurrency
 
 SQLite permits one writer at a time, and this system has several: the engine
@@ -239,6 +244,24 @@ The store makes a sealed view once per file and host (`prepare_sealed`,
 (`note_kept_sealed`). On the host, the folder is filed under the guest's
 person (`visit_persons`), and opened only with a key its phone sent
 (`open_kept`, `kept_file`, `unseal_kept`).
+
+## A phone's backups, and a folder for each person
+
+A phone's WhatsApp folder and the folders chosen for it are indexed in its
+vault where they lie, under `.qurb-outside/whatsapp/` and
+`.qurb-outside/storage/`
+([decision 0062](../../docs/decisions/0062-backing-up-whatsapp.md),
+[0063](../../docs/decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md));
+`Db::outside_summary` says how many and how much of them a computer is known
+to keep. On the computer, `person.rs` maps what is kept for a phone to where a
+person looks for it — *WhatsApp*, each backed-up folder under its own name,
+*Private Vault* — one tree for the window and the phone alike
+([decision 0067](../../docs/decisions/0067-a-folder-for-each-person.md));
+`own_phones` names a phone's folders, its own and its *earlier selves'*
+(`Db::earlier_selves`: the same phone set up again, whose kept content that
+phone may still fetch). A phone asks about its vault's files with no record
+of a holder keeping them through `Db::kept_unconfirmed`, a few at random each
+sync.
 
 ## Not yet built
 

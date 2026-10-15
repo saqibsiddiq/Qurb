@@ -3,13 +3,17 @@
 qurb in the corner of the screen.
 
 ```bash
-qurb-tray ~/qurb
+qurb-tray              # the folder already set up, ~/qurb/Shared by default
+qurb-tray ~/Sync       # or another
 ```
 
 An icon showing whether things are in step, a menu with recent files and paired
 devices, and a way to open the folder or quit. Where there is no tray, a window
 with the same information **and the one setting people want to change**: how
 much disk qurb may use. It **runs the daemon** — the same one `qurb run` does.
+Like the window and `qurb run`, it moves a folder of the old shape at `~/qurb`
+into `~/qurb/Shared` before it starts watching
+([decision 0067](../../docs/decisions/0067-a-folder-for-each-person.md)).
 
 ## One process, not two
 

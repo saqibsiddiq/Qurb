@@ -54,32 +54,33 @@ This is the actual program. Three terminals.
 qurb signal
 ```
 
-**Terminal 2** — set up the first device. It prints 24 words:
+**Terminal 2** — set up the first device. There is nothing to write down: the
+key travels with the pairing code ([0052](decisions/0052-the-key-travels-with-the-code.md)):
 
 ```bash
 qurb init ~/qurb-a
 ```
 
-**Terminal 3** — set up the second with those words. Both devices share one key;
-that is what makes them *yours*:
-
-```bash
-qurb enrol ~/qurb-b "the twenty four words it printed"
-```
-
-Now introduce them. `qurb pair` prints a code and waits:
+Then show a code. `qurb pair` prints a QR code, the code as text, and six
+digits for a device on the same network ([0066](decisions/0066-six-digits-to-pair.md)),
+and waits:
 
 ```bash
 qurb pair ~/qurb-a
 ```
 
-In the other terminal, hand that code over:
+**Terminal 3** — the second device joins with the six digits, or the code. A
+folder not set up yet takes the first device's key; both devices sharing one
+key is what makes them *yours*:
 
 ```bash
-qurb join ~/qurb-b qurb1-XXXXX...
+qurb join ~/qurb-b 240667
 ```
 
-Both should report `Paired with ...`. Then run both daemons:
+It prints a number, and terminal 2 asks `Approve? [y/N]` with the number it
+should show ([0053](decisions/0053-approval-same-key-and-safe-copies.md)).
+If they match, answer `y`. Both should report `Paired with ...`. Then run
+both daemons:
 
 ```bash
 qurb run ~/qurb-a
@@ -93,17 +94,24 @@ Put a file in `~/qurb-a` and it appears in `~/qurb-b`. `qurb status ~/qurb-a`
 shows what is stored and who it is paired with.
 
 **Verified**: this exact sequence was run on one machine, with both daemons
-connecting through the rendezvous service over the real network stack.
+connecting through the rendezvous service over the real network stack; the
+pairing part again on 2026-10-15, joining by the six digits.
 
 **The same, in the window.** `qurb-desktop` is the daemon with a window on it,
 and replaces `qurb run` on a computer with a screen. Installed with
 `packaging/install.sh` (or `makepkg -si` in `packaging/arch` on Arch), it is in
-the applications menu as qurb. On first launch it asks for the folder and how
-much disk qurb may use, shows the 24 words and has three typed back — or takes
-the words from another device. Devices → *Show a code* pairs another device;
-the other enters it or scans the QR. Closing the window keeps it syncing;
+the applications menu as qurb. On first launch it asks for the folder — `~/qurb/Shared` unless you choose
+another — and how much disk qurb may use, and starts; nothing to write down.
+Or *I already use Qurb* joins another device by its code or six digits.
+Devices → *Add a device* → *Show a code* pairs another device; the other
+scans the QR or types the six digits. Closing the window keeps it syncing;
 Settings → *Quit qurb* stops it. Two windows on one machine need two users or
 two `HOME`s — it is one qurb per person.
+
+In the window, Files opens on *Shared*, the folder on all your devices, and a
+folder for each person this computer keeps files for — a phone's backups,
+opened only with a yes on that phone
+([0067](decisions/0067-a-folder-for-each-person.md)).
 
 Then, on either device, the things worth trying: delete a file and restore it
 from Recently deleted, at the foot of Files, on the *other* device; edit one
@@ -196,15 +204,17 @@ measured.
 ```
 
 Builds the native libraries, regenerates the Kotlin bindings, builds a debug
-APK (about 47 MB) and installs it on a connected device. Needs the NDK and a
+APK (about 51 MB) and installs it on a connected device. Needs the NDK and a
 JDK 17; the script says so if it cannot find them. `release` instead builds the
-light one — arm64 only, about 11 MB installed — signed with the key named in
+light one — arm64 only, an APK of about 12 MB — signed with the key named in
 `~/.config/qurb/signing.properties`; Android refuses to install an update
 signed with a different key than the installed app, so a phone moves from a
 debug build to a release one only by uninstalling, which deletes its key.
 
-On first launch it offers to create an identity or restore from 24 words. The
-key goes into the Android Keystore, where the app itself cannot read it.
+On first launch it sets the phone up with a new key — kept in Block Store,
+nothing to write down — or joins another device by scanning its code or
+typing its six digits; the 24 words are a fallback for somebody who has them.
+The key goes into the Android Keystore, where the app itself cannot read it.
 
 Four tabs: Home, Files, Devices, Settings; Private Vault is inside Files.
 The synced files also appear in the system's Files app, under **qurb**.
@@ -221,8 +231,16 @@ qurb signal 0.0.0.0:9000
 
 In the app: Settings → **Rendezvous service** → `ws://<your computer's LAN IP>:9000`.
 Then Devices → **Add**: scan the code the computer shows (Devices → *Add a
-device* → *Show a code* in the window, or `qurb pair`), type it, or show a
-code on the phone for the computer to enter. Then **Sync now** on Home.
+device* → *Show a code* in the window, or `qurb pair`), type its six digits
+on the same Wi-Fi, or show a code on the phone for the computer to enter.
+Then **Sync now** on Home.
+
+With a computer keeping the phone's files (a device's sheet → *Keep a backup
+of my Private Vault*), Home's *Backups* backs up WhatsApp's folder and the
+folders you choose to it, and Files → *Your folder on …* reaches what it
+keeps, to download or restore a file. **Restoring WhatsApp from it is not
+proven yet**; keep WhatsApp's own Google backup on until it is
+([0062](decisions/0062-backing-up-whatsapp.md)).
 
 Both devices have to be awake and running at the same moment — a QUIC
 handshake's opening packets are the hole punch, so a device that is only

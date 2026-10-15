@@ -4,28 +4,32 @@ Private cloud storage. Dropbox-like sync where your files stay on your own
 devices — they move directly between them, encrypted end to end, and are never
 stored on our servers.
 
-**Status (2026-10-03): working on Linux and Android, and both apps designed;
-the owner's review of the design, the relay on a server, and a release are
-next, in that order.**
+**Status (2026-10-15): working on Linux and Android, both apps designed, in
+light and dark. A computer now backs up a phone's WhatsApp and chosen folders,
+and keeps a folder for each person, opened with a yes on their phone. The
+relay on a server and a release are next.**
 
 - The engine is complete and hardened: two devices sync end to end over QUIC,
   with encryption, conflict handling that never discards an edit, and key
   management — verified at 100,000 files, and tested against crashes, wrong
   clocks, long absences, damaged disks and hostile peers.
 - The **desktop window** does everything the command line does: setting up,
-  pairing by QR code, browsing and freeing files, sending to one device,
-  recently deleted, settling conflicts, sharing a folder with chosen devices,
-  keeping a folder only remotely, and a passphrase on the key — designed to the
-  owner's direction, in light only. There is an Arch package.
+  pairing by QR code or six digits, browsing and freeing files, sending to one
+  device, recently deleted, settling conflicts, sharing a folder with chosen
+  devices, keeping a folder only remotely, and a passphrase on the key. Files
+  opens on *Shared* and a folder for each person — each phone's WhatsApp,
+  backed-up folders and Private Vault — opened only with that person's yes on
+  their phone. Designed to the owner's direction, light and dark. There is an
+  Arch package.
 - The **Android app** syncs with a laptop both ways, from home Wi-Fi or mobile
   data, is woken by push within seconds, takes shares from any app, and shows
-  its files in the system file picker — verified on a Galaxy S23. Its screens
-  were rebuilt to the same design on 2026-09-29 and walked on the phone on
-  2026-10-03.
-- Not built yet: dark mode, the relay running on a server, a formal release,
-  iOS, macOS and Windows. Unmeasured: battery over a day on a phone, how often
-  a direct connection works across other networks, and what the design costs
-  the Android app in size and startup.
+  its files in the system file picker — verified on a Galaxy S23. It backs up
+  WhatsApp (36,062 files, 10.1 GB on the S23) and chosen folders to the
+  laptop, and reaches its folder there to download or restore a file.
+- Not built yet: the relay running on a server, a formal release, iOS, macOS
+  and Windows. **Restoring WhatsApp from the laptop is unproven.** Unmeasured:
+  battery over a day on a phone, and how often a direct connection works
+  across other networks.
 
 **[docs/features.md](docs/features.md)** lists everything that exists, and how
 far each piece has been checked.
@@ -82,15 +86,15 @@ cargo build --release -p qurb-cli -p qurb-tray -p qurb-desktop
 ./packaging/install.sh
 ```
 
-Then open qurb from the applications menu: it sets the device up, shows the 24
-words that are your key, and pairs another device by QR code. From a terminal
-instead:
+Then open qurb from the applications menu: it sets the device up — nothing to
+write down — and pairs another device by QR code or six digits. From a
+terminal instead:
 
 ```bash
-qurb init ~/qurb                    # a new key; nothing to write down
-qurb enrol ~/qurb "wheel push ..."  # on the second device, with those words
-qurb pair                           # on one, then `qurb join ~/qurb <code>` on the other
-qurb run                            # on both
+qurb init                  # a new key, in ~/qurb/Shared; nothing to write down
+qurb pair                  # on it: shows a code and six digits
+qurb join <code or digits> # on the other device: takes the key and pairs
+qurb run                   # on both
 ```
 
 The Android app: `./scripts/android-app.sh install`. Syncing from outside the
@@ -108,7 +112,7 @@ cargo run --release -p qurb-peer --example demo -- /tmp/device-a /tmp/device-b
 
 ```bash
 cargo build --release
-cargo test --workspace         # 790 tests in 90 binaries (2026-10-08)
+cargo test --workspace         # 879 tests in 94 binaries, all passing (2026-10-15)
 ./scripts/desktop-smoke.sh     # the real window, driven end to end
 ```
 

@@ -27,7 +27,10 @@ owner made, is [design/brief.md](design/brief.md)
 ([0048](decisions/0048-the-design-direction.md)). Both apps were built to it
 on 2026-09-29, in light only, and wait for the owner's look; the Android app's
 was walked on the S23 on 2026-10-03. Dark mode was built on 2026-10-08. On 2026-10-03 the owner asked to focus on completing the project; §13
-is the list, checked off as it goes.
+is the list, checked off as it goes. His numbered lists of 2026-10-13 and
+2026-10-14 came first after it, and are tracked item by item in
+[phases/phase-5-mobile.md](phases/phase-5-mobile.md); §2.9 has what they
+added.
 
 **Four things the brief asks for disagreed with decisions already recorded.**
 All four were decided on 2026-09-25, each the brief's way — see §3. Three are
@@ -291,6 +294,30 @@ Since 2026-09-29:
   not yet reviewed either. The phone's was walked on the S23 on 2026-10-03
   ([phase 5](phases/phase-5-mobile.md#the-designed-app-on-the-s23)). On the phone, adding a file now puts it in the area on screen —
   [0049](decisions/0049-adding-a-file-puts-it-where-you-are-looking.md).
+
+Since 2026-10-11, from the owner's lists:
+
+- **WhatsApp backed up to a computer**, not to the Google account: kept in
+  the phone's Private Vault on the laptop, read from where it lies, on Wi-Fi
+  — [0062](decisions/0062-backing-up-whatsapp.md). **Restoring is
+  unproven.**
+- **A phone's folders, chosen on either device**, backed up the same way —
+  [0063](decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md).
+- **Six digits to pair** on the same network, beside the QR code —
+  [0066](decisions/0066-six-digits-to-pair.md).
+- **A folder for each person** (the owner's included) at the top of the
+  window's Files and in `~/qurb`, beside `~/qurb/Shared`, opened only with a
+  yes on their phone; the phone sends to its folder there or to the
+  computer's Downloads, and reaches its folder to download or restore —
+  [0067](decisions/0067-a-folder-for-each-person.md).
+- **Home on both, and the desktop's Storage, redesigned**: *Sync now* and
+  *Send*, what is waiting, the backups; what is kept on the computer, not
+  only what could be freed.
+- **The computer kept awake while it collects**, on mains power, and a phone
+  set up again shown as one device.
+- **Scale**: a million files synced, once the file list went in frames —
+  [0065](decisions/0065-the-scale-qurb-is-built-for.md),
+  [0064](decisions/0064-many-small-files-quickly.md).
 
 Still as the inventory says: a replica freeing space, and everything in
 §2.4–§2.6.

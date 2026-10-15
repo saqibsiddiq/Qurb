@@ -33,17 +33,20 @@ them, and the sheets that rise over them:
 
 | place | what it is for |
 |---|---|
-| Home | is my Qurb space okay? One state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Not synced yet*, *Add your first device* — with a ring that turns while syncing; one action, *Send to device*; a line of facts and *Sync now*; attention when a file has two versions ([0043](../docs/decisions/0043-settling-a-conflict.md)); Recent, and *See all* for Activity. Pulling down syncs |
-| Files | the shared space, folder by folder: search across all of them, breadcrumbs, folders as tiles apart from files, and each file's state in words — *On this phone*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](../docs/decisions/0055-a-file-on-no-device-says-so.md)), *Downloading*. Tapping a file opens a sheet: its details, then open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move, delete (into Recently deleted). ⋯ sorts, makes a folder, saves everything here to the phone. *Add files* adds into the shared space. Back goes up a folder |
+| Home | is my Qurb space okay? One state — *Everything is synced*, *Syncing…*, files waiting to reach your devices, *Backing up to …*, *Waiting for … to collect*, *Not synced yet*, *Add your first device* — with a ring that turns while syncing; *Sync now* and *Send* side by side; a line of facts; attention when a file has two versions ([0043](../docs/decisions/0043-settling-a-conflict.md)); *Waiting* — files not on another device yet, sends not collected, backups still to go; *Backups* — WhatsApp and *Your folders*. Pulling down syncs |
+| Files | the shared space, folder by folder: search across all of them, breadcrumbs, folders as tiles apart from files, and each file's state in words — *On this phone*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](../docs/decisions/0055-a-file-on-no-device-says-so.md)), *Downloading*. Tapping a file opens a sheet: its details, then open, keep on this phone, free local space (never the only copy), send to a device, save a copy, rename, move, delete (into Recently deleted). ⋯ sorts, makes a folder, saves everything here to the phone. *Add files* adds into the shared space. Back goes up a folder. At the top, *Your folder on …* for a computer keeping this phone's files |
+| Your folder on … | from Files, while that computer is on: what it keeps for this phone — WhatsApp, the backed-up folders, the Private Vault, deleted files included, and what it kept before the phone was set up again — a hundred files at a time; a file is *Download*ed to Downloads/Qurb or *Restore*d where it was, checked before it is put there ([0067](../docs/decisions/0067-a-folder-for-each-person.md), `KeptScreen.kt`) |
+| Your folders | from Home's *Backups* and Settings: a switch for each of the phone's folders, *Back up now*, how much the computer holds; chosen here or on the computer, the later choice winning ([0063](../docs/decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md), `FoldersScreen.kt`) |
 | Private Vault | a step inside Files: this phone's own files, in the same browser. *Add files* here adds privately, whatever *Keep new files private* says |
-| Devices | this phone and each paired device as cards, with when each was last here; a device's sheet chooses whether it keeps a backup of the Private Vault, sends it files, and removes it after saying what that does ([0041](../docs/decisions/0041-removing-a-device.md)). *Add* scans a code, shows one on this phone, or takes one typed |
+| Devices | this phone and each paired device as cards, with when each was last here; a device's sheet chooses whether it keeps a backup of the Private Vault, sends it files, and removes it after saying what that does ([0041](../docs/decisions/0041-removing-a-device.md)). *Add* scans a code, shows one on this phone (with six digits), or takes six digits on a number pad, joining as the sixth is typed ([0066](../docs/decisions/0066-six-digits-to-pair.md)) |
 | Settings | grouped lists: this phone and its key, devices, storage (space, who has each folder — [0044](../docs/decisions/0044-sharing-with-chosen-devices.md), [0045](../docs/decisions/0045-a-folder-kept-remotely.md) — Recently deleted, freeing unused space), WhatsApp ([0062](../docs/decisions/0062-backing-up-whatsapp.md): its folder picked once, backed up each night to the computer keeping the vault, on Wi-Fi), privacy, notifications, the recovery phrase, appearance, and advanced (background sync, rendezvous, relay, version) |
 | Activity | from Home: everything this phone did, newest first |
 | Recently deleted | from Files and Settings: 30 days, restore everywhere or delete for good ([0042](../docs/decisions/0042-recently-deleted.md)) |
 | Transfers | a bar above the tabs while this phone syncs or has sent something not yet collected; it opens a sheet with what is waiting (stoppable) and what finished |
-| setup | create an identity with nothing to write down; or join by scanning (or typing) the code another device shows, which brings its key; or the key from the Google backup; or the 24 words |
+| setup | create an identity with nothing to write down; or join by scanning the code another device shows, or typing its six digits, which brings its key; or the key from the Google backup; or the 24 words |
 | scan | the camera, reading the code another device shows when connecting |
-| share | anything on the phone, from the system share sheet: saved to Private Vault, saved to Files, or sent to one paired device |
+| share | anything on the phone, from the system share sheet: saved to Private Vault, saved to Files, *Save to my folder on …* (opens there only with this phone's yes) or *Send to …'s Downloads* for a computer keeping this phone's files, or sent to one paired device |
+| asked | *Open your folder on …?*: a computer asking to open this phone's folder there, the owner's own or one it visits; answered behind the fingerprint, face or screen lock, the yes sent within seconds; a notification when the app is away ([0060](../docs/decisions/0060-a-computer-keeps-private-folders-for-several-people.md), [0067](../docs/decisions/0067-a-folder-for-each-person.md)) |
 
 Light or dark, as Settings → Theme says or as the phone is set
 ([decision 0056](../docs/decisions/0056-dark-mode.md)): the colour roles have
@@ -208,9 +211,14 @@ instead. `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` and
 foreground under a notification, so Android does not freeze the app while a
 device collects a large file from it ([decision 0050](../docs/decisions/0050-large-files-from-a-phone.md)).
 The notification permission is asked for the first time that happens, not at
-install, and refusing it stops nothing. Nothing else: no storage permission,
-because the synced directory is the app's own private storage, and no
-location, contacts or anything like them.
+install, and refusing it stops nothing. `USE_BIOMETRIC`, to confirm it is the
+person before a computer may open their folder. `MANAGE_EXTERNAL_STORAGE`
+("All files access"), for one thing: backing up the phone's own folders where
+they lie ([decision 0063](../docs/decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)),
+granted by the person on the system's page after Settings says why; without
+it only WhatsApp's folder, picked once, is read, and the synced directory is
+the app's own private storage either way. Nothing else: no location,
+contacts or anything like them.
 
 `allowBackup` is `false` on purpose. Android's backup would copy the vault to
 Google's servers, and the Keystore key wrapping it does **not** travel — so a
@@ -232,7 +240,8 @@ its host.
 
 Then, on the computer, Devices → **Add a device** → *Show a code* in the
 desktop app, or `qurb pair <dir>`; on the phone, Devices → **Add** → *Scan the
-other device's code*, and point the camera at it.
+other device's code*, and point the camera at it, or *Enter a code* and type
+the six digits on the same Wi-Fi.
 
 ## Background sync
 
@@ -384,13 +393,17 @@ replaced by uninstalling — which deletes the phone's key and index. See
   without asking; it errs the safe way, never offering to free such a file.
 - **Reviewed in its designed form.** Every place was walked on the S23 on
   2026-10-03 and the app measured there on 2026-10-08 (decision 0039: the
-  same startup, about 13 MB more memory, mostly graphics); the owner has not
-  reviewed it. See
+  same startup, about 13 MB more memory, mostly graphics); the owner uses it
+  and his lists say what he found. See
   [phases/phase-5-mobile.md](../docs/phases/phase-5-mobile.md#the-designed-app-on-the-s23).
 - **Not yet tried on the phone**, though built and run on the emulator:
   removing a device, the share sheet sending to a device, showing a pairing
-  code to another device, and sharing a folder with chosen devices between
-  real ones. See
+  code to another device, sharing a folder with chosen devices between real
+  ones, typing six digits, sending to *My folder on …*, and downloading or
+  restoring from *Your folder on …* (browsed on the S23 on 2026-10-15).
+- **Restoring WhatsApp from the computer** has not been done, so the backup
+  is not proven to bring WhatsApp back (decision 0062). Until it is, keep
+  WhatsApp's own Google backup on. See
   [phases/phase-5-mobile.md](../docs/phases/phase-5-mobile.md#checked-between-the-galaxy-s23-and-the-laptop).
 - **The development phone runs a debug build.** Android refuses an update
   signed by a different key, so moving it to a release build means

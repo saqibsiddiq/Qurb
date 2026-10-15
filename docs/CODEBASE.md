@@ -8,20 +8,26 @@ goes deeper on one topic; this file is the map.
 It is a **living document**. Anything that changes how the system fits together
 should be reflected here in the same piece of work that changes it.
 
-**Last verified against the code:** 2026-10-08 — the whole file checked against
-the source, not just the sections that changed. Phases 0–2 are complete.
-Phase 3 is built and its kill criterion is unmeasured, for want of a second
-*network*. Phase 4 has a daemon, a desktop window that does everything the
-command line does — setting up, pairing, sending, recently deleted, conflicts,
-sharing folders with chosen devices, the passphrase — and an Arch package; no
-automatic updater, by decision. Phase 5 has an Android app on a real phone that
-syncs with a laptop in both directions, shares into qurb from anywhere on the
-phone, and is woken by push; iOS is untouched. Both apps were rebuilt to the
-owner's design direction on 2026-09-29, and given a dark mode on 2026-10-08
-([0056](decisions/0056-dark-mode.md)); the Android app's places were walked on
-a Galaxy S23 on 2026-10-03. What comes
-next, in the owner's order: the owner's review of the design, then the relay on
-a server of the owner's own, then a formal release for Linux and Android.
+**Last verified against the code:** 2026-10-15 — the whole file checked against
+the source, not just the sections that changed: every file and name it
+mentions found in the tree, the file map compared with each directory, and
+the prose read against what changed since 2026-10-08. Phases 0–2 are
+complete. Phase 3 is built and its kill criterion is unmeasured, for want of
+a second *network*. Phase 4 has a daemon, a desktop window that does
+everything the command line does — setting up, pairing by code or six
+digits, sending, recently deleted, conflicts, sharing folders with chosen
+devices, the passphrase — and an Arch package; no automatic updater, by
+decision. Since 2026-10-14 `~/qurb` holds people: `~/qurb/Shared`, the synced
+folder, and a folder for each person, opened only with their phone's yes
+([0067](decisions/0067-a-folder-for-each-person.md)). Phase 5 has an Android
+app on a real phone that syncs with a laptop in both directions, shares into
+qurb from anywhere on the phone, is woken by push, and backs up WhatsApp and
+chosen folders to the laptop — restoring them unproven
+([0062](decisions/0062-backing-up-whatsapp.md)); iOS is untouched. Both apps
+were rebuilt to the owner's design direction on 2026-09-29, and given a dark
+mode on 2026-10-08 ([0056](decisions/0056-dark-mode.md)). What comes next:
+the owner's numbered lists as he gives them, then the relay on a server of
+the owner's own, then a formal release for Linux and Android.
 [features.md](features.md) lists everything that exists, by where a person
 meets it.
 
@@ -120,7 +126,9 @@ where a storage cap would otherwise destroy data.
 device is known to hold those exact bytes. A device that cannot free enough
 stays over its limit and says so. That looks like a bug and is not: a limit is
 a promise about disk, and no number in a settings box outranks the only copy of
-someone's work.
+someone's work. Nor does it ever free a file this device keeps for another's
+vault — a phone's backup above all: only this device's own files are
+candidates (`Db::evictable`).
 
 **Dropping a file must not look like deleting it.** A syncing device decides a
 file was deleted by not finding it. So the index records whether this device is
@@ -361,8 +369,10 @@ space runs short on a desktop, or when asked for by name on a phone
 ([decisions/0062](decisions/0062-backing-up-whatsapp.md) and
 [0063](decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)): on a phone,
 WhatsApp's folder, which Android lets the app read through a grant the person
-gives once. Such a file is a row in the device's vault under a prefix
-(`.qurb-outside/whatsapp/`), its chunks recorded and none stored, and `outside_sources`
+gives once, and the folders chosen for it on either device, read with "All
+files access". Such a file is a row in the device's vault under a prefix
+(`.qurb-outside/whatsapp/`, `.qurb-outside/storage/<folder>/`), its chunks
+recorded and none stored, and `outside_sources`
 says where it is read from -- whenever a device keeping the vault asks, and
 checked against its hashes, for as long as the file is there.
 `Store::keep_outside_folder` brings the rows into line with a listing of the
@@ -480,6 +490,24 @@ each conversation keeps the name it began with
 ([decisions/0061](decisions/0061-the-relay-carries-meetings.md)). Both ends
 must use the same rendezvous service and relay; nothing yet tells a guest which
 the computer uses.
+
+**A computer keeps a folder for each person**
+([decisions/0067](decisions/0067-a-folder-for-each-person.md)): its owner,
+whose phones' vaults it keeps, and each guest. `~/qurb` holds them:
+`~/qurb/Shared` is the synced folder — a folder of the old shape at `~/qurb`
+is moved there once, index and all, before anything watches it
+(`qurb_cli::layout`) — and `~/qurb/<person>` is a read-only placeholder for
+each, holding one note, since their files open only inside Qurb. In the
+window's Files each is locked until a yes on one of that person's phones,
+asked and answered as a guest's folder is; open, `qurb_storage::person` maps
+what is kept for each phone to where a person looks for it (*WhatsApp*, each
+backed-up folder, *Private Vault*), and a phone set up again keeps its own
+folder, *…, earlier* (`Db::earlier_selves`). A phone of the owner's reaches
+its own folder there with `Request::Kept`, answered to that phone only,
+fetching through the ordinary manifest and chunks — content kept for its
+earlier self included, and for no other device. The owner's folder is not
+sealed: the computer holds the same key, so its lock is qurb's rule, said so
+in the window.
 
 ### 2.7 The index remembers what happened, not just what is
 
@@ -721,15 +749,19 @@ qurb/
 │   │   ├── src/tls.rs       mutual authentication by pinned fingerprint
 │   │   ├── src/kept.rs      a vault kept sealed by another person's computer:
 │   │   │                    fetched back and unsealed (0060)
-│   │   ├── src/openings.rs  a guest's folder opened at the computer with the
-│   │   │                    guest's approval: asks and keys, in memory (0060)
+│   │   ├── src/openings.rs  a person's folder opened at the computer with a
+│   │   │                    yes from their phone: asks and keys, in memory;
+│   │   │                    a guest's (0060) and the owner's (0067)
 │   │   ├── src/server.rs    serves a store, read-only
 │   │   ├── src/client.rs    asks for trees, manifests, chunks
-│   │   └── src/source.rs    plugs the client into the engine
+│   │   └── src/source.rs    plugs the client into the engine; who holds what,
+│   │                        reported and asked about (`confirm_kept`)
 │   │
 │   ├── mobile-ffi/        The engine, as a phone can call it.
-│   │   ├── src/lib.rs       UniFFI surface: files and where they are, pairing,
-│   │   │                    bounded sync, holding, freeing, sending, history
+│   │   ├── src/lib.rs       UniFFI surface: files and where they are, pairing
+│   │   │                    by code or six digits, bounded sync, holding,
+│   │   │                    freeing, sending, history, backups, a computer's
+│   │   │                    asks, and the phone's folder on a computer
 │   │   └── src/bin/         uniffi-bindgen, which mobile-bindings.sh runs
 │   │
 │   ├── keys/              The root secret and the way back to it.
@@ -766,7 +798,10 @@ qurb/
 │   │   │                    restore, forget, activity, ls, find, config,
 │   │   │                    protect, version, signal, relay, netcheck
 │   │   ├── src/daemon.rs    watch, apply, sync, collect, stay under the limit;
-│   │   │                    stop if the folder is moved or deleted
+│   │   │                    stop if the folder is moved or deleted; sync now
+│   │   │                    when the window asks
+│   │   ├── src/awake.rs     the computer kept from suspending while it
+│   │   │                    collects, on mains power
 │   │   ├── src/lock.rs      one daemon per folder, enforced not assumed
 │   │   ├── src/profiles.rs  which folders exist, so commands need no path
 │   │   ├── src/layout.rs    `~/qurb` by person: `Shared`, the synced folder,
@@ -830,12 +865,14 @@ qurb/
 │       │                  FoldersScreen.kt    Your folders: which of the phone's
 │       │                                      folders back up, chosen here (0063)
 │       │                  KeptScreen.kt       Your folder on saqib: what the
-│       │                                      computer keeps for this phone,
+│       │                                      computer keeps for this phone, a
+│       │                                      hundred files at a time,
 │       │                                      downloaded or restored (0067)
 │       │                  ActivityScreen.kt   everything this phone did, from Home
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
 │       │                                      change your mind
-│       │                  ShowCode.kt         this phone showing a pairing code
+│       │                  ShowCode.kt         this phone showing a pairing code,
+│       │                                      and its six digits
 │       │                  Approval.kt         a device asking to join, approved by
 │       │                                      the six digits both screens show
 │       │                  ScreenLock.kt       the fingerprint, face or screen lock,
@@ -843,17 +880,21 @@ qurb/
 │       │                                      phone's folder there (0060)
 │       │                  Words.kt            how the app says things, in one place
 │       │                  SetupActivity.kt    set up, or join by scanning a code
+│       │                                      or typing its six digits
 │       │                  Backup.kt           the key, kept in Block Store
 │       │                  ScanActivity.kt     reading a pairing QR code
-│       │                  ShareActivity.kt    the share sheet's way in: save it, or
-│       │                                      send it to one device
+│       │                  ShareActivity.kt    the share sheet's way in: save it,
+│       │                                      save it to my folder on a computer,
+│       │                                      or send it to one device
 │       │                  AndroidKeyStore.kt  the platform half of decision 0021
 │       │                  SyncWorker.kt       background sync, on WorkManager;
 │       │                                      a long pass in the foreground
 │       │                  Transfers.kt        the notification a long transfer
 │       │                                      runs under, and its progress
 │       │                  Notices.kt          the desktop's three notifications:
-│       │                                      sent to you, collected, failed
+│       │                                      sent to you, collected, failed;
+│       │                                      and a computer asking to open
+│       │                                      this phone's folder
 │       │                  Previews.kt         an image or a text's start, for a
 │       │                                      conflict's two versions
 │       │                  SentCopies.kt       copies of sent files, let go of by name
@@ -947,8 +988,8 @@ code gets written fresh, informed by the spike rather than copied from it.
 Being precise about this matters, because the architecture document describes a
 complete system and a good deal of it is still unbuilt. The engine is real, and
 so, on Linux and Android, is a product around it that does what the brief asks
-of the features, designed to the owner's direction; what it does not have yet
-is the owner's review of that design, a relay on a server, and a release.
+of the features, designed to the owner's direction and changed as he uses
+it; what it does not have yet is a relay on a server, and a release.
 Dark mode is built on both ([decisions/0056](decisions/0056-dark-mode.md)).
 The unbuilt parts are listed at the end of this section.
 
@@ -1040,6 +1081,9 @@ for the workspace as it stands.
 | Guests | another person's device visits with a guest code, keeping its own key; the two meet at the rendezvous service under a secret of their own and are shown each other only what was sent to them (the `Guest` audience) — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | A guest's folder, sealed | a guest's Private Vault kept by the computer it visits under sealed names and sealed chunks the computer cannot open, filed under the guest's person; freed on the phone once kept, fetched back and checked when opened — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | Opening a guest's folder at the computer | the window asks, the guest's phone approves behind its screen lock and sends the folder key, accepted only if it opens the folder; held in memory until locked or ten minutes unused; files opened unsealed into memory-backed space and checked. Run end to end with the emulator as the guest; not with a real phone — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
+| A folder for each person | the owner's, as a guest's is: asked from the window, a yes from one of the owner's phones (`Unlock` with no key, the computer holding the same one); the ask heard at each sync and every ten seconds of a long pass, the yes sent the same way. Run between the S23 and the laptop on 2026-10-15: shown on the phone six seconds after the ask, open 21 seconds after it, a file opened — [0067](decisions/0067-a-folder-for-each-person.md) |
+| A phone's folder on a computer | `Kept { dir }`: a phone of the computer's own person is shown what is kept for it and for its earlier self, at one place in the tree a person sees, and fetches through the ordinary manifest and chunks; browsed on the S23, 2026-10-15 — [0067](decisions/0067-a-folder-for-each-person.md) |
+| A phone knows what its computer keeps | `confirm_kept`: each sync, a phone asks the computer keeping its vault about up to 64 of its files with no record of it keeping them, at random, and records each yes; a `Got` lost with a connection had left 130 of the S23's WhatsApp files "still to go" for good — [0062](decisions/0062-backing-up-whatsapp.md) |
 | The relay carries meetings | one relay connection, several names: a device's own and one per meeting with another person's device, so a computer reaches a guest it cannot dial — [0061](decisions/0061-the-relay-carries-meetings.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
@@ -1065,10 +1109,10 @@ for the workspace as it stands.
 | Recovery, end to end | the phrase turns back into the user's files |
 | Key hygiene | redacted in `Debug`, wiped on drop, owner-only on disk |
 
-801 tests in 90 test binaries on Linux, all passing (2026-10-10, debug build,
-the development laptop, on a network that carries multicast — seven tests find
-devices on the local network that way, and fail on one that does not). Clippy
-is clean. On Android the engine's crates run by `scripts/android-test.sh`:
+879 tests in 94 test binaries on Linux, all passing, 3 ignored (2026-10-15,
+debug build, the development laptop, on a network that carries multicast —
+the tests of local discovery and of six digits find devices that way, and
+fail on one that does not). Clippy is clean. On Android the engine's crates run by `scripts/android-test.sh`:
 678 tests in 63 binaries passed on the Android 14 x86_64 emulator on
 2026-10-08, including two phones pairing and syncing. The last run on a
 Galaxy S23 was 426 of them, on 2026-09-17. See
@@ -1098,7 +1142,9 @@ prevents. See [phases/phase-1-engine.md](phases/phase-1-engine.md).
 
 **Devices now pair.** An invite carries the inviter's full fingerprint across an
 out-of-band channel — a QR code, or a code read aloud — and both sides record the
-other in a trust store binding device identity to network identity. A listener
+other in a trust store binding device identity to network identity. On one
+network, six digits fetch that invite instead, through SPAKE2
+([decisions/0066](decisions/0066-six-digits-to-pair.md)). A listener
 takes its guest list from there, so the system has a notion of "my devices"
 rather than a list the caller assembled.
 
@@ -1288,14 +1334,22 @@ about 175 ms — see [decisions/0039](decisions/0039-a-light-android-app.md).
 an identity, keeps the key in the Android Keystore, pairs and syncs. Since
 2026-09-29 it follows the same design as the desktop window, in four tabs —
 Home, Files, Devices, Settings — under a floating bar. Home says whether
-everything is synced and offers one action, *Send to device*, with conflicts to
-settle as attention. Files is browsed by folder and searched, says where each
+everything is synced, or backing up, or waiting for a device to collect;
+offers *Sync now* and *Send* side by side; and lists what is *Waiting* and the
+*Backups* — WhatsApp's folder and the phone's chosen folders, kept on the
+computer ([decisions/0062](decisions/0062-backing-up-whatsapp.md),
+[0063](decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)) —
+with conflicts to settle as attention. Files is browsed by folder and searched, says where each
 file's bytes are, and opens, frees, fetches, renames, moves, sends, saves out or
 deletes each from a sheet; Private Vault, the phone's own files, is a step
 inside it, in the same browser, and a file moves between the two with *Move
-to Private Vault* or *Move to Files*. Devices pairs — scanning a code or
-showing one, a device asking to join approved by the six digits both screens
-show — chooses who keeps the phone's own files, and removes a device. Settings
+to Private Vault* or *Move to Files*. Files also reaches *Your folder on …*,
+what the computer keeps for this phone, to download or restore a file
+([decisions/0067](decisions/0067-a-folder-for-each-person.md)). Devices pairs —
+scanning a code, typing six digits, or showing one, a device asking to join
+approved by the six digits both screens show — chooses who keeps the phone's
+own files, and removes a device. A computer asking to open this phone's
+folder there is answered behind the screen lock. Settings
 has who has each folder (sharing, and keeping it only remotely), Recently
 deleted, space, copies of sent files, notifications, the theme, syncing and the
 version. Activity is reached from Home, and Transfers is a bar that appears
@@ -1372,7 +1426,7 @@ network. iOS needs Xcode, which needs a Mac. See
 | Home | one state — synced, syncing, devices away, add your first device, needs attention — then *Sync now* and *Send*, of one size (*Add a device* alone until there is one); attention only when something needs a decision; *Waiting*: files made here no other device has yet, sends not collected, a phone's folders still to come; *Backups*: WhatsApp and the folders kept here for each of your phones. What happened lately is a clock button away (Activity), not on Home. *Sync now* tells the daemon (`Daemon::sync_when_asked`) to drop every backoff, tell each device there is news — which wakes a phone that is asleep — and sync with all of them |
 | Files | at the top, *Shared* and a folder for each person the computer keeps files for, the owner's included, each opened only with a yes from that person's phone ([0067](decisions/0067-a-folder-for-each-person.md)); inside *Shared*, a file browser from the index: search, breadcrumbs, folders apart from files, and where each file's bytes are — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](decisions/0055-a-file-on-no-device-says-so.md)); keep a file here, free its local space, send it, move it into Private Vault, delete it; a details panel naming the devices that hold it |
 | Private Vault | this computer's own files, browsed the same way; *Move to shared* takes one back out ([0057](decisions/0057-moving-a-file-into-or-out-of-private-vault.md)) |
-| Devices | who is paired, whether each is connected now and whether directly or through the relay, when each was last reached; removing one, with what that will and will not do said first |
+| Devices | who is paired, whether each is connected now and whether directly or through the relay, when each was last reached; a phone set up again shown as one, with what is still kept from before; a phone's backups from its panel, opened in the person's folder; removing one, with what that will and will not do said first |
 | Activity | reached from Home: what this device did, paged, with the reason where there is one |
 | Storage | how much Qurb takes against the limit or the disk; what is kept here by kind -- each phone's backups (WhatsApp, folders, Private Vault), the shared files, guests' sealed folders, Recently deleted (`storage_parts`); the largest files that can be freed without losing anything; and the allowance |
 | Settings | grouped lists: this device and its key, devices and pairings, where files sent here go, keep new files private, notifications, the 24 words, appearance — system, light or dark ([0056](decisions/0056-dark-mode.md)) — and the advanced settings — rendezvous, relay, port, start at login, version, Quit |
@@ -1422,7 +1476,7 @@ lacks is a placeholder — see the first gap below.
 
 ### The gaps that matter most
 
-Eight things are known-missing rather than merely unbuilt:
+Nine things are known-missing rather than merely unbuilt:
 
 1. **An evicted file simply vanishes from the folder on Linux.** Windows and
    macOS both have an API for a placeholder that keeps its name and size and
@@ -1470,7 +1524,10 @@ Eight things are known-missing rather than merely unbuilt:
    of the desktop window's own buttons with a real phone on the other end —
    its pairing was, approved by number on 2026-10-08, and the rest is driven
    by its smoke test against a second device on the same machine — two
-   phones, and a new phone restored from a Google backup. The designed app,
+   phones, and a new phone restored from a Google backup. On 2026-10-15 the
+   window's Home, Storage and the owner's folder in Files were used with the
+   S23 on the other end: *Sync now*, the folder asked for and opened with the
+   phone's yes, a file opened from it. The designed app,
    measured on the S23 on 2026-10-08, starts as fast as before and holds
    about 13 MB more memory, mostly graphics, measured once rather than back to
    back with the old build
@@ -1502,6 +1559,13 @@ Eight things are known-missing rather than merely unbuilt:
    noticed on 2026-10-08 and set again by hand. The product does not yet
    prevent that
    ([phase 5](phases/phase-5-mobile.md#the-last-of-the-phone-and-a-setting-lost-three-days-before)).
+
+9. **Restoring WhatsApp from the computer is unproven.** The S23's WhatsApp
+   folder is kept on the laptop — 36,062 files, 10.1 GB, every one known
+   kept since 2026-10-15 — and the phone can fetch any file back. Nobody
+   has yet put the backup back and watched WhatsApp read it
+   ([decisions/0062](decisions/0062-backing-up-whatsapp.md)). Until that is
+   done, nothing here says to turn WhatsApp's Google backup off.
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:
@@ -1537,8 +1601,8 @@ cargo build --release
 ```
 
 **The program itself.** Two devices, start to finish — `init` on the first,
-then `pair` there, which shows a code, and `join` with that code on the
-second, which brings the first device's key with it
+then `pair` there, which shows a code and six digits, and `join` with the
+digits or the code on the second, which brings the first device's key with it
 ([decisions/0052](decisions/0052-the-key-travels-with-the-code.md)); the first
 asks to approve the second by a six-digit number both print. Then `run` on
 both. `enrol` with the 24 words is the way in without the other device to
@@ -1695,7 +1759,7 @@ cargo build --release -p qurb-desktop
 ```
 
 ```bash
-# Drive that window end to end -- set up, every tab, pairing by code, a send,
+# Drive that window end to end -- set up, every tab, pairing by six digits, a send,
 # removing a device, a passphrase set, quit, refused and then unlocked on the
 # next start -- on a display of its own, failing on any command that errs.
 # Needs broadwayd and WebKitWebDriver.
@@ -1836,6 +1900,13 @@ And when you want to close the measurements still outstanding:
   can be built, for all of them, to start a Tokio runtime of its own, which
   panics on a Tokio thread. It did, with zbus: see
   [phases/phase-4-product.md](phases/phase-4-product.md#notifications-stopped-at-the-first-failure).
+- **A Tokio timer is made inside the runtime.** `tokio::time::timeout` built
+  outside `block_on` — `runtime.block_on(timeout(..))` — panics with "no
+  reactor running" when it is built, not when awaited; write
+  `block_on(async { timeout(..).await })`. The phone's folder on the
+  laptop failed that way on every open until 2026-10-15, and the emulator
+  showed the panic as "isn't reachable". A test through the FFI, as the app
+  calls it, is what catches it.
 
 ---
 

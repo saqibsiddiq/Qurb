@@ -75,6 +75,12 @@ number with a direct dollar cost.
 by the recipient, with no intermediate party able to read it. Our relays forward
 bytes they cannot interpret.
 
+**Earlier self** — A phone set up again — its data cleared, or a new
+install — pairs as a new device. Its old identity, with the same name and
+kind and last seen before the new one was paired, is that phone's earlier
+self: shown as one device, its backups kept under *…, earlier* in the
+person's folder and reachable from the phone that replaced it, and no other.
+
 **Eviction / freeing** — Deleting a device's local copy of a file while
 keeping everything the index knows about it, so it can be fetched back. Done by
 the *storage cap*, by a person choosing *free* on one file, or by a folder
@@ -103,7 +109,9 @@ open.
 **Holder** — A device that keeps a copy of another device's private files,
 in its store and never in its folder, so the owner — usually a phone — can
 free its own copies. A holder lets a file go only on the owner's deletion. See
-[decisions/0036](decisions/0036-a-phone-keeps-its-own-files.md).
+[decisions/0036](decisions/0036-a-phone-keeps-its-own-files.md). It says
+*got it* as it collects each file; the phone asks about any it was not told
+of, a few each sync, so a lost message does not leave one "still to go".
 
 **Hole punching** — The technique that lets two devices behind NAT connect
 directly. Both send packets to each other simultaneously; each outbound packet
@@ -120,6 +128,13 @@ listed, new versions arriving from elsewhere are recorded without their bytes,
 and local copies are freed where another device has them. A file is fetched
 when asked for. Not synced — it is this device's business. See
 [decisions/0045](decisions/0045-a-folder-kept-remotely.md).
+
+**Kept where it lies** — Files a phone backs up without copying them into
+qurb's folder: WhatsApp's folder (decision 0062) and the folders chosen for
+it (decision 0063). Indexed in the phone's *vault* under `.qurb-outside/`,
+read from where they are when a *holder* collects them, and kept there when
+they are deleted on the phone. Shown as *Backups*, never among the person's
+files.
 
 **Manifest** — The record mapping a file path to its ordered list of chunk
 hashes. Reconstructing a file means fetching its manifest, then fetching each
@@ -166,8 +181,22 @@ computer's person's key, so it cannot use theirs (decision 0060).
 **Pairing** — Introducing two devices so each trusts the other: one shows a
 code — a QR code, or words to type or read aloud — and the other enters it.
 The code carries the shower's *fingerprint*, and expires after five minutes.
+On the same network the other may type *six digits* instead, which fetch the
+code by a password-authenticated exchange (SPAKE2), so knowing them is not
+enough to stand in for the device showing them; five wrong tries and they
+stop working (decision 0066). Either way the person approves by matching a
+number both devices show (decision 0053).
 Removing a device undoes it; see
 [decisions/0041](decisions/0041-removing-a-device.md).
+
+**Person's folder** — On a computer, everything it keeps for one person:
+for each of their phones its Private Vault, WhatsApp and backed-up folders.
+At the top of the window's Files beside *Shared*, and on disk as a
+read-only placeholder `~/qurb/<person>`. It opens only with a yes from one
+of that person's phones, behind its screen lock, until locked or ten minutes
+unused. A guest's is *sealed*; the computer's owner's is not, the computer
+holding the same key, so the yes is qurb's rule there and not encryption
+(decision 0067).
 
 **Protocol version** — What two devices speak, carried in the TLS
 handshake (ALPN) as `qurb/2`. Devices with different versions refuse to
@@ -214,6 +243,10 @@ deleting the file first calls the send off
 ([0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md)). On a desktop, a
 received file is saved to `Downloads/qurb` as an ordinary file. See
 [decisions/0030](decisions/0030-sending-a-file-to-one-device.md).
+
+**Shared** — `~/qurb/Shared`: the folder that copies to every one of the
+owner's devices, beside the *person's folders* in `~/qurb` (decision 0067).
+Before 2026-10-14 it was `~/qurb` itself.
 
 **Sharing rule** — A small file at `.qurb-sharing/<folder>` naming the
 devices a folder in the shared area is shared with. It syncs like any other

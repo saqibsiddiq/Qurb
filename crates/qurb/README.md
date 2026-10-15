@@ -3,11 +3,16 @@
 The program a person runs. Everything else in this repository is a library.
 
 ```
-qurb init [dir]                  set up a device and create a key (~/qurb if none)
+qurb init [dir]                  set up a device and create a key
+                                 (~/qurb/Shared if none)
 qurb enrol <dir> "<24 words>"    set up a device with an existing key
-qurb pair [dir]                  show a code and wait for a device to join
-                                 (the code lasts five minutes, then it stops)
-qurb join [dir] <code>           join a device that is showing a code
+qurb pair [dir] [--guest]        show a code and its six digits, and wait for
+                                 a device to join (five minutes, then it stops);
+                                 --guest: another person's, keeping its key
+qurb visit [dir] <code>          visit another person's computer as a guest
+qurb join [dir] <code|digits>    join a device showing a code, or its six
+                                 digits on the same network; a folder not set
+                                 up yet takes that device's key
 qurb run [dir]                   watch, sync, and keep running
 qurb replica [dir] [--only p]    hold content for devices that are asleep
 qurb status [dir]                what this device holds and trusts
@@ -48,8 +53,8 @@ qurb netcheck                    what kind of router this machine is behind
 
 `[dir]` is the qurb folder. Left out, it is the one set up most recently —
 and a word that is not a folder with qurb in it is never taken for one, so
-`qurb protect keystore` and `qurb protect ~/qurb keystore` both mean what
-they say. Folders are listed by their full path, in
+`qurb protect keystore` and `qurb protect ~/qurb/Shared keystore` both mean
+what they say. Folders are listed by their full path, in
 `~/.config/qurb/folders`.
 
 ## Two devices, start to finish
@@ -57,18 +62,22 @@ they say. Folders are listed by their full path, in
 On the first:
 
 ```bash
-qurb init ~/Sync          # a new key; another device joins with `qurb pair`
-qurb pair ~/Sync          # shows a code
+qurb init ~/Sync          # a new key; nothing to write down
+qurb pair ~/Sync          # shows a code, and six digits for the same network
 ```
 
-On the second, using the phrase from the first:
+On the second, with the six digits or the code. A folder not set up yet
+takes the first device's key with it
+([decision 0052](../../docs/decisions/0052-the-key-travels-with-the-code.md)),
+once the first approves, seeing the same number
+([0053](../../docs/decisions/0053-approval-same-key-and-safe-copies.md)):
 
 ```bash
-qurb enrol ~/Sync "wheel push industry ..."
-qurb join ~/Sync qurb1-...
+qurb join ~/Sync 240667
 ```
 
-Then `qurb run ~/Sync` on both.
+Then `qurb run ~/Sync` on both. Run this way on 2026-10-15, joining by the
+digits ([0066](../../docs/decisions/0066-six-digits-to-pair.md)).
 
 Sharing a key is what makes two devices *yours*. Pairing is separate and still
 necessary: it is how they learn each other's network identity, and it happens
@@ -77,9 +86,11 @@ won.
 
 ## Setting a device up
 
-`qurb init` and `qurb enrol` both go through `qurb_cli::setup`, which is the
-one definition of what a set-up device is — a key, an identity, a config and an
-index. The desktop window calls the same functions, so a device created there
+`qurb init`, `qurb enrol` and `qurb join` into a folder not set up all go
+through `qurb_cli::setup`, which is the one definition of what a set-up
+device is — a key, an identity, a config and an index. A typed code is read
+there too: the long code as it is, six digits found on the network
+(`setup::invite`). The desktop window calls the same functions, so a device created there
 and one created here are the same thing rather than two similar things.
 
 ## What an interface asks
@@ -288,6 +299,34 @@ off is simply in the folder, and it moves when one is next reachable. A device
 learns it is no longer the only holder because the device that received the
 content says so, which is the only message in the protocol that asks for
 nothing.
+
+## Where the folder is
+
+`~/qurb` holds people: the folder that copies to every one of the owner's
+devices is `~/qurb/Shared`, and beside it each person this computer keeps
+files for has `~/qurb/<name>`, a read-only placeholder holding one note,
+since their files open only inside Qurb
+([decision 0067](../../docs/decisions/0067-a-folder-for-each-person.md)).
+`layout.rs`: a folder of the old shape at `~/qurb` is moved into
+`~/qurb/Shared` once, index and all, when `run`, the window or the tray
+starts, before anything watches it; each entry is a rename, undone as far
+as it got if one fails. A folder chosen elsewhere is not moved.
+
+## Staying awake while collecting
+
+`awake.rs`. While a plan brings content in, and the computer is on mains
+power or has no battery, GNOME's session inhibitor and logind's are held,
+and let go when the plan is applied: on 2026-10-13 the laptop's idle
+suspend cost 12 of the WhatsApp backup's 15.5 hours. They hold
+`tail --pid` on this process, so they cannot outlive it.
+
+## A device set up again
+
+A phone cleared or reinstalled pairs as a new device. `View::devices` marks
+one of the same person, name and kind, paired after an older one was last
+seen, as that one set up again (`set_up_again`), so interfaces show one
+device, with what is still kept from before; `qurb status` lists both and
+says which became which.
 
 ## If the folder moves
 

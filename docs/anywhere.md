@@ -174,7 +174,7 @@ has no folder, shows nobody any files, and cannot read what it stores. Its
 whole job is to be awake when the others are not.
 
 ```bash
-qurb enrol /srv/qurb "<the same 24 words>"
+qurb enrol /srv/qurb "<the same 24 words>"   # in the window: Settings → the recovery phrase
 qurb replica /srv/qurb
 ```
 
