@@ -2302,6 +2302,17 @@ His answers to the questions they raised are with them.
    *Your folder on saqib*, browsed live while the laptop is on, each file
    downloaded or restored where it was, what the S23 kept before it was set
    up again included; not yet seen on the S23.
+
+   **With the S23, 2026-10-15** (0067's *Progress* has the detail): step 1
+   ran end to end -- asked in the laptop's window during a WhatsApp send,
+   shown on the S23 in six seconds, approved behind its lock, open on the
+   laptop 21 seconds after the ask, listing both of the S23's folders --
+   once two faults were fixed: an ask the background worker heard was never
+   shown while the app was open, and a long pass did not look for asks for
+   up to half an hour. Step 4 panicked on every open (a timeout built
+   outside the engine's runtime; the emulator had shown it as "isn't
+   reachable"), fixed and now tested through the engine. Opening a file in
+   the window, and steps 3 and 4 working on the S23, not yet seen.
 6. **The S23 is listed twice in the laptop's Devices**: its identity from
    before it was set up again, and its new one. **Built 2026-10-14**: a
    device of the same person with the same name and kind, paired after an
@@ -2345,7 +2356,11 @@ His answers to the questions they raised are with them.
    laptop, not yet pressed with the S23 there. A phone's folders "still to
    come" is what the phone last listed less what is kept here, and what is
    kept includes files since deleted on the phone, so it can say too few,
-   never too many.
+   never too many. **On the S23, 2026-10-15**: *Sync now* synced (51.4 MB
+   handed to the laptop in the background). Home said *Everything is
+   synced.* above a *Waiting* list of 130 WhatsApp files still to go; it
+   now says *Backing up to saqib* while a backup is on its way, and *Waiting
+   for … to collect* while a send is, as the list below it does.
 9. **The desktop's Storage redesigned**, thoroughly. **Built 2026-10-14**:
    it said only what could be freed and the limit, while on the laptop nearly
    all of Qurb's 9.2 GB is the S23's backups, which it did not mention. Now:
@@ -2359,7 +2374,13 @@ His answers to the questions they raised are with them.
    and shared once; the five largest files that can be freed, all of them
    freed by the button above; and the limit. Looked at in the fixtures page;
    the smoke test opens it against the real engine with no command failing.
-   Not yet looked at on the laptop with its real numbers.
+   **Looked at in the laptop's window with its real numbers, 2026-10-15**:
+   17 GB of a 30 GB limit; the phones' backups 21 GB as files (the S23's
+   WhatsApp 10 GB and folders 7.3 GB, its earlier self's WhatsApp 3.3 GB);
+   the shared files' 18 all freed; read as it should. Checked while there:
+   the limit never frees a file kept for a phone (`Db::evictable` takes
+   only this computer's own), so backups past it stay, as the limit's own
+   note says over-limit can.
 10. **The folders to back up chosen on the phone too**, and on its Home.
     **Built 2026-10-14**: either device may choose, the later choice winning
     wherever it was made (0063, amended). On the phone *Your folders*, from
@@ -2375,9 +2396,12 @@ His answers to the questions they raised are with them.
     built -- the desktop's in the fixtures page, wide and narrow; the phone's
     on the emulator (Home, *Your folders*, the *Send* sheet, *Enter a code*
     with its number pad, *Your folder on …* and its unreachable state) --
-    and what was found and fixed is in consistency rows 49 to 53. **Not
-    looked at on the S23 or in the laptop's own window** with real numbers;
-    that is the next pass, with the phone.
+    and what was found and fixed is in consistency rows 49 to 53. **With
+    the S23 and the laptop's own window, 2026-10-15**: the phone's Home and
+    the laptop's Home, Files and Storage looked at with real numbers; found
+    and fixed, Home's headline over a Waiting list, and the person tile's
+    count and cut-off line (rows 54 and 55). The phone's *Your folder on
+    saqib*, Send sheet and *Enter a code* not yet looked at on the S23.
 
 Where each stands is kept here as it moves.
 

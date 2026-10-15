@@ -19,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.qurb.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.FileEntry
@@ -239,7 +240,43 @@ class MainActivity : AppCompatActivity() {
         if (running == syncingInWorker) return
         syncingInWorker = running
         changed()
-        if (!running) askedMeanwhile()
+        // A computer's ask, heard by the worker's pass: the worker leaves it
+        // to the screen when the app is on it (Notices.asked), so it is asked
+        // here -- looked for while the pass runs, since a long one asks the
+        // computer again every ten seconds and lasts up to half an hour, and
+        // once more at its end. Until 2026-10-15 nothing here looked, and the
+        // laptop waited on a phone that had heard it and sat on Home
+        // (decision 0067).
+        listening?.cancel()
+        listening = null
+        if (running) {
+            listening = lifecycleScope.launch {
+                while (true) {
+                    delay(2_000)
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) heard()
+                }
+            }
+            return
+        }
+        lifecycleScope.launch { heard() }
+        askedMeanwhile()
+    }
+
+    /** Looking for asks while the worker runs. */
+    private var listening: kotlinx.coroutines.Job? = null
+
+    /**
+     * What computers said about this phone's folder there (decisions 0060
+     * and 0067): an ask, shown behind the screen lock, and what one did with
+     * a yes sent it.
+     */
+    private suspend fun heard() {
+        val engine = runCatching { Engine.open(this@MainActivity) }.getOrNull() ?: return
+        engine.openAsks().firstOrNull()?.let { askToOpen(engine, it) }
+        for (answer in engine.openAnswers()) {
+            say(if (answer.opened) "Your folder is open on ${answer.name}. It locks itself after ten minutes unused."
+                else "${answer.name} didn't open your folder: its ask had lapsed, or it keeps nothing of yours yet.")
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -600,15 +637,9 @@ class MainActivity : AppCompatActivity() {
                 // On screen, so nothing is raised; what was shown here is
                 // marked as seen, and not announced later.
                 withContext(Dispatchers.IO) { Notices.tell(this@MainActivity, engine) }
-                // A computer this phone visits, asking to open its folder
-                // there (decision 0060).
-                engine.openAsks().firstOrNull()?.let { askToOpen(engine, it) }
-                // And what a computer did with a key this phone sent: the
-                // person approved, so they hear whether it opened.
-                for (answer in engine.openAnswers()) {
-                    say(if (answer.opened) "Your folder is open on ${answer.name}. It locks itself after ten minutes unused."
-                        else "${answer.name} didn't open your folder: its ask had lapsed, or it keeps nothing of yours yet.")
-                }
+                // A computer asking to open this phone's folder there, and
+                // what one did with a yes sent it.
+                heard()
                 if (!quiet) say(
                     when {
                         outcome.reached == 0u && outcome.unreachable == 0u && outcome.timedOut ->

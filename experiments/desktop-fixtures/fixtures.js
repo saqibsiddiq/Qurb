@@ -376,9 +376,9 @@ const ANSWERS = {
   // it open.
   people: () => [
     { id: "owner", name: "Saqib", relation: "owner", state: personState(), sealed: false, files: 41_210,
-      size: "14100000000", devices: ["Galaxy S23", "Galaxy S23, earlier"] },
+      size: "14100000000", devices: ["Galaxy S23", "Galaxy S23, earlier"], phones: 1 },
     { id: "c0ffee12".repeat(8), name: "Ammi's phone", relation: "guest", state: "locked", sealed: true, files: 12,
-      size: "12582912", devices: ["Ammi's phone"] },
+      size: "12582912", devices: ["Ammi's phone"], phones: 1 },
   ],
   person_folder: ({ person, dir }) => {
     const state = person === "owner" ? personState() : "locked";

@@ -112,8 +112,11 @@ function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
     try { people = await invoke("people"); } catch (e) { people = []; }
     const box = $(folders);
     box.replaceChildren(el("div", "list-label", "Folders"));
-    const tile = (name, iconName, meta, open) => {
+    const tile = (name, iconName, meta, open, state) => {
       const t = el("button", "folder area");
+      // Locked or open is the icon's to say, which leaves the line room for
+      // what is in it; said in words to whoever cannot see the icon.
+      if (state) t.setAttribute("aria-label", `${name}, ${state}: ${meta}`);
       const words = el("div", "area-words");
       words.append(el("span", null, name), el("small", null, meta));
       t.append(icon(iconName), words);
@@ -122,10 +125,11 @@ function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
     };
     tile("Shared", "folder", "On all your devices", () => { b.area = "shared"; b.dir = ""; b.draw(); });
     for (const p of people) {
-      const phones = p.relation === "owner" && p.devices.length ? count(p.devices.length, "phone") : null;
+      const phones = p.relation === "owner" && p.phones ? count(p.phones, "phone") : null;
       tile(p.name, p.state === "open" ? "folder-open" : "lock-keyhole",
-        [phones, Number(p.size) > 0 ? size(p.size) : null, p.state === "open" ? "Open" : "Locked"].filter(Boolean).join(" · "),
-        () => { b.area = p.id; b.dir = ""; closePanel(); b.draw(); });
+        [phones, Number(p.size) > 0 ? size(p.size) : null].filter(Boolean).join(" · ") || "Nothing kept yet",
+        () => { b.area = p.id; b.dir = ""; closePanel(); b.draw(); },
+        p.state === "open" ? "open" : "locked");
     }
     $(list).replaceChildren();
     drawDeletedLink();

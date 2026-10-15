@@ -2,8 +2,10 @@
 
 **Status:** Accepted as a design and an order of work, 2026-10-14, from the
 owner's items 2 to 5 of that day and his answers. All four steps built the
-same day; step 2 run on the owner's laptop; steps 1, 3 and 4 not yet seen
-with the S23. See *Progress*. Extends
+same day; step 2 run on the owner's laptop; step 1 run between the S23 and
+the laptop on 2026-10-15, after two fixes found doing it; steps 3 and 4 not
+yet seen working on the S23 (step 4 failed there, and is fixed). See
+*Progress*. Extends
 [0060](0060-a-computer-keeps-private-folders-for-several-people.md), which
 built most of this for guests, to every person a computer keeps files for,
 its owner included, and answers 0060's question 3 ("the owner's own files:
@@ -161,8 +163,36 @@ in the window where it matters, and recorded here.
 Tests: `the_owners_folder_opens_with_a_yes_from_the_owners_phone` (a guest
 is not asked about it and cannot open it; a wrong nonce opens nothing).
 Looked at in the fixtures page: the top, a locked folder, an open one. The
-real-window smoke test opens Files with the new top. **Not yet seen**: the
-ask reaching the S23 and its yes opening the folder on the laptop.
+real-window smoke test opens Files with the new top.
+
+**Run with the S23, 2026-10-15**, the laptop's real window driven through
+WebKit's WebDriver and the owner at the phone. The first two asks never
+showed on the phone, for two reasons:
+
+- **Heard, and not shown.** The window's ask woke the phone; the phone's
+  background worker synced and collected the ask (`asking=true` in its
+  log), and, the app being on screen, left it to the screen, which only
+  looked for asks after a sync of its own. Now the screen looks when a
+  worker's pass ends, and every two seconds while one runs.
+- **Not heard for half an hour.** The phone was sending the laptop its
+  WhatsApp backup, a long pass that stays to be collected from for up to
+  thirty minutes; a wake while it runs starts nothing, and asks were
+  collected only at a pass's start. Now a pass staying to be collected from
+  asks each computer it reached again every ten seconds, over the
+  connection it holds (reached again if that closed), and sends a yes the
+  same way, rather than at the next pass (`trade_asks`, `ASKS_EVERY`). The
+  worker raises the notification for an ask while the app is away.
+
+With both: asked at 10:55:34 from the window, during the WhatsApp send; the
+S23 showed *Open your folder on saqib?* within six seconds; the owner
+approved behind the screen lock; the folder was open in the window at
+10:55:55. Open, it listed *SM-S911B* (*DCIM*, *WhatsApp*, with that
+morning's 525 MB message database) and *SM-S911B, earlier* (*WhatsApp*,
+*Private Vault* with 5 files), as the tests expect. **Not checked**:
+opening a file from it in the window -- the owner locked the folder before
+that was tried. The tile said *2 phones* for the S23 and its earlier self
+and cut off its last word; it now counts phones in use, lists them first,
+and leaves locked or open to its icon.
 
 ### Step 2, `~/qurb` holds people — built 2026-10-14
 
@@ -235,8 +265,18 @@ cleared, and is reachable from the S23 now.
 Tests: `a_phone_reaches_its_folder_on_the_computer_and_what_it_kept_before`
 (its own and its earlier self's listed and fetched; another device of the
 same person shown neither, and refused the content by hash);
-`kept_paths_show_where_a_person_looks_for_them`. **Not yet seen** on the
-S23, and the emulator cannot play it: its computer is never on.
+`kept_paths_show_where_a_person_looks_for_them`.
+
+**On the S23, 2026-10-15, it failed every time**: opening the folder
+panicked in the engine ("there is no reactor running"), a timeout built
+outside the runtime it was meant to run on. The emulator had shown the same
+panic as *isn't reachable*, which was taken for its computer being off; the
+tests above go through the peer crate, not the engine the app calls, so
+none opened the folder as the phone does. Fixed, and
+`a_phone_opens_its_folder_on_the_computer` now does: through the engine,
+opened, listed from the top, a file fetched and checked, a second fetch put
+beside the first. It fails with the same panic without the fix. **Not yet
+seen working on the S23.**
 
 ## Reversing it
 

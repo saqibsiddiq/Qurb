@@ -1641,8 +1641,11 @@ impl Qurb {
             }));
         }
         let connector = Arc::new(connector);
+        // The timeout made inside the runtime: made outside, its timer has no
+        // runtime to belong to and panics. It did, on the S23, every time
+        // until 2026-10-15; the emulator showed the panic as "isn't reachable".
         let client = runtime
-            .block_on(tokio::time::timeout(budget, connector.reach(peer)))
+            .block_on(async { tokio::time::timeout(budget, connector.reach(peer)).await })
             .map_err(|_| QurbError::Network { detail: format!("{name} isn't reachable: it has to be on, with Qurb running") })?
             .map_err(|e| QurbError::Network { detail: format!("{name} isn't reachable: {e}") });
         let client = match client {
@@ -2627,6 +2630,9 @@ impl Qurb {
             );
         }
 
+        // Computers reached that may ask to open this phone's folder: asked
+        // again while the pass stays to be collected from (`trade_asks`).
+        let mut askers: Vec<(qurb_peer::Fingerprint, qurb_peer::PeerClient)> = Vec::new();
         while let Some(done) = runtime.block_on(reaching.join_next()) {
             let (peer, client) = match done {
                 Ok((peer, Ok(Ok(client)))) => (peer, client),
@@ -2663,6 +2669,7 @@ impl Qurb {
                     outcome.reached += 1;
                     outcome.adopted += stats.adopted as u32;
                     outcome.conflicts += stats.conflicts as u32;
+                    askers.push((peer, client));
                 }
                 // Ran out of time mid-peer. Whatever landed is already
                 // committed; the rest is the next window's problem.
@@ -2702,12 +2709,32 @@ impl Qurb {
             let come_by = come_by(std::time::Instant::now(), started, budget, serving);
             let at_most = started + serving;
             runtime.block_on(connector.announce_news());
+            askers.retain(|(peer, _)| self.asker(peer).is_some());
             let mut looked = std::time::Instant::now();
             let mut excused = looked;
+            let mut asked_at = looked;
             loop {
                 let now = std::time::Instant::now();
                 excused = excused_until(looked, now, excused);
                 looked = now;
+                if now.duration_since(asked_at) >= ASKS_EVERY {
+                    asked_at = now;
+                    for (peer, client) in askers.iter_mut() {
+                        // Its connection may have closed in a long wait:
+                        // reached again, briefly, or left to the next pass.
+                        if client.is_closed() {
+                            let connector = Arc::clone(&connector);
+                            let peer = *peer;
+                            match runtime.block_on(async { tokio::time::timeout(ASKS_WAIT, connector.reach(peer)).await }) {
+                                Ok(Ok(again)) => *client = again,
+                                _ => continue,
+                            }
+                        }
+                        if let Some((known, key)) = self.asker(peer) {
+                            self.trade_asks(&runtime, client, &known, key);
+                        }
+                    }
+                }
                 if !keep_answering(
                     now,
                     come_by,
@@ -2768,6 +2795,103 @@ impl Qurb {
             bytes += backup.bytes - backup.held_bytes;
         }
         Ok((files, bytes))
+    }
+
+    /// The device behind `peer`, and what a yes would send it, if it may ask
+    /// to open this phone's folder there. Takes the engine briefly.
+    fn asker(&self, peer: &qurb_peer::Fingerprint) -> Option<(qurb_storage::db::TrustedPeer, [u8; 32])> {
+        let engine = self.engine().ok()?;
+        let known = engine.store().db().peer_by_fingerprint(peer.as_bytes()).ok().flatten()?;
+        self.may_ask(engine.store(), &known).then(|| {
+            let key = self.key_to_open(engine.store(), &known);
+            (known, key)
+        })
+    }
+
+    /// Whether `known` may ask to open this phone's folder there: a computer
+    /// of another person's keeping it sealed (decision 0060), or one of this
+    /// person's keeping its vault (decision 0067).
+    fn may_ask(&self, store: &qurb_storage::Store, known: &qurb_storage::db::TrustedPeer) -> bool {
+        match known.relation {
+            qurb_storage::db::Relation::Host => true,
+            qurb_storage::db::Relation::Own => store.db().is_holder(&known.device_id).unwrap_or(false),
+            _ => false,
+        }
+    }
+
+    /// What a yes sends `known`: the folder's key to a computer that keeps
+    /// it sealed, and nothing to one of this person's, which holds the same
+    /// key already, so the yes is all it needs.
+    fn key_to_open(&self, store: &qurb_storage::Store, known: &qurb_storage::db::TrustedPeer) -> [u8; 32] {
+        match known.relation {
+            qurb_storage::db::Relation::Host => {
+                qurb_storage::sealed::FolderKey::for_host(&store.chunk_key(), &known.device_id).to_bytes()
+            }
+            _ => [0; 32],
+        }
+    }
+
+    /// With a computer that may ask (`may_ask`): send it the person's yes, if
+    /// they gave one, and note whether it is asking, for the app to show.
+    /// Done in each pass that reaches it, and again every `ASKS_EVERY` while
+    /// a long pass stays to be collected from: somebody at that computer
+    /// waits on the answer, and a long pass can last half an hour.
+    fn trade_asks(
+        &self,
+        runtime: &tokio::runtime::Runtime,
+        client: &qurb_peer::PeerClient,
+        known: &qurb_storage::db::TrustedPeer,
+        key: [u8; 32],
+    ) {
+        let own = known.relation == qurb_storage::db::Relation::Own;
+        let fingerprint = hex(&known.fingerprint);
+        let approved = self.approved.lock().ok().and_then(|mut a| a.remove(&fingerprint));
+        if let Some(nonce) = approved {
+            let sent = runtime.block_on(async { tokio::time::timeout(ASKS_WAIT, client.unlock(nonce, key)).await });
+            match sent {
+                Ok(Ok(opened)) => {
+                    tracing::info!(opened, "answered an ask to open this phone's folder");
+                    if let Ok(mut answers) = self.open_answers.lock() {
+                        answers.push(OpenAnswer { name: known.name.clone(), opened });
+                    }
+                }
+                // Not delivered: still approved, sent at the next chance.
+                failed => {
+                    let error = match failed {
+                        Ok(Err(e)) => e.to_string(),
+                        _ => "no answer in time".to_string(),
+                    };
+                    tracing::warn!(error, "could not send the yes to open this phone's folder");
+                    if let Ok(mut held) = self.approved.lock() {
+                        held.insert(fingerprint.clone(), nonce);
+                    }
+                }
+            }
+        }
+        let asked = match runtime.block_on(async { tokio::time::timeout(ASKS_WAIT, client.asks()).await }) {
+            Ok(Ok(asked)) => asked,
+            failed => {
+                let error = match failed {
+                    Ok(Err(e)) => e.to_string(),
+                    _ => "no answer in time".to_string(),
+                };
+                tracing::warn!(error, "could not ask whether a computer wants to open this phone's folder");
+                // Not known either way: what was noted stands.
+                return;
+            }
+        };
+        let answered = self.settled.lock().ok().and_then(|s| s.get(&fingerprint).copied());
+        tracing::debug!(asking = asked.is_some(), answered_before = asked.is_some() && asked == answered, "a visited computer's ask");
+        if let Ok(mut asks) = self.open_asks.lock() {
+            match asked {
+                Some(nonce) if approved != Some(nonce) && answered != Some(nonce) => {
+                    asks.insert(fingerprint, (known.name.clone(), nonce, own));
+                }
+                _ => {
+                    asks.remove(&fingerprint);
+                }
+            }
+        }
     }
 
     /// Sync against a peer already reached. `Ok(None)` means the time ran out.
@@ -2860,57 +2984,10 @@ impl Qurb {
                 runtime.block_on(qurb_peer::learn_kept(client, engine.store_mut(), &known.device_id, &tree));
                 runtime.block_on(qurb_peer::fetch_kept(client, engine.store_mut(), &known.device_id, &tree));
             }
-            // Asked to open this phone's folder there (0060's step 5): answered
-            // if the person approved, and the ask noted for the app. A
-            // computer of this person's that keeps its vault asks too, for the
-            // owner's folder (decision 0067), and is sent no key: it holds
-            // the same one, so the yes is all it needs.
-            let keeper = known.relation == qurb_storage::db::Relation::Own
-                && engine.store().db().is_holder(&known.device_id).unwrap_or(false);
-            if host || keeper {
-                let fingerprint = hex(&known.fingerprint);
-                let approved = self.approved.lock().ok().and_then(|mut a| a.remove(&fingerprint));
-                if let Some(nonce) = approved {
-                    let key = match host {
-                        true => qurb_storage::sealed::FolderKey::for_host(&engine.store().chunk_key(), &known.device_id)
-                            .to_bytes(),
-                        false => [0; 32],
-                    };
-                    match runtime.block_on(client.unlock(nonce, key)) {
-                        Ok(opened) => {
-                            tracing::info!(opened, "answered an ask to open this phone's folder");
-                            if let Ok(mut answers) = self.open_answers.lock() {
-                                answers.push(OpenAnswer { name: known.name.clone(), opened });
-                            }
-                        }
-                        // Not delivered: still approved, sent at the next sync.
-                        Err(e) => {
-                            tracing::warn!(error = %e, "could not send the key to open this phone's folder");
-                            if let Ok(mut held) = self.approved.lock() {
-                                held.insert(fingerprint.clone(), nonce);
-                            }
-                        }
-                    }
-                }
-                let asked = match runtime.block_on(client.asks()) {
-                    Ok(asked) => asked,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "could not ask whether a computer wants to open this phone's folder");
-                        None
-                    }
-                };
-                let answered = self.settled.lock().ok().and_then(|s| s.get(&fingerprint).copied());
-                tracing::debug!(asking = asked.is_some(), answered_before = asked.is_some() && asked == answered, "a visited computer's ask");
-                if let Ok(mut asks) = self.open_asks.lock() {
-                    match asked {
-                        Some(nonce) if approved != Some(nonce) && answered != Some(nonce) => {
-                            asks.insert(fingerprint, (known.name.clone(), nonce, keeper));
-                        }
-                        _ => {
-                            asks.remove(&fingerprint);
-                        }
-                    }
-                }
+            // Asked to open this phone's folder there (0060's step 5, 0067).
+            if self.may_ask(engine.store(), &known) {
+                let key = self.key_to_open(engine.store(), &known);
+                self.trade_asks(runtime, client, &known, key);
             }
         }
 
@@ -2958,6 +3035,15 @@ impl Qurb {
 /// that hears the phone to dial back and pull a few photos; short enough that
 /// a device which never comes costs a background window little.
 const LINGER: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How often a long pass, staying to be collected from, asks the computers it
+/// reached whether they want this phone's folder opened. Somebody at the
+/// computer is waiting: on 2026-10-15 a laptop's ask sat unheard behind a
+/// WhatsApp backup the S23 served for the half hour such a pass may last.
+const ASKS_EVERY: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long one ask, or one yes, is waited for.
+const ASKS_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Whether a pass that has finished its own syncing stays to answer at all.
 ///

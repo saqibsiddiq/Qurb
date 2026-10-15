@@ -119,6 +119,20 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                 else "${waiting.size} files are waiting to reach your devices",
                 onlyHereSays(state),
             )
+            // Backups and sends on their way are not "everything is synced":
+            // on 2026-10-15 the S23 said so above a Waiting list of 130
+            // WhatsApp files still to go.
+            backupsLeft(state) > 0 -> {
+                val keeper = state.holders.joinToString(" and ") { it.name }
+                hero("away", R.drawable.ic_upload, "Backing up to $keeper",
+                    "${Words.files(backupsLeft(state))} still to go. It carries on whenever $keeper is on.")
+            }
+            state.sends.isNotEmpty() -> {
+                val to = state.sends.map { it.to }.distinct().joinToString(" and ")
+                hero("away", R.drawable.ic_send, "Waiting for $to to collect",
+                    if (state.sends.size == 1) "1 file sent, not collected yet."
+                    else "${state.sends.size} files sent, not collected yet.")
+            }
             synced == null -> hero("away", R.drawable.ic_refresh_cw, "Not synced yet", "Sync to bring your devices up to date.")
             else -> hero(
                 "", R.drawable.ic_check, "Everything is synced.",
@@ -203,6 +217,14 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             kit.row(rows, R.drawable.ic_check, "Nothing waiting", "Everything here has reached $going.",
                 iconTint = R.color.healthy)
         }
+    }
+
+    /** Files of the WhatsApp and folder backups not yet on the computer
+     *  keeping them: what Waiting lists as still to go. */
+    private fun backupsLeft(state: State): Int {
+        if (state.holders.isEmpty()) return 0
+        fun left(b: BackupState) = if (b.heldFiles < b.files) (b.files - b.heldFiles).toInt() else 0
+        return left(state.whatsApp) + left(state.folders)
     }
 
     /** WhatsApp and this phone's folders, kept on the computer (item 10). */

@@ -1740,6 +1740,9 @@ pub struct Person {
     size: String,
     /// Their phones, by the names the folder shows them under.
     devices: Vec<String>,
+    /// How many of those are phones in use: one set up again is one phone,
+    /// though it keeps a folder for what was kept before.
+    phones: usize,
 }
 
 /// A person's folder, at one place in it, while it is open.
@@ -1804,6 +1807,10 @@ fn owner_phones(hosted: &Hosted) -> Result<Vec<(String, qurb_cli::Device)>, Stri
         .filter(|d| d.relation == qurb_storage::db::Relation::Own && d.kind.as_deref() == Some("phone"))
         .filter(|d| d.held.is_some() || d.replaced_by.is_none())
         .collect();
+    // Phones in use first, then what was kept for them before, as the phone
+    // lists its own (`qurb_storage::person::own_phones`).
+    let mut phones = phones;
+    phones.sort_by_key(|d| d.replaced_by.is_some());
     let mut named = Vec::new();
     for phone in phones {
         let mut name = if phone.replaced_by.is_some() { format!("{}, earlier", phone.name) } else { phone.name.clone() };
@@ -1885,6 +1892,7 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
         sealed: false,
         files: Some(files),
         size: big(bytes),
+        phones: phones.iter().filter(|(_, p)| p.replaced_by.is_none()).count(),
         devices: phones.into_iter().map(|(name, _)| name).collect(),
     }];
 
@@ -1913,6 +1921,7 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
             sealed: true,
             files: Some(count),
             size: big(kept),
+            phones: theirs.len(),
             devices: theirs.into_iter().map(|d| d.name).collect(),
         });
     }

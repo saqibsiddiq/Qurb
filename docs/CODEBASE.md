@@ -447,14 +447,19 @@ set up again with the same key learns its folder from the computer
 
 The computer opens a guest's folder only with that person's approval. Its
 window asks (`qurb_peer::openings`, a registry in memory, one per process,
-since the window and the server answering the phone share one). The
-guest's phone collects the ask when it next syncs with that computer
-(`Request::Asks`). The person approves behind their fingerprint, face or
-screen lock (`ScreenLock.kt`), and the phone sends the folder key
-(`Request::Unlock`), which the computer accepts only if it opens one of that
+since the window and the server answering the phone share one), and wakes
+the phone (*Sync now*). The guest's phone collects the ask when it syncs
+with that computer (`Request::Asks`): at each pass, and, while a long pass
+stays to be collected from, every ten seconds over the connection it already
+holds (`trade_asks` in `mobile-ffi`), since such a pass lasts up to half an
+hour. The person approves behind their fingerprint, face or screen lock
+(`ScreenLock.kt`), and the phone sends the folder key (`Request::Unlock`)
+the same way, which the computer accepts only if it opens one of that
 person's sealed names. The key stays in memory until the folder is locked, or
 for ten minutes without use. Files opened are unsealed under
-`$XDG_RUNTIME_DIR/qurb-open/` and deleted on locking.
+`$XDG_RUNTIME_DIR/qurb-open/` and deleted on locking. The owner's own phones
+ask and answer the same way for the owner's folder (decision 0067), with no
+key sent: the computer holds the same one, so the yes is all it needs.
 
 A computer reads what a guest shows it by dialling the guest, which a phone
 behind a carrier's NAT does not allow. The relay covers that case for guests

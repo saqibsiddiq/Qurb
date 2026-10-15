@@ -99,6 +99,11 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                     var postedAt = 0L
                     while (true) {
                         delay(2_000)
+                        // A computer's ask, heard while the pass stays to be
+                        // collected from: somebody there is waiting, so not
+                        // left until a half-hour pass ends. Raised once an ask,
+                        // and only with the app away (Notices.asked).
+                        runCatching { Notices.asked(applicationContext, engine) }
                         val sent = engine.serving().bytes - from
                         val now = Transfers.shown(sent, forOthers)
                         val moved = now.percent != shown.percent || now.waiting != shown.waiting

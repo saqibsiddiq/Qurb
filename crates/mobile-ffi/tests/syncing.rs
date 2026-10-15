@@ -1066,3 +1066,76 @@ fn two_phones_pair_share_both_ways_and_send() {
     // Sent to one phone, so not to anybody else: it stays out of the shared area.
     assert!(!first.list().unwrap().iter().any(|f| f.path == "for-the-first.txt" && !f.private));
 }
+
+/// The phone reaches its folder on the computer (decision 0067, step 4)
+/// through the engine as the app calls it: opened, listed from the top down,
+/// a file fetched and its bytes checked, and closed. Until 2026-10-15 opening
+/// panicked every time -- a timeout made outside the runtime -- and only the
+/// S23 showed it, because nothing here opened the folder.
+#[test]
+fn a_phone_opens_its_folder_on_the_computer() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
+    logging();
+    let (_runtime, signal) = signalling();
+    let desktop_dir = tempfile::tempdir().unwrap();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let setup = create(desktop_dir.path().display().to_string()).unwrap();
+    restore(phone_dir.path().display().to_string(), setup.recovery_phrase.clone()).unwrap();
+    let desktop =
+        Qurb::open_with(desktop_dir.path().display().to_string(), None, settings("desktop", &signal))
+            .unwrap();
+    let phone =
+        Qurb::open_with(phone_dir.path().display().to_string(), None, settings("phone", &signal))
+            .unwrap();
+
+    let offer = desktop.offer_pairing().unwrap();
+    let code = offer.code();
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
+    phone.join_pairing(code).unwrap();
+    waiting.join().unwrap().unwrap();
+    let laptop = phone.peers().unwrap().remove(0);
+    phone.add_holder(laptop.fingerprint.clone()).unwrap();
+
+    // Something in the phone's Private Vault, for the computer to keep.
+    let source = phone_dir.path().join("outside.txt");
+    std::fs::write(&source, b"kept on the computer").unwrap();
+    phone.import_into(source.display().to_string(), "Notes/kept.txt".into(), true).unwrap();
+
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let desktop = Arc::new(desktop);
+    let serving = keep_syncing(Arc::clone(&desktop), Arc::clone(&done));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    let mut last = String::new();
+    let (folder, file) = loop {
+        assert!(std::time::Instant::now() < deadline, "never listed the kept file: {last}");
+        let _ = phone.sync_within(5);
+        let folder = match phone.open_kept_folder(laptop.fingerprint.clone(), 5) {
+            Ok(folder) => folder,
+            Err(e) => {
+                last = e.to_string();
+                continue;
+            }
+        };
+        let top = folder.list(String::new()).unwrap();
+        assert_eq!(top.folders, vec!["phone".to_string()], "the top is this phone's folder");
+        match folder.list("phone/Private Vault/Notes".into()) {
+            Ok(listed) if !listed.files.is_empty() => break (folder, listed.files[0].clone()),
+            other => last = format!("{other:?}"),
+        }
+        folder.disconnect();
+    };
+    assert_eq!((file.name.as_str(), file.path.as_str(), file.mine), ("kept.txt", "Notes/kept.txt", true));
+    assert!(folder.list("phone".into()).unwrap().folders.contains(&"Private Vault".to_string()));
+
+    let to = phone_dir.path().join("Download/kept.txt");
+    let went = folder.download(file.clone(), to.display().to_string()).unwrap();
+    assert_eq!(std::fs::read(&went).unwrap(), b"kept on the computer");
+    // A second fetch goes beside the first rather than over it.
+    let beside = folder.download(file, to.display().to_string()).unwrap();
+    assert!(beside.ends_with("kept (2).txt"), "{beside}");
+
+    folder.disconnect();
+    drop(folder);
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    serving.join().unwrap();
+}
