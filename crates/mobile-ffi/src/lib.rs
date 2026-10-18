@@ -3617,6 +3617,22 @@ impl KeptFolder {
         Ok(to.display().to_string())
     }
 
+    /// `file`, to be read in parts as a player asks for them: shown or
+    /// played while it arrives, seeking included, with nothing kept on the
+    /// phone but the few chunks being read (`qurb_peer::Ranged`). On the S23
+    /// on 2026-10-15 a 1.6 GB episode had to arrive whole, in the app's
+    /// cache, before it would start. Over this folder's connection, so the
+    /// folder stays open while it plays.
+    pub fn stream(&self, file: KeptFile) -> Result<Arc<KeptStream>, QurbError> {
+        let content = unhex(&file.content).ok_or_else(|| QurbError::Other { detail: "not a file of the folder".into() })?;
+        let ranged = self
+            .runtime
+            .block_on(qurb_peer::Ranged::open(self.client.clone(), content))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?
+            .ok_or_else(|| QurbError::NotFound { detail: format!("{} no longer keeps {}", self.name, file.name) })?;
+        Ok(Arc::new(KeptStream { runtime: Arc::clone(&self.runtime), ranged }))
+    }
+
     /// Stop: the connection closes, and nothing more is answered. Not
     /// `close`, which every generated object already has.
     pub fn disconnect(&self) {
@@ -3624,6 +3640,33 @@ impl KeptFolder {
         for task in &self.accepting {
             task.abort();
         }
+    }
+}
+
+/// A file of this phone's folder on a computer, read in parts as a player
+/// asks ([`KeptFolder::stream`]). At most a megabyte crosses at a time: a
+/// player's reads are smaller, and nothing here holds a whole file, which is
+/// what decision 0018 is for.
+#[derive(uniffi::Object)]
+pub struct KeptStream {
+    runtime: Arc<tokio::runtime::Runtime>,
+    ranged: Arc<qurb_peer::Ranged>,
+}
+
+#[uniffi::export]
+impl KeptStream {
+    /// The file's size in bytes.
+    pub fn size(&self) -> u64 {
+        self.ranged.size()
+    }
+
+    /// Up to `length` bytes from `offset`: fewer at the end of the file, none
+    /// past it, and never more than a megabyte. Each chunk is checked against
+    /// its hash before a byte of it is given.
+    pub fn read_at(&self, offset: u64, length: u32) -> Result<Vec<u8>, QurbError> {
+        self.runtime
+            .block_on(self.ranged.read_at(offset, length as usize))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })
     }
 }
 

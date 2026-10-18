@@ -1412,6 +1412,24 @@ impl Store {
     /// folder's file to be sure and would read a whole video to answer one
     /// request. A file changed under the index fails at the chunk, as it
     /// always has, until the next scan.
+    /// What [`held_chunks`](Self::held_chunks) gives, with each chunk's size
+    /// in bytes: what reading part of the file needs, since a chunk's place in
+    /// it is the sum of the sizes before it (a player seeking in a video kept
+    /// here for a phone, `Request::Layout`).
+    pub fn held_layout(&self, content: &blake3::Hash) -> Result<Option<Vec<(blake3::Hash, u32)>>> {
+        let Some(chunks) = self.held_chunks(content)? else {
+            return Ok(None);
+        };
+        let mut sized = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
+            match self.db.chunk_size(&chunk)? {
+                Some(size) => sized.push((chunk, size as u32)),
+                None => return Ok(None),
+            }
+        }
+        Ok(Some(sized))
+    }
+
     pub fn held_chunks(&self, content: &blake3::Hash) -> Result<Option<Vec<blake3::Hash>>> {
         let Some(chunks) = self.chunk_hashes_for_content(content)? else {
             return Ok(None);

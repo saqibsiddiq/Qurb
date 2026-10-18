@@ -384,7 +384,8 @@ async fn serve_request(
         | Response::Short { .. }
         | Response::Sealed(_)
         | Response::Withdrawn
-        | Response::Kept { .. } => 0,
+        | Response::Kept { .. }
+        | Response::Layout(_) => 0,
     };
 
     match (&request, &response) {
@@ -533,6 +534,20 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // (decision 0067, step 4): what is kept for it and for its earlier
         // selves, as the window shows them. Never another person's device,
         // and never another phone's folder.
+        // A file's chunks with their sizes, for reading part of it: given to
+        // whoever may have its manifest, by the same rules. Not for a sealed
+        // folder, whose chunks are not the file's.
+        Request::Layout { content } => {
+            let content = blake3::Hash::from(*content);
+            if !store.content_visible_to(&content, audience)? {
+                return Ok(Answer::Now(Response::NotFound));
+            }
+            match store.held_layout(&content)? {
+                Some(chunks) => Response::Layout(chunks.into_iter().map(|(h, size)| (*h.as_bytes(), size)).collect()),
+                None => Response::NotFound,
+            }
+        }
+
         Request::Kept { dir } => match (&owner, other_person) {
             (Some(device), false) => {
                 let phones = qurb_storage::person::own_phones(store.db(), device)?;

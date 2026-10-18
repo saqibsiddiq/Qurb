@@ -55,6 +55,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
     override fun left() {
         val open = folder ?: return
         folder = null
+        StreamProvider.clear()
         scope.launch(Dispatchers.IO) { runCatching { open.disconnect() } }
     }
 
@@ -118,7 +119,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         val upTo = minOf(files.size, from + PAGE)
         for (file in files.subList(from, upTo)) {
             kit.row(rows, States.icon(file.name), file.name,
-                "${Words.size(file.size)}  ·  ${Words.ago(file.modifiedAt)}") { choose(file) }
+                facts(file)) { choose(file) }
         }
         if (upTo < files.size) {
             var more: View? = null
@@ -130,10 +131,16 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         }
     }
 
+    /** A file's size and when it changed -- or its size alone, when the
+     *  file never said when: a time of 0 read "20742 days ago" on the S23
+     *  for a video a download manager left undated (2026-10-15). */
+    private fun facts(file: KeptFile): String =
+        if (file.modifiedAt <= 0) Words.size(file.size) else "${Words.size(file.size)}  ·  ${Words.ago(file.modifiedAt)}"
+
     /** One file: opened here, or where it would go, either way. */
     private fun choose(file: KeptFile) {
         kit.sheet()
-            .header(States.icon(file.name), file.name, "${Words.size(file.size)}  ·  ${Words.ago(file.modifiedAt)}")
+            .header(States.icon(file.name), file.name, facts(file))
             .action(R.drawable.ic_external_link, "Open", meta = "In an app on this phone, without saving a copy") {
                 open(file)
             }
@@ -147,13 +154,40 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
     /**
      * Shown or played here, as Files opens a file (the owner's item of
      * 2026-10-15: a photo or a song in this folder could only be downloaded
-     * or restored). Fetched whole and checked, as a download is, into the
-     * app's cache under its content's hash -- so a file opened again is not
-     * fetched again -- and handed to the app for its type through a
-     * FileProvider, readable through that one URI only. Let go of a day
-     * later (`tidyOpened`), or sooner if Android needs the space.
+     * or restored).
+     *
+     * A large file is read as the app showing it asks (`StreamProvider`):
+     * a video starts at once and seeks where it likes, and nothing of it is
+     * kept. The first way, fetching it whole first, kept the S23 waiting on
+     * a 1.6 GB episode and filled its cache. A small one is fetched whole and
+     * checked into the cache under its content's hash -- so a photo opened
+     * again is not fetched again -- and handed over through a FileProvider,
+     * readable through that one URI only; the cache is held under
+     * [OPENED_MOST] and let go of a day later (`tidyOpened`).
      */
     private fun open(file: KeptFile) {
+        val type = MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(file.name.substringAfterLast('.', "").lowercase()) ?: "*/*"
+        if (file.size > STREAM_FROM) {
+            scope.launch {
+                try {
+                    val uri = withContext(Dispatchers.IO) {
+                        val open = folder ?: error("the folder is closed")
+                        StreamProvider.add(app, open.stream(file), file.name, type)
+                    }
+                    val view = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, type)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    app.startActivity(Intent.createChooser(view, "Open with"))
+                } catch (e: android.content.ActivityNotFoundException) {
+                    app.fail("Nothing on this phone can open ${file.name}", e)
+                } catch (e: Exception) {
+                    app.fail("Could not open ${file.name}", e)
+                }
+            }
+            return
+        }
         val dir = java.io.File(app.cacheDir, "$OPENED/${file.content.take(16)}")
         val here = java.io.File(dir, file.name)
         if (!here.exists()) app.say("Fetching ${file.name}…")
@@ -166,8 +200,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
                     java.io.File(open.download(file, here.path))
                 }
                 val uri = FileProvider.getUriForFile(app, "${app.packageName}.opened", local)
-                val type = MimeTypeMap.getSingleton()
-                    .getMimeTypeFromExtension(file.name.substringAfterLast('.', "").lowercase()) ?: "*/*"
+                scope.launch(Dispatchers.IO) { tidyOpened() }
                 val view = Intent(Intent.ACTION_VIEW).apply {
                     setDataAndType(uri, type)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -181,11 +214,17 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         }
     }
 
-    /** Files opened from here more than a day ago, let go of. */
+    /** Files opened from here more than a day ago let go of, and the
+     *  oldest beyond [OPENED_MOST] in all. */
     private fun tidyOpened() {
         val opened = java.io.File(app.cacheDir, OPENED)
         val old = System.currentTimeMillis() - 24L * 60 * 60 * 1000
-        opened.listFiles()?.filter { it.lastModified() < old }?.forEach { it.deleteRecursively() }
+        val kept = opened.listFiles()?.sortedByDescending { it.lastModified() } ?: return
+        var total = 0L
+        for (dir in kept) {
+            total += dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+            if (dir.lastModified() < old || total > OPENED_MOST) dir.deleteRecursively()
+        }
     }
 
     private fun downloads(file: KeptFile): String =
@@ -254,6 +293,10 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         private const val WHATSAPP = ".qurb-outside/whatsapp/"
         /** Under the app's cache: files fetched to be opened (`opened_paths.xml`). */
         private const val OPENED = "opened"
+        /** Larger than this, a file is read as it is shown rather than fetched first. */
+        private const val STREAM_FROM: ULong = 16_777_216uL
+        /** The most the cache of opened files holds. */
+        private const val OPENED_MOST = 200L * 1024 * 1024
         private const val STORAGE = ".qurb-outside/storage/"
     }
 }

@@ -2007,6 +2007,7 @@ pub fn ask_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
 pub fn lock_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
     let id = person_of(&hosted, &person)?;
     qurb_peer::openings::lock(&id);
+    crate::stream::forget(&id);
     let _ = std::fs::remove_dir_all(opened_dir(&id));
     Ok(())
 }
@@ -2025,8 +2026,35 @@ pub fn open_person_file(hosted: Host<'_>, person: String, device: Option<String>
     if !qurb_sync::is_safe_path(&path) {
         return Err("that is not a file of the folder".to_string());
     }
-    // Under its own path, which `is_safe_path` keeps inside: two files of
-    // one name in different folders are two files.
+    let row = hosted
+        .with_store(|store| Ok(store.db().live_row_in(&path, Some(&phone.id))?))
+        .map_err(failed)?
+        .ok_or("that file is not in the folder")?;
+    let name = std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+
+    // A large video or song is played from the store, a range at a time,
+    // with no copy anywhere (stream.rs): written out, a 1.6 GB episode filled
+    // the memory-backed space it was written to (2026-10-15).
+    if let Some(kind) = crate::stream::media_type(&name) {
+        if row.size > STREAM_FROM {
+            let (dir, key) = hosted.with_store(|store| Ok((store.root().to_path_buf(), store.chunk_key()))).map_err(failed)?;
+            let url = crate::stream::serve(&dir, key, id, &row.content_hash, &name, kind).map_err(failed)?;
+            return crate::stream::play(&url, kind).map_err(failed);
+        }
+    }
+
+    // Anything else is written into memory-backed space -- only if it fits
+    // there with room to spare, since the desktop's own sessions keep their
+    // sockets in it -- under its own path, which `is_safe_path` keeps
+    // inside: two files of one name in different folders are two files.
+    let free = free_space(&opened_dir(&id));
+    if row.size.saturating_add(KEEP_FREE) > free {
+        return Err(format!(
+            "{name} is {}, more than this computer can open in memory ({} free). Open it on the phone it came from.",
+            big(row.size),
+            big(free.saturating_sub(KEEP_FREE.min(free))),
+        ));
+    }
     let to = opened_dir(&id).join(phone.id.short()).join(&path);
     std::fs::create_dir_all(to.parent().ok_or("that file has no folder")?).map_err(|e| e.to_string())?;
     #[cfg(unix)]
@@ -2035,10 +2063,39 @@ pub fn open_person_file(hosted: Host<'_>, person: String, device: Option<String>
         let _ = std::fs::set_permissions(opened_dir(&id), std::fs::Permissions::from_mode(0o700));
     }
     let mut out = std::fs::File::create(&to).map_err(|e| e.to_string())?;
-    hosted
-        .with_store(|store| Ok(store.read_held_into(&phone.id, &path, &mut out)?))
-        .map_err(failed)?;
+    let written = hosted.with_store(|store| Ok(store.read_held_into(&phone.id, &path, &mut out)?));
+    if let Err(e) = written {
+        // Not left half written: it holds memory until the folder locks.
+        drop(out);
+        let _ = std::fs::remove_file(&to);
+        return Err(failed(e));
+    }
     reveal(&to)
+}
+
+/// Media larger than this is streamed rather than written out.
+const STREAM_FROM: u64 = 64 << 20;
+
+/// What opening a file must leave free in the memory-backed space.
+const KEEP_FREE: u64 = 256 << 20;
+
+/// The bytes free on the filesystem holding `dir`, or what holds it: the
+/// runtime directory's, a slice of memory.
+fn free_space(dir: &std::path::Path) -> u64 {
+    let mut at = dir;
+    while !at.exists() {
+        match at.parent() {
+            Some(parent) => at = parent,
+            None => return 0,
+        }
+    }
+    let Ok(path) = std::ffi::CString::new(at.as_os_str().as_encoded_bytes()) else { return 0 };
+    let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
+    // SAFETY: a valid NUL-terminated path and a struct of the right type.
+    if unsafe { libc::statvfs(path.as_ptr(), &mut stats) } != 0 {
+        return 0;
+    }
+    (stats.f_bavail as u64).saturating_mul(stats.f_frsize as u64)
 }
 
 /// A guest's file, unsealed: as [`open_guest_file`] does.
@@ -2057,7 +2114,11 @@ fn open_sealed(hosted: &Host<'_>, person: &qurb_sync::DeviceId, key: [u8; 32], p
         let _ = std::fs::set_permissions(opened_dir(person), std::fs::Permissions::from_mode(0o700));
     }
     let to = dir.join(name);
-    hosted.with_store(|store| Ok(store.unseal_kept(&key, &sealed, path, &to)?)).map_err(failed)?;
+    if let Err(e) = hosted.with_store(|store| Ok(store.unseal_kept(&key, &sealed, path, &to)?)) {
+        // Not left half written in memory-backed space.
+        let _ = std::fs::remove_file(&to);
+        return Err(failed(e));
+    }
     reveal(&to)
 }
 

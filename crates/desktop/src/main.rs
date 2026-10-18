@@ -23,6 +23,7 @@ mod commands;
 mod instance;
 mod notify;
 mod session;
+mod stream;
 
 pub use session::Hosted;
 

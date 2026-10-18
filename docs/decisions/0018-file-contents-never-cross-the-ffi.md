@@ -1,6 +1,6 @@
 # 0018 — File contents never cross the FFI
 
-**Status:** Accepted
+**Status:** Accepted. Amended 2026-10-15: a bounded range may cross, for a player reading a file as it plays — see [A range, for a player](#a-range-for-a-player).
 **Date:** 2026-09-17
 
 ## Decision
@@ -117,3 +117,18 @@ profiling on a real device says the extra write matters.
   forgets the override fails that test.
 - The memory promise is asserted by a test in `crates/mobile-ffi`, not by a
   comment. A change that reintroduces buffering fails rather than ships.
+
+## A range, for a player
+
+Amended 2026-10-15. A video kept on a computer, opened on the phone, was
+fetched whole into the app's cache before it could play: 1.6 GB for one
+episode on the S23, which then struggled, and the cache grew with each.
+Android lets an app hand another a file descriptor whose reads it answers
+itself (`openProxyFileDescriptor`), which is what playing as it arrives,
+seeking included, needs -- and the answers are bytes, from the engine.
+
+So one call returns bytes: `KeptStream::read_at`, at most a megabyte, of a
+file read from the computer a chunk at a time (`qurb_peer::Ranged`), each
+chunk checked against its hash, a few kept. What this decision protects --
+memory that does not grow with the file -- holds: the S23 played and sought
+in that episode with Qurb at 123 MB in all. Nothing returns a whole file.

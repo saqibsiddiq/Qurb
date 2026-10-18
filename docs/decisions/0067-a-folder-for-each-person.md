@@ -290,3 +290,27 @@ not yet seen on the S23.**
 Step 2 is the one with a lasting effect on disk, undone by moving
 `~/qurb/Shared` back with Qurb stopped. The rest is how the window and the
 phone present what is already kept.
+
+### Opened as it plays, on both -- 2026-10-15
+
+**On the laptop**, a 1.6 GB episode opened from the owner's folder did not
+fit the memory-backed space files are opened into (1.6 GB on the laptop):
+the write failed with "No space left on device", and what it had written
+stayed, filling the space the desktop session keeps its sockets in, until
+it was deleted by hand. Now a video or song over 64 MB is not written
+anywhere: it is served to the desktop's player for its type (*Showtime*,
+*Decibels*) over HTTP on 127.0.0.1, at an address with a 128-bit token,
+straight from the store, a range at a time, for as long as the folder is
+open (`crates/desktop/src/stream.rs`). Anything else is opened only if it
+fits with 256 MB to spare, and is otherwise refused with its size and the
+space there is; a write that fails deletes what it wrote. Tested over real
+HTTP with the ranges a player sends; not yet watched in the laptop's
+window.
+
+**On the phone**, *Open* fetched a file whole into the cache first. A file
+over 16 MB is now read as the app showing it asks (`StreamProvider`,
+`KeptStream`, `Request::Layout` giving each chunk's size): on the S23 the
+same episode played six seconds after *Open* in Samsung's Video Player,
+sought to 42:40 and played on there about four seconds later, Qurb at
+123 MB in memory. Smaller files are still fetched once into the cache,
+which is now held under 200 MB.

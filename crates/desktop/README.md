@@ -227,6 +227,12 @@ key — and the locked screen says the lock is Qurb's rule; a guest's is.
 Beside the shared folder on disk, `~/qurb/<person>` is a read-only
 placeholder for each (`place_people`).
 
+A video or song over 64 MB is not written out to be opened: `stream.rs`
+serves it to the desktop's player for its type over HTTP on 127.0.0.1, at
+an address with a 128-bit token, from the store a range at a time, until
+the folder locks. Anything else is opened only if it fits the memory-backed
+space with 256 MB to spare; a 1.6 GB episode once filled it.
+
 ## Notifications
 
 Three things, and nothing else:

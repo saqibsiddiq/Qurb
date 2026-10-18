@@ -24,6 +24,7 @@ qurb-storage = { path = "../storage" }
 qurb-sync = { path = "../sync" }
 
 anyhow.workspace = true
+blake3.workspace = true
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

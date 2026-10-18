@@ -138,6 +138,14 @@
         <!-- A file fetched from a computer keeping this phone's folder, opened
              in whatever app plays or shows it (KeptScreen). Not exported: a
              file is reached only through the one URI handed with the intent. -->
+        <!-- A file of this phone's folder on a computer, read as another app
+             plays or shows it (StreamProvider). Not exported: reached only
+             through the URI handed with the intent. -->
+        <provider
+            android:name=".StreamProvider"
+            android:authorities="${applicationId}.stream"
+            android:exported="false"
+            android:grantUriPermissions="true" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.opened"

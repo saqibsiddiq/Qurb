@@ -2601,6 +2601,17 @@ impl Db {
             .map_err(Into::into)
     }
 
+    /// A chunk's size in bytes, before compression, if the index knows it.
+    pub fn chunk_size(&self, hash: &blake3::Hash) -> Result<Option<u64>> {
+        self.conn
+            .query_row("SELECT size FROM chunks WHERE hash = ?1", params![hash.as_bytes().as_slice()], |r| {
+                r.get::<_, i64>(0)
+            })
+            .optional()
+            .map(|size| size.map(|s| s as u64))
+            .map_err(Into::into)
+    }
+
     /// Where the index stands: the rows changed through this connection, and
     /// the count SQLite moves whenever another connection commits. Equal
     /// twice, nothing in the index changed in between -- which is what lets a

@@ -50,6 +50,7 @@ impl Resume {
     }
 }
 
+#[derive(Clone)]
 pub struct PeerClient {
     endpoint: quinn::Endpoint,
     connection: quinn::Connection,
@@ -225,6 +226,17 @@ impl PeerClient {
             Response::Kept { folders, files } => Ok(Some((folders, files))),
             Response::NotFound => Ok(None),
             other => Err(unexpected("kept folder", &other)),
+        }
+    }
+
+    /// A file's chunks, each with its size, or `None` if the peer does not
+    /// have it or will not show it: what reading part of it needs
+    /// ([`crate::Ranged`]).
+    pub async fn layout(&self, content: [u8; 32]) -> Result<Option<Vec<([u8; 32], u32)>>> {
+        match self.request(Request::Layout { content }).await? {
+            Response::Layout(chunks) => Ok(Some(chunks)),
+            Response::NotFound => Ok(None),
+            other => Err(unexpected("layout", &other)),
         }
     }
 
@@ -545,6 +557,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Sealed(_) => "sealed code",
         Response::Withdrawn => "refusal of six digits",
         Response::Kept { .. } => "listing of a kept folder",
+        Response::Layout(_) => "layout of a file",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }
 }

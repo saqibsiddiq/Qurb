@@ -147,6 +147,13 @@ pub enum Request {
     /// phone of the computer's own person only, about itself and its earlier
     /// selves.
     Kept { dir: String },
+
+    /// The chunks making up a file, each with its size: answered with
+    /// [`Response::Layout`] to whoever may have its manifest, under the same
+    /// rules. What reading part of a file needs -- a player seeking in a
+    /// video kept on a computer -- since a chunk's place in the file is the
+    /// sum of the sizes before it.
+    Layout { content: [u8; 32] },
 }
 
 /// One file of a phone's folder on a computer, as listed to the phone.
@@ -229,6 +236,10 @@ pub enum Response {
 
     /// A place in a phone's folder on a computer, answering [`Request::Kept`].
     Kept { folders: Vec<String>, files: Vec<KeptEntry> },
+
+    /// A file's chunks, each with its size in bytes, answering
+    /// [`Request::Layout`].
+    Layout(Vec<([u8; 32], u32)>),
 }
 
 const TAG_TREE: u8 = 1;
@@ -248,6 +259,7 @@ const TAG_TREE_STREAM: u8 = 14;
 const TAG_SHORT: u8 = 15;
 const TAG_SHORT_CONFIRM: u8 = 16;
 const TAG_KEPT: u8 = 17;
+const TAG_LAYOUT: u8 = 18;
 
 /// The most entries one listing of a phone's folder may hold: a folder of a
 /// hundred thousand photos is a phone's; more is not.
@@ -287,6 +299,7 @@ const STATUS_SHORT: u8 = 16;
 const STATUS_SEALED: u8 = 17;
 const STATUS_WITHDRAWN: u8 = 18;
 const STATUS_KEPT: u8 = 19;
+const STATUS_LAYOUT: u8 = 20;
 
 /// The most folders one answer may list: two levels of a phone's storage come
 /// to a few hundred. A peer claiming more is not describing a phone.
@@ -357,6 +370,10 @@ impl Request {
                 out.push(TAG_KEPT);
                 put_path(&mut out, dir);
             }
+            Request::Layout { content } => {
+                out.push(TAG_LAYOUT);
+                out.extend_from_slice(content);
+            }
         }
         out
     }
@@ -392,6 +409,7 @@ impl Request {
             TAG_SHORT => Request::Short { spake: r.array()? },
             TAG_SHORT_CONFIRM => Request::ShortConfirm { confirm: r.hash()? },
             TAG_KEPT => Request::Kept { dir: r.path()? },
+            TAG_LAYOUT => Request::Layout { content: r.hash()? },
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -432,6 +450,14 @@ impl Response {
                 out.extend_from_slice(sealed);
             }
             Response::Withdrawn => out.push(STATUS_WITHDRAWN),
+            Response::Layout(chunks) => {
+                out.push(STATUS_LAYOUT);
+                put_u32(&mut out, chunks.len());
+                for (hash, size) in chunks {
+                    out.extend_from_slice(hash);
+                    out.extend_from_slice(&size.to_le_bytes());
+                }
+            }
             Response::Kept { folders, files } => {
                 out.push(STATUS_KEPT);
                 let folders = &folders[..folders.len().min(MAX_KEPT)];
@@ -600,6 +626,17 @@ impl Response {
                 Response::Sealed(r.take(len)?.to_vec())
             }
             STATUS_WITHDRAWN => Response::Withdrawn,
+            STATUS_LAYOUT => {
+                let count = r.count()?;
+                let mut chunks = Vec::with_capacity(count.min(4096));
+                for _ in 0..count {
+                    let hash = r.hash()?;
+                    let mut size = [0u8; 4];
+                    size.copy_from_slice(r.take(4)?);
+                    chunks.push((hash, u32::from_le_bytes(size)));
+                }
+                Response::Layout(chunks)
+            }
             STATUS_KEPT => {
                 let count = r.count()?;
                 if count > MAX_KEPT {

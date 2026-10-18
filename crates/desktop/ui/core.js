@@ -69,7 +69,8 @@ function size(bytes) {
 
 /** Unix seconds as a relative time. Matches the wording `qurb status` uses. */
 function when(seconds) {
-  if (seconds == null) return "";
+  // 0 is a file that never said when it changed, not one from 1970.
+  if (seconds == null || seconds <= 0) return "";
   const ago = Math.max(0, Math.floor(Date.now() / 1000) - seconds);
   if (ago <= 90) return "just now";
   if (ago <= 5400) return plural(Math.floor(ago / 60), "minute");

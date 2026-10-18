@@ -507,7 +507,11 @@ its own folder there with `Request::Kept`, answered to that phone only,
 fetching through the ordinary manifest and chunks — content kept for its
 earlier self included, and for no other device. The owner's folder is not
 sealed: the computer holds the same key, so its lock is qurb's rule, said so
-in the window.
+in the window. A large file in it is never copied whole to be watched: the
+window serves a video or song to the desktop's player over 127.0.0.1 from
+the store, a range at a time (`crates/desktop/src/stream.rs`), and the
+phone reads one as its player asks, after `Request::Layout` gives each
+chunk's size (`qurb_peer::Ranged`, `StreamProvider.kt`).
 
 ### 2.7 The index remembers what happened, not just what is
 
@@ -754,6 +758,8 @@ qurb/
 │   │   │                    a guest's (0060) and the owner's (0067)
 │   │   ├── src/server.rs    serves a store, read-only
 │   │   ├── src/client.rs    asks for trees, manifests, chunks
+│   │   ├── src/ranged.rs    part of a file on another device, read as a
+│   │   │                    player asks: chunks by their sizes, checked
 │   │   └── src/source.rs    plugs the client into the engine; who holds what,
 │   │                        reported and asked about (`confirm_kept`)
 │   │
@@ -821,6 +827,8 @@ qurb/
 │   ├── desktop/           The desktop application: the daemon in a window.
 │   │   ├── src/main.rs      opens the window, and the daemon if there is one
 │   │   ├── src/session.rs   unmade or running, and the phrase in between
+│   │   ├── src/stream.rs    large media from a person's folder, played from
+│   │   │                    the store over 127.0.0.1, never written out
 │   │   ├── src/notify.rs    the three things worth interrupting somebody about
 │   │   ├── src/commands.rs  every question the window may ask
 │   │   ├── src/autostart.rs starting at login, hidden
@@ -868,8 +876,11 @@ qurb/
 │       │                                      folders back up, chosen here (0063)
 │       │                  KeptScreen.kt       Your folder on saqib: what the
 │       │                                      computer keeps for this phone, a
-│       │                                      hundred files at a time,
+│       │                                      hundred files at a time, opened,
 │       │                                      downloaded or restored (0067)
+│       │                  StreamProvider.kt   a large file of it opened in another
+│       │                                      app as it arrives, seekable, read
+│       │                                      a chunk at a time
 │       │                  ActivityScreen.kt   everything this phone did, from Home
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
 │       │                                      change your mind

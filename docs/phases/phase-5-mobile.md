@@ -2486,8 +2486,9 @@ item added during the work.
    the same day, found with the S23: asks never shown while the app was open,
    asks unheard for a long pass, *Your folder on saqib* panicking on every
    open, and Home's headline over a Waiting list -- all fixed (0067).
-3. **A spare phone for further testing.** Not yet connected: it needs
-   wireless debugging paired with the laptop, which needs its pairing code.
+3. **A spare phone for further testing.** Not yet connected: its first
+   pairing code was refused by `adb pair` ("protocol fault"), and a code
+   works once; a fresh one is needed.
    First uses: six digits typed on a device not yet paired, and two phones
    together.
 4. **Media in the phone's folder on the computer could not be viewed or
@@ -2495,7 +2496,20 @@ item added during the work.
    sheet starts with *Open*, fetched whole and checked into the app's cache
    under its content's hash and handed to the app for its type through a
    `FileProvider`; opened again, it is not fetched again; let go of a day
-   later. Not yet tried on the S23.
+   later. Large files were then found to struggle -- see item 6.
+5. **"No space left on device"** opening a 1.6 GB episode from the owner's
+   folder in the laptop's window: the file was being written into the
+   memory-backed space files are opened into, 1.6 GB on the laptop, and
+   what was written stayed, filling it. **Fixed the same day** (0067,
+   *Opened as it plays*): large media is played from the store over a
+   local address, never written out; anything else opened only if it fits.
+6. **The phone struggling to play large videos from the laptop, and its
+   cache growing.** *Open* fetched each file whole first. **Fixed the same
+   day**: a file over 16 MB is read as the player asks, a chunk at a time;
+   the episode played six seconds after *Open* and sought to 42:40 in about
+   four, with Qurb at 123 MB; the cache of small opened files is held under
+   200 MB. Found on the way: a file with no date read "20742 days ago";
+   it now shows its size alone.
 
 ## Deliberately left undone
 
