@@ -243,11 +243,11 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
             file.path.startsWith(WHATSAPP) || file.path.startsWith(STORAGE) -> {
                 // Writing into another app's folder, or anywhere in the phone's
                 // storage, is what "All files access" allows.
-                if (!Folders.allowed()) {
+                if (!Folders.allowed(app)) {
                     app.say("Allow Qurb to manage this phone's files first, in Settings → Backups")
                     return
                 }
-                val rest = if (file.path.startsWith(WHATSAPP)) "Android/media/com.whatsapp/WhatsApp/" +
+                val rest = if (file.path.startsWith(WHATSAPP)) "${WhatsApp.relative()}/" +
                     file.path.removePrefix(WHATSAPP) else file.path.removePrefix(STORAGE)
                 fetch(file, "${Folders.root()}/$rest", "Restored")
             }

@@ -112,6 +112,12 @@ settled; a gap in its ring when working; grey when nothing is reachable; and a
 gap on a warning colour for a problem. No animation; a tray icon that animates
 is a tray icon people turn off.
 
+Built for any distribution since 2026-10-18: the ring's gap is found with
+`f64`'s `atan2`, as old as glibc, rather than `f32`'s, which a tray built on
+glibc 2.43 then needed of every machine; and `tray-icon` without libxdo, which
+only its Copy, Paste and Select All items use and which is `libxdo.so.4` on
+Arch and `.so.3` elsewhere. Built on Arch, the tray started on nothing else.
+
 ## What it will not say
 
 **"Up to date" when no device has been reached.** A sync tool that shows a

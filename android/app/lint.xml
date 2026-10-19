@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What lint is told to leave, and why. Everything else it reports is read
+     before a release (docs/releasing.md). -->
+<lint>
+    <!-- UniFFI's generated bindings use java.lang.ref.Cleaner only after
+         checking it exists, falling back to JNA's below Android 13. -->
+    <issue id="NewApi">
+        <ignore path="src/main/java/uniffi/**" />
+    </issue>
+</lint>

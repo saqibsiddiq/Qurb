@@ -81,4 +81,9 @@
     <color name="safe_soft">@color/healthy_bg</color>
     <color name="notice">@color/attention</color>
     <color name="notice_soft">@color/attention_bg</color>
+
+    <!-- Behind the navigation bar. Clear from Android 8.1, which draws its
+         buttons dark on a light page; 8.0 draws them white only, so there
+         they sit on a scrim rather than vanish into the page. -->
+    <color name="navigation_bar">#99000000</color>
 </resources>

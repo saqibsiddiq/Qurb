@@ -617,8 +617,9 @@ pub struct Qurb {
     /// Whether to ask a public STUN server for this device's public address.
     discover: bool,
     /// How this device can be woken while it is not connected. See
-    /// [`Settings::wake_token`].
-    wake_token: Option<String>,
+    /// [`Settings::wake_token`]. Changed by [`Qurb::set_wake_token`] when the
+    /// push service issues a new one.
+    wake_token: Mutex<Option<String>>,
     /// Built on first use and kept.
     ///
     /// Lazy because a phone that only browses its files should not pay for a
@@ -2098,6 +2099,18 @@ impl Qurb {
         self.backup_state("whatsapp", &whatsapp_prefix())
     }
 
+    /// The push token this phone is woken by now, for the next pass to give
+    /// the rendezvous service. Until 2026-10-18 the one read when the engine
+    /// opened was given for the life of the app, so a token the push service
+    /// reissued left the phone unwakeable until the app was next started:
+    /// a rendezvous service now forgets a token the push service calls gone,
+    /// and was handed the old one again on every pass.
+    pub fn set_wake_token(&self, token: Option<String>) {
+        if let Ok(mut held) = self.wake_token.lock() {
+            *held = token.filter(|t| !t.is_empty());
+        }
+    }
+
     /// Whether this phone is on a network that does not count what it carries
     /// -- Wi-Fi, usually. Only then is the WhatsApp backup offered to the
     /// computer keeping it, which is 9.65 GB the first time on the S23
@@ -2328,7 +2341,7 @@ impl Qurb {
             relay: settings.relay,
             port: settings.port,
             discover: settings.discover,
-            wake_token: settings.wake_token,
+            wake_token: Mutex::new(settings.wake_token),
             runtime: Mutex::new(None),
             serving: Arc::new(ServingStats::default()),
             documents: Mutex::new(None),
@@ -2553,8 +2566,9 @@ impl Qurb {
         // every pass rather than once: push tokens are reissued, and the
         // service holds them in memory, so re-stating it costs one small
         // message and removes a whole class of "it stopped working".
-        if self.wake_token.is_some() {
-            let _ = connector.reachable_via(self.wake_token.clone());
+        let wake = self.wake_token.lock().ok().and_then(|t| t.clone());
+        if wake.is_some() {
+            let _ = connector.reachable_via(wake);
         }
 
         // Answer as well as ask, for the length of this pass.

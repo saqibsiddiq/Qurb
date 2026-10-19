@@ -27,7 +27,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png"],
+    "icon": ["icons/icon.png", "icons/icon.ico"],
     "category": "Utility",
     "shortDescription": "Private cloud storage on your own devices",
     "longDescription": "qurb keeps your files on the devices you already own, end-to-end encrypted, and syncs them directly between those devices. Nothing is stored on anybody else's server."

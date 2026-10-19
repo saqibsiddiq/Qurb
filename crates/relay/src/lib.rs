@@ -38,4 +38,4 @@ pub mod socket;
 pub use error::{Error, Result};
 pub use frame::{Frame, RelayId};
 pub use server::{Relay, RelayServer, RelayStats, MAX_IDENTITIES};
-pub use socket::{endpoint_over, RelaySocket};
+pub use socket::{endpoint_over, Dial, Duplex, Link, RelaySocket, RelayStream};

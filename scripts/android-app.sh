@@ -8,6 +8,10 @@
 #                                       # the engine built with the `mobile`
 #                                       # profile, the code shrunk by R8
 #   ./scripts/android-app.sh install    # debug APK, installed on a connected device
+#   ./scripts/android-app.sh release-all  # a formal release: every ABI -- arm64-v8a,
+#                                       # armeabi-v7a, x86, x86_64 -- one APK each,
+#                                       # one holding all four, and an app bundle;
+#                                       # what has run on which is docs/releasing.md
 #   ./scripts/android-app.sh fast       # a release built with the debug key: shrunk,
 #                                       # optimised and not debuggable, yet it
 #                                       # installs over a debug build's data
@@ -39,9 +43,16 @@ echo "== 1/3  native libraries"
 # is, and the engine built for size and speed rather than for build time. A
 # debug build carries x86_64 as well, for the emulator, and builds quicker.
 # See decision 0039.
-if [[ $MODE == release || $MODE == fast ]]; then
+if [[ $MODE == release-all ]]; then
+    PROFILE=mobile
+    declare -A ABI=( [arm64-v8a]=aarch64-linux-android [armeabi-v7a]=armv7-linux-androideabi
+                     [x86]=i686-linux-android [x86_64]=x86_64-linux-android )
+    ANDROID_TARGETS="${ABI[*]}" ./scripts/android-build.sh --profile mobile
+elif [[ $MODE == release || $MODE == fast ]]; then
     PROFILE=mobile
     declare -A ABI=( [arm64-v8a]=aarch64-linux-android )
+    # Only arm64 packaged: a library left from a release-all would go in too.
+    rm -rf android/app/src/main/jniLibs/{armeabi-v7a,x86,x86_64}
     ANDROID_TARGETS=aarch64-linux-android ./scripts/android-build.sh --profile mobile
 else
     PROFILE=release
@@ -89,12 +100,20 @@ GRADLE=${GRADLE:-$(command -v gradle || true)}
 cd android
 case "$MODE" in
     release) "$GRADLE" --no-daemon assembleRelease ;;
+    release-all)
+        # The bundle and the APKs one each ABI apart: Gradle will not make both
+        # in one build with the splits on (Google's issue 402800800), and each
+        # leaves shrunk resources the other then refuses.
+        rm -rf app/build/intermediates/shrunk_resources_proto_format/release
+        "$GRADLE" --no-daemon -Pqurb.allAbis=true -Pqurb.bundle=true bundleRelease
+        rm -rf app/build/intermediates/shrunk_resources_proto_format/release
+        "$GRADLE" --no-daemon -Pqurb.allAbis=true assembleRelease ;;
     fast)    "$GRADLE" --no-daemon assembleFast ;;
     install) "$GRADLE" --no-daemon installDebug ;;
     *)       "$GRADLE" --no-daemon assembleDebug ;;
 esac
 
 echo
-find app/build/outputs/apk -name '*.apk' 2>/dev/null | while read -r apk; do
+{ find app/build/outputs/apk app/build/outputs/bundle \( -name '*.apk' -o -name '*.aab' \) 2>/dev/null || true; } | while read -r apk; do
     printf '%s  (%s)\n' "$apk" "$(du -h "$apk" | cut -f1)"
 done

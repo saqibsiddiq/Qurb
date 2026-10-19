@@ -102,8 +102,13 @@ pub fn forget(person: &qurb_sync::DeviceId) {
 }
 
 /// The address a player for `kind` is opened with: the desktop's own choice
-/// of player for that type, else whatever opens addresses.
+/// of player for that type, else whatever opens addresses. On Windows,
+/// whatever opens addresses: a type's player there is not asked for by type.
 pub fn play(url: &str, kind: &str) -> anyhow::Result<()> {
+    if cfg!(windows) {
+        let _ = kind;
+        return Ok(qurb_cli::platform::open(url)?);
+    }
     let chosen = std::process::Command::new("xdg-mime")
         .args(["query", "default", kind])
         .output()
@@ -111,14 +116,10 @@ pub fn play(url: &str, kind: &str) -> anyhow::Result<()> {
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().trim_end_matches(".desktop").to_string())
         .filter(|s| !s.is_empty());
-    let mut child = match chosen {
-        Some(app) => std::process::Command::new("gtk-launch").args([app.as_str(), url]).spawn()?,
-        None => std::process::Command::new("xdg-open").arg(url).spawn()?,
-    };
-    // Reaped, so it does not linger as a zombie for as long as qurb runs.
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
+    match chosen {
+        Some(app) => qurb_cli::platform::reap(std::process::Command::new("gtk-launch").args([app.as_str(), url]).spawn()?),
+        None => qurb_cli::platform::open(url)?,
+    }
     Ok(())
 }
 
@@ -212,6 +213,14 @@ fn answer(stream: TcpStream) -> std::io::Result<()> {
         Err(after) => after.saturating_sub(1),
     };
     while index < served.chunks.len() && served.starts[index] < end {
+        // The folder locked while this played: stopped, within a chunk. By
+        // the window, or by itself -- idle ten minutes, or the computer
+        // asleep longer -- which until 2026-10-18 left the address playing
+        // on. Playing is using it, so the idle time starts again.
+        let still = SERVER.get().and_then(|s| s.open.lock().ok().map(|open| open.contains_key(token)));
+        if still != Some(true) || qurb_peer::openings::key(&served.person).is_none() {
+            return Ok(());
+        }
         let bytes = {
             let store = served.store.lock().map_err(|_| std::io::Error::other("a reader failed"))?;
             store.read_chunk(&served.chunks[index].0).map_err(std::io::Error::other)?
@@ -289,6 +298,8 @@ mod tests {
         store.put_bytes("film.mkv", &film, 0).unwrap();
         let content = blake3::hash(&film);
         let person = qurb_sync::DeviceId::from_bytes([9; 32]);
+        let asked = qurb_peer::openings::ask(&person);
+        assert!(qurb_peer::openings::unlock(&person, &asked, [3; 32], |_| true));
         let url = serve(&dir.path().join("store"), key, person, &content, "film.mkv", "video/x-matroska").unwrap();
 
         let (head, body) = get(&url, None);
@@ -304,6 +315,11 @@ mod tests {
 
         let wrong = url.replace(url.split('/').nth(3).unwrap(), "0000");
         assert!(get(&wrong, None).0.starts_with("HTTP/1.1 404"));
+
+        // Locked other than from the window -- idle, or asleep -- and the
+        // address plays nothing more.
+        qurb_peer::openings::lock(&person);
+        assert!(get(&url, None).1.is_empty(), "played on after the folder locked");
         forget(&person);
         assert!(get(&url, None).0.starts_with("HTTP/1.1 404"), "still served once forgotten");
     }

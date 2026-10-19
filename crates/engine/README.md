@@ -40,9 +40,16 @@ That is not strictly true: a file edited in place, keeping its exact length,
 within the same timestamp tick would slip through.
 
 The window is small, and the alternative is reading every file on every
-reconciliation — the difference above between 0.03 seconds and 13. rsync and git
-make the same trade. The backstop is `Store::verify`, which re-reads everything
-and is meant to run occasionally rather than per change.
+reconciliation — the difference above between 0.03 seconds and 13. rsync makes
+the same trade. Like git, though, a match is not trusted for a file read within
+three seconds of its own time: another write of the same size could follow in
+the same tick of the filesystem's clock, which on Android 8 and Linux before
+6.13 is milliseconds long, and on FAT two seconds. Such a file is marked when
+read (`Store::put_file`) and read again on each scan until it is older
+([decision 0069](../../docs/decisions/0069-too-recent-to-trust.md)); until
+2026-10-18 it was not, and on Android 8 an edit made straight after a scan was
+never synced. The backstop is `Store::verify`, which re-reads everything and
+is meant to run occasionally rather than per change.
 
 ## Removal is resolved against the index
 

@@ -819,10 +819,15 @@ fn folders_chosen_on_the_computer_are_backed_up_where_they_lie() {
     let qurb = Qurb::open(root, None).unwrap();
     qurb.add_holder(laptop).unwrap();
 
+    // Taken a while ago, as photos are: a file written moments before it is
+    // read is read again until it is older (`Store::put_file`, *Too recent
+    // to trust*), which is not what this is about.
     let put = |relative: &str, size: usize| {
         let path = storage.path().join(relative);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         write_incompressible(&path, size);
+        let earlier = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        std::fs::File::options().write(true).open(&path).unwrap().set_modified(earlier).unwrap();
     };
     put("DCIM/Camera/IMG-1.jpg", 2 << 20);
     put("DCIM/Camera/IMG-2.jpg", 1 << 20);

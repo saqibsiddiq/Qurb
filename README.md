@@ -4,10 +4,11 @@ Private cloud storage. Dropbox-like sync where your files stay on your own
 devices — they move directly between them, encrypted end to end, and are never
 stored on our servers.
 
-**Status (2026-10-15): working on Linux and Android, both apps designed, in
-light and dark. A computer now backs up a phone's WhatsApp and chosen folders,
-and keeps a folder for each person, opened with a yes on their phone. The
-relay on a server and a release are next.**
+**Status (2026-10-19): working on Linux and Android, both apps designed, in
+light and dark. A computer backs up a phone's WhatsApp and chosen folders, and
+keeps a folder for each person, opened with a yes on their phone. Release
+0.1.0 is built — Linux, Android on every ABI, and Windows, which has not run
+on Windows — and not yet published ([docs/releasing.md](docs/releasing.md)).**
 
 - The engine is complete and hardened: two devices sync end to end over QUIC,
   with encryption, conflict handling that never discards an edit, and key
@@ -26,8 +27,9 @@ relay on a server and a release are next.**
   its files in the system file picker — verified on a Galaxy S23. It backs up
   WhatsApp (36,062 files, 10.1 GB on the S23) and chosen folders to the
   laptop, and reaches its folder there to download or restore a file.
-- Not built yet: the relay running on a server, a formal release, iOS, macOS
-  and Windows. **Restoring WhatsApp from the laptop is unproven.** Unmeasured:
+- Not done yet: the relay running on a server, publishing the release, iOS
+  and macOS, and running Windows at all. **Restoring WhatsApp from the laptop
+  is unproven.** Unmeasured:
   battery over a day on a phone, and how often a direct connection works
   across other networks.
 
@@ -60,8 +62,8 @@ Then, depending on what you want:
 docs/           documentation — start with CODEBASE.md
 crates/         the engine, the program, the desktop window, the services
 android/        the Android app, a thin Kotlin layer over the FFI
-packaging/      installing: an Arch package, an install script, server units
-scripts/        building for Android, generating bindings and icons, the desktop smoke test
+packaging/      installing: an Arch package, an install script, server units, Windows' README
+scripts/        building for Android, a release, generating bindings and icons, the desktop smoke test
 experiments/    throwaway spikes, clearly marked as such
 website/        the website (Next.js), in the apps' design, independent of the engine
 ```
@@ -72,8 +74,13 @@ last. Nothing migrates silently between them.
 
 ## Trying it
 
-On Arch, a package of this checkout — the window, the tray icon and the
-command line:
+From a release (`./scripts/release.sh` builds one into `dist/`; what each file
+is for, and what it has run on, is [docs/releasing.md](docs/releasing.md)):
+the `.deb` on Debian, Ubuntu and their kind, the `.rpm` on Fedora and openSUSE
+Tumbleweed, both for glibc 2.34 and later; the Arch package; the static
+`qurb` alone on any Linux; the `.apk` on any Android phone from 8.0.
+
+From this checkout, on Arch — the window, the tray icon and the command line:
 
 ```bash
 cd packaging/arch && makepkg -si

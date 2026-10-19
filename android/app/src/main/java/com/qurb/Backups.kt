@@ -15,7 +15,7 @@ class Backups(private val app: MainActivity, private val refresh: () -> Unit) {
 
     /** The folders' line: how many, and how far the computer has them. */
     fun foldersLine(chosen: Int, backup: BackupState, keeper: String?): String = when {
-        !Folders.allowed() -> "Off. Photos, documents, any folder, kept on ${keeper ?: "your computer"}"
+        !Folders.allowed(app) -> "Off. Photos, documents, any folder, kept on ${keeper ?: "your computer"}"
         chosen == 0 -> "Choose which, here or on ${keeper ?: "your computer"}"
         backup.files == 0uL -> "${Words.folders(chosen)}: starting, on Wi-Fi"
         backup.heldFiles == backup.files ->

@@ -213,6 +213,12 @@ sync". See
 many independent streams on one connection. A stalled stream does not block the
 others, unlike TCP. We use the `quinn` Rust implementation.
 
+**Racy** — Said of a file read within three seconds of its own modification
+time: another write of the same size could follow in the same tick of the
+filesystem's clock and leave the time unchanged, so its size and time are not
+trusted to say it is unchanged until a later read finds it older. Git's word,
+for the same thing ([0069](decisions/0069-too-recent-to-trust.md)).
+
 **Recently deleted** — Where a file goes when it is deleted, here or on
 another device: out of the folder into `.qurb/trash/`, for thirty days.
 Restoring writes it back as a new version, so it returns on every device. See
@@ -223,8 +229,10 @@ on paper. With them, any device can be set up again; without them and every
 device, the files are gone — nobody, including us, can recover them.
 
 **Relay** — A server that forwards encrypted traffic between two devices
-that cannot reach each other directly; `qurb relay`. It carries a QUIC session
-it cannot read, over TCP on port 443. qurb's version of what Tailscale calls
+that cannot reach each other directly; `qurb relay`, or the one a rendezvous
+service carries at `/relay` as a WebSocket ([0068](decisions/0068-the-rendezvous-service-relays.md)).
+It carries a QUIC session it cannot read. A device's connection to it is
+dialled again whenever it goes. qurb's version of what Tailscale calls
 *DERP*.
 
 **Rendezvous service** — The server that lets two devices learn each other's
@@ -269,6 +277,11 @@ public server "what address do my packets appear to come from?" The answer is
 what peers exchange in order to attempt hole punching. Querying two different
 STUN servers from the same local socket and comparing the answers is how we
 classify a NAT as cone or symmetric.
+
+**Static build** — The `qurb` program linked against musl with no library
+asked of the system, so it runs on any Linux of its architecture: what a
+server runs the rendezvous service and relay as (`./scripts/release.sh
+server`).
 
 **Symmetric NAT** — See *NAT*. A router that assigns a different external port
 per destination, which breaks hole punching because the address a peer learns

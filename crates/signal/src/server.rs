@@ -260,6 +260,16 @@ impl Directory {
         }
     }
 
+    /// Forget `token` for whoever said it, kept on disk too: the push service
+    /// says it no longer exists.
+    fn forget_wake_token(&mut self, token: &crate::wake::WakeToken) {
+        let before = self.wake.len();
+        self.wake.retain(|_, (kept, _)| kept != token);
+        if self.wake.len() != before {
+            self.save_wake_tokens();
+        }
+    }
+
     /// Write the tokens where they are kept, if they are. Best effort: a
     /// failure costs wake-ups after a restart, never a connection now.
     fn save_wake_tokens(&self) {
@@ -361,6 +371,14 @@ impl SignalServer {
     /// devices sync when they next look. That is the right default, and it is
     /// what a deployment with no push credentials gets.
     pub fn waking_with(mut self, waker: crate::wake::SharedWaker) -> Self {
+        // A token the push service says is gone is forgotten here, and on
+        // disk, rather than tried on every wake for ever.
+        let directory = Arc::clone(&self.directory);
+        waker.when_gone(Arc::new(move |token: &crate::wake::WakeToken| {
+            if let Ok(mut directory) = directory.lock() {
+                directory.forget_wake_token(token);
+            }
+        }));
         self.waker = waker;
         self
     }
@@ -874,6 +892,41 @@ mod wake_tests {
             directory.wake_token(group, two).is_some(),
             "the token should survive being connected, for next time"
         );
+    }
+
+    /// A token the push service says no longer exists is forgotten, on disk
+    /// too, rather than tried on every wake: 21 refusals in three days on the
+    /// owner's laptop before this (2026-10-18).
+    #[tokio::test]
+    async fn a_token_the_push_service_has_forgotten_is_forgotten_here() {
+        #[derive(Default)]
+        struct Forgetting(std::sync::Mutex<Option<crate::wake::Forget>>);
+        impl crate::wake::Waker for Forgetting {
+            fn wake(&self, _: &crate::wake::WakeToken) {}
+            fn when_gone(&self, forget: crate::wake::Forget) {
+                *self.0.lock().unwrap() = Some(forget);
+            }
+        }
+
+        let (group, one, two) = group_and_members();
+        let dir = tempfile::tempdir().unwrap();
+        let kept = dir.path().join("wake-tokens.json");
+        let waker = Arc::new(Forgetting::default());
+        let server = SignalServer::bind("127.0.0.1:0".parse().unwrap())
+            .await
+            .unwrap()
+            .keeping_wake_tokens_in(kept.clone())
+            .waking_with(waker.clone());
+        server.directory.lock().unwrap().set_wake_token(group, one, Some("still-here".into()), 16);
+        server.directory.lock().unwrap().set_wake_token(group, two, Some("uninstalled".into()), 16);
+
+        let forget = waker.0.lock().unwrap().clone().expect("the service did not say how to forget");
+        forget(&"uninstalled".to_string());
+
+        assert_eq!(server.directory.lock().unwrap().wake_token(group, two), None);
+        assert_eq!(server.directory.lock().unwrap().wake_token(group, one), Some("still-here".to_string()));
+        let on_disk = std::fs::read_to_string(&kept).unwrap();
+        assert!(!on_disk.contains("uninstalled") && on_disk.contains("still-here"), "{on_disk}");
     }
 
     /// And the service restarting. Before this a restart forgot every token,

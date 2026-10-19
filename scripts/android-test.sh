@@ -3,6 +3,12 @@
 #
 #   ./scripts/android-test.sh              # x86_64, which is what an emulator is
 #   ./scripts/android-test.sh aarch64      # a real phone
+#   ./scripts/android-test.sh x86          # 32-bit, on an x86_64 emulator, which
+#                                          # runs 32-bit programs too: the closest
+#                                          # this machine comes to an armeabi-v7a
+#                                          # phone, whose pointers are as narrow
+#
+# With more than one device attached, say which: ANDROID_SERIAL=emulator-5560.
 #
 # For a real phone: enable Developer options (tap Build number seven times),
 # turn on USB debugging, plug it in, and accept the prompt on the screen.
@@ -24,7 +30,8 @@ ARCH=${1:-x86_64}
 case "$ARCH" in
     x86_64)  TARGET=x86_64-linux-android;      CLANG=x86_64-linux-android ;;
     aarch64) TARGET=aarch64-linux-android;     CLANG=aarch64-linux-android ;;
-    *) echo "usage: android-test.sh [x86_64|aarch64]" >&2; exit 2 ;;
+    x86)     TARGET=i686-linux-android;        CLANG=i686-linux-android ;;
+    *) echo "usage: android-test.sh [x86_64|aarch64|x86]" >&2; exit 2 ;;
 esac
 
 API=${ANDROID_API:-26}

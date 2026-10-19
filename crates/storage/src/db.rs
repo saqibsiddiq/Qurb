@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -633,6 +633,17 @@ CREATE TABLE IF NOT EXISTS outside_sources (
 /// rewound by a build undone and then redone -- keeps every choice, an untick
 /// included: `INSERT OR IGNORE` takes the V23 rows, all of them ticks then,
 /// only where there is nothing yet. V23's two tables are left, unused.
+/// Files whose size and time cannot yet be trusted to say they are unchanged
+/// (`Store::put_file`, *Too recent to trust*).
+const V26: &str = r#"
+-- Read within a few seconds of being written: a second write of the same
+-- size in the same tick of the filesystem's clock would look like none. Read
+-- again on each scan until they are older than that, then let go of.
+CREATE TABLE IF NOT EXISTS racy (
+    path TEXT PRIMARY KEY
+) STRICT;
+"#;
+
 const V25: &str = r#"
 -- On a computer: each phone's choices.
 CREATE TABLE IF NOT EXISTS phone_choices (
@@ -3912,6 +3923,29 @@ impl Db {
     /// S23, and must not go over mobile data. Off until the app says so.
     pub fn outside_offered(&self) -> Result<bool> {
         Ok(self.local_fact("outside_offered")?.as_deref() == Some("1"))
+    }
+
+    /// Mark `path`'s size and time as too recent to trust, or trusted again
+    /// (`Store::put_file`, *Too recent to trust*).
+    pub fn set_racy(&self, path: &str, racy: bool) -> Result<()> {
+        match racy {
+            true => self.conn.execute("INSERT OR IGNORE INTO racy (path) VALUES (?1)", params![path])?,
+            false => self.conn.execute("DELETE FROM racy WHERE path = ?1", params![path])?,
+        };
+        Ok(())
+    }
+
+    /// Whether `path`'s size and time are too recent to trust.
+    pub fn is_racy(&self, path: &str) -> Result<bool> {
+        Ok(self.conn.query_row("SELECT 1 FROM racy WHERE path = ?1", params![path], |_| Ok(())).optional()?.is_some())
+    }
+
+    /// Every path whose size and time are too recent to trust: few, so a scan
+    /// asks once rather than once a file.
+    pub fn racy_paths(&self) -> Result<std::collections::HashSet<String>> {
+        let mut statement = self.conn.prepare("SELECT path FROM racy")?;
+        let paths = statement.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<_>>()?;
+        Ok(paths)
     }
 
     pub fn set_outside_offered(&self, offered: bool) -> Result<()> {

@@ -16,7 +16,7 @@ A number without its conditions is not evidence.
 | [2](phase-2-correctness.md) | Adversarial correctness | ✅ complete — 5 defects found |
 | [3](phase-3-networking.md) | Networking at scale | 🔨 built — kill criterion unmeasured |
 | [4](phase-4-product.md) | Desktop product | 🔨 in progress — every feature built, an Arch package, the window designed, light and dark; since 2026-10-14 a folder for each person, opened with their phone |
-| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — Android syncs, shares, wakes and settles conflicts; backs up WhatsApp and chosen folders to the laptop (restoring unproven); the owner's lists of 2026-10-13 and 2026-10-14 tracked item by item; no iOS |
+| [5](phase-5-mobile.md) | Mobile | 🔨 in progress — Android syncs, shares, wakes and settles conflicts; backs up WhatsApp and chosen folders to the laptop (restoring unproven); the owner's lists of 2026-10-13 to 2026-10-18 tracked item by item; run on Android 8 to 16; release 0.1.0 built; no iOS |
 | 6 | Commercial | not started |
 
 Phase definitions and kill criteria: [../roadmap.md](../roadmap.md).

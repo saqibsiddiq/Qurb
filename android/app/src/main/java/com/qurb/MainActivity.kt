@@ -90,6 +90,26 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { }
 
+    /** The storage permission, asked for in a dialog before Android 11. */
+    private val filesAsk = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { changed() }
+
+    /** Ask to read this phone's files (decision 0063): the system's page from
+     *  Android 11, its dialog before. */
+    fun allowFiles() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) startActivity(Folders.allowing(this))
+        else filesAsk.launch(Folders.OLDER)
+    }
+
+    /** What the screen lock answers before Android 10, whose prompt cannot
+     *  offer the PIN or pattern itself ([ScreenLock]). */
+    private val lockAsk = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { ScreenLock.answered(it.resultCode == RESULT_OK) }
+
+    fun confirmWithLock(intent: Intent) = lockAsk.launch(intent)
+
     /** Whether this launch has freed what nothing needs yet. Once is enough. */
     private var housekept = false
 
@@ -129,7 +149,7 @@ class MainActivity : AppCompatActivity() {
         if (WhatsApp.accept(this, picked)) {
             say("Backing up WhatsApp. The first run starts on Wi-Fi.")
         } else {
-            say("That isn't WhatsApp's folder. Choose Android › media › com.whatsapp › WhatsApp.")
+            say("That isn't WhatsApp's folder. Choose ${WhatsApp.relative().replace("/", " › ")}.")
         }
         changed()
     }

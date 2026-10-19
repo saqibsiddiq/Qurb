@@ -1,6 +1,5 @@
 package com.qurb
 
-import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
 import android.hardware.biometrics.BiometricManager
@@ -14,18 +13,38 @@ import android.os.CancellationSignal
  * folder there (decision 0060, step 5).
  *
  * The framework's prompt rather than a library's: the app stays light
- * (decision 0039), and Android 9 and later have it built in. A phone with no
- * screen lock cannot confirm anything, and says so.
+ * (decision 0039). From Android 10 it offers the fingerprint, the face and
+ * the PIN or pattern alike. Before, Android 8 and 9, the screen lock's own
+ * page asks instead: 9's prompt offers no PIN or pattern, and 8 has none. A
+ * phone with no screen lock cannot confirm anything, and says so.
+ *
+ * Until 2026-10-18 a phone on Android 9 stopped here, at a call Android 10
+ * added, and one on 8 could not confirm at all; lint found it.
  */
 object ScreenLock {
     /** Whether the phone has a screen lock to confirm with at all. */
     fun available(context: Context): Boolean =
         (context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isDeviceSecure
 
+    /** Waiting for the screen lock's page, before Android 10. */
+    private var waiting: ((Boolean) -> Unit)? = null
+
     /** Ask, and call `then` with whether the person confirmed. */
-    fun confirm(activity: Activity, title: String, subtitle: String, then: (Boolean) -> Unit) {
-        if (!available(activity) || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+    fun confirm(activity: MainActivity, title: String, subtitle: String, then: (Boolean) -> Unit) {
+        if (!available(activity)) {
             then(false)
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            val keyguard = activity.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            @Suppress("DEPRECATION")
+            val asking = keyguard.createConfirmDeviceCredentialIntent(title, subtitle)
+            if (asking == null) {
+                then(false)
+                return
+            }
+            waiting = then
+            activity.confirmWithLock(asking)
             return
         }
         val builder = BiometricPrompt.Builder(activity).setTitle(title).setSubtitle(subtitle)
@@ -47,5 +66,12 @@ object ScreenLock {
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) = then(false)
             },
         )
+    }
+
+    /** The screen lock's page answered. */
+    fun answered(yes: Boolean) {
+        val then = waiting ?: return
+        waiting = null
+        then(yes)
     }
 }

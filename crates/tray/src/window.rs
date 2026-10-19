@@ -261,20 +261,9 @@ fn gib(value: f64) -> u64 {
 /// away is choosing within what the disk actually has, and a slider that runs
 /// past it would offer numbers that cannot mean anything.
 fn gibibytes_available(root: &std::path::Path) -> f64 {
-    let path = match std::ffi::CString::new(root.as_os_str().as_encoded_bytes()) {
-        Ok(path) => path,
-        Err(_) => return 64.0,
-    };
-
-    // SAFETY: `statvfs` writes into the struct and reads a NUL-terminated
-    // path, both of which hold here. A failure leaves it untouched, which is
-    // why the return value is checked before anything is read out.
-    unsafe {
-        let mut stat: libc::statvfs = std::mem::zeroed();
-        if libc::statvfs(path.as_ptr(), &mut stat) != 0 {
-            return 64.0;
-        }
-        (stat.f_blocks as f64 * stat.f_frsize as f64) / GIB
+    match qurb_cli::disk::space(root).0 {
+        0 => 64.0,
+        total => total as f64 / GIB,
     }
 }
 

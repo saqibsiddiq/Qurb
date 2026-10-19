@@ -383,3 +383,34 @@ fn the_change_mark_moves_with_any_change_to_the_index() {
     assert_eq!(phone.store.db().holders().unwrap(), vec![computer()], "not the same index");
     assert_ne!(phone.store.db().change_mark().unwrap(), after, "missed another connection's change");
 }
+
+/// Listed in the tick it was written in, then written again, the same size,
+/// in that tick: the listing's size and time are the same, and the second
+/// write is still read (`Store::put_file`, *Too recent to trust*). Found as
+/// a folder's edit lost on Android 8, 2026-10-18; WhatsApp's files are
+/// listed the same way.
+#[test]
+fn a_file_written_again_in_the_same_tick_is_read_again() {
+    let mut phone = Phone::new();
+    let tick = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos() as i64;
+    let first = phone.write("Databases/msgstore.db", &noisy(20_000, 40), tick);
+    assert_eq!(phone.sync(&[first], true).added, 1);
+
+    let second = noisy(20_000, 41);
+    let entry = phone.write("Databases/msgstore.db", &second, tick);
+    assert_eq!(phone.sync(&[entry], true).changed, 1, "the second write was not read");
+    assert_eq!(phone.store.read_content(&blake3::hash(&second)).unwrap().unwrap(), second);
+}
+
+/// And one older than any tick is trusted, and not read again.
+#[test]
+fn a_file_older_than_any_tick_is_not_read_again() {
+    let mut phone = Phone::new();
+    let entry = phone.write("Databases/old.db", &noisy(20_000, 42), 1);
+    assert_eq!(phone.sync(std::slice::from_ref(&entry), true).added, 1);
+    let again = phone.sync(&[entry], true);
+    assert_eq!((again.unchanged, again.bytes_read), (1, 0));
+}

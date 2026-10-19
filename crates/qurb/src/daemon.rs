@@ -82,23 +82,35 @@ const MAX_RETRY: Duration = Duration::from_secs(120);
 /// folder by name -- made a second device where it had been. Checked on the
 /// daemon's timers and before every change it applies; a folder that is not
 /// at its name any more stops the daemon, saying why.
-struct Here {
-    dev: u64,
-    ino: u64,
-}
+struct Here((u64, u64));
 
 impl Here {
     fn of(dir: &Path) -> Result<Self> {
-        use std::os::unix::fs::MetadataExt;
         let meta = std::fs::metadata(dir).with_context(|| format!("reading {}", dir.display()))?;
-        Ok(Self { dev: meta.dev(), ino: meta.ino() })
+        Ok(Self(Self::identity(&meta)))
     }
 
     /// Whether `dir` still names this folder: not gone, and not replaced by
     /// another made at the same path.
     fn still(&self, dir: &Path) -> bool {
-        use std::os::unix::fs::MetadataExt;
-        std::fs::metadata(dir).map(|m| m.dev() == self.dev && m.ino() == self.ino).unwrap_or(false)
+        std::fs::metadata(dir).map(|m| Self::identity(&m) == self.0).unwrap_or(false)
+    }
+
+    /// What tells a folder from another made at its path: its device and
+    /// inode on Unix. Windows' file index is not in stable Rust, so there it
+    /// is when the folder was made, which a folder made in its place does not
+    /// share.
+    fn identity(meta: &std::fs::Metadata) -> (u64, u64) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            (meta.dev(), meta.ino())
+        }
+        #[cfg(not(unix))]
+        {
+            let made = meta.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok());
+            (made.map_or(0, |d| d.as_secs()), made.map_or(0, |d| u64::from(d.subsec_nanos())))
+        }
     }
 }
 

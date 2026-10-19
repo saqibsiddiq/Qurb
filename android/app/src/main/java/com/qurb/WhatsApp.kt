@@ -3,6 +3,7 @@ package com.qurb
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
@@ -45,9 +46,25 @@ object WhatsApp {
     private const val NOW = "whatsapp-now"
     private const val MORE = "whatsapp-more"
 
-    /** WhatsApp's folder, as the external storage provider names it. */
+    /** WhatsApp's folder, as the external storage provider names it: under
+     *  `Android/media` from Android 11, where WhatsApp moved it, and at the top
+     *  of the storage before. Until 2026-10-18 only the first was accepted, so
+     *  a phone on Android 10 or older could not back WhatsApp up at all. */
     private const val FOLDER = "primary:Android/media/com.whatsapp/WhatsApp"
+    private const val OLDER_FOLDER = "primary:WhatsApp"
     private const val STORAGE = "com.android.externalstorage.documents"
+
+    /** Where WhatsApp keeps its folder on this phone, as the provider names it.
+     *  Before Android 11 the newer place counts only if it is there: a phone
+     *  updated from an older Android may have WhatsApp's folder moved. */
+    private fun folder(): String = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> FOLDER
+        File(Environment.getExternalStorageDirectory(), FOLDER.substringAfter(':')).isDirectory -> FOLDER
+        else -> OLDER_FOLDER
+    }
+
+    /** WhatsApp's folder on this phone, from the root of its storage. */
+    fun relative(): String = folder().substringAfter(':')
 
     /** Measured on the S23: a first run reads 9.65 GB, about a minute and a
      *  half; listing takes another. Inside a worker's ten minutes, and what is
@@ -56,7 +73,7 @@ object WhatsApp {
 
     /** The picker, opened at WhatsApp's folder. */
     fun pickIntent(): Intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-        putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract.buildDocumentUri(STORAGE, FOLDER))
+        putExtra(DocumentsContract.EXTRA_INITIAL_URI, DocumentsContract.buildDocumentUri(STORAGE, folder()))
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
     }
 
@@ -66,7 +83,7 @@ object WhatsApp {
      * is for restoring, which asks again.
      */
     fun accept(context: Context, picked: Uri): Boolean {
-        if (DocumentsContract.getTreeDocumentId(picked) != FOLDER) return false
+        if (DocumentsContract.getTreeDocumentId(picked) !in listOf(FOLDER, OLDER_FOLDER)) return false
         context.contentResolver.takePersistableUriPermission(picked, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         prefs(context).edit().putString("tree", picked.toString()).apply()
         schedule(context)
@@ -91,7 +108,7 @@ object WhatsApp {
         prefs(context).edit().clear().apply()
         // The same nightly run backs up the folders chosen on the computer
         // (decision 0063), which go on without WhatsApp.
-        if (!Folders.allowed()) WorkManager.getInstance(context).cancelUniqueWork(NIGHTLY)
+        if (!Folders.allowed(context)) WorkManager.getInstance(context).cancelUniqueWork(NIGHTLY)
     }
 
     /** When it last ran, in unix seconds, and what it did, in words. */
@@ -133,7 +150,7 @@ object WhatsApp {
         // the S23, WhatsApp's 36,055 files listed in 4.3 to 5.3 s this way
         // against 39.6 to 57.5 through the picked folder, and each read in
         // half the time.
-        if (Folders.allowed()) listDirectly(context)?.let { return it }
+        if (Folders.allowed(context)) listDirectly(context)?.let { return it }
         val out = ArrayList<OutsideFile>(40_000)
         val columns = arrayOf(
             Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE,
@@ -170,7 +187,7 @@ object WhatsApp {
      * 24 s on the S23. `null` when the folder is not there.
      */
     private suspend fun listDirectly(context: Context): List<OutsideFile>? {
-        val base = File(Environment.getExternalStorageDirectory(), FOLDER.substringAfter(':'))
+        val base = File(Environment.getExternalStorageDirectory(), relative())
         if (!base.isDirectory) return null
         return Engine.open(context).listDirectly(base.path)
     }

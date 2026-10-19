@@ -151,8 +151,10 @@ fn inside_tile(x: f32, y: f32) -> bool {
 /// "in motion" without animating — a tray icon that animates is a tray icon
 /// people turn off.
 fn in_gap(dx: f32, dy: f32) -> bool {
-    // y grows downwards, so a positive angle is below the centre.
-    (1.95..3.0).contains(&dy.atan2(dx))
+    // y grows downwards, so a positive angle is below the centre. In f64:
+    // f32's is glibc 2.43's `atan2f`, which a tray built here then needed of
+    // every machine it ran on (2026-10-18); `atan2` is as old as glibc.
+    (1.95..3.0).contains(&f64::from(dy).atan2(f64::from(dx)))
 }
 
 fn distance(x: f32, y: f32, to_x: f32, to_y: f32) -> f32 {

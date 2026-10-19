@@ -34,6 +34,7 @@
 
 use crate::error::{Error, Result};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::pki_types::pem::{self, PemObject};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, SignatureScheme};
 use std::path::{Path, PathBuf};
@@ -58,17 +59,19 @@ impl Certificate {
         let key_pem = std::fs::read(key)
             .map_err(|e| Error::Tls(format!("reading {}: {e}", key.display())))?;
 
-        let chain: Vec<CertificateDer<'static>> =
-            rustls_pemfile::certs(&mut cert_pem.as_slice())
-                .collect::<std::result::Result<_, _>>()
-                .map_err(|e| Error::Tls(format!("reading certificates: {e}")))?;
+        // By rustls's own reader: `rustls-pemfile`, used until 2026-10-18, is
+        // no longer maintained (RUSTSEC-2025-0134).
+        let chain: Vec<CertificateDer<'static>> = CertificateDer::pem_slice_iter(&cert_pem)
+            .collect::<std::result::Result<_, _>>()
+            .map_err(|e| Error::Tls(format!("reading certificates: {e}")))?;
         if chain.is_empty() {
             return Err(Error::Tls(format!("{} holds no certificate", cert.display())));
         }
 
-        let key = rustls_pemfile::private_key(&mut key_pem.as_slice())
-            .map_err(|e| Error::Tls(format!("reading the private key: {e}")))?
-            .ok_or_else(|| Error::Tls(format!("{} holds no private key", key.display())))?;
+        let key = PrivateKeyDer::from_pem_slice(&key_pem).map_err(|e| match e {
+            pem::Error::NoItemsFound => Error::Tls(format!("{} holds no private key", key.display())),
+            e => Error::Tls(format!("reading the private key: {e}")),
+        })?;
 
         let fingerprint = fingerprint_of(&chain[0]);
         Ok(Self { chain, key, fingerprint })

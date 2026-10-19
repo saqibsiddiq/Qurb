@@ -102,6 +102,27 @@ address, and a device with no relay set uses that one.**
   JSON text in small, rate-limited messages, by design; datagrams through it
   would need its limits lifted for everyone.
 
+## Amended 2026-10-18: staying on the relay
+
+Found reading the code while hunting faults, not in use: a device's relay
+connection was opened once. When it went -- the rendezvous service restarted,
+or a laptop's daemon started at login before it -- the device stayed off the
+relay until it was itself restarted, and the socket reported the loss to QUIC
+as a failed socket, which ends the whole relayed endpoint. The laptop's daemon
+holds one connector for hours, so a restart of the service there cost the
+phone its way round for the rest of the session.
+
+Now the relay socket dials again when its connection goes, waiting one second
+and doubling to a minute, and registers every name it holds on the new
+connection -- its own and each meeting's (0061). Meanwhile what QUIC sends
+through it is dropped, as over any lost path. A device whose relay cannot be
+reached when it starts keeps the socket, knows it is down, and does not dial a
+peer through it until it is up; the same for a rendezvous service that carries
+no relay, which a device now asks again once a minute rather than never.
+Tested by restarting a relay under a connected socket
+(`a_socket_finds_its_relay_again_after_a_restart_with_every_name`) and by
+starting a socket before its relay (`a_socket_started_before_its_relay_gets_on_it`).
+
 ## Reversing it
 
 `--no-relay` on the service, and `relay = off` on a device. The relay on its

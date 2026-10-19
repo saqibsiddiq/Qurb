@@ -258,6 +258,7 @@ The parts nobody sees, and the reason the features above can be trusted.
 | Any Linux, one user | `packaging/install.sh` — what the laptop runs | ✅ |
 | The rendezvous service | `packaging/install-rendezvous.sh`, with push | ✅ |
 | Android | `./scripts/android-app.sh release`, signed with the project's key; the phone itself runs a debug build | ◻ release · ✅ debug |
+| A release, 0.1.0 | `./scripts/release.sh`: a deb, an rpm and the Arch package (glibc 2.34+); `qurb` alone, static, for any Linux, x86_64 and arm64; Android, every ABI, an APK each, one for all, an app bundle; Windows, zipped — built 2026-10-18, not published; what has run on what is [releasing.md](releasing.md) | ◻ |
 
 ---
 
@@ -271,8 +272,10 @@ Stated plainly so that a design does not assume it:
   itself, while the laptop is on; not yet seen doing so on the S23. A VPS is
   still the plan for the services.
 - **The owner's review of the design**, on both.
-- **A formal release** — after the relay.
-- **iOS, macOS and Windows.** Linux and Android first.
+- **A published release.** 0.1.0 is built, nothing published
+  ([releasing.md](releasing.md)).
+- **Windows, run.** Built since 2026-10-18 and never run on Windows.
+- **iOS and macOS.** Linux and Android first.
 - **Placeholders on Linux.** A freed file is absent from the folder, not shown
   greyed out ([0025](decisions/0025-a-storage-cap-that-cannot-lose-data.md)).
 - **Restoring WhatsApp from the computer**, proven. The backup is kept and

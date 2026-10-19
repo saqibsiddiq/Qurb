@@ -217,8 +217,30 @@ person before a computer may open their folder. `MANAGE_EXTERNAL_STORAGE`
 they lie ([decision 0063](../docs/decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md)),
 granted by the person on the system's page after Settings says why; without
 it only WhatsApp's folder, picked once, is read, and the synced directory is
-the app's own private storage either way. Nothing else: no location,
-contacts or anything like them.
+the app's own private storage either way. Android 10 and older have no "All
+files access": there the same reach is `READ_EXTERNAL_STORAGE` and
+`WRITE_EXTERNAL_STORAGE`, asked in a dialog, declared up to API 29 only.
+Nothing else: no location, contacts or anything like them.
+
+## Every Android since 8.0
+
+`minSdk` is 26. Until 2026-10-18 nothing older than the S23's Android 16 had
+run the app, and lint found what that hid: on Android 8, 9 and 10 it stopped,
+at calls those versions do not have -- "All files access" asked of on every
+pass, headings marked for accessibility on every screen, and on 9 the screen
+lock asked for confirmation. Each is now asked of a way that version has
+(`ViewCompat` for headings; the screen lock's own page before Android 10).
+WhatsApp's folder is accepted where Android 10 and older keep it,
+`WhatsApp/` at the top of storage. On 8.0 the navigation bar sits on a scrim,
+since 8.0 draws its buttons white whatever the page, and the semibold weights
+read as bold. Checked on an Android 8.0 emulator without Google Play
+services, which also showed Block Store failing as it should there: setup
+went on without it. Lint reports no errors since.
+
+`./scripts/android-app.sh release-all` builds every ABI -- arm64-v8a,
+armeabi-v7a, x86 and x86_64 -- as an APK each, one holding all four, and an
+app bundle ([releasing](../docs/releasing.md)). The everyday release stays
+arm64 alone (decision 0039).
 
 `allowBackup` is `false` on purpose. Android's backup would copy the vault to
 Google's servers, and the Keystore key wrapping it does **not** travel — so a
@@ -235,8 +257,9 @@ qurb signal 0.0.0.0:9000
 ```
 
 In the app: Settings → **Rendezvous service** → `ws://<that machine's LAN
-IP>:9000`. From an emulator use `ws://10.0.2.2:9000`, which is how it reaches
-its host.
+IP>:9000`. An emulator with nothing set uses `ws://10.0.2.2:9000`, which is
+how it reaches its host; a phone with nothing set uses none, and says so --
+only devices on the same Wi-Fi -- rather than an address that leads nowhere.
 
 Then, on the computer, Devices → **Add a device** → *Show a code* in the
 desktop app, or `qurb pair <dir>`; on the phone, Devices → **Add** → *Scan the

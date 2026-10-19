@@ -149,6 +149,10 @@ fn writable(folder: &Path, on: bool) {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(folder, std::fs::Permissions::from_mode(if on { 0o755 } else { 0o555 }));
     }
+    // Windows' read-only attribute on a folder does not stop anything being
+    // put in it, so there a placeholder is only its note.
+    #[cfg(not(unix))]
+    let _ = (folder, on);
 }
 
 #[cfg(test)]

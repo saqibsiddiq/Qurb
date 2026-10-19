@@ -28,6 +28,8 @@ mod stream;
 pub use session::Hosted;
 
 fn main() {
+    // Windows' places under the names the rest asks for.
+    qurb_cli::platform::settle();
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

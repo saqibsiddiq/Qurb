@@ -43,7 +43,7 @@ class FoldersScreen(app: MainActivity, from: String, override val tab: Int) : Sc
                     val engine = engine()
                     // Never listed yet, with the access there: list now, so that
                     // the first look is not empty.
-                    if (Folders.allowed() && engine.ownFolders().isEmpty()) {
+                    if (Folders.allowed(app) && engine.ownFolders().isEmpty()) {
                         runCatching { Folders.run(app, engine, 0u, listNow = true) }
                     }
                     State(
@@ -74,11 +74,11 @@ class FoldersScreen(app: MainActivity, from: String, override val tab: Int) : Sc
                 "Devices") { app.go(R.id.tab_devices) }
             return
         }
-        if (!Folders.allowed()) {
+        if (!Folders.allowed(app)) {
             kit.empty(page, R.drawable.ic_hard_drive,
                 "To back up its folders, Qurb needs to read this phone's files. It reads only the folders you " +
                     "choose, and lists the rest's names and sizes for $keeper.",
-                "Allow") { app.startActivity(Folders.allowing(app)) }
+                "Allow") { app.allowFiles() }
             return
         }
 

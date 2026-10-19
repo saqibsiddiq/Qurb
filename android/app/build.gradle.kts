@@ -41,6 +41,17 @@ val signing = Properties().apply {
     if (signingFile.exists()) signingFile.inputStream().use { load(it) }
 }
 
+// Every ABI Android has, for a formal release (`-Pqurb.allAbis=true`, which
+// scripts/android-app.sh's `release-all` passes): one APK for each and one
+// holding all four, and a bundle that a store splits itself. Not the everyday
+// build, which is what the phones here are -- arm64 -- see the build types.
+// Which of the four have run, and on what, is in docs/releasing.md.
+val allAbis = (findProperty("qurb.allAbis") as String?) == "true"
+// The bundle is built apart from the APKs: Gradle will not make both from one
+// build with the splits on (Google's issue 402800800).
+val bundling = (findProperty("qurb.bundle") as String?) == "true"
+val everyAbi = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+
 android {
     namespace = "com.qurb"
     compileSdk = 36
@@ -77,7 +88,9 @@ android {
             // by R8, and unused resources dropped. Together, most of the
             // difference between a heavy app and a light one -- see decision
             // 0039 for the measurements.
-            ndk {
+            // With every ABI the splits below choose instead: Gradle refuses
+            // a filter and splits together.
+            if (!allAbis) ndk {
                 abiFilters += listOf("arm64-v8a")
             }
             isMinifyEnabled = true
@@ -87,7 +100,7 @@ android {
         }
         debug {
             // x86_64 as well, for the emulator.
-            ndk {
+            if (!allAbis) ndk {
                 abiFilters += listOf("arm64-v8a", "x86_64")
             }
             isMinifyEnabled = false
@@ -106,6 +119,23 @@ android {
             isDebuggable = false
             isProfileable = true
             matchingFallbacks += listOf("release")
+        }
+    }
+
+    // JNA's own libraries for ABIs Android no longer runs -- armeabi (ARMv5),
+    // MIPS -- would otherwise ride in the universal APK and the bundle.
+    packaging {
+        jniLibs {
+            excludes += listOf("lib/armeabi/**", "lib/mips/**", "lib/mips64/**")
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = allAbis && !bundling
+            reset()
+            include(*everyAbi.toTypedArray())
+            isUniversalApk = true
         }
     }
 
@@ -167,10 +197,18 @@ dependencies {
     // foreground service: it is the only scheduler that survives reboots,
     // respects Doze, and backs off on its own when the system is busy — which
     // is exactly the negotiation a sync app has to win to keep running at all.
-    implementation("androidx.work:work-runtime-ktx:2.9.1")
+    //
+    // 2.10 at least: it stops a foreground worker when Android 15 says its
+    // six hours a day of data sync are up (Service.onTimeout). 2.9 did not,
+    // and the system stops an app whose service runs on past that.
+    implementation("androidx.work:work-runtime-ktx:2.10.5")
 
     // UniFFI's Kotlin bindings call the native library through JNA. The `@aar`
     // classifier matters: the plain jar has no Android native components and
     // fails at runtime rather than at build time.
-    implementation("net.java.dev.jna:jna:5.15.0@aar")
+    //
+    // 5.17 at least: its x86_64 library is aligned for 16 KB pages, as the
+    // others were already; 5.15's was not, and would not load on an x86_64
+    // device with them (Android lint, 2026-10-18).
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
 }

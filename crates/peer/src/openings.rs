@@ -15,7 +15,7 @@
 use qurb_sync::DeviceId;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 /// How long an open folder stays open without being used.
 pub const IDLE: Duration = Duration::from_secs(10 * 60);
@@ -23,9 +23,30 @@ pub const IDLE: Duration = Duration::from_secs(10 * 60);
 /// How long an ask waits for the phone before it lapses.
 pub const ASK_LIFETIME: Duration = Duration::from_secs(5 * 60);
 
+/// A moment, on both clocks. The monotonic one alone stops while a computer
+/// sleeps -- Linux's does -- so until 2026-10-18 a folder open when the lid
+/// closed for the night was still open in the morning, with all ten minutes
+/// to go. The wall clock counts the sleep; one set back counts as the time
+/// being up, which errs towards locking.
+#[derive(Debug, Clone, Copy)]
+struct Since {
+    mono: Instant,
+    wall: SystemTime,
+}
+
+impl Since {
+    fn now() -> Self {
+        Self { mono: Instant::now(), wall: SystemTime::now() }
+    }
+
+    fn elapsed(&self) -> Duration {
+        self.mono.elapsed().max(self.wall.elapsed().unwrap_or(Duration::MAX))
+    }
+}
+
 struct Registry {
-    asks: HashMap<DeviceId, ([u8; 16], Instant)>,
-    open: HashMap<DeviceId, ([u8; 32], Instant)>,
+    asks: HashMap<DeviceId, ([u8; 16], Since)>,
+    open: HashMap<DeviceId, ([u8; 32], Since)>,
 }
 
 fn registry() -> &'static Mutex<Registry> {
@@ -40,7 +61,7 @@ pub fn ask(person: &DeviceId) -> [u8; 16] {
     let mut nonce = [0u8; 16];
     rand::rngs::OsRng.fill_bytes(&mut nonce);
     if let Ok(mut r) = registry().lock() {
-        r.asks.insert(*person, (nonce, Instant::now()));
+        r.asks.insert(*person, (nonce, Since::now()));
     }
     nonce
 }
@@ -68,7 +89,7 @@ pub fn unlock(person: &DeviceId, nonce: &[u8; 16], key: [u8; 32], check: impl Fn
         return false;
     }
     r.asks.remove(person);
-    r.open.insert(*person, (key, Instant::now()));
+    r.open.insert(*person, (key, Since::now()));
     true
 }
 
@@ -78,7 +99,7 @@ pub fn key(person: &DeviceId) -> Option<[u8; 32]> {
     let mut r = registry().lock().ok()?;
     match r.open.get_mut(person) {
         Some((key, used)) if used.elapsed() < IDLE => {
-            *used = Instant::now();
+            *used = Since::now();
             Some(*key)
         }
         Some(_) => {
@@ -123,5 +144,27 @@ mod tests {
         lock(&person);
         assert_eq!(key(&person), None);
         assert!(!is_open(&person));
+    }
+
+    /// Asleep, the monotonic clock stands still; the wall clock does not.
+    #[test]
+    fn a_folder_open_through_a_sleep_is_locked_after_it() {
+        let person = DeviceId::from_bytes([78; 32]);
+        let nonce = ask(&person);
+        assert!(unlock(&person, &nonce, [3; 32], |_| true));
+        // Eleven minutes asleep: the wall clock has moved, the other not.
+        if let Ok(mut r) = registry().lock() {
+            let (_, used) = r.open.get_mut(&person).expect("open");
+            used.wall -= Duration::from_secs(11 * 60);
+        }
+        assert!(!is_open(&person), "still open after a sleep longer than the idle time");
+        assert_eq!(key(&person), None);
+    }
+
+    #[test]
+    fn a_wall_clock_set_back_counts_as_the_time_being_up() {
+        let since = Since { mono: Instant::now(), wall: SystemTime::now() + Duration::from_secs(3600) };
+        assert!(since.elapsed() >= IDLE);
+        assert!(Since::now().elapsed() < IDLE);
     }
 }

@@ -219,6 +219,31 @@ fn a_file_arrives_with_the_time_it_was_changed() {
     assert_eq!((rescan.stored, rescan.unchanged), (0, 1), "the file was read again");
 }
 
+/// Two writes of the same size in one tick of the filesystem's clock keep
+/// one time. Android 8's kernel ticks every few milliseconds, and there
+/// `an_edit_propagates` failed (2026-10-18): the second write was never seen.
+/// This machine's clock is finer, so the tick is made by setting the time.
+#[test]
+fn an_edit_in_the_same_tick_of_the_clock_is_still_seen() {
+    let (mut a, mut b) = (Device::new(), Device::new());
+    let tick = std::time::SystemTime::now();
+    // Written and given the tick's time before anything looks.
+    let write_in_the_tick = |device: &mut Device, contents: &str| {
+        let path = device.root.join("notes.txt");
+        fs::write(&path, contents).unwrap();
+        fs::File::options().write(true).open(&path).unwrap().set_modified(tick).unwrap();
+        device.engine.reconcile().unwrap();
+    };
+    write_in_the_tick(&mut a, "version one");
+    sync_until_stable(&mut a, &mut b);
+
+    write_in_the_tick(&mut a, "version two");
+    sync_until_stable(&mut a, &mut b);
+
+    assert_eq!(b.on_disk().get("notes.txt").map(String::as_str), Some("version two"));
+    assert_converged(&a, &b);
+}
+
 #[test]
 fn an_edit_propagates() {
     let (mut a, mut b) = (Device::new(), Device::new());

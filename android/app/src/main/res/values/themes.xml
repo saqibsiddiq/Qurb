@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- The whole app's look, from docs/design/direction.md, as roles mapped
          onto Material's. DayNight: the roles take values-night's values in
          dark (decision 0056).
@@ -30,8 +30,8 @@
         <item name="colorControlNormal">@color/text_2</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">@bool/light_bars</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightNavigationBar">@bool/light_bars</item>
+        <item name="android:navigationBarColor">@color/navigation_bar</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/light_bars</item>
         <item name="android:windowBackground">@drawable/environment</item>
 
         <!-- Inter, everywhere a component would otherwise pick its own. -->
@@ -96,58 +96,68 @@
         <item name="android:textColor">@color/text</item>
         <item name="android:letterSpacing">0</item>
     </style>
+    <!-- Weights by textFontWeight, which Android 9 added. On 8 the semibold
+         ones are bold as well, and bold picks the nearest of Inter's weights,
+         semibold; from 9 textFontWeight wins over it. The medium ones and
+         lineHeight are 9's alone: on 8 they read regular, a little tighter. -->
     <style name="Text.Display">
         <item name="android:textSize">27sp</item>
-        <item name="android:lineHeight">33sp</item>
-        <item name="android:textFontWeight">600</item>
+        <item name="android:lineHeight" tools:targetApi="28">33sp</item>
+        <item name="android:textFontWeight" tools:targetApi="28">600</item>
+        <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">-0.02</item>
     </style>
     <style name="Text.Hero">
         <item name="android:textSize">26sp</item>
-        <item name="android:lineHeight">32sp</item>
-        <item name="android:textFontWeight">600</item>
+        <item name="android:lineHeight" tools:targetApi="28">32sp</item>
+        <item name="android:textFontWeight" tools:targetApi="28">600</item>
+        <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">-0.02</item>
     </style>
     <style name="Text.Title">
         <item name="android:textSize">20sp</item>
-        <item name="android:lineHeight">26sp</item>
-        <item name="android:textFontWeight">600</item>
+        <item name="android:lineHeight" tools:targetApi="28">26sp</item>
+        <item name="android:textFontWeight" tools:targetApi="28">600</item>
+        <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">-0.01</item>
     </style>
     <style name="Text.Section">
         <item name="android:textSize">17sp</item>
-        <item name="android:lineHeight">23sp</item>
-        <item name="android:textFontWeight">600</item>
+        <item name="android:lineHeight" tools:targetApi="28">23sp</item>
+        <item name="android:textFontWeight" tools:targetApi="28">600</item>
+        <item name="android:textStyle">bold</item>
     </style>
     <style name="Text.Body">
         <item name="android:textSize">15.5sp</item>
-        <item name="android:lineHeight">22sp</item>
+        <item name="android:lineHeight" tools:targetApi="28">22sp</item>
     </style>
     <style name="Text.Name">
         <item name="android:textSize">15.5sp</item>
-        <item name="android:lineHeight">21sp</item>
-        <item name="android:textFontWeight">500</item>
+        <item name="android:lineHeight" tools:targetApi="28">21sp</item>
+        <item name="android:textFontWeight" tools:targetApi="28">500</item>
     </style>
     <style name="Text.Quiet">
         <item name="android:textSize">14.5sp</item>
-        <item name="android:lineHeight">21sp</item>
+        <item name="android:lineHeight" tools:targetApi="28">21sp</item>
         <item name="android:textColor">@color/text_2</item>
     </style>
     <style name="Text.Meta">
         <item name="android:textSize">12.5sp</item>
-        <item name="android:lineHeight">17sp</item>
+        <item name="android:lineHeight" tools:targetApi="28">17sp</item>
         <item name="android:textColor">@color/text_3</item>
     </style>
     <style name="Text.Label">
         <item name="android:textSize">11.5sp</item>
-        <item name="android:textFontWeight">600</item>
+        <item name="android:textFontWeight" tools:targetApi="28">600</item>
+        <item name="android:textStyle">bold</item>
         <item name="android:textColor">@color/text_3</item>
         <item name="android:letterSpacing">0.08</item>
         <item name="android:textAllCaps">true</item>
     </style>
     <style name="Text.Button">
         <item name="android:textSize">15sp</item>
-        <item name="android:textFontWeight">600</item>
+        <item name="android:textFontWeight" tools:targetApi="28">600</item>
+        <item name="android:textStyle">bold</item>
         <item name="android:letterSpacing">0</item>
         <item name="android:textAllCaps">false</item>
     </style>
@@ -195,8 +205,8 @@
         <item name="bottomSheetStyle">@style/Widget.Qurb.Sheet</item>
         <item name="android:windowIsFloating">false</item>
         <item name="android:backgroundDimAmount">0.2</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightNavigationBar">@bool/light_bars</item>
+        <item name="android:navigationBarColor">@color/navigation_bar</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/light_bars</item>
     </style>
     <!-- Opaque, like a dialog: on the S23 the phone said it would blur behind
          a sheet and did not, and the page read through the 3% (consistency.md,
@@ -259,7 +269,7 @@
     </style>
     <style name="Nav.Label" parent="Text">
         <item name="android:textSize">12sp</item>
-        <item name="android:textFontWeight">500</item>
+        <item name="android:textFontWeight" tools:targetApi="28">500</item>
     </style>
 
     <style name="Shape.Qurb.Fab" parent="">

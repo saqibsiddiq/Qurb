@@ -288,16 +288,33 @@ pub async fn relay_for(setting: Option<&str>, signal_url: &str) -> Option<RelayA
     }
 }
 
-/// Open a relay connection and register on it as `me`.
-async fn open_relay(at: RelayAt, me: qurb_relay::RelayId) -> std::result::Result<Arc<qurb_relay::RelaySocket>, String> {
-    match at {
-        RelayAt::Tcp(address) => qurb_relay::RelaySocket::connect(address, me).await.map_err(|e| e.to_string()),
-        RelayAt::Tunnel(url) => {
-            let stream = qurb_signal::tunnel::open(&url).await.map_err(|e| e.to_string())?;
-            qurb_relay::RelaySocket::over(stream, me).await.map_err(|e| e.to_string())
-        }
-    }
+/// A relay connection registered as `me`, opened now and again whenever it
+/// goes (`qurb_relay::socket`, *Staying on*): a relay restarts, and a laptop's
+/// daemon may start before the rendezvous service carrying it.
+fn open_relay(at: RelayAt, me: qurb_relay::RelayId) -> Arc<qurb_relay::RelaySocket> {
+    let dial: qurb_relay::Dial = Arc::new(move || {
+        let at = at.clone();
+        Box::pin(async move {
+            Ok(match at {
+                RelayAt::Tcp(address) => {
+                    let stream = tokio::net::TcpStream::connect(address).await?;
+                    let _ = stream.set_nodelay(true);
+                    Box::pin(stream) as qurb_relay::RelayStream
+                }
+                RelayAt::Tunnel(url) => {
+                    let stream = qurb_signal::tunnel::open(&url).await.map_err(std::io::Error::other)?;
+                    Box::pin(stream) as qurb_relay::RelayStream
+                }
+            })
+        })
+    });
+    qurb_relay::RelaySocket::redialling(dial, me)
 }
+
+/// How long starting waits for the relay's first connection. Through a
+/// rendezvous service that relays it is a TLS WebSocket's round trips, and
+/// the wait runs alongside asking STUN.
+const RELAY_SETTLES: Duration = Duration::from_secs(6);
 
 /// What the signalling task is asked to do.
 enum Command {
@@ -336,10 +353,7 @@ impl Connector {
         // a rendezvous service that relays it is a TLS WebSocket's round trips
         // -- at the start of every pass a phone makes.
         let me = *MemberId::derive(&master, identity.fingerprint().as_bytes()).as_bytes();
-        let opening = relay.map(|at| {
-            let shown = format!("{at:?}");
-            (shown, tokio::spawn(open_relay(at, me)))
-        });
+        let opening = relay.map(|at| (format!("{at:?}"), open_relay(at, me)));
         let socket = std::net::UdpSocket::bind(bind)
             .map_err(|e| Error::Io { path: bind.to_string().into(), source: e })?;
         let local = socket
@@ -369,25 +383,24 @@ impl Connector {
         // Best effort, like the rendezvous below. A relay that cannot be
         // reached costs the fallback, not the device: it used to stop a device
         // starting at all, so a server of one's own being down meant a phone
-        // could not sync with the laptop beside it on the same Wi-Fi.
+        // could not sync with the laptop beside it on the same Wi-Fi. Kept
+        // either way, since it keeps trying: a relay down now is used once it
+        // is back.
         let relay = match opening {
-            Some((shown, opening)) => match opening.await {
-                Ok(Ok(socket)) => {
-                    let server_config = tls::server_config(&identity, allowed)?;
-                    let endpoint = qurb_relay::endpoint_over(Arc::clone(&socket), Some(server_config))
-                        .map_err(|e| Error::Signalling { detail: format!("relay: {e}") })?;
-                    tracing::debug!(relay = %shown, "on the relay");
-                    Some(RelayPath { socket, endpoint })
+            Some((shown, socket)) => {
+                match socket.settled(RELAY_SETTLES).await {
+                    qurb_relay::Link::Up => tracing::debug!(relay = %shown, "on the relay"),
+                    qurb_relay::Link::Down(why) => tracing::warn!(
+                        error = %why, relay = %shown,
+                        "the relay cannot be reached; direct paths only until it can"
+                    ),
+                    qurb_relay::Link::Trying => tracing::info!(relay = %shown, "still reaching the relay"),
                 }
-                Ok(Err(e)) => {
-                    tracing::warn!(error = %e, relay = %shown, "the relay cannot be reached; direct paths only");
-                    None
-                }
-                Err(e) => {
-                    tracing::warn!(error = %e, relay = %shown, "opening the relay failed; direct paths only");
-                    None
-                }
-            },
+                let server_config = tls::server_config(&identity, allowed)?;
+                let endpoint = qurb_relay::endpoint_over(Arc::clone(&socket), Some(server_config))
+                    .map_err(|e| Error::Signalling { detail: format!("relay: {e}") })?;
+                Some(RelayPath { socket, endpoint })
+            }
             None => None,
         };
 
@@ -694,6 +707,11 @@ impl Connector {
         self.via_relay(peer, relay).await
     }
 
+    /// Whether this device is on its relay now, if it has one.
+    pub fn relay_link(&self) -> Option<qurb_relay::Link> {
+        self.relay.as_ref().map(|r| r.socket.link())
+    }
+
     /// The endpoint accepting relayed connections, if a relay is configured.
     ///
     /// A device has two ways in and must listen on both.
@@ -821,6 +839,11 @@ impl Connector {
 
     /// Reach a peer the long way round.
     async fn via_relay(&self, peer: Fingerprint, relay: &RelayPath) -> Result<PeerClient> {
+        // Not through a relay that is not there: a handshake into it would
+        // only wait out its timeout.
+        if let qurb_relay::Link::Down(why) = relay.socket.settled(RELAY_SETTLES).await {
+            return Err(Error::Unreachable { peer: peer.short(), tried: format!("the relay is not reachable now: {why}") });
+        }
         // By the names the two use: a meeting's for another person's device,
         // this person's for one of their own (decision 0061).
         let me = self.identity.fingerprint();

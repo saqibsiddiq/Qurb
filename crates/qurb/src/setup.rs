@@ -270,37 +270,13 @@ fn nearest_existing(path: &Path) -> Option<PathBuf> {
 }
 
 /// Whether this process could create something in `dir`.
-///
-/// Asked of the operating system rather than inferred from the mode bits: the
-/// answer depends on the effective user, the group list, and on Linux the
-/// filesystem's own opinion, none of which a permission triple reports.
 fn is_writable(dir: &Path) -> bool {
-    use std::os::unix::ffi::OsStrExt;
-    let Ok(path) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return false };
-    // SAFETY: `access` reads a NUL-terminated path and returns a status. It
-    // changes nothing.
-    unsafe { libc::access(path.as_ptr(), libc::W_OK | libc::X_OK) == 0 }
+    crate::disk::is_writable(dir)
 }
 
 /// Total and available bytes on the filesystem holding `dir`.
 fn space(dir: &Path) -> (u64, u64) {
-    use std::os::unix::ffi::OsStrExt;
-    let Ok(path) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else { return (0, 0) };
-
-    // SAFETY: `statvfs` writes into the struct and reads a NUL-terminated path,
-    // both of which hold here. A failure leaves the struct untouched, which is
-    // why the return value is checked before anything is read out of it.
-    unsafe {
-        let mut stat: libc::statvfs = std::mem::zeroed();
-        if libc::statvfs(path.as_ptr(), &mut stat) != 0 {
-            return (0, 0);
-        }
-        let block = stat.f_frsize as u64;
-        // `f_bavail` rather than `f_bfree`: some of the free space is reserved
-        // for root, and offering it to somebody choosing an allowance would be
-        // offering space they cannot have.
-        ((stat.f_blocks as u64).saturating_mul(block), (stat.f_bavail as u64).saturating_mul(block))
-    }
+    crate::disk::space(dir)
 }
 
 #[cfg(test)]

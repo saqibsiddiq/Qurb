@@ -42,12 +42,21 @@
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
+    <!-- The same reach before Android 11, which had no "All files access":
+         the storage permission, asked in a dialog. Not asked for from 11. -->
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:name=".QurbApplication"
         android:allowBackup="false"
         android:hasFragileUserData="true"
+        android:requestLegacyExternalStorage="true"
         android:manageSpaceActivity=".ManageSpaceActivity"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"

@@ -1,8 +1,12 @@
 package com.qurb
 
 import android.content.Context
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import uniffi.qurb_mobile.Qurb
 import uniffi.qurb_mobile.Settings
 import uniffi.qurb_mobile.createProtected
@@ -23,6 +27,20 @@ object Engine {
 
     @Volatile
     private var handle: Qurb? = null
+
+    /** How long opening waits for the push token. */
+    private const val WAKE_WAIT_MS = 3_000L
+
+    private val later = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * The push token to be woken by from now on: the push service issued a
+     * new one. Given to the rendezvous service on the next pass; a phone that
+     * kept giving the old one could not be woken until the app restarted.
+     */
+    fun wakeBy(token: String) {
+        runCatching { handle?.setWakeToken(token) }
+    }
 
     /**
      * Where the synced files live.
@@ -90,6 +108,13 @@ object Engine {
      */
     suspend fun keepKeyOnce(context: Context) {
         val prefs = context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
+        // And the rendezvous address beside it, once, for a phone that set it
+        // before it was kept there (2026-10-18).
+        val signal = prefs.getString("signal", null)
+        if (!signal.isNullOrEmpty() && !prefs.getBoolean("signal_kept", false)) {
+            Backup.saveSignal(context, signal)
+            prefs.edit().putBoolean("signal_kept", true).apply()
+        }
         if (prefs.getBoolean("key_kept", false)) return
         Backup.save(context, open(context).recoveryPhrase())
         prefs.edit().putBoolean("key_kept", true).apply()
@@ -140,7 +165,14 @@ object Engine {
         // lock is held while the store opens. Null whenever push is not set
         // up, which is the ordinary case for a build with no Firebase project:
         // the phone then syncs on its schedule instead of being poked.
-        val wake = runCatching { Push.token(context) }.getOrNull()
+        //
+        // Not waited on for long: with no network and none cached, the push
+        // library can take its time, and the first screen waits on this. A
+        // token that comes later is handed over when it does.
+        val wake = withTimeoutOrNull(WAKE_WAIT_MS) { runCatching { Push.token(context) }.getOrNull() }
+        if (wake == null && Push.AVAILABLE) later.launch {
+            runCatching { Push.token(context) }.getOrNull()?.let { wakeBy(it) }
+        }
 
         handle ?: synchronized(this@Engine) {
             handle ?: Qurb.openProtected(
@@ -335,16 +367,20 @@ object Engine {
     }
 
     /**
-     * Where the rendezvous service is.
+     * Where the rendezvous service is, or empty for none: devices on this
+     * phone's Wi-Fi only.
      *
-     * Editable because there is no hosted one yet: to try this you run
-     * `qurb signal` on a computer and point the phone at it. `10.0.2.2` is the
-     * emulator's route to its host; a real phone needs the machine's address on
-     * the local network.
+     * Editable because there is no hosted one: the person runs `qurb signal`
+     * and points the phone at it. The default used to be `10.0.2.2`, the
+     * emulator's route to its host, on every phone: after *Clear data* the
+     * S23 silently used it for three days, unreachable off its home Wi-Fi
+     * (2026-10-08), and since the relay is found beside the rendezvous each
+     * pass also waited on an address that answers nothing. Now the emulator
+     * has it and a phone has none, and says so.
      */
     fun signalUrl(context: Context): String =
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
-            .getString("signal", DEFAULT_SIGNAL) ?: DEFAULT_SIGNAL
+            .getString("signal", null) ?: if (isEmulator()) EMULATOR_SIGNAL else ""
 
     fun setSignalUrl(context: Context, url: String) {
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
@@ -354,7 +390,12 @@ object Engine {
         handle = null
     }
 
-    const val DEFAULT_SIGNAL = "ws://10.0.2.2:9000"
+    /** Whether this is the Android emulator, whose host is `10.0.2.2`. */
+    private fun isEmulator(): Boolean =
+        android.os.Build.HARDWARE in setOf("ranchu", "goldfish") ||
+            android.os.Build.FINGERPRINT.startsWith("generic")
+
+    private const val EMULATOR_SIGNAL = "ws://10.0.2.2:9000"
 
     /**
      * The relay, as `host:port`, or nothing for direct connections only.

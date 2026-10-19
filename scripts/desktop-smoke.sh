@@ -3,6 +3,8 @@
 #
 #   ./scripts/desktop-smoke.sh                 # builds qurb and qurb-desktop first
 #   ./scripts/desktop-smoke.sh --no-build
+#   SMOKE_APP=.../qurb-desktop SMOKE_QURB=.../qurb ./scripts/desktop-smoke.sh --no-build
+#                                              # a release's programs, as packaged
 #
 # Sets a device up through the window, opens every place, adds a second device
 # by the code the window shows, and sends it a file -- through the real
@@ -96,7 +98,7 @@ sleep 1
 
 export SMOKE_DRIVER=http://127.0.0.1:$port
 export SMOKE_APP=${SMOKE_APP:-$ROOT/target/release/qurb-desktop}
-export SMOKE_QURB=$ROOT/target/release/qurb
+export SMOKE_QURB=${SMOKE_QURB:-$ROOT/target/release/qurb}
 
 if python3 "$ROOT/scripts/desktop_smoke.py"; then
     rm -rf "$WORK"

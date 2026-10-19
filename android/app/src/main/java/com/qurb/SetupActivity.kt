@@ -74,6 +74,13 @@ class SetupActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             if (Backup.find(this@SetupActivity) != null) views.fromBackup.visibility = View.VISIBLE
+            // The rendezvous address kept with the key, for a phone set up
+            // again after a reinstall or restored from a backup: back before
+            // the first sync, however the phone then joins.
+            val kept = Backup.findSignal(this@SetupActivity)
+            if (!kept.isNullOrEmpty() && Engine.signalUrl(this@SetupActivity).isEmpty()) {
+                Engine.setSignalUrl(this@SetupActivity, kept)
+            }
         }
     }
 

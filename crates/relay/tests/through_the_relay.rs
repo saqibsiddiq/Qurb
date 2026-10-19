@@ -480,3 +480,126 @@ async fn a_connections_names_go_with_it_and_are_bounded() {
     .await;
     assert!(gone.is_ok(), "names outlived their connection");
 }
+
+/// A relay that can be stopped as a restart stops one: its listener and every
+/// connection on it go at once.
+fn run_relay(listener: tokio::net::TcpListener) -> (qurb_relay::Relay, tokio::task::JoinHandle<()>) {
+    let relay = qurb_relay::Relay::default();
+    let serving = relay.clone();
+    let running = tokio::spawn(async move {
+        let mut connections = tokio::task::JoinSet::new();
+        loop {
+            let Ok((stream, _)) = listener.accept().await else { return };
+            let relay = serving.clone();
+            connections.spawn(async move { relay.serve(stream).await });
+        }
+    });
+    (relay, running)
+}
+
+/// Waits for a socket's link to be `want`, for up to `within`.
+async fn link_becomes(socket: &RelaySocket, want: fn(&qurb_relay::Link) -> bool, within: Duration) -> bool {
+    let until = std::time::Instant::now() + within;
+    while std::time::Instant::now() < until {
+        if want(&socket.link()) {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    false
+}
+
+/// Found by reading on 2026-10-18: a socket whose relay restarted stayed off
+/// it, and told QUIC its socket had failed, which ends the endpoint. A laptop
+/// whose rendezvous service restarted could not be reached through its relay
+/// again until it was restarted itself.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_socket_finds_its_relay_again_after_a_restart_with_every_name() {
+    rustls::crypto::ring::default_provider().install_default().ok();
+    const BOB_IN_MEETING: [u8; 32] = [0xB3; 32];
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let (_, first) = run_relay(listener);
+
+    let bob_socket = RelaySocket::connect(addr, BOB).await.unwrap();
+    bob_socket.register(BOB_IN_MEETING).unwrap();
+    let bob = endpoint_over(Arc::clone(&bob_socket), Some(server_config())).unwrap();
+    let listening = tokio::spawn(async move {
+        let connection = bob.accept().await.expect("a connection").await.expect("handshake");
+        let mut stream = connection.accept_uni().await.expect("stream");
+        stream.read_to_end(1024).await.expect("read")
+    });
+
+    first.abort();
+    assert!(
+        link_becomes(&bob_socket, |l| matches!(l, qurb_relay::Link::Down(_)), Duration::from_secs(5)).await,
+        "the socket did not notice its relay go"
+    );
+
+    // Back, as a new process: it knows nobody.
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let (again, _running) = run_relay(listener);
+    assert!(
+        link_becomes(&bob_socket, |l| *l == qurb_relay::Link::Up, Duration::from_secs(10)).await,
+        "the socket did not dial its relay again"
+    );
+    let registered = tokio::time::timeout(Duration::from_secs(5), async {
+        while again.registered_count() < 2 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    assert!(registered.is_ok(), "the socket did not register both its names again");
+
+    // And the endpoint over it still answers, through the new relay.
+    let alice_socket = RelaySocket::connect(addr, ALICE).await.unwrap();
+    let bob_address = alice_socket.address_for(BOB).unwrap();
+    let alice = endpoint_over(alice_socket, None).unwrap();
+    let connection = tokio::time::timeout(
+        Duration::from_secs(10),
+        alice.connect_with(client_config(), bob_address, "qurb-device").unwrap(),
+    )
+    .await
+    .expect("the handshake stalled after the restart")
+    .expect("connect through the restarted relay");
+    let mut stream = connection.open_uni().await.unwrap();
+    stream.write_all(b"after the restart").await.unwrap();
+    stream.finish().unwrap();
+    let got = tokio::time::timeout(Duration::from_secs(10), listening).await.expect("stalled").unwrap();
+    assert_eq!(got, b"after the restart");
+}
+
+/// A device that starts before its relay, as a laptop's daemon may at login
+/// before the rendezvous service carrying it: on the relay once it is up.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_socket_started_before_its_relay_gets_on_it() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    drop(listener);
+
+    let dial: qurb_relay::Dial = Arc::new(move || {
+        Box::pin(async move {
+            let stream = tokio::net::TcpStream::connect(addr).await?;
+            Ok(Box::pin(stream) as qurb_relay::RelayStream)
+        })
+    });
+    let socket = RelaySocket::redialling(dial, BOB);
+    assert!(
+        matches!(socket.settled(Duration::from_secs(5)).await, qurb_relay::Link::Down(_)),
+        "nothing listens, yet the socket says otherwise"
+    );
+
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let (relay, _running) = run_relay(listener);
+    assert!(
+        link_becomes(&socket, |l| *l == qurb_relay::Link::Up, Duration::from_secs(10)).await,
+        "the socket did not get on its relay once it was up"
+    );
+    let registered = tokio::time::timeout(Duration::from_secs(5), async {
+        while relay.registered_count() < 1 {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await;
+    assert!(registered.is_ok(), "on the relay but not registered");
+}

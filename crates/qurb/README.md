@@ -338,6 +338,24 @@ the folder went. Put it back and start qurb again, or set it up again. It is
 checked before every change is applied and on the daemon's timers, so a move
 is never read as the files in it being deleted. See
 [phase 4](../../docs/phases/phase-4-product.md#a-folder-deleted-while-qurb-ran).
+On Windows, where a folder's file index is not in stable Rust, it is told by
+when it was made.
+
+## On other systems
+
+Written on Linux, and built since 2026-10-18 for Windows too -- not yet run
+there ([decision 0070](../../docs/decisions/0070-the-first-release.md)). What
+differs is said once: `platform.rs` gives a Windows process `HOME`,
+`XDG_CONFIG_HOME` and `USER` from its profile, roaming data and user name, so
+everything that asks for them finds the Windows places, and opens folders and
+addresses with `xdg-open` or the shell's `start`; `disk.rs` asks a
+filesystem's size and free space of `statvfs` or `GetDiskFreeSpaceExW`; the
+store's lock is the standard library's file lock, `flock` on Linux as before.
+The computer is not kept awake on Windows while collecting.
+
+Built statically for any Linux -- x86_64 and arm64, against musl, with nothing
+asked of the system -- for a rendezvous service or a replica on whatever a
+server runs (`./scripts/release.sh server`).
 
 ## What it does not do yet
 

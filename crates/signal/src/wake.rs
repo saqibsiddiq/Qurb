@@ -36,7 +36,16 @@ pub trait Waker: Send + Sync {
     /// Best effort and non-blocking. A failure means a device syncs on its own
     /// schedule instead, which is what happened before any of this existed.
     fn wake(&self, token: &WakeToken);
+
+    /// Be told how to forget a token the push service says no longer exists
+    /// -- an app uninstalled, or a phone set up again under a new one. Without
+    /// it a dead token is tried on every wake for ever: 21 refusals in three
+    /// days on the owner's laptop (2026-10-18). Does nothing by default.
+    fn when_gone(&self, _forget: Forget) {}
 }
+
+/// Forget a token, everywhere it is kept.
+pub type Forget = Arc<dyn Fn(&WakeToken) + Send + Sync>;
 
 /// The default: nobody can be woken.
 ///

@@ -41,8 +41,9 @@ notify-rust = "4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# For the size of the disk the folder is on, which the allowance control needs
-# as its maximum. There is no standard-library way to ask.
+# For the user's id, which names the socket a second launch finds the first
+# by (`instance`). The disk's size is asked through `qurb_cli::disk`.
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [dev-dependencies]

@@ -174,7 +174,9 @@ one transaction with the schema number it sets. Before any migration runs on an
 existing index, the index is copied with `VACUUM INTO` to
 `index.before-schema-<n>.db`; an index whose schema is newer than the build is
 refused ([decision 0047](../../docs/decisions/0047-versions-and-upgrades.md)).
-`tests/upgrading.rs` checks both.
+`tests/upgrading.rs` checks both. Schema 26 (2026-10-18) added `racy`: the paths
+read too soon after being written for their size and time to be trusted
+([decision 0069](../../docs/decisions/0069-too-recent-to-trust.md)).
 
 ## Testing
 

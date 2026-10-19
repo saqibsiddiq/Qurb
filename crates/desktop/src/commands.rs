@@ -615,23 +615,10 @@ fn folder_to_show(detail: &str, downloads: &std::path::Path) -> Answer<std::path
     Ok(folder)
 }
 
-/// Hand a folder to the desktop's file manager.
-///
-/// `xdg-open`, which every Linux desktop answers with its own file manager.
-/// Waited for on a thread of its own, so it neither blocks the window nor
-/// leaves a finished process behind.
+/// Hand a folder to the desktop's file manager: `xdg-open` on Linux, which
+/// every desktop answers with its own, and Explorer on Windows.
 fn reveal(dir: &std::path::Path) -> Answer<()> {
-    let mut child = std::process::Command::new("xdg-open")
-        .arg(dir)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| format!("could not open the file manager: {e}"))?;
-    std::thread::spawn(move || {
-        let _ = child.wait();
-    });
-    Ok(())
+    qurb_cli::platform::open(dir).map_err(|e| format!("could not open the file manager: {e}"))
 }
 
 /// Where a folder somebody typed is.
@@ -2082,20 +2069,7 @@ const KEEP_FREE: u64 = 256 << 20;
 /// The bytes free on the filesystem holding `dir`, or what holds it: the
 /// runtime directory's, a slice of memory.
 fn free_space(dir: &std::path::Path) -> u64 {
-    let mut at = dir;
-    while !at.exists() {
-        match at.parent() {
-            Some(parent) => at = parent,
-            None => return 0,
-        }
-    }
-    let Ok(path) = std::ffi::CString::new(at.as_os_str().as_encoded_bytes()) else { return 0 };
-    let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
-    // SAFETY: a valid NUL-terminated path and a struct of the right type.
-    if unsafe { libc::statvfs(path.as_ptr(), &mut stats) } != 0 {
-        return 0;
-    }
-    (stats.f_bavail as u64).saturating_mul(stats.f_frsize as u64)
+    qurb_cli::disk::available(dir)
 }
 
 /// A guest's file, unsealed: as [`open_guest_file`] does.

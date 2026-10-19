@@ -304,9 +304,10 @@ impl Engine {
         // workers. Overlapping the waiting is the whole gain; there is very
         // little computation to parallelise.
         let mut changed = Vec::new();
+        let racy = self.store.db().racy_paths()?;
         for entry in entries {
             on_disk.push(entry.logical.clone());
-            match self.looks_unchanged(&entry.logical, entry.size, entry.mtime_ns) {
+            match self.looks_unchanged(&entry.logical, entry.size, entry.mtime_ns, &racy) {
                 Ok(true) => stats.unchanged += 1,
                 Ok(false) => changed.push(entry),
                 Err(e) => stats.record(&entry.path, e),
@@ -504,13 +505,27 @@ impl Engine {
     /// reconciliation, which on a large library is the difference between a
     /// startup that takes a second and one that takes minutes.
     ///
-    /// rsync and git make the same trade. The backstop is
-    /// [`Store::verify`](qurb_storage::Store::verify), which re-reads
-    /// everything and is meant to run occasionally rather than on every change.
+    /// rsync and git make the same trade, and like git this does not trust
+    /// a match for a file read within moments of being written, when another
+    /// write in the same tick of the filesystem's clock could follow
+    /// (`Store::put_file`, *Too recent to trust*): until 2026-10-18 it did,
+    /// and on Android 8 an edit made straight after a scan was never synced.
+    /// The backstop is [`Store::verify`](qurb_storage::Store::verify), which
+    /// re-reads everything and is meant to run occasionally rather than on
+    /// every change.
     /// Whether the index already agrees with what is on disk.
     ///
     /// See `store_if_changed` for what this trades away.
-    fn looks_unchanged(&self, logical: &str, size: u64, mtime_ns: i64) -> Result<bool> {
+    fn looks_unchanged(
+        &self,
+        logical: &str,
+        size: u64,
+        mtime_ns: i64,
+        racy: &std::collections::HashSet<String>,
+    ) -> Result<bool> {
+        if racy.contains(logical) {
+            return Ok(false);
+        }
         // Either kind of file the folder holds. A received file that looked
         // unknown here would be read and stored on every scan.
         Ok(match self.store.db().in_folder(logical)? {
@@ -607,6 +622,7 @@ impl Engine {
             if existing.deleted_at.is_none()
                 && existing.size == size
                 && existing.mtime_ns == mtime_ns
+                && !self.store.db().is_racy(logical)?
             {
                 stats.unchanged += 1;
                 return Ok(stats);

@@ -17,7 +17,6 @@
 
 use anyhow::{Context, Result};
 use std::fs::File;
-use std::os::fd::AsRawFd;
 use std::path::Path;
 
 /// Held for as long as the daemon runs. Dropping it releases the lock, and so
@@ -43,18 +42,30 @@ impl Lock {
             .open(&path)
             .with_context(|| format!("opening {}", path.display()))?;
 
-        // SAFETY: a valid descriptor and a constant operation. `LOCK_NB` makes
-        // this return rather than wait, which is the whole point: the answer
-        // wanted here is "is someone else running", not "let me queue up".
-        let taken = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-        if taken == 0 {
-            return Ok(Some(Lock { _file: file }));
+        // Without waiting, which is the whole point: the answer wanted here is
+        // "is someone else running", not "let me queue up". The standard
+        // library's, since 2026-10-18: `flock` on Unix as before, and the
+        // same on Windows, which `libc::flock` was not.
+        match file.try_lock() {
+            Ok(()) => Ok(Some(Lock { _file: file })),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+            Err(std::fs::TryLockError::Error(e)) => Err(e).with_context(|| format!("locking {}", path.display())),
         }
+    }
+}
 
-        let error = std::io::Error::last_os_error();
-        match error.raw_os_error() {
-            Some(libc::EWOULDBLOCK) => Ok(None),
-            _ => Err(error).with_context(|| format!("locking {}", path.display())),
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A second taker is told someone has it, and has it once they let go.
+    #[test]
+    fn one_daemon_holds_a_store_at_a_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = Lock::take(dir.path()).unwrap();
+        assert!(first.is_some(), "the lock was not taken");
+        assert!(Lock::take(dir.path()).unwrap().is_none(), "a second daemon was let in");
+        drop(first);
+        assert!(Lock::take(dir.path()).unwrap().is_some(), "the lock was not given back");
     }
 }

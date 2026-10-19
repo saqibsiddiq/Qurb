@@ -45,6 +45,17 @@ service that relays as well gives it the WebSockets opened at its `/relay`
 which is how the owner's runs, published with the rendezvous through a proxy
 that carries only TLS by name. The frames are the same either way.
 
+## Staying on
+
+A socket made with `RelaySocket::connect` or `RelaySocket::redialling` dials
+its relay again when the connection goes -- a restart, a reboot, a rendezvous
+service that came up after the device -- waiting one second and doubling to a
+minute, and registers every name it holds on the new connection. Until it is
+back, what QUIC sends is dropped, as over any lost path, and `link()` says
+`Down`, so a device does not dial a peer through it. A socket made `over` one
+stream ends with it, as before. Until 2026-10-18 every socket was the last
+kind: a relay restart left a device off it until the device restarted.
+
 ## TCP, when everything else is UDP
 
 The data plane is QUIC over UDP because it is faster. The relay is TCP because

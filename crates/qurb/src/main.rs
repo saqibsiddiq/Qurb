@@ -82,6 +82,8 @@ Settings live in <dir>/.qurb/config and can be edited by hand.
 ";
 
 fn main() {
+    // Windows' places under the names the rest asks for.
+    qurb_cli::platform::settle();
     allow_a_closed_pipe();
 
     tracing_subscriber::fmt()
@@ -427,6 +429,7 @@ fn allow_a_closed_pipe() {
     // SAFETY: `signal` with `SIG_DFL` restores the disposition the process
     // started with before Rust changed it. It touches no memory and is the
     // documented way to undo that.
+    #[cfg(unix)]
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }

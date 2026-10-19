@@ -18,7 +18,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # The tray icon itself. Cross-platform: StatusNotifierItem on Linux, the
 # status bar on macOS, the notification area on Windows.
-tray-icon = "0.25"
+#
+# Without libxdo, which only the predefined Copy, Paste and Select All items
+# use -- the tray has none -- and whose library is libxdo.so.4 on Arch and
+# libxdo.so.3 on Debian, Ubuntu and Fedora: a tray built on one did not start
+# on the others (found building 0.1.0, 2026-10-18).
+tray-icon = { version = "0.25", default-features = false, features = ["libappindicator"] }
 # Desktop notifications, for the things worth interrupting someone about.
 notify-rust = "4"
 

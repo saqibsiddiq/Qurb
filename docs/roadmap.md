@@ -3,8 +3,12 @@
 Six phases. Each has an explicit **kill criterion**: the result that means stop
 and reconsider rather than push on.
 
-**Where it stands, 2026-10-15:** Phases 0–2 complete; Phase 3 built with its
-kill criterion unmeasured; Phases 4 and 5 working on Linux and Android. What
+**Where it stands, 2026-10-19:** Phases 0–2 complete; Phase 3 built with its
+kill criterion unmeasured; Phases 4 and 5 working on Linux and Android, and on
+2026-10-18 hunted for faults -- the suite run on Android 8 for the first time,
+lint, `cargo audit` -- and **release 0.1.0 built**, not published: Linux
+packages, a static `qurb` for any Linux, Android for every ABI, and Windows,
+built and not run there ([releasing.md](releasing.md)). What
 comes next was set by the project owner on 2026-09-28, in this order, with
 his numbered lists since (2026-10-13 and 2026-10-14) taken first as they
 came — backing up WhatsApp and a phone's folders to a computer, six digits to
@@ -21,9 +25,13 @@ state is kept in [phases/phase-5-mobile.md](phases/phase-5-mobile.md):
    are what he found.
 2. **The relay on a server of the owner's own**, so the phone and the laptop
    reach each other from any network, not only where a direct path exists.
-3. **A formal release for Linux and Android.**
+3. **A formal release for Linux and Android.** Built on 2026-10-18 as 0.1.0,
+   with Windows added at the owner's asking
+   ([0070](decisions/0070-the-first-release.md)); publishing it is the owner's
+   call.
 
-macOS, Windows and iOS come after Linux and Android are finished.
+macOS and iOS come after Linux and Android are finished; Windows is built and
+waits for a Windows machine to be run on.
 
 ## Honest feasibility
 

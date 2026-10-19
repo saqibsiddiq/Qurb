@@ -2511,6 +2511,77 @@ item added during the work.
    200 MB. Found on the way: a file with no date read "20742 days ago";
    it now shows its size alone.
 
+## The owner's list of 2026-10-18
+
+1. **"Find and fix every possible bug in the system."** Hunted by reading the
+   code, by Android lint, by `cargo audit`, by the desktop smoke test, and by
+   running the whole Rust suite on Android 8.0 for the first time -- an
+   emulator, API 26, no Google Play services, as 64-bit x86_64 and 32-bit x86.
+   What was found, and what was done about each:
+
+   | found | how | done |
+   |---|---|---|
+   | The rendezvous service kept poking a push token Firebase had forgotten, and a stale access token was refused with 401 after the laptop slept: it expired by `Instant`, which stops while Linux is suspended | reading `fcm.rs` against the laptop's log | forgotten on Firebase's "UNREGISTERED"; the access token by the wall clock, fetched afresh and the poke sent once more on a 401 |
+   | A phone with no rendezvous set used `10.0.2.2` -- the emulator's address for its host -- on real hardware; after *Clear data* the S23 did, for three days (2026-10-08) | reading `Qurb.kt` | none on a phone, which says so; the emulator keeps it; the address kept in Block Store beside the key and restored at setup |
+   | The relay connection was opened once: a restart of the rendezvous service, or the daemon starting before it at login, left a device off the relay for the session, and told QUIC its socket had failed | reading `relay/socket.rs` | dialled again with backoff, every name registered again; tested by restarting a relay under it ([0068](../decisions/0068-the-rendezvous-service-relays.md), amended) |
+   | A person's folder open on the computer stayed open through a night's sleep, the ten idle minutes counted on `Instant` | reading `openings.rs` | counted on both clocks; tested by moving the wall clock past a sleep |
+   | A video address from that folder went on playing after the folder had locked itself, idle or asleep | reading `desktop/stream.rs` | checked as it plays, which counts as using it |
+   | **An edit made straight after a scan was never synced**: the same size, in the same tick of the filesystem's clock | the suite on Android 8 (`an_edit_propagates`) | [decision 0069](../decisions/0069-too-recent-to-trust.md): a file read within three seconds of being written is read again until it is older; index schema 26 |
+   | **Android 8, 9 and 10 stopped the app**: "All files access" asked of by an Android 11 call, on every pass, Home and Settings; headings set by an Android 9 call on every screen; the screen lock confirmed by an Android 10 call on Android 9 | Android lint (`NewApi`), then the app on Android 8 | the storage permission asked in a dialog before 11; headings through `ViewCompat`; the screen lock's own page before 10, where 8 could not confirm at all |
+   | WhatsApp's folder accepted only under `Android/media`, where WhatsApp moved it on Android 11: on 10 and older it could not be backed up | reading `WhatsApp.kt` beside the above | `WhatsApp/` at the top of storage accepted too, restored to where WhatsApp keeps it |
+   | On Android 8.0 the navigation buttons were white on a white page, and every heading lost its weight | the app on Android 8, by eye | a scrim behind the buttons on 8.0 alone; semibold as bold, which 8 understands |
+   | A push token Firebase reissued never reached the engine, which kept giving the old one until the app restarted; and the first screen could wait on fetching the token | reading `Push.kt` against `Qurb.kt` | handed over when issued; waited on for three seconds at most; Block Store's calls bounded too |
+   | WorkManager 2.9 did not stop a foreground worker when Android 15's six hours of data sync a day ran out, and the system stops the app for that | reading the release notes against `SyncWorker.kt` | 2.10.5 |
+   | Eight advisories in dependencies: three in `quinn-proto`, two of them a peer able to panic the QUIC stack, and five in `rustls`; `rustls-pemfile` unmaintained | `cargo audit` | `quinn-proto` 0.11.19, `rustls` 0.23.46; PEM read by rustls itself |
+   | The tray needed glibc 2.43 (`atan2f`) and Arch's `libxdo.so.4`: built here, it started on no other distribution | `objdump -T`, building the release | the angle in f64; the tray without libxdo, which only menu items it does not have used |
+
+   Not faults, and left: `a_device_that_is_off_does_not_starve_one_that_is_on`
+   failed once on the Android 8 emulator under the load of a full run and
+   passed alone; it allows six seconds. Lint's warnings about text written
+   into the code rather than kept as translatable resources are left: the
+   app is in English only, for now.
+
+   Measured on the emulator before the last fixes: the suite passed but for
+   the two above, 770 of 772 as x86_64 and, as 32-bit x86, all but a crash
+   test whose helper had been built after the schema changed under it. With
+   them, on 2026-10-19: as 32-bit x86 all 775 tests passed, and as x86_64 774,
+   the one left being the load-sensitive test above. On the laptop, 900 and
+   none failing; clippy clean.
+
+2. **"Build for all the distros of Linux, Windows and every Android phone for
+   formal release."** Asked, answered on 2026-10-18: Windows built here and
+   run under Wine, labelled as not run on Windows; version 0.1.0; built only,
+   nothing published. **Built, 2026-10-18 and 19**, by `scripts/release.sh`
+   into `dist/0.1.0/` -- everything, and what has run on what, is in
+   [releasing.md](../releasing.md); why it is shaped so,
+   [decision 0070](../decisions/0070-the-first-release.md):
+
+   - **Linux**: a deb, an rpm and the Arch package, for glibc 2.34 and
+     WebKitGTK 4.1 and later, measured; and `qurb` alone, static, for any
+     x86_64 or arm64 Linux. The deb's and the Arch package's programs were run
+     on the laptop: two folders paired and synced, and the window driven end
+     to end by its smoke test. The arm64 program has not run.
+   - **Android**: an APK for each ABI, one holding all four, and an app
+     bundle, signed with the release key, every library aligned for 16 KB
+     pages. Run on emulators without Google Play: the universal APK on
+     Android 14, the 32-bit x86 one on Android 8.0. Not on a phone: the S23
+     runs debug-key builds, and changing that means uninstalling.
+   - **Windows**: the window and `qurb`, cross-built with Zig, zipped with
+     `WebView2Loader.dll` and a README that says first that it has not run on
+     Windows. Not run under Wine either: Wine is not installed here, and
+     installing it needs the owner. Its imports were read instead, which
+     found the missing DLL.
+
+   Found building it, and fixed: the tray needed glibc 2.43 and Arch's
+   libxdo; Tauri wrote its own menu entry, named in lower case, with the PNG
+   icon; the Arch package depended on `xdotool`, which nothing uses now;
+   Zig's linker stripped every function name from the static programs;
+   Gradle will not build a bundle and split APKs at once; JNA brought
+   libraries for ABIs Android no longer runs; JNA 5.15's x86_64 library was
+   not 16 KB aligned; the Windows window asked for a DLL Windows does not
+   have. And an AppImage was built, measured to need glibc 2.44 because it
+   carries this machine's WebKitGTK, and left out.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

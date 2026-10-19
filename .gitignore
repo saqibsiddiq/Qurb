@@ -3,6 +3,9 @@
 **/target/
 *.pdb
 
+# Release builds (scripts/release.sh)
+/dist/
+
 # Spike scratch output
 /experiments/**/scratch/
 

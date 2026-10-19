@@ -1,6 +1,7 @@
 package com.qurb
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -58,6 +59,7 @@ object Notices {
             PackageManager.PERMISSION_GRANTED
 
     /** After a sync: say what is worth saying since the last look. */
+    @SuppressLint("MissingPermission") // permitted() is asked first
     fun tell(context: Context, engine: Qurb) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val history = runCatching { engine.history(50u, null) }.getOrNull() ?: return
@@ -95,6 +97,7 @@ object Notices {
      * waiting, so it is worth interrupting for. Tapped, the app opens and asks
      * the question behind the screen lock; nothing is approved from here.
      */
+    @SuppressLint("MissingPermission") // permitted() is asked first
     fun asked(context: Context, engine: Qurb) {
         if (onScreen || !permitted(context)) return
         val ask = runCatching { engine.openAsks() }.getOrNull()?.firstOrNull() ?: return

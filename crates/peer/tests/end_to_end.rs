@@ -740,8 +740,10 @@ async fn a_file_syncs_through_the_relay_the_rendezvous_carries() {
 }
 
 /// A rendezvous service that carries no relay refuses `/relay`, and a device
-/// that looked for one there starts without it, at once, rather than
-/// registered with something that never answers.
+/// that looked for one there starts at once, knowing it is not there, rather
+/// than registered with something that never answers. It asks again now and
+/// then (`qurb_relay::socket`, *Staying on*), so a service that later carries
+/// one is used without the device being restarted.
 #[tokio::test(flavor = "multi_thread")]
 async fn no_relay_beside_a_rendezvous_that_carries_none() {
     let signal = Arc::new(SignalServer::bind("127.0.0.1:0".parse().unwrap()).await.unwrap());
@@ -752,7 +754,11 @@ async fn no_relay_beside_a_rendezvous_that_carries_none() {
 
     let started = std::time::Instant::now();
     let connector = connected_via(&desktop, &signal_url, qurb_peer::relay_for(None, &signal_url).await).await;
-    assert!(connector.relay_endpoint().is_none(), "took a relay that is not there");
+    assert!(
+        matches!(connector.relay_link(), Some(qurb_relay::Link::Down(_))),
+        "took a relay that is not there: {:?}",
+        connector.relay_link()
+    );
     assert!(started.elapsed() < Duration::from_secs(3), "waited for a relay that is not there");
 }
 

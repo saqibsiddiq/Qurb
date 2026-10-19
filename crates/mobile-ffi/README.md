@@ -137,7 +137,7 @@ qurb.removeDevice(peer.fingerprint, deleteKept = false)
 ```
 
 And two free functions: `engineVersion()` — `qurb 0.1.0 · protocol qurb/2 ·
-index schema 25` on 2026-10-15 — and `qrCode(text)`, the matrix a phone draws to show a
+index schema 26` on 2026-10-18 — and `qrCode(text)`, the matrix a phone draws to show a
 pairing code, so the app needs no image library.
 
 `outstanding()` is the honest answer to "did it get there yet": live files this
@@ -211,7 +211,10 @@ the vault's files with no record of it keeping them (`confirm_kept`), so a
 `Settings.wakeToken` carries the platform's push token, so the rendezvous
 service can poke this device when another has something and this one is asleep.
 `null` — the default, and right on a desktop — means it is never woken and
-syncs when it next looks.
+syncs when it next looks. A token the push service issues later, or issues
+anew, is handed over with `setWakeToken(token)` and given on the next pass;
+until 2026-10-18 the one the engine opened with was given for the life of the
+app.
 
 The pairing code carries this device's **full** fingerprint and must travel out
 of band — a QR code on screen, or read aloud. Sending it over the network

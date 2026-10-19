@@ -75,7 +75,7 @@
                         android:layout_gravity="center"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_plus"
-                        android:tint="@color/text_2" />
+                        app:tint="@color/text_2" />
                 </FrameLayout>
 
                 <LinearLayout
@@ -106,7 +106,7 @@
                     android:layout_marginStart="8dp"
                     android:importantForAccessibility="no"
                     android:src="@drawable/ic_chevron_right"
-                    android:tint="@color/text_3" />
+                    app:tint="@color/text_3" />
             </LinearLayout>
 
             <LinearLayout
@@ -132,7 +132,7 @@
                         android:layout_gravity="center"
                         android:importantForAccessibility="no"
                         android:src="@drawable/ic_key_round"
-                        android:tint="@color/text_2" />
+                        app:tint="@color/text_2" />
                 </FrameLayout>
 
                 <LinearLayout
@@ -162,7 +162,7 @@
                     android:layout_marginStart="8dp"
                     android:importantForAccessibility="no"
                     android:src="@drawable/ic_chevron_right"
-                    android:tint="@color/text_3" />
+                    app:tint="@color/text_3" />
             </LinearLayout>
 
             <!-- Shown only when Block Store holds a key from before. Pulled

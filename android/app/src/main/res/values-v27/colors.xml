@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 8.1 on: the navigation bar's buttons follow the page
+         (windowLightNavigationBar), so the bar is clear. -->
+    <color name="navigation_bar">@android:color/transparent</color>
+</resources>

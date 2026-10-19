@@ -7,6 +7,7 @@ import com.google.android.gms.auth.blockstore.RetrieveBytesRequest
 import com.google.android.gms.auth.blockstore.StoreBytesData
 import com.google.android.gms.tasks.Task
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -31,6 +32,7 @@ import kotlin.coroutines.resumeWithException
 object Backup {
     private const val TAG = "qurb"
     private const val KEY = "com.qurb.key"
+    private const val SIGNAL = "com.qurb.signal"
 
     /** Whether a copy would leave this phone, end to end encrypted. */
     suspend fun leavesThePhone(context: Context): Boolean =
@@ -55,6 +57,30 @@ object Backup {
         }.onFailure { Log.w(TAG, "could not keep the key in Block Store", it) }
     }
 
+    /**
+     * Keep the rendezvous service's address beside the key, so a reinstall or
+     * a new phone restored from this one's backup has it back with the key
+     * rather than none. Not across *Clear data*, which empties Block Store
+     * too. Best effort, as the key's is.
+     */
+    suspend fun saveSignal(context: Context, url: String) {
+        runCatching {
+            val data = StoreBytesData.Builder()
+                .setKey(SIGNAL)
+                .setBytes(url.toByteArray(Charsets.UTF_8))
+                .setShouldBackupToCloud(leavesThePhone(context))
+                .build()
+            Blockstore.getClient(context).storeBytes(data).await()
+        }.onFailure { Log.w(TAG, "could not keep the rendezvous address in Block Store", it) }
+    }
+
+    /** The rendezvous address kept with the key, if there is one. */
+    suspend fun findSignal(context: Context): String? = runCatching {
+        val request = RetrieveBytesRequest.Builder().setKeys(listOf(SIGNAL)).build()
+        val found = Blockstore.getClient(context).retrieveBytes(request).await()
+        found.blockstoreDataMap[SIGNAL]?.bytes?.toString(Charsets.UTF_8)
+    }.onFailure { Log.w(TAG, "could not read Block Store", it) }.getOrNull()
+
     /** The key kept earlier, on this phone or restored to it, if there is one. */
     suspend fun find(context: Context): String? = runCatching {
         val request = RetrieveBytesRequest.Builder().setKeys(listOf(KEY)).build()
@@ -62,8 +88,15 @@ object Backup {
         found.blockstoreDataMap[KEY]?.bytes?.toString(Charsets.UTF_8)
     }.onFailure { Log.w(TAG, "could not read Block Store", it) }.getOrNull()
 
-    private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { waiting ->
-        addOnSuccessListener { waiting.resume(it) }
-        addOnFailureListener { waiting.resumeWithException(it) }
+    /** Bounded: setup waits on Block Store, and a phone whose Play services
+     *  are missing, old or busy must not hold it up for long. Every caller
+     *  takes a failure as "nothing kept". */
+    private suspend fun <T> Task<T>.await(): T = withTimeout(WAIT_MS) {
+        suspendCancellableCoroutine { waiting ->
+            addOnSuccessListener { waiting.resume(it) }
+            addOnFailureListener { waiting.resumeWithException(it) }
+        }
     }
+
+    private const val WAIT_MS = 10_000L
 }

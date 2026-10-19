@@ -161,6 +161,15 @@ device" at `13:22:19.281` — **seven hundred milliseconds**. See
 [decision 0028](../../docs/decisions/0028-waking-a-sleeping-device.md) for what
 the dependency costs.
 
+What Firebase refuses is told apart (`fcm::Refused`). A token it says is gone
+-- `UNREGISTERED`, or not a valid token -- is forgotten by the service and not
+tried again; until 2026-10-18 it was poked on every wake for as long as the
+service ran. A refusal of the service's own access token is met by fetching a
+fresh one and sending once more. The access token's hour is counted by the
+wall clock: counted on `Instant`, which stops while Linux is suspended, a
+token past its hour was still used after the laptop slept, and wakes were
+refused until it was replaced.
+
 ## Not yet built
 
 - **Abuse controls beyond the basics.** There are limits on connections, group

@@ -599,10 +599,24 @@ impl Store {
     /// mapping. An earlier version chunked the file and then read it again into
     /// a heap buffer, which read every byte twice and held the whole file in
     /// memory — invisible at test sizes and 100k files' worth of waste at scale.
+    ///
+    /// # Too recent to trust
+    ///
+    /// A scan takes a file whose size and modification time match the index
+    /// as unchanged. A filesystem's clock ticks, though: every few
+    /// milliseconds on Android 8's kernel, and on Linux before 6.13; two
+    /// seconds on FAT. A file read in the tick it was written in can be
+    /// written again, the same size, and keep the same time -- and that edit
+    /// would never be seen. It was not, on Android 8 (2026-10-18), where
+    /// `an_edit_propagates` failed. So a file read within [`RACY`] of its time
+    /// is marked, and read again on each scan until it is older than that, as
+    /// git does with an index entry as new as the index.
     pub fn put_file(&mut self, logical_path: &str, source: &Path) -> Result<PutStats> {
         let file = std::fs::File::open(source).map_err(|e| Error::io(source, e))?;
         let meta = file.metadata().map_err(|e| Error::io(source, e))?;
         let mtime_ns = mtime_from(&meta);
+        // Best effort: a mark not written costs the protection, not the file.
+        let _ = self.db.set_racy(logical_path, too_recent(mtime_ns));
 
         // Mapping a zero-length file fails, and there is nothing to map anyway.
         if meta.len() == 0 {
@@ -1765,12 +1779,16 @@ impl Store {
 
         let known: std::collections::HashMap<&str, &db::OutsideRow> =
             kept.iter().map(|row| (row.path.as_str(), row)).collect();
+        // Read within moments of being written, and not trusted until older
+        // (`put_file`, *Too recent to trust*): the same as a folder's files.
+        let racy = self.db.racy_paths()?;
         let mut work = Vec::new();
         for entry in listing {
             let path = format!("{prefix}/{}", entry.path);
             let before = known.get(path.as_str());
             if let Some(row) = before.filter(|row| {
-                row.source.as_ref().is_some_and(|s| s.size == entry.size && s.mtime_ns == entry.mtime_ns)
+                !racy.contains(&row.path)
+                    && row.source.as_ref().is_some_and(|s| s.size == entry.size && s.mtime_ns == entry.mtime_ns)
             }) {
                 // The same file, found another way: read from where it was
                 // found this time, without reading it again. WhatsApp's files
@@ -1829,7 +1847,15 @@ impl Store {
                     .expect("every file was read")
                     .and_then(|m| self.record_outside(path, &entry.source, entry.size, entry.mtime_ns, &m));
                 match recorded {
+                    // Read again only because it was too recent to trust, and
+                    // the same after all.
+                    Ok(put) if put.unchanged && *before && racy.contains(path.as_str()) => {
+                        let _ = self.db.set_racy(path, too_recent(entry.mtime_ns));
+                        report.bytes_read += entry.size;
+                        report.unchanged += 1;
+                    }
                     Ok(_) => {
+                        let _ = self.db.set_racy(path, too_recent(entry.mtime_ns));
                         report.bytes_read += entry.size;
                         if *before {
                             report.changed += 1;
@@ -3429,6 +3455,21 @@ impl VerifyReport {
     pub fn is_healthy(&self) -> bool {
         self.missing.is_empty() && self.corrupt.is_empty() && self.refcount_drift.is_empty()
     }
+}
+
+/// How near a file's time to now its size and time are not trusted: a
+/// filesystem's clock ticks every two seconds at worst (FAT), and a margin.
+pub const RACY: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Whether a file with this time, read now, could be written again in the same
+/// tick (`Store::put_file`, *Too recent to trust*). A time far in the future
+/// is not: nothing could be done for it, and it would be read on every scan.
+fn too_recent(mtime_ns: i64) -> bool {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as i64)
+        .unwrap_or(0);
+    (now - mtime_ns).abs() < RACY.as_nanos() as i64
 }
 
 fn mtime_from(meta: &std::fs::Metadata) -> i64 {

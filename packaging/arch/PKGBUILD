@@ -18,28 +18,39 @@
 # turn that off.
 
 pkgname=qurb
-pkgver=0.1.0.r117.3b570dd
+pkgver=0.1.0
 pkgrel=1
 pkgdesc="Private cloud storage: your files, synced directly between your own devices"
 arch=('x86_64' 'aarch64')
 url="https://github.com/saqibsiddiq/Qurb"
 license=('MIT OR Apache-2.0')
-depends=('webkit2gtk-4.1' 'gtk3' 'xdotool' 'glibc' 'gcc-libs')
+depends=('webkit2gtk-4.1' 'gtk3' 'glibc' 'gcc-libs')
+# The tray icon, for whoever runs qurb-tray; the window needs nothing more.
+optdepends=('libayatana-appindicator: the tray icon of qurb-tray')
 makedepends=('cargo' 'git')
-# The binaries keep their symbols for readable backtraces; stripping is left
-# to makepkg's default, and LTO to Cargo's profile.
-options=('!lto')
+# The binaries keep their symbols for readable backtraces (`strip` off below,
+# Cargo dropping only the debug information), and LTO is left to Cargo.
+options=('!lto' '!strip' '!debug')
 
 _root() { realpath "$startdir/../.."; }
 
+# A release names its version (scripts/release.sh sets QURB_RELEASE); a build
+# from the working tree is named by its commit.
 pkgver() {
     cd "$(_root)"
+    if [[ -n ${QURB_RELEASE:-} ]]; then
+        echo "$QURB_RELEASE"
+        return
+    fi
     printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 build() {
     cd "$(_root)"
     export CARGO_TARGET_DIR="$srcdir/target"
+    # Function names kept, for a readable backtrace; the rest of the debug
+    # information is not shipped.
+    export CARGO_PROFILE_RELEASE_DEBUG=false CARGO_PROFILE_RELEASE_STRIP=debuginfo
     cargo build --release --locked -p qurb-cli --features push
     cargo build --release --locked -p qurb-desktop -p qurb-tray
 }

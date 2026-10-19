@@ -59,12 +59,13 @@ class Wakeup : FirebaseMessagingService() {
 
     /**
      * The token changed, so the rendezvous service is holding a stale one.
-     *
-     * Nothing to do here beyond a sync: the token is read fresh and re-sent on
-     * every pass, so the next one corrects it.
+     * Handed to the engine, which gives it on every pass, and a pass now to
+     * give it. Until 2026-10-18 only the pass: the engine kept the token it
+     * opened with, so the stale one was given again until the app restarted.
      */
     override fun onNewToken(token: String) {
         Log.i("qurb", "push token changed")
+        Engine.wakeBy(token)
         SyncWorker.runNow(applicationContext)
     }
 }

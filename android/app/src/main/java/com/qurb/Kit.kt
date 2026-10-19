@@ -14,6 +14,7 @@ import android.widget.TextView
 import androidx.annotation.DrawableRes
 import androidx.annotation.StyleRes
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.setPadding
 import androidx.core.widget.NestedScrollView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
@@ -182,7 +183,9 @@ class Kit(private val app: MainActivity) {
         row.addView(TextView(app).apply {
             this.text = text
             setTextAppearance(R.style.Text_Section)
-            isAccessibilityHeading = true
+            // Through the compat call: Android 9 added the attribute, and
+            // setting it on 8 stopped the app until 2026-10-18.
+            ViewCompat.setAccessibilityHeading(this, true)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         // A text button's words end at the gutter, as Home's *See all* does.
         if (action != null && onAction != null) row.addView(
@@ -463,7 +466,7 @@ class Sheet(private val app: MainActivity, private val kit: Kit) {
         words.addView(TextView(app).apply {
             text = title
             setTextAppearance(R.style.Text_Title)
-            isAccessibilityHeading = true
+            ViewCompat.setAccessibilityHeading(this, true)
         })
         if (sub.isNotEmpty()) words.addView(TextView(app).apply {
             text = sub

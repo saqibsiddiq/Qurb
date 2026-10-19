@@ -1,8 +1,11 @@
 package com.qurb
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.os.SystemClock
 import android.provider.Settings
@@ -19,6 +22,11 @@ import uniffi.qurb_mobile.Qurb
  * Reading them needs "All files access". Without it Android lets an app into
  * a folder only when the person picks it on the phone, one at a time, so the
  * computer could neither see this phone's folders nor choose any.
+ *
+ * "All files access" is Android 11's. Before it, Android 8 to 10, the same
+ * reach is the storage permission, asked in a dialog rather than on a page of
+ * Settings. Until 2026-10-18 only the newer was asked for, and asking whether
+ * it was held stopped the app on those phones: lint found it, none had run it.
  */
 object Folders {
     private const val TAG = "qurb-folders"
@@ -34,7 +42,13 @@ object Folders {
      */
     private const val LIST_EVERY_MS = 6L * 3600 * 1000
 
-    fun allowed(): Boolean = Environment.isExternalStorageManager()
+    /** The storage permission's two halves, before Android 11: reading
+     *  folders, and writing into them for a restore. */
+    val OLDER = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+
+    fun allowed(context: Context): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager()
+        else OLDER.all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
 
     /**
      * Whether the access has been seen granted before, and from now on it
@@ -55,7 +69,7 @@ object Folders {
      * waited for a pass that had not come.
      */
     fun startChosen(context: Context, engine: Qurb) {
-        if (!allowed()) return
+        if (!allowed(context)) return
         val chosen = runCatching { engine.chosenFolders() }.getOrNull() ?: return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val before = prefs.getStringSet(CHOSEN, emptySet()) ?: emptySet()
@@ -67,7 +81,8 @@ object Folders {
     /** The root of this phone's shared storage, which folders are named from. */
     fun root(): String = Environment.getExternalStorageDirectory().path
 
-    /** The system's own page for granting it. */
+    /** The system's own page for granting it, from Android 11. Before, it is
+     *  asked for in a dialog ([MainActivity.allowFiles]). */
     fun allowing(context: Context): Intent =
         Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}"))
 
@@ -78,7 +93,7 @@ object Folders {
      * on by the next run.
      */
     fun run(context: Context, engine: Qurb, seconds: UInt, listNow: Boolean = false): BackupRun? {
-        if (!allowed()) return null
+        if (!allowed(context)) return null
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         if (listNow || now - prefs.getLong(LISTED, 0) > LIST_EVERY_MS) {

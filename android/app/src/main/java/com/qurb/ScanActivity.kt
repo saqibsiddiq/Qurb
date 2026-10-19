@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -65,6 +66,9 @@ class ScanActivity : AppCompatActivity() {
         }
     }
 
+    // The camera frame's image is read for the barcode reader, which CameraX
+    // marks as an API that may change.
+    @androidx.annotation.OptIn(markerClass = [ExperimentalGetImage::class])
     private fun start() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({

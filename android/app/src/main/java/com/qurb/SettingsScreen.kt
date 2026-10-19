@@ -60,7 +60,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                     // Access just granted, in the system's page this screen
                     // opened: the folders listed at once, for the computer to
                     // show, and the nightly run scheduled (decision 0063).
-                    if (Folders.allowed() && !Folders.noticed(app)) {
+                    if (Folders.allowed(app) && !Folders.noticed(app)) {
                         runCatching { Folders.run(app, engine, 0u, listNow = true) }
                         WhatsApp.schedule(app)
                         SyncWorker.runNow(app)
@@ -197,7 +197,8 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.groupTitle(page, "Advanced")
         group = kit.group(page)
         kit.item(group, "Background sync", state.background) { explainBackground() }
-        kit.item(group, "Rendezvous service", Engine.signalUrl(app)) { editSignal() }
+        kit.item(group, "Rendezvous service",
+            Engine.signalUrl(app).ifEmpty { "Not set — only devices on this Wi-Fi" }) { editSignal() }
         kit.item(group, "Relay", when (val relay = Engine.relayAddress(app)) {
             null -> "Beside your rendezvous service"
             "off" -> "None — devices must reach each other directly"
@@ -491,7 +492,11 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                 "for one reachable from anywhere. It never sees your files.")
             .view(input, top = 14)
             .buttons("Save") {
-                Engine.setSignalUrl(app, input.text.toString().trim())
+                val url = input.text.toString().trim()
+                Engine.setSignalUrl(app, url)
+                // Kept with the key, so a reinstall or a new phone restored
+                // from this one's backup has it back.
+                scope.launch(Dispatchers.IO) { Backup.saveSignal(app, url) }
                 app.say("Saved")
                 refresh()
             }

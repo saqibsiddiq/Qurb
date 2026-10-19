@@ -274,8 +274,14 @@ Settings turns off. See [decision 0040](../../docs/decisions/0040-the-menu-opens
   already there — and the full path whenever it differs from what was typed,
   since a relative path once made a second, empty device the window then ran
   at every login (see [phase 4](../../docs/phases/phase-4-product.md#a-folder-typed-without-a-slash)).
-- **Linux only, in practice.** The Rust is portable and Tauri is
-  cross-platform; this has never been built or run on Windows or macOS.
+- **Linux only, in practice.** Since 2026-10-18 it is built for Windows too,
+  cross-compiled here, and has never run there: single instance by a
+  loopback port instead of a Unix socket (`instance.rs`), starting at login
+  by the user's `Run` key (`autostart.rs`), large media opened in the browser,
+  folders in Explorer. Never built for macOS.
+- **No AppImage.** One built here carries this machine's libraries and needs
+  its glibc, 2.44; the release has a deb, an rpm and the Arch package instead
+  (`tauri.release.conf.json`, [releasing](../../docs/releasing.md)).
 - **Checked by eye only in a renderer without compositing.** The screens were
   looked at in WebKitGTK offscreen, which draws no backdrop blur and no
   running animations; the real window has both. The owner uses it, and the

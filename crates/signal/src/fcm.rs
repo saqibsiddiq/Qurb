@@ -22,9 +22,9 @@
 //! the token cache — but the first real send is unproven. Said here rather
 //! than discovered later.
 
-use crate::wake::{WakeToken, Waker};
+use crate::wake::{Forget, WakeToken, Waker};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime};
 
 /// What Google issues for a service account, as the JSON file gives it.
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -44,9 +44,14 @@ impl ServiceAccount {
 }
 
 /// An access token and when it stops being usable.
+///
+/// By the wall clock. It was `Instant`, which on Linux stops while the machine
+/// is suspended, and Google's tokens expire by the wall clock: after the
+/// owner's laptop slept, a token past its hour was still taken as good, and
+/// wakes were refused 401 until it was (2026-10-15).
 struct Access {
     token: String,
-    until: Instant,
+    until: SystemTime,
 }
 
 /// Sends pokes to Firebase.
@@ -54,6 +59,30 @@ pub struct Fcm {
     account: ServiceAccount,
     http: reqwest::Client,
     access: Arc<Mutex<Option<Access>>>,
+    /// Told of a token Firebase says is gone, so it is not tried again.
+    gone: Arc<Mutex<Option<Forget>>>,
+}
+
+/// Why Firebase refused a poke.
+#[derive(Debug, PartialEq, Eq)]
+enum Refused {
+    /// The token is no longer anybody's: forgotten, not tried again.
+    Gone,
+    /// The access token: dropped, and asked for afresh.
+    Unauthorized,
+    Other(String),
+}
+
+impl Refused {
+    /// From a refusal's status and body, as the HTTP v1 API gives them.
+    fn from(status: u16, body: &str) -> Self {
+        match status {
+            404 if body.contains("UNREGISTERED") => Self::Gone,
+            400 if body.contains("registration token is not a valid") => Self::Gone,
+            401 => Self::Unauthorized,
+            _ => Self::Other(format!("firebase refused it: {status} {body}")),
+        }
+    }
 }
 
 impl Fcm {
@@ -62,6 +91,7 @@ impl Fcm {
             account,
             http: reqwest::Client::new(),
             access: Arc::new(Mutex::new(None)),
+            gone: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -83,7 +113,7 @@ impl Fcm {
         const MARGIN: Duration = Duration::from_secs(120);
 
         if let Some(held) = self.access.lock().expect("access").as_ref() {
-            if held.until > Instant::now() + MARGIN {
+            if held.until > SystemTime::now() + MARGIN {
                 return Ok(held.token.clone());
             }
         }
@@ -114,7 +144,7 @@ impl Fcm {
         let token = granted.access_token.clone();
         *self.access.lock().expect("access") = Some(Access {
             token: granted.access_token,
-            until: Instant::now() + Duration::from_secs(granted.expires_in),
+            until: SystemTime::now() + Duration::from_secs(granted.expires_in),
         });
         Ok(token)
     }
@@ -181,25 +211,33 @@ impl Fcm {
         })
     }
 
-    async fn poke(&self, token: WakeToken) -> Result<(), String> {
-        let access = self.access_token().await?;
+    /// Send one poke; refused for a stale access token, asked for afresh
+    /// and sent once more.
+    async fn poke(&self, token: &WakeToken) -> Result<(), Refused> {
+        match self.send(token).await {
+            Err(Refused::Unauthorized) => {
+                *self.access.lock().expect("access") = None;
+                self.send(token).await
+            }
+            other => other,
+        }
+    }
+
+    async fn send(&self, token: &WakeToken) -> Result<(), Refused> {
+        let access = self.access_token().await.map_err(Refused::Other)?;
         let response = self
             .http
             .post(self.endpoint())
             .bearer_auth(access)
-            .json(&Self::body(&token))
+            .json(&Self::body(token))
             .send()
             .await
-            .map_err(|e| format!("sending: {e}"))?;
-
-        match response.status().is_success() {
-            true => Ok(()),
-            false => Err(format!(
-                "firebase refused it: {} {}",
-                response.status(),
-                response.text().await.unwrap_or_default()
-            )),
+            .map_err(|e| Refused::Other(format!("sending: {e}")))?;
+        if response.status().is_success() {
+            return Ok(());
         }
+        let status = response.status().as_u16();
+        Err(Refused::from(status, &response.text().await.unwrap_or_default()))
     }
 }
 
@@ -212,21 +250,46 @@ impl Waker for Fcm {
         let account = self.account.clone();
         let http = self.http.clone();
         let access = Arc::clone(&self.access);
+        let gone = Arc::clone(&self.gone);
         tokio::spawn(async move {
-            let sender = Fcm { account, http, access };
-            if let Err(e) = sender.poke(token).await {
+            let sender = Fcm { account, http, access, gone };
+            match sender.poke(&token).await {
+                Ok(()) => {}
+                Err(Refused::Gone) => {
+                    tracing::info!("a device's wake token no longer exists; forgotten");
+                    let forget = sender.gone.lock().expect("gone").clone();
+                    if let Some(forget) = forget {
+                        forget(&token);
+                    }
+                }
                 // A device that is not woken syncs on its own schedule, which
                 // is what happened before any of this existed. Not worth
                 // failing anything over.
-                tracing::debug!(error = %e, "could not wake a device");
+                Err(e) => tracing::debug!(error = ?e, "could not wake a device"),
             }
         });
+    }
+
+    fn when_gone(&self, forget: Forget) {
+        *self.gone.lock().expect("gone") = Some(forget);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Refusals as Firebase words them: a token gone, the access token
+    /// stale, anything else.
+    #[test]
+    fn refusals_are_told_apart() {
+        let gone = r#"{"error":{"code":404,"status":"NOT_FOUND","details":[{"errorCode":"UNREGISTERED"}]}}"#;
+        assert_eq!(Refused::from(404, gone), Refused::Gone);
+        assert_eq!(Refused::from(400, "The registration token is not a valid FCM registration token"), Refused::Gone);
+        assert_eq!(Refused::from(401, "UNAUTHENTICATED"), Refused::Unauthorized);
+        assert!(matches!(Refused::from(500, "oops"), Refused::Other(_)));
+        assert!(matches!(Refused::from(404, "not this"), Refused::Other(_)));
+    }
 
     /// The message says nothing about what is being synced. This is the
     /// promise the whole feature is judged against.

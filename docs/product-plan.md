@@ -418,6 +418,11 @@ there is no Windows machine to run it on.
 
 Recommended: **keep §5A**.
 
+On 2026-10-18 the owner asked for Windows builds in the formal release. They
+are built -- cross-compiled here, never run on Windows -- and say so wherever
+they appear ([0070](decisions/0070-the-first-release.md)); §5A otherwise
+stands: Linux and Android define done.
+
 ### 3.5 Two more that do not block yet
 
 **Sharing (§23)** is still undecided and is not needed before step 9. Under
@@ -759,6 +764,11 @@ then.*
 - [x] Licence files for the licence `Cargo.toml` declares — 2026-10-08:
   `LICENSE-APACHE` and `LICENSE-MIT` at the root, the standard texts, the
   copyright held by "the Qurb authors".
+- [x] The release built, 2026-10-18: Linux as deb, rpm and the Arch package,
+  `qurb` static for any Linux, Android for every ABI, Windows zipped and
+  labelled not run there ([releasing.md](releasing.md),
+  [0070](decisions/0070-the-first-release.md)). Built only, as the owner
+  asked.
 - [ ] A signed release APK on the S23 (leaving the debug build means
   uninstalling and joining again with a code from the laptop), the Arch package
   installed, a GitHub Release, and the website's Download page pointing at it.

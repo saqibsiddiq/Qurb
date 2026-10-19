@@ -101,7 +101,13 @@ async fn a_relay_that_does_not_answer_does_not_stop_a_device() {
     )
     .await
     .expect("a relay that does not answer stopped the device starting");
-    assert!(connector.relay_endpoint().is_none(), "claims a relay path it does not have");
+    // Kept, and known to be down: it is dialled again in the background, and
+    // nothing is sent through it until it answers.
+    assert!(
+        matches!(connector.relay_link(), Some(qurb_relay::Link::Down(_))),
+        "claims a relay path it does not have: {:?}",
+        connector.relay_link()
+    );
 }
 
 /// When every address fails, the error says how each one did.

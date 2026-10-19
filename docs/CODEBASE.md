@@ -696,6 +696,8 @@ qurb/
 │   │                      direction word for word; brief.md, how it meets
 │   │                      the product and where each feature goes;
 │   │                      consistency.md, how the parts line up on both apps
+│   ├── releasing.md       Building a release: every package, what each is
+│   │                      for, and what has run on what
 │   ├── decisions/         Why each choice was made (one file per decision)
 │   └── phases/            What each phase produced, with measurements
 │
@@ -792,7 +794,8 @@ qurb/
 │   │
 │   ├── relay/             The fallback when no direct path exists.
 │   │   ├── src/frame.rs      opaque forwarding, binary and bounded
-│   │   ├── src/socket.rs     a relay connection pretending to be a UDP socket
+│   │   ├── src/socket.rs     a relay connection pretending to be a UDP socket,
+│   │   │                     dialled again when it goes (0068, amended)
 │   │   └── src/server.rs     forwards between registered identifiers, several
 │   │                         to a connection (0061)
 │   │
@@ -811,6 +814,10 @@ qurb/
 │   │   ├── src/awake.rs     the computer kept from suspending while it
 │   │   │                    collects, on mains power
 │   │   ├── src/lock.rs      one daemon per folder, enforced not assumed
+│   │   ├── src/disk.rs      a filesystem's size and free space, and whether
+│   │   │                    it may be written: Linux and Windows
+│   │   ├── src/platform.rs  what differs between systems, said once: Windows'
+│   │   │                    places under Linux's names, opening a folder
 │   │   ├── src/profiles.rs  which folders exist, so commands need no path
 │   │   ├── src/layout.rs    `~/qurb` by person: `Shared`, the synced folder,
 │   │   │                    moved there once, and a read-only placeholder
@@ -831,8 +838,12 @@ qurb/
 │   │   │                    the store over 127.0.0.1, never written out
 │   │   ├── src/notify.rs    the three things worth interrupting somebody about
 │   │   ├── src/commands.rs  every question the window may ask
-│   │   ├── src/autostart.rs starting at login, hidden
+│   │   ├── src/autostart.rs starting at login, hidden: the freedesktop
+│   │   │                    autostart folder, or Windows' Run key
 │   │   ├── src/instance.rs  one qurb per person; a second launch shows the first
+│   │   ├── tauri.release.conf.json
+│   │   │                    what a release adds to the deb, rpm and AppImage:
+│   │   │                    qurb and qurb-tray beside the window, the icon
 │   │   └── ui/              the window: index.html, app.css (the design),
 │   │                        theme.js (light or dark, before anything draws),
 │   │                        a script per place (core, setup, home, files,
@@ -935,7 +946,10 @@ qurb/
 │       └── nopush/java/   the same surface, doing nothing, when it is not
 │
 ├── packaging/             Getting it onto a machine.
-│   ├── arch/PKGBUILD      a pacman package of this checkout (makepkg -si)
+│   ├── arch/PKGBUILD      a pacman package of this checkout (makepkg -si);
+│   │                      a release names its version (QURB_RELEASE)
+│   ├── windows/README.txt what the Windows zip holds, and that it has not
+│   │                      run on Windows
 │   ├── install.sh         qurb in this user's applications menu: the window,
 │   │                      with qurb and qurb-tray beside it
 │   ├── install-rendezvous.sh
@@ -951,13 +965,17 @@ qurb/
 │   ├── android-app.sh     build the app: libraries, bindings, then Gradle
 │   ├── android-build.sh   cross-compile the engine for all four Android ABIs
 │   ├── android-icons.py   the Lucide icons the app uses, as vector drawables
-│   ├── android-test.sh    run the test suite on a device, over adb
+│   ├── android-test.sh    run the test suite on a device, over adb: arm64,
+│   │                      x86_64, or 32-bit x86 on an x86_64 emulator
 │   ├── desktop-icons.py   the Lucide icons the window uses, as a sprite
 │   ├── desktop-smoke.sh   drive the real desktop window end to end, on a
 │   │                      display of its own (with desktop_smoke.py)
 │   ├── smoke_portal.py    a stand-in desktop settings portal, for the
 │   │                      smoke test's dark-preference check
-│   └── mobile-bindings.sh generate the Kotlin and Swift bindings
+│   ├── mobile-bindings.sh generate the Kotlin and Swift bindings
+│   └── release.sh         build a release into dist/<version>/: Linux
+│                          packages, the static qurb program, every Android
+│                          ABI, Windows, and SHA256SUMS (docs/releasing.md)
 │
 ├── experiments/
 │   ├── desktop-fixtures/  Throwaway. The window's screens against made-up
@@ -1099,6 +1117,8 @@ for the workspace as it stands.
 | A phone's folder on a computer | `Kept { dir }`: a phone of the computer's own person is shown what is kept for it and for its earlier self, at one place in the tree a person sees, and fetches through the ordinary manifest and chunks; browsed on the S23, 2026-10-15 — [0067](decisions/0067-a-folder-for-each-person.md) |
 | A phone knows what its computer keeps | `confirm_kept`: each sync, a phone asks the computer keeping its vault about up to 64 of its files with no record of it keeping them, at random, and records each yes; a `Got` lost with a connection had left 130 of the S23's WhatsApp files "still to go" for good — [0062](decisions/0062-backing-up-whatsapp.md) |
 | The relay carries meetings | one relay connection, several names: a device's own and one per meeting with another person's device, so a computer reaches a guest it cannot dial — [0061](decisions/0061-the-relay-carries-meetings.md) |
+| Staying on the relay | the connection dialled again when it goes, from one second doubling to a minute, every name registered again; a relay down at start kept, known down, and not dialled through until up — tested by restarting a relay under a socket ([0068](decisions/0068-the-rendezvous-service-relays.md), amended 2026-10-18) |
+| An edit in the clock's tick | a file read within three seconds of its time is read again on each scan until older, so a second write of the same size in the same tick is not missed (`racy`, index schema 26) — found on Android 8, [0069](decisions/0069-too-recent-to-trust.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | The file list in frames | `TreeStream`: the same list as `Tree`, sent as length-prefixed frames of about 1 MiB, at most 1 GiB in all, so a library too large for one 64 MiB message still syncs; asked first, `Tree` when a peer does not answer it — [0065](decisions/0065-the-scale-qurb-is-built-for.md) |
@@ -1325,7 +1345,16 @@ with `adb` and runs them: on a Samsung Galaxy S23 (Android 16, arm64-v8a) all 35
 binaries passed on 2026-09-17 — 426 tests, including the real QUIC handshakes
 and hole punching. The suite has grown since and has been run on the
 emulator, not on the phone again. Receiving a 512 MiB file over the network
-there grows the heap by 6 MiB.
+there grows the heap by 6 MiB. On 2026-10-18 and 19 it ran on Android 8.0
+(API 26, the oldest the app supports) for the first time, as x86_64 and as
+32-bit x86 -- `./scripts/android-test.sh x86`, the nearest this machine comes
+to a 32-bit ARM phone -- and found a lost edit no other platform here showed
+([decisions/0069](decisions/0069-too-recent-to-trust.md)); with it fixed, all
+775 tests passed as x86, and 774 as x86_64, the last a test sensitive to a
+loaded emulator ([releasing.md](releasing.md), *Known gaps*). The app itself
+ran there too, and on Android 14; until then it had run on the S23's Android
+16 alone, and stopped on Android 8 to 10 (android/README.md, *Every Android
+since 8.0*).
 
 Three problems mobile exposed were fixed in the core, because all three were
 core problems that a desktop merely tolerates:
@@ -1507,7 +1536,7 @@ lacks is a placeholder — see the first gap below.
 
 ### The gaps that matter most
 
-Nine things are known-missing rather than merely unbuilt:
+Eleven things are known-missing rather than merely unbuilt:
 
 1. **An evicted file simply vanishes from the folder on Linux.** Windows and
    macOS both have an API for a placeholder that keeps its name and size and
@@ -1587,9 +1616,13 @@ Nine things are known-missing rather than merely unbuilt:
    *Clear data* also emptied the phone's rendezvous setting, and the app fell
    back to the emulator's address without saying so: for three days the
    phone could be neither woken nor reached off the home Wi-Fi, until it was
-   noticed on 2026-10-08 and set again by hand. The product does not yet
-   prevent that
+   noticed on 2026-10-08 and set again by hand
    ([phase 5](phases/phase-5-mobile.md#the-last-of-the-phone-and-a-setting-lost-three-days-before)).
+   Since 2026-10-18 a phone never falls back to that address -- Settings says
+   *Not set — only devices on this Wi-Fi* -- and the address is kept in Block
+   Store beside the key, so a reinstall or a phone restored from a backup has
+   it back. *Clear data* empties Block Store too, so after it the person
+   still sets it again; now they are told.
 
 9. **Restoring WhatsApp from the computer is unproven.** The S23's WhatsApp
    folder is kept on the laptop — 36,062 files, 10.1 GB, every one known
@@ -1597,6 +1630,22 @@ Nine things are known-missing rather than merely unbuilt:
    has yet put the backup back and watched WhatsApp read it
    ([decisions/0062](decisions/0062-backing-up-whatsapp.md)). Until that is
    done, nothing here says to turn WhatsApp's Google backup off.
+
+10. **Windows is built and has not run; macOS and iOS are not built.** The
+    0.1.0 release has a Windows zip, cross-built here, with a README that opens
+    by saying so ([releasing.md](releasing.md),
+    [decisions/0070](decisions/0070-the-first-release.md)). Where Windows
+    differs, the code says what it does there (`qurb_cli::platform`,
+    `disk`, the desktop's `instance` and `autostart`), and none of it has
+    been watched. The computer is not kept awake on Windows while a phone
+    collects from it.
+
+11. **The release's reach is measured, not all of it run.** Linux packages
+    need glibc 2.34 and WebKitGTK 4.1; they have been run on this machine
+    alone. There is no AppImage, because one built here needs glibc 2.44.
+    32-bit Android has run only as x86 on an emulator, not on an ARM phone;
+    a file there is read by mapping it whole, which a large enough file
+    cannot be in a 32-bit process.
 
 Three earlier entries here have since been closed, and how they were closed is
 worth knowing:
