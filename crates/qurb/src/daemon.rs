@@ -1005,7 +1005,11 @@ impl Daemon {
             }
         };
 
-        let tree = match client.tree().await {
+        // Its list as kept from the last sync, if it says nothing changed
+        // since (`qurb_peer::trees`): a phone's lists here are its backups'
+        // tens of thousands of files.
+        let trees = qurb_peer::trees::Trees::at(self.store_dir.join("trees"));
+        let tree = match client.tree_kept(&peer, &trees).await {
             Ok(tree) => tree,
             Err(e) => {
                 // The connection has gone. Drop it so the next attempt makes a

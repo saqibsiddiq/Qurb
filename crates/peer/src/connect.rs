@@ -48,6 +48,10 @@ const RENDEZVOUS_TIMEOUT: Duration = Duration::from_secs(20);
 /// rather than each one in turn.
 const CANDIDATE_TIMEOUT: Duration = Duration::from_secs(8);
 
+/// How long the direct paths have before the relay is tried alongside them
+/// (`Connector::direct_or_relay`).
+const RELAY_HEAD_START: Duration = Duration::from_secs(4);
+
 /// A device's connection machinery: one socket, one endpoint, one rendezvous.
 /// How much of the outside world to involve in finding peers.
 ///
@@ -769,16 +773,7 @@ impl Connector {
                 Ok(Err(_)) => return Err(Error::Signalling { detail: "signalling has stopped".into() }),
                 Err(_) => return Err(Error::PeerDidNotAnswer),
             };
-            return match self.race(peer, &endpoints).await {
-                Ok(client) => Ok(client),
-                Err(direct) => match &self.relay {
-                    Some(relay) => {
-                        tracing::info!(peer = %peer.short(), "no direct path to a meeting's device; falling back to the relay");
-                        self.via_relay(peer, relay).await
-                    }
-                    None => Err(direct),
-                },
-            };
+            return self.direct_or_relay(peer, &endpoints).await;
         }
 
         // Somebody who beaconed from this network moments ago is both the
@@ -820,19 +815,52 @@ impl Connector {
             Err(_) => return Err(Error::PeerDidNotAnswer),
         };
 
-        match self.race(peer, &endpoints).await {
-            Ok(client) => Ok(client),
-            Err(direct) => {
-                // Every address failed. This is what the relay is for, and it is
-                // the only moment at which paying for it is justified.
-                let Some(relay) = &self.relay else {
-                    return Err(direct);
-                };
-                tracing::info!(
-                    peer = %peer.short(),
-                    "no direct path; falling back to the relay"
-                );
-                self.via_relay(peer, relay).await
+        self.direct_or_relay(peer, &endpoints).await
+    }
+
+    /// The addresses a peer was announced at, raced; and the relay too, if
+    /// they have not answered within [`RELAY_HEAD_START`], whichever connects
+    /// first kept.
+    ///
+    /// The relay used to be tried only once every address had failed, which
+    /// takes [`CANDIDATE_TIMEOUT`]: on another phone's hotspot on 2026-10-19
+    /// the S23 spent eleven of its pass's 25 seconds before asking the relay,
+    /// and the pass ran out of time with the relay connected. A direct path
+    /// that answers at all answers well inside the head start -- on the same
+    /// network in milliseconds, punched through a router in a round trip or
+    /// two -- and is still the one kept then.
+    async fn direct_or_relay(&self, peer: Fingerprint, endpoints: &Endpoints) -> Result<PeerClient> {
+        let direct = self.race(peer, endpoints);
+        tokio::pin!(direct);
+        let Some(relay) = &self.relay else {
+            return direct.await;
+        };
+        match tokio::time::timeout(RELAY_HEAD_START, &mut direct).await {
+            Ok(Ok(client)) => return Ok(client),
+            Ok(Err(_)) => {
+                // Every address failed. This is what the relay is for.
+                tracing::info!(peer = %peer.short(), "no direct path; falling back to the relay");
+                return self.via_relay(peer, relay).await;
+            }
+            Err(_) => tracing::info!(peer = %peer.short(), "no direct path yet; trying the relay as well"),
+        }
+        let via = self.via_relay(peer, relay);
+        tokio::pin!(via);
+        let (mut direct_failed, mut via_failed) = (None, None);
+        loop {
+            tokio::select! {
+                result = &mut direct, if direct_failed.is_none() => match result {
+                    Ok(client) => return Ok(client),
+                    Err(e) if via_failed.is_some() => return Err(e),
+                    Err(e) => direct_failed = Some(e),
+                },
+                result = &mut via, if via_failed.is_none() => match result {
+                    Ok(client) => return Ok(client),
+                    Err(e) => match direct_failed.take() {
+                        Some(direct) => return Err(direct),
+                        None => via_failed = Some(e),
+                    },
+                },
             }
         }
     }

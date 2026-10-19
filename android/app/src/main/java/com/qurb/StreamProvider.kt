@@ -71,6 +71,7 @@ class StreamProvider : ContentProvider() {
         override fun onRead(offset: Long, size: Int, data: ByteArray): Int {
             // A short answer before the end reads as the end to some players,
             // so the whole of what was asked is gathered, a megabyte at a time.
+            val started = android.os.SystemClock.elapsedRealtime()
             var done = 0
             try {
                 while (done < size) {
@@ -83,6 +84,10 @@ class StreamProvider : ContentProvider() {
                 android.util.Log.w("qurb", "could not read a file from the computer", e)
                 if (done == 0) throw ErrnoException("read", OsConstants.EIO)
             }
+            // What a player waits on, when it waits: where the time to start
+            // playing goes (2026-10-19, 37 s on mobile data).
+            val took = android.os.SystemClock.elapsedRealtime() - started
+            if (took >= SLOW_READ_MS) android.util.Log.i("qurb", "read $done bytes at $offset in $took ms")
             return done
         }
 
@@ -90,6 +95,9 @@ class StreamProvider : ContentProvider() {
     }
 
     companion object {
+        /** A read worth a line in the log: a player waiting this long stutters. */
+        private const val SLOW_READ_MS = 500L
+
         /** What one read asks the engine for at most: its own bound. */
         private const val MOST = 1 shl 20
 
@@ -110,11 +118,48 @@ class StreamProvider : ContentProvider() {
         @Synchronized
         private fun opened(uri: Uri): Open? = uri.pathSegments.firstOrNull()?.let { open[it] }
 
+        /** The network the open streams were read over, while any are. */
+        private var reading: android.net.Network? = null
+        private var watching = false
+
+        /**
+         * When the phone's network changes -- Wi-Fi gone, mobile data taking
+         * over -- the connection an open file is read over is gone with it,
+         * and a read waiting on it would wait until it timed out: on the S23
+         * on 2026-10-19 the player was declared not responding first. So
+         * every open stream is closed then, and its reads fail at once; the
+         * player says it cannot read, and opening the file again reads it
+         * over the network there is now.
+         */
+        private fun watchNetwork(context: Context) {
+            if (watching) return
+            watching = true
+            val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
+            reading = connectivity.activeNetwork
+            connectivity.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) = changed(network)
+                override fun onLost(network: android.net.Network) = changed(null)
+            })
+        }
+
+        @Synchronized
+        private fun changed(now: android.net.Network?) {
+            if (now != null && now == reading) return
+            reading = now
+            if (open.isEmpty()) return
+            android.util.Log.i("qurb", "the network changed; closing ${open.size} open file(s)")
+            open.values.forEach { runCatching { it.stream.stopReading() } }
+            open.clear()
+        }
+
         /** A URI another app can open `stream` by, as `name`, of `type`. */
         @Synchronized
         fun add(context: Context, stream: KeptStream, name: String, type: String): Uri {
+            watchNetwork(context.applicationContext)
             val token = UUID.randomUUID().toString()
             open[token] = Open(stream, name, type)
+            // Let go of, not closed: a file's stream shares its folder's
+            // connection, which the newer ones are read over too.
             while (open.size > KEPT) open.remove(open.keys.first())
             return Uri.Builder().scheme("content").authority("${context.packageName}.stream")
                 .appendPath(token).appendPath(name).build()
@@ -122,6 +167,9 @@ class StreamProvider : ContentProvider() {
 
         /** Every stream let go of: the folder they read from is closing. */
         @Synchronized
-        fun clear() = open.clear()
+        fun clear() {
+            open.values.forEach { runCatching { it.stream.stopReading() } }
+            open.clear()
+        }
     }
 }

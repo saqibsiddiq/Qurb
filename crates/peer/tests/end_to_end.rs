@@ -762,3 +762,38 @@ async fn no_relay_beside_a_rendezvous_that_carries_none() {
     assert!(started.elapsed() < Duration::from_secs(3), "waited for a relay that is not there");
 }
 
+
+/// Announced at an address that swallows every packet, as a phone behind
+/// another phone's hotspot was on 2026-10-19: the direct attempts wait out
+/// their timeout rather than failing. The relay is tried alongside once they
+/// have had a head start, and the device reached through it well before they
+/// would have given up -- not after, as when the relay came only last.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_relay_is_tried_alongside_direct_paths_that_do_not_answer() {
+    let signal = Arc::new(SignalServer::bind("127.0.0.1:0".parse().unwrap()).await.unwrap());
+    let signal_url = format!("ws://{}", signal.local_addr().unwrap());
+    let running = Arc::clone(&signal);
+    tokio::spawn(async move { running.serve().await });
+    let relay_addr = relay().await;
+
+    let (desktop, phrase) = Device::first();
+    let laptop = Device::enrolled(&phrase);
+    pair(&desktop, &laptop).await;
+    let desktop_conn = connected(&desktop, &signal_url, relay_addr).await;
+    let laptop_conn = connected(&laptop, &signal_url, relay_addr).await;
+
+    // Bound and never read: a knock there goes nowhere and is not refused.
+    let silent = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+    desktop_conn.reannounce(qurb_signal::Endpoints { public: None, local: vec![silent.local_addr().unwrap()] });
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let asked = std::time::Instant::now();
+    let client = tokio::time::timeout(Duration::from_secs(20), laptop_conn.reach(desktop.identity.fingerprint()))
+        .await
+        .expect("reaching it hung")
+        .expect("could not reach the desktop at all");
+    let took = asked.elapsed();
+    assert!(client.is_relayed(), "reached without the relay, though nothing direct answers");
+    assert!(took < Duration::from_secs(7), "the relay waited for the direct paths to give up: {took:?}");
+    drop(silent);
+}

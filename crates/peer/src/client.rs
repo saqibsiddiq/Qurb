@@ -163,6 +163,22 @@ impl PeerClient {
         }
     }
 
+    /// The fingerprint of the file list this device would send now
+    /// ([`crate::trees`]), or `None` from one too old to say: such a device
+    /// fails the one request, and the connection goes on.
+    pub async fn tree_digest(&self) -> Result<Option<[u8; 32]>> {
+        match self.request(Request::TreeDigest).await {
+            Ok(Response::Digest(digest)) => Ok(Some(digest)),
+            Ok(_) => Ok(None),
+            // The connection itself gone is not an old device.
+            Err(Error::Connection(e)) => Err(Error::Connection(e)),
+            Err(e) => {
+                tracing::debug!(error = %e, "no fingerprint of the file list; it will be fetched");
+                Ok(None)
+            }
+        }
+    }
+
     async fn tree_stream(&self) -> Result<Vec<FileVersion>> {
         use crate::wire::{decode_tree_frame, MAX_TREE, MAX_TREE_FRAME};
         let (mut send, mut recv) = self.connection.open_bi().await?;
@@ -558,6 +574,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Withdrawn => "refusal of six digits",
         Response::Kept { .. } => "listing of a kept folder",
         Response::Layout(_) => "layout of a file",
+        Response::Digest(_) => "fingerprint of a file list",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }
 }

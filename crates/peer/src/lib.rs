@@ -47,6 +47,7 @@ pub mod server;
 pub mod short;
 pub mod source;
 pub mod tls;
+pub mod trees;
 pub mod wire;
 
 pub use client::PeerClient;

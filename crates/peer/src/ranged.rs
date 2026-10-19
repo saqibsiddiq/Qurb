@@ -84,6 +84,13 @@ impl Ranged {
         })))
     }
 
+    /// End the connection the file is read over: a read waiting on it fails
+    /// at once rather than when the connection times out. What the phone does
+    /// when its network changes under a player (2026-10-19).
+    pub fn close(&self) {
+        self.client.disconnect("stopped reading");
+    }
+
     /// The file's size in bytes.
     pub fn size(&self) -> u64 {
         self.starts.last().copied().unwrap_or(0)

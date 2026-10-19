@@ -78,8 +78,12 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
             } catch (e: Exception) {
                 left()
                 views.sections.removeAllViews()
+                // Both ends, since either may be the one: on 2026-10-19 the S23's
+                // mobile data stopped carrying anything while Android still
+                // called it connected, and this screen blamed the laptop.
                 kit.empty(views.sections, R.drawable.ic_cloud_off,
-                    "${computer.name} isn't reachable. It has to be on, with Qurb running.", "Try again") { refresh() }
+                    "${computer.name} isn't reachable. It has to be on with Qurb running, and this phone " +
+                        "online.", "Try again") { refresh() }
                 android.util.Log.w("qurb", "could not reach the kept folder", e)
             } finally {
                 views.refresh.isRefreshing = false

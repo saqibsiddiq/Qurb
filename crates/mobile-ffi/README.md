@@ -208,6 +208,17 @@ Each sync with a computer keeping the vault also asks it about up to 64 of
 the vault's files with no record of it keeping them (`confirm_kept`), so a
 *got it* lost on the way does not leave a file "still to go".
 
+Calls that only read -- the lists, counts and summaries the screens show --
+read the index through a connection of their own (`look`), so they are answered
+while a sync holds the engine to bring a large file in; on the S23 a 200 MB
+file used to keep Devices waiting 56 seconds (2026-10-19). Anything that
+changes the index still goes through the engine, one at a time.
+
+A streamed file's reads (`KeptStream::read_at`) give up after 20 seconds, and
+`stopReading()` ends the stream's connection so a waiting read fails at once:
+what the app does to every open file when the phone's network changes, so a
+player stops rather than being declared not responding.
+
 `Settings.wakeToken` carries the platform's push token, so the rendezvous
 service can poke this device when another has something and this one is asleep.
 `null` — the default, and right on a desktop — means it is never woken and

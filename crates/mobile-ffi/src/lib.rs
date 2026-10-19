@@ -645,6 +645,11 @@ pub struct Qurb {
     settled: Mutex<std::collections::HashMap<String, [u8; 16]>>,
     /// Summaries that read every row, kept while the index is unchanged.
     remembered: Remembered,
+    /// What the screens read the index through: a connection of its own,
+    /// opened on first use, so that a list or a count is not kept waiting
+    /// while a sync holds the engine to bring a large file in (`look`).
+    reader: Mutex<Option<Store>>,
+    chunk_key: ChunkKey,
 }
 
 /// A computer's answer to the key this phone sent it, once approved
@@ -1128,14 +1133,14 @@ impl Qurb {
     /// record crosses the boundary, and ten thousand of them at once is time a
     /// person spends looking at an empty list.
     pub fn page(&self, offset: u32, limit: u32) -> Result<Vec<FileEntry>, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let rows = engine.store().db().folder_listing(limit as usize, offset as usize)?;
         Ok(rows.into_iter().map(FileEntry::from).collect())
     }
 
     /// Whether a path exists in the index.
     pub fn contains(&self, path: String) -> Result<bool, QurbError> {
-        Ok(self.engine()?.store().db().in_folder(&path)?.is_some())
+        Ok(self.look()?.store().db().in_folder(&path)?.is_some())
     }
 
     /// One directory of the folder: the folders directly inside it and the
@@ -1162,18 +1167,18 @@ impl Qurb {
     /// in the folder.
     pub fn entry(&self, path: String) -> Result<Option<FileEntry>, QurbError> {
         let path = qurb_watcher::normalize(path.trim_matches('/'));
-        Ok(self.engine()?.store().db().folder_entry(&path)?.map(FileEntry::from))
+        Ok(self.look()?.store().db().folder_entry(&path)?.map(FileEntry::from))
     }
 
     /// Files whose path contains `text`, ignoring case, at most `limit`.
     pub fn search(&self, text: String, limit: u32) -> Result<Vec<FileEntry>, QurbError> {
-        let found = self.engine()?.store().db().folder_search(&text, limit as usize)?;
+        let found = self.look()?.store().db().folder_search(&text, limit as usize)?;
         Ok(found.into_iter().map(FileEntry::from).collect())
     }
 
     /// The same, in one area only, as [`browse_in`](Self::browse_in).
     pub fn search_in(&self, text: String, limit: u32, private: bool) -> Result<Vec<FileEntry>, QurbError> {
-        let found = self.engine()?.store().db().folder_search(&text, 4 * limit as usize)?;
+        let found = self.look()?.store().db().folder_search(&text, 4 * limit as usize)?;
         Ok(found
             .into_iter()
             .filter(|e| e.private == private)
@@ -1261,7 +1266,7 @@ impl Qurb {
 
     /// Devices this one trusts.
     pub fn peers(&self) -> Result<Vec<PeerInfo>, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         Ok(engine
             .store()
             .db()
@@ -1431,7 +1436,7 @@ impl Qurb {
     /// which files those are. A share made with every other device switched
     /// off looks exactly like a share made with them on, until one answers.
     pub fn outstanding(&self) -> Result<Outstanding, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let waiting = engine.store().undelivered()?;
 
         let bytes = waiting.iter().map(|(_, size)| size).sum();
@@ -1452,7 +1457,7 @@ impl Qurb {
     /// `logical` is what the files add up to, `on_disk` is what they cost after
     /// deduplication and compression.
     pub fn usage(&self) -> Result<Usage, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let db = engine.store().db();
         // Live *files*, not chunks. Summing chunks would count shared content
         // once and report that three copies of a photo take up one photo's
@@ -1464,7 +1469,7 @@ impl Qurb {
     /// device is known to hold, largest first (decision 0053). What the screen
     /// Android opens in place of *Clear data* lists before anything goes.
     pub fn only_here(&self) -> Result<Vec<OnlyHere>, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         Ok(engine
             .store()
             .only_here()?
@@ -1505,7 +1510,7 @@ impl Qurb {
         // Settings was drawn (2026-10-15). Whether each is still stored is
         // asked of the chunk store every time, since freeing them is not a
         // change to the index alone.
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let store = engine.store();
         let chunks = self.remembered.answer("releasable", store.db().change_mark()?, || {
             Ok(store.db().releasable_held_chunks()?)
@@ -1679,7 +1684,7 @@ impl Qurb {
     }
 
     pub fn holders(&self) -> Result<Vec<PeerInfo>, QurbError> {
-        let holders = self.engine()?.store().db().holders()?;
+        let holders = self.look()?.store().db().holders()?;
         Ok(self
             .peers()?
             .into_iter()
@@ -1705,7 +1710,7 @@ impl Qurb {
 
     /// Folders, and which devices each is shared with (decision 0044).
     pub fn sharing(&self) -> Result<Vec<SharedFolder>, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let remote = engine.store().db().remote_folders()?;
         Ok(engine
             .store()
@@ -1723,7 +1728,7 @@ impl Qurb {
     /// The devices a folder can be shared with: this phone first, then every
     /// paired device, each by the device id a rule names.
     pub fn share_targets(&self) -> Result<Vec<ShareTarget>, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let store = engine.store();
         let mut out = vec![ShareTarget {
             id: store.device_id()?.to_hex(),
@@ -1769,7 +1774,7 @@ impl Qurb {
 
     /// Files two devices changed without either seeing the other (brief §24).
     pub fn conflicts(&self) -> Result<Vec<ConflictInfo>, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let store = engine.store();
         let mut names = store.db().device_names()?;
         // Its own versions too: a conflict is as often with itself as with
@@ -1820,7 +1825,7 @@ impl Qurb {
     /// What is in Recently deleted on this phone, most recent first
     /// (decision 0042).
     pub fn recently_deleted(&self) -> Result<Vec<DeletedFile>, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let store = engine.store();
         let names = store.db().device_names()?;
         let me = store.device_id()?;
@@ -2048,7 +2053,7 @@ impl Qurb {
     /// The folders chosen for this phone on a computer keeping its vault, as
     /// it last said (decision 0063), the ones that can be backed up.
     pub fn chosen_folders(&self) -> Result<Vec<String>, QurbError> {
-        let chosen = self.engine()?.store().db().chosen_here()?;
+        let chosen = self.look()?.store().db().chosen_here()?;
         Ok(outermost(chosen.into_iter().filter(|f| choosable(f)).collect()))
     }
 
@@ -2056,7 +2061,7 @@ impl Qurb {
     /// back up and how much of it the computer keeps: for choosing on the
     /// phone (the owner's item 10, 2026-10-14).
     pub fn own_folders(&self) -> Result<Vec<OwnFolder>, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let db = engine.store().db();
         let chosen = db.chosen_here()?;
         Ok(db
@@ -2125,7 +2130,7 @@ impl Qurb {
     /// again is a new send, which the other device takes.
     pub fn sent_before(&self, sources: Vec<String>, to: String) -> Result<Vec<EarlierSend>, QurbError> {
         let device = self.device_of(&to)?;
-        let found = self.engine()?.store().sent_before(&sources, &device)?;
+        let found = self.look()?.store().sent_before(&sources, &device)?;
         Ok(found
             .into_iter()
             .map(|e| EarlierSend { source: e.source, sent_as: e.sent_as, at: e.at })
@@ -2135,7 +2140,7 @@ impl Qurb {
     /// What this phone has sent that has not been collected yet.
     pub fn waiting(&self) -> Result<Vec<Waiting>, QurbError> {
         let peers = self.peers()?;
-        let pending = self.engine()?.store().pending_deliveries()?;
+        let pending = self.look()?.store().pending_deliveries()?;
         Ok(pending
             .into_iter()
             .map(|(path, size, to)| {
@@ -2159,8 +2164,8 @@ impl Qurb {
 
     /// What happened, newest first. `before` pages backwards by id.
     pub fn history(&self, limit: u32, before: Option<i64>) -> Result<Vec<Happening>, QurbError> {
-        let names = self.engine()?.store().db().device_names()?;
-        let rows = self.engine()?.store().db().activity(limit as usize, before)?;
+        let names = self.look()?.store().db().device_names()?;
+        let rows = self.look()?.store().db().activity(limit as usize, before)?;
         Ok(rows
             .into_iter()
             .map(|r| Happening {
@@ -2236,7 +2241,7 @@ impl Qurb {
     /// [`browse_in`](Self::browse_in)).
     fn directory(&self, dir: String, area: Option<bool>) -> Result<Directory, QurbError> {
         let dir = qurb_watcher::normalize(dir.trim_matches('/'));
-        let entries = self.engine()?.store().db().folder_entries_under(&dir)?;
+        let entries = self.look()?.store().db().folder_entries_under(&dir)?;
         let prefix = if dir.is_empty() { String::new() } else { format!("{dir}/") };
 
         let mut folders = std::collections::BTreeSet::new();
@@ -2324,6 +2329,7 @@ impl Qurb {
 
         let master: MasterKey = vault.unlock(passphrase.as_deref())?;
         let chunk_key = ChunkKey::from_bytes(master.derive(Purpose::ChunkEncryption).to_bytes());
+        let master_chunk_key = chunk_key.clone();
         let root = PathBuf::from(&root);
         let mut store = Store::open(&store_dir, chunk_key)?;
         store.set_new_files_private(settings.own_files_private);
@@ -2350,6 +2356,8 @@ impl Qurb {
             open_answers: Mutex::new(Vec::new()),
             remembered: Remembered::default(),
             settled: Mutex::new(std::collections::HashMap::new()),
+            reader: Mutex::new(None),
+            chunk_key: master_chunk_key,
         })
     }
 }
@@ -2404,7 +2412,7 @@ impl Qurb {
             .collect::<Option<_>>()
             .ok_or_else(unknown)?;
         let bytes: [u8; 32] = bytes.try_into().map_err(|_| unknown())?;
-        self.engine()?
+        self.look()?
             .store()
             .db()
             .peer_by_fingerprint(&bytes)?
@@ -2769,7 +2777,7 @@ impl Qurb {
 
     /// How many files a reached device would come for, and their bytes.
     fn for_others(&self) -> Result<(usize, u64), QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let store = engine.store();
         let pending = store.pending_deliveries()?;
         let mut files = pending.len();
@@ -2910,8 +2918,12 @@ impl Qurb {
         // outside a runtime -- which is true and reads like it is about the
         // future it wraps.
         let started = std::time::Instant::now();
+        // The computer's list as kept from the last pass, if it says nothing
+        // changed since (`qurb_peer::trees`): 9.8 MB on the S23 otherwise,
+        // every pass, and more than a slow hotspot carried in one.
+        let trees = qurb_peer::trees::Trees::at(self.store_dir.join("trees"));
         let tree = match runtime
-            .block_on(async { tokio::time::timeout(budget, client.tree()).await })
+            .block_on(async { tokio::time::timeout(budget, client.tree_kept(&peer, &trees)).await })
         {
             Ok(Ok(tree)) => tree,
             Ok(Err(e)) => return Err(QurbError::Network { detail: e.to_string() }),
@@ -3037,7 +3049,7 @@ impl Qurb {
     /// asks on every refresh. Computed each time, it held the engine 1.2 s
     /// on the S23, and every screen waited behind it (2026-10-15).
     fn backup_state(&self, what: &'static str, prefix: &str) -> Result<BackupState, QurbError> {
-        let engine = self.engine()?;
+        let engine = self.look()?;
         let db = engine.store().db();
         self.remembered.answer(what, db.change_mark()?, || {
             let summary = db.outside_summary(prefix)?;
@@ -3051,9 +3063,28 @@ impl Qurb {
         })
     }
 
-    /// The engine, held until the guard goes. Every call that reads or
-    /// changes the index comes through here, one at a time, so a slow one
-    /// holds up every screen waiting behind it. A wait or a hold that runs
+    /// The index to read, without the engine: a connection of its own, which
+    /// SQLite lets read while the engine's writes, so a screen is answered
+    /// while a sync holds the engine. Until 2026-10-19 every screen came
+    /// through `engine`, and on the S23 a 200 MB file arriving held it 64
+    /// seconds, with Devices and Home waiting up to 56 of them. Only for
+    /// calls that change nothing: a change still goes through the engine,
+    /// one at a time, so a scan never runs while a transfer places a file.
+    #[track_caller]
+    fn look(&self) -> Result<Looking<'_>, QurbError> {
+        let mut guard = self
+            .reader
+            .lock()
+            .map_err(|_| QurbError::Other { detail: "the index reader failed earlier".into() })?;
+        if guard.is_none() {
+            *guard = Some(self.another_store(self.chunk_key.clone())?);
+        }
+        Ok(Looking { guard })
+    }
+
+    /// The engine, held until the guard goes. Every call that changes the
+    /// index comes through here, one at a time, so a slow one holds up every
+    /// call waiting behind it. A wait or a hold that runs
     /// long is logged with where in this file it was taken, which is how the
     /// S23's first minute after opening the app was taken apart (2026-10-15).
     #[track_caller]
@@ -3111,6 +3142,17 @@ impl Remembered {
 }
 
 /// The engine, held: the lock's guard, and where and when it was taken.
+/// The index, read through its own connection (`Qurb::look`).
+struct Looking<'a> {
+    guard: std::sync::MutexGuard<'a, Option<Store>>,
+}
+
+impl Looking<'_> {
+    fn store(&self) -> &Store {
+        self.guard.as_ref().expect("opened by look")
+    }
+}
+
 struct Held<'a> {
     guard: std::sync::MutexGuard<'a, Engine>,
     since: std::time::Instant,
@@ -3677,12 +3719,36 @@ impl KeptStream {
     /// Up to `length` bytes from `offset`: fewer at the end of the file, none
     /// past it, and never more than a megabyte. Each chunk is checked against
     /// its hash before a byte of it is given.
+    ///
+    /// Given up after [`STREAM_READ_LIMIT`]: the app reading is a player, and
+    /// a player waiting on a read that never ends is declared not responding.
+    /// On the S23 on 2026-10-19 a video's reads waited out a connection lost
+    /// with the Wi-Fi, over a minute, and the player was.
     pub fn read_at(&self, offset: u64, length: u32) -> Result<Vec<u8>, QurbError> {
+        let ranged = Arc::clone(&self.ranged);
         self.runtime
-            .block_on(self.ranged.read_at(offset, length as usize))
+            .block_on(async move {
+                tokio::time::timeout(STREAM_READ_LIMIT, ranged.read_at(offset, length as usize)).await
+            })
+            .map_err(|_| QurbError::Network { detail: "the computer did not answer in time".into() })?
             .map_err(|e| QurbError::Network { detail: e.to_string() })
     }
+
+    /// Stop reading: the connection is ended, and a read waiting on it fails
+    /// at once. When the phone's network changes, the app does this to every
+    /// file open in a player, which then says it cannot read rather than
+    /// hanging.
+    ///
+    /// Not `close`: UniFFI gives every object a `close` of its own, which
+    /// frees it.
+    pub fn stop_reading(&self) {
+        self.ranged.close();
+    }
 }
+
+/// The longest one read of a streamed file may take: long enough for a
+/// megabyte over a slow mobile network, short of a player's patience.
+const STREAM_READ_LIMIT: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// `path`, or the first `name (n).ext` beside it that is free.
 fn free_path(path: &std::path::Path) -> std::path::PathBuf {
@@ -3958,5 +4024,41 @@ mod tests {
         qurb_peer::Served::served(&stats, &qurb_peer::Fingerprint::from_bytes([1; 32]), &blake3::hash(b"x"), 512);
         assert!(stats.recently(COLLECTING));
         assert_eq!(stats.bytes.load(std::sync::atomic::Ordering::Relaxed), 512);
+    }
+
+    /// A sync bringing a large file in holds the engine for as long as it
+    /// takes: on the S23, 64 seconds for 200 MB, with Devices, Home and Files
+    /// waiting behind it (2026-10-19). What they ask is read through a
+    /// connection of its own, and answered meanwhile.
+    #[test]
+    fn the_screens_are_answered_while_the_engine_is_held() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().display().to_string();
+        create(root.clone()).unwrap();
+        std::fs::write(dir.path().join("notes.txt"), b"one").unwrap();
+        let qurb = std::sync::Arc::new(Qurb::open(root, None).unwrap());
+        qurb.scan().unwrap();
+
+        let holder = std::sync::Arc::clone(&qurb);
+        let (held, release) = (std::sync::mpsc::channel(), std::sync::mpsc::channel::<()>());
+        let holding = std::thread::spawn(move || {
+            let _engine = holder.engine().unwrap();
+            held.0.send(()).unwrap();
+            release.1.recv().unwrap();
+        });
+        held.1.recv().unwrap();
+
+        let asked = Instant::now();
+        assert!(qurb.peers().unwrap().is_empty());
+        assert_eq!(qurb.page(0, 10).unwrap().len(), 1);
+        assert!(qurb.contains("notes.txt".into()).unwrap());
+        assert!(qurb.usage().unwrap().logical > 0);
+        qurb.history(10, None).unwrap();
+        qurb.waiting().unwrap();
+        qurb.browse_in(String::new(), false).unwrap();
+        assert!(asked.elapsed() < Duration::from_secs(2), "the screens waited {:?}", asked.elapsed());
+
+        release.0.send(()).unwrap();
+        holding.join().unwrap();
     }
 }

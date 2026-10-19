@@ -385,7 +385,8 @@ async fn serve_request(
         | Response::Sealed(_)
         | Response::Withdrawn
         | Response::Kept { .. }
-        | Response::Layout(_) => 0,
+        | Response::Layout(_)
+        | Response::Digest(_) => 0,
     };
 
     match (&request, &response) {
@@ -447,14 +448,18 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
     };
 
     Ok(Answer::Now(match request {
-        // The same list either way; a stream is only how it is sent.
-        Request::Tree | Request::TreeStream => {
+        // The same list either way; a stream is only how it is sent. And its
+        // fingerprint, for a device that may hold it already (`trees`).
+        Request::Tree | Request::TreeStream | Request::TreeDigest => {
             let mut tree = store.tree_for(audience)?;
             if let (true, Some(holder)) = (keeps_mine, &owner) {
                 store.prepare_sealed(holder, SEALING_BUDGET)?;
                 tree.extend(store.sealed_tree_for(holder)?);
             }
-            Response::Tree(tree)
+            match request {
+                Request::TreeDigest => Response::Digest(crate::wire::tree_digest(&tree)),
+                _ => Response::Tree(tree),
+            }
         }
 
         Request::Manifest { content } => {

@@ -683,7 +683,7 @@ class MainActivity : AppCompatActivity() {
                         outcome.reached == 0u && outcome.unreachable == 0u ->
                             "No devices connected yet"
                         outcome.reached == 0u ->
-                            "No device answered. It has to be switched on and running Qurb."
+                            "No device answered. It has to be on with Qurb running, and this phone online."
                         outcome.adopted == 0u && outcome.conflicts == 0u ->
                             "Everything is synced"
                         else -> buildString {

@@ -2582,6 +2582,64 @@ item added during the work.
    have. And an AppImage was built, measured to need glibc 2.44 because it
    carries this machine's WebKitGTK, and left out.
 
+## Tested across networks with the S23, 2026-10-19
+
+The owner's request: "test all the features on same wifi, mobile data and
+another hotspot", and suggest more. Run over USB, which let the phone be
+switched between networks from the laptop without losing it; the S23 on a debug
+build of the day's code (the same code as the `fast` build, readable with
+`run-as`), the laptop on the day's release build. The test harness -- write a
+file on either side, press *Sync now*, compare SHA-256 on both -- is in the
+session's notes, not the repository.
+
+| | same Wi-Fi | mobile data (Airtel) | hotspot sharing home Wi-Fi | hotspot on mobile data (Jio) |
+|---|---|---|---|---|
+| suite: new, edited both ways, a file kept by the laptop, a larger file each way, deletion, Recently deleted, a conflict | 9 of 9 (50 MB) | 9 of 9 (2 MB) | 1 of 4 | 0 of 5 -- see below |
+| path | direct, LAN | direct, the laptop's public address, punched | direct, then the relay | the relay |
+| a pass with nothing to do | 9 s | 10–16 s | ran out of time | ran out of time; after 0071, finished |
+| sends | both ways, byte for byte | | | |
+| push, the phone dozing | | woken 1.5 s after the change, the file there 9.5 s after | | |
+| the phone's folder on the laptop, an 832 MB video | listed in 5 s, playing | listed in 11 s, playing after 37 s on a connection that failed minutes later | | |
+
+Found, and fixed the same day unless said:
+
+- **A. The app froze while a large file arrived.** A sync holds the engine
+  for the whole transfer -- 64 s for 200 MB -- and Devices, Home and Files
+  waited behind it, up to 56 s. They now read through a connection of their
+  own (`Qurb::look`); during the same download Devices drew in under 3 s.
+  Changes still go through the engine one at a time.
+- **B. A video player was declared not responding** when the Wi-Fi went
+  while it played from the laptop: its reads waited over a minute on a
+  connection that was gone. Each read is bounded (20 s), and the phone closes
+  every open stream when its network changes; the player then stops, with no
+  hang.
+- **C. A video on mobile data took 37 s to start.** Measured once, minutes
+  before that connection stopped carrying anything; not yet measured again.
+  The Samsung player reads about 70 MB before starting, so the speed of the
+  path is the question.
+- **D. With the phone itself offline, the app blamed the laptop.** Both
+  messages now say the phone must be online too.
+- **E. Every pass fetched the laptop's whole file list**, 9.8 MB with nothing
+  changed -- the phone's own 37,959 backed-up files among it -- and on the
+  hotspot that never arrived within a pass: the likeliest reason for the
+  owner's report of 2026-10-15. Now fetched only when it changed
+  ([0071](../decisions/0071-a-file-list-fetched-only-when-it-changed.md)):
+  24–27 KiB a pass with nothing changed. **Not finished**: a pass after any
+  change still fetches it whole, and on that hotspot still runs out of time.
+- **F. The relay was asked only after eleven seconds** of direct attempts; now
+  alongside them after four (0071).
+- **G. A send whose name was taken was received again on every sync**: it
+  was recorded as taken under the name it was filed as, and looked for under
+  the name it was sent as. Now recorded under both.
+
+Also seen and not faults: the laptop's `own-files = private`, which files
+everything new on it into its own vault, kept by nobody -- the owner's to
+decide; `7b543b5d`, which the phone heard on the home Wi-Fi, is the laptop's
+name at the rendezvous; background passes waiting below 15% battery, by design;
+the dial-back loop of the morning, which was the phone's old build. The
+phone's mobile data stopped carrying traffic at about 19:20 while Android still
+called it connected; the hotspot tests used the other phone's.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

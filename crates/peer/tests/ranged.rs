@@ -102,6 +102,17 @@ async fn parts_of_a_file_are_read_as_they_are_asked_for() {
     // Never more than the bound, whatever is asked.
     assert_eq!(ranged.read_at(0, 10 << 20).await.unwrap().len(), qurb_peer::ranged::MOST);
 
+    // Closed, as the phone does when its network changes under a player: a
+    // read then fails at once, rather than waiting out a connection that is
+    // gone (2026-10-19, a player declared not responding).
+    let addr = computer.serve(&phone);
+    let client = PeerClient::connect(addr, &phone.identity, computer.identity.fingerprint()).await.unwrap();
+    let fresh = Ranged::open(client, content).await.unwrap().expect("not shown the file");
+    fresh.close();
+    let asked = std::time::Instant::now();
+    assert!(fresh.read_at(size / 2, 4096).await.is_err(), "read after closing");
+    assert!(asked.elapsed() < std::time::Duration::from_secs(2), "waited {:?}", asked.elapsed());
+
     // Content it does not hold is not offered.
     let addr = computer.serve(&phone);
     let client = PeerClient::connect(addr, &phone.identity, computer.identity.fingerprint()).await.unwrap();

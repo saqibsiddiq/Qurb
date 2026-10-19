@@ -154,6 +154,14 @@ pub enum Request {
     /// video kept on a computer -- since a chunk's place in the file is the
     /// sum of the sizes before it.
     Layout { content: [u8; 32] },
+
+    /// The fingerprint of the file list [`Request::TreeStream`] would send
+    /// now ([`tree_digest`]), so that a device holding that list already
+    /// from an earlier sync need not fetch it again. A phone's list on a
+    /// computer keeping its WhatsApp backup is tens of thousands of files,
+    /// 9.8 MB a pass on the S23 with nothing changed: on a slow hotspot the
+    /// pass ran out of time before the list arrived, every time (2026-10-19).
+    TreeDigest,
 }
 
 /// One file of a phone's folder on a computer, as listed to the phone.
@@ -240,6 +248,9 @@ pub enum Response {
     /// A file's chunks, each with its size in bytes, answering
     /// [`Request::Layout`].
     Layout(Vec<([u8; 32], u32)>),
+
+    /// The file list's fingerprint, answering [`Request::TreeDigest`].
+    Digest([u8; 32]),
 }
 
 const TAG_TREE: u8 = 1;
@@ -260,6 +271,7 @@ const TAG_SHORT: u8 = 15;
 const TAG_SHORT_CONFIRM: u8 = 16;
 const TAG_KEPT: u8 = 17;
 const TAG_LAYOUT: u8 = 18;
+const TAG_TREE_DIGEST: u8 = 19;
 
 /// The most entries one listing of a phone's folder may hold: a folder of a
 /// hundred thousand photos is a phone's; more is not.
@@ -300,6 +312,7 @@ const STATUS_SEALED: u8 = 17;
 const STATUS_WITHDRAWN: u8 = 18;
 const STATUS_KEPT: u8 = 19;
 const STATUS_LAYOUT: u8 = 20;
+const STATUS_DIGEST: u8 = 21;
 
 /// The most folders one answer may list: two levels of a phone's storage come
 /// to a few hundred. A peer claiming more is not describing a phone.
@@ -374,6 +387,7 @@ impl Request {
                 out.push(TAG_LAYOUT);
                 out.extend_from_slice(content);
             }
+            Request::TreeDigest => out.push(TAG_TREE_DIGEST),
         }
         out
     }
@@ -410,6 +424,7 @@ impl Request {
             TAG_SHORT_CONFIRM => Request::ShortConfirm { confirm: r.hash()? },
             TAG_KEPT => Request::Kept { dir: r.path()? },
             TAG_LAYOUT => Request::Layout { content: r.hash()? },
+            TAG_TREE_DIGEST => Request::TreeDigest,
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -457,6 +472,10 @@ impl Response {
                     out.extend_from_slice(hash);
                     out.extend_from_slice(&size.to_le_bytes());
                 }
+            }
+            Response::Digest(digest) => {
+                out.push(STATUS_DIGEST);
+                out.extend_from_slice(digest);
             }
             Response::Kept { folders, files } => {
                 out.push(STATUS_KEPT);
@@ -637,6 +656,7 @@ impl Response {
                 }
                 Response::Layout(chunks)
             }
+            STATUS_DIGEST => Response::Digest(r.hash()?),
             STATUS_KEPT => {
                 let count = r.count()?;
                 if count > MAX_KEPT {
@@ -722,6 +742,16 @@ pub fn tree_frames(versions: &[FileVersion]) -> Vec<Vec<u8>> {
     }
     frames.push(0u32.to_le_bytes().to_vec());
     frames
+}
+
+/// A file list's fingerprint: the hash of its frames, as [`tree_frames`]
+/// writes them. The list is in path order, so the same list hashes the same.
+pub fn tree_digest(versions: &[FileVersion]) -> [u8; 32] {
+    let mut hasher = blake3::Hasher::new();
+    for frame in tree_frames(versions) {
+        hasher.update(&frame);
+    }
+    *hasher.finalize().as_bytes()
 }
 
 /// One frame's versions, its length already read.
@@ -931,6 +961,25 @@ mod tests {
         FileVersion::file(path, [3; 32], 1234, vector, DeviceId::from_bytes([9; 32]), 1_757_462_400)
     }
 
+    /// The same list fingerprints the same, and any change -- one file's
+    /// content, one file fewer -- fingerprints differently (`trees`).
+    #[test]
+    fn a_file_list_has_one_fingerprint() {
+        let versions: Vec<FileVersion> = (0..5_000).map(|i| version(&format!("f{i:05}"))).collect();
+        assert_eq!(tree_digest(&versions), tree_digest(&versions.clone()));
+        let mut changed = versions.clone();
+        changed[2_500] = FileVersion::file(
+            "f02500",
+            [4; 32],
+            1234,
+            changed[2_500].vector.clone(),
+            DeviceId::from_bytes([9; 32]),
+            1_757_462_400,
+        );
+        assert_ne!(tree_digest(&versions), tree_digest(&changed));
+        assert_ne!(tree_digest(&versions), tree_digest(&versions[1..]));
+    }
+
     /// A file list too large for one frame arrives whole and in order, in
     /// frames no larger than the cap, the last one empty (decision 0065).
     #[test]
@@ -977,6 +1026,8 @@ mod tests {
             },
             Request::Asks,
             Request::Unlock { nonce: [11; 16], key: [12; 32] },
+            Request::Layout { content: [13; 32] },
+            Request::TreeDigest,
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -1011,6 +1062,7 @@ mod tests {
                 Choice { folder: "DCIM/Camera".into(), chosen: true, changed_at: 1_791_980_000_123 },
                 Choice { folder: "Documents".into(), chosen: false, changed_at: 1_791_980_100_456 },
             ]),
+            Response::Digest([14; 32]),
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);

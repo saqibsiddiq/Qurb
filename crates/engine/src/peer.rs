@@ -636,6 +636,9 @@ impl Engine {
         // clash with something the recipient already has is ordinary rather
         // than exceptional -- two people can both have a `report.pdf` -- and
         // neither file may be overwritten.
+        // As sent, whatever it is filed as here: what the next sync looks a
+        // delivery up by.
+        let sent = version.clone();
         let version = &if version.area == Area::Sent && !version.is_deleted() {
             match self.store().db().live_path_anywhere(&version.path)? {
                 true => {
@@ -876,6 +879,13 @@ impl Engine {
                 // own file fetched back from a device holding it.
                 if matches!(version.area, Area::Sent | Area::Held) {
                     self.store_mut().adopt_file_privately(version, &path, mtime)?;
+                    // Taken under the name it was sent as, too. Recorded only
+                    // under the name it was filed as, a send whose name was
+                    // taken here was never found taken, and arrived again on
+                    // every sync: the S23, 2026-10-19, seven times in an hour.
+                    if sent.path != version.path {
+                        self.store().note_taken(&sent, &version.path)?;
+                    }
                 } else {
                     self.store_mut().adopt_file(version, &path, mtime)?;
                 }

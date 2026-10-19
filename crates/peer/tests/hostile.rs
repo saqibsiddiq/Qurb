@@ -80,6 +80,11 @@ fn start_hostile(
                         // As a device from before streamed lists answers one:
                         // not as a stream, so the asker falls back to `Tree`.
                         (_, Request::TreeStream) => Some(Response::NotFound.encode()),
+                        // A fingerprint of a list it then does not send, or
+                        // sends different: the list is fetched and checked as
+                        // any list is, and a kept one used only if its own
+                        // fingerprint matches.
+                        (_, Request::TreeDigest) => Some(Response::Digest([0x42; 32]).encode()),
                         (_, Request::Short { .. } | Request::ShortConfirm { .. } | Request::Kept { .. } | Request::Layout { .. }) => {
                             Some(Response::NotFound.encode())
                         }

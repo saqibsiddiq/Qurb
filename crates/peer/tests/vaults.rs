@@ -476,6 +476,17 @@ async fn a_delivery_onto_an_occupied_name_is_filed_beside_it() {
         .collect();
     assert_eq!(filed.len(), 1, "the sent file was not filed under a free name: {filed:?}");
     assert_eq!(fs::read(guest.root.join(&filed[0])).unwrap(), b"the host's report");
+
+    // Taken, under the name it was filed as: the next sync takes nothing.
+    // It used to be taken again on every one -- recorded as taken only under
+    // the name it was filed as, it was looked for under the name it was sent
+    // as, and never found (the S23, 2026-10-19).
+    let (addr, fingerprint) = serve(&host, &[guest.identity.fingerprint()]);
+    let client = PeerClient::connect(addr, &guest.identity, fingerprint).await.unwrap();
+    let tree = client.tree().await.unwrap();
+    let plan = guest.engine.plan_against(&tree).unwrap();
+    assert!(!format!("{plan:?}").contains("Adopt"), "the send was taken again: {plan:?}");
+    client.close();
 }
 
 /// A send keeps no copy, over a real connection (decision 0060): its file is
