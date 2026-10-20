@@ -161,6 +161,12 @@ the kept list again: nothing had changed.
 The phone's index migrated to schema 27 on the first start of the new build
 (`index.before-schema-27.db`, 44 MB). That start was not timed.
 
+Afterwards, at 20:07, the S23 was put back on the `fast` build of the same
+code: a release build signed with the debug key (`scripts/android-app.sh
+fast`). A file written on the
+laptop woke it one second later, and its log said `its file list brought up
+to date changed=1 files=38033`, then `sync: reached=1`.
+
 ## Not yet tested
 
 - **On a hotspot or on mobile data.** What 0071 measured failing (a pass
