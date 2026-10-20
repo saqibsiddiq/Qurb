@@ -695,7 +695,10 @@ qurb/
 │   ├── design/            The design pass: direction.md, the owner's
 │   │                      direction word for word; brief.md, how it meets
 │   │                      the product and where each feature goes;
-│   │                      consistency.md, how the parts line up on both apps
+│   │                      consistency.md, how the parts line up on both apps;
+│   │                      inventory.md, every page, pop-up, message and
+│   │                      notification with its words, made by a script
+│   │                      from the code (2026-10-20)
 │   ├── releasing.md       Building a release: every package, what each is
 │   │                      for, and what has run on what
 │   ├── decisions/         Why each choice was made (one file per decision)
