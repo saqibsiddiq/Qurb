@@ -2676,7 +2676,7 @@ Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
 
   The numbers are in
   [0072](../decisions/0072-only-what-changed-in-a-list.md), *On the S23*.
-- **Found on the phone, not yet decided:** two of the conflict test's files
+- **Found on the phone, and cleared by renaming:** two of the conflict test's files
   from 2026-10-19 are shared on the laptop and private on the phone, at the
   same paths. On every pass the phone refuses the shared version before
   fetching it: `a file sent to this device already has that name`. That is
@@ -2685,6 +2685,13 @@ Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
   the shared versions never arrive. The message was also wrong for this case,
   since the private file was not sent to the phone but is the phone's own. It
   now reads `a private file here already has that name`.
+
+  The owner chose to rename. The laptop's shared copies were renamed
+  `…-shared` and put back in the shared area (`qurb unprivate`, since the
+  laptop files a new name as private). The phone's next two passes logged no
+  failures, and the phone reported holding both shared copies under their new
+  names. Its own private copies are unchanged. The engine's rule is unchanged
+  too: such a clash is refused on every pass until one of the names changes.
 - **Not done:** nothing has been run on a hotspot or on mobile data.
 
 ## Deliberately left undone
