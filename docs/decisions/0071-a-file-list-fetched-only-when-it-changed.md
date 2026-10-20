@@ -4,7 +4,11 @@
 `connect`), used by the phone and the laptop's daemon. Measured on the S23 on
 another phone's hotspot. **It does not finish the job**: a pass after the other
 side changed anything still fetches the whole list, which on that hotspot is
-more than a pass can carry -- see *What is left*.
+more than a pass can carry -- see *What is left*. Amended 2026-10-20 by
+[0072](0072-only-what-changed-in-a-list.md), which sends only the changes
+and fingerprints a list in a different order (so a list kept by this build is
+fetched again once); the fingerprint is still asked of a device that sends its
+list only whole.
 **Date:** 2026-10-19
 
 ## What was found
@@ -58,7 +62,9 @@ laptop at home, 2026-10-19:
 
 A pass after the laptop changed anything still fetches the whole list, 9.8 MB,
 and on that hotspot still runs out of time: the suite there failed for that
-reason after this was built. Two ways on, neither built yet:
+reason after this was built. Two ways on; the first was built on 2026-10-20
+as [0072](0072-only-what-changed-in-a-list.md), and has not yet been run on
+that hotspot:
 
 - **The list's changes only**: rows changed since the list the asker holds,
   which needs a change counter every write to the list moves, deletions

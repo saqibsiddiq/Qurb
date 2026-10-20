@@ -11,6 +11,7 @@ use crate::pairing::fingerprint_of;
 use crate::tls;
 use crate::wire::{Request, Response, MAX_MESSAGE};
 use qurb_storage::Store;
+use qurb_sync::FileVersion;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -386,7 +387,8 @@ async fn serve_request(
         | Response::Withdrawn
         | Response::Kept { .. }
         | Response::Layout(_)
-        | Response::Digest(_) => 0,
+        | Response::Digest(_)
+        | Response::TreeDelta { .. } => 0,
     };
 
     match (&request, &response) {
@@ -402,6 +404,10 @@ async fn serve_request(
     send.finish()?;
     Ok(())
 }
+
+/// The most entries a list's changes are sent as, apart from the list: past
+/// this, or past half of it, the list is sent whole instead.
+const DELTA_MOST: usize = 20_000;
 
 /// What a request is answered with: at once, or, for a chunk, the bytes once
 /// they are read without the store (decision 0064).
@@ -459,6 +465,33 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
             match request {
                 Request::TreeDigest => Response::Digest(crate::wire::tree_digest(&tree)),
                 _ => Response::Tree(tree),
+            }
+        }
+
+        // Only what changed since the list the asker holds (decision 0072),
+        // with the whole list's fingerprint for it to check what it rebuilds
+        // against. Not for a computer keeping this device's vault sealed: a
+        // part of its list moves no counter here, so it is sent whole. Nor
+        // when so much changed that the list is as cheap.
+        Request::TreeSince { since } => {
+            if keeps_mine {
+                Response::NotFound
+            } else {
+                let (now, tree, changed) = store.tree_since(audience, *since)?;
+                let digest = crate::wire::tree_digest(&tree);
+                let total = tree.len();
+                let delta: Vec<FileVersion> = tree
+                    .into_iter()
+                    .filter(|version| {
+                        let (class, path) = crate::wire::listed_order(version);
+                        changed.contains(&(class, path.to_string()))
+                    })
+                    .collect();
+                if delta.len() > DELTA_MOST || (delta.len() > 64 && delta.len() * 2 > total) {
+                    Response::NotFound
+                } else {
+                    Response::TreeDelta { now, digest, changed: delta }
+                }
             }
         }
 

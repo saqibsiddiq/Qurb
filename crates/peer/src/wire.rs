@@ -162,6 +162,12 @@ pub enum Request {
     /// 9.8 MB a pass on the S23 with nothing changed: on a slow hotspot the
     /// pass ran out of time before the list arrived, every time (2026-10-19).
     TreeDigest,
+
+    /// What changed in the file list since the list counter stood at
+    /// `since` (decision 0072): answered by [`Response::TreeDelta`], or by
+    /// [`Response::NotFound`] when the changes are too many to be worth
+    /// sending apart from the list.
+    TreeSince { since: u64 },
 }
 
 /// One file of a phone's folder on a computer, as listed to the phone.
@@ -251,6 +257,12 @@ pub enum Response {
 
     /// The file list's fingerprint, answering [`Request::TreeDigest`].
     Digest([u8; 32]),
+
+    /// Answering [`Request::TreeSince`]: where the list counter stands now,
+    /// the whole list's fingerprint as it is now ([`tree_digest`]), and the
+    /// entries of it that changed. The asker puts them in place of its own
+    /// and checks the result against the fingerprint.
+    TreeDelta { now: u64, digest: [u8; 32], changed: Vec<FileVersion> },
 }
 
 const TAG_TREE: u8 = 1;
@@ -272,6 +284,7 @@ const TAG_SHORT_CONFIRM: u8 = 16;
 const TAG_KEPT: u8 = 17;
 const TAG_LAYOUT: u8 = 18;
 const TAG_TREE_DIGEST: u8 = 19;
+const TAG_TREE_SINCE: u8 = 20;
 
 /// The most entries one listing of a phone's folder may hold: a folder of a
 /// hundred thousand photos is a phone's; more is not.
@@ -313,6 +326,7 @@ const STATUS_WITHDRAWN: u8 = 18;
 const STATUS_KEPT: u8 = 19;
 const STATUS_LAYOUT: u8 = 20;
 const STATUS_DIGEST: u8 = 21;
+const STATUS_TREE_DELTA: u8 = 22;
 
 /// The most folders one answer may list: two levels of a phone's storage come
 /// to a few hundred. A peer claiming more is not describing a phone.
@@ -388,6 +402,10 @@ impl Request {
                 out.extend_from_slice(content);
             }
             Request::TreeDigest => out.push(TAG_TREE_DIGEST),
+            Request::TreeSince { since } => {
+                out.push(TAG_TREE_SINCE);
+                out.extend_from_slice(&since.to_le_bytes());
+            }
         }
         out
     }
@@ -425,6 +443,7 @@ impl Request {
             TAG_KEPT => Request::Kept { dir: r.path()? },
             TAG_LAYOUT => Request::Layout { content: r.hash()? },
             TAG_TREE_DIGEST => Request::TreeDigest,
+            TAG_TREE_SINCE => Request::TreeSince { since: r.u64()? },
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -476,6 +495,15 @@ impl Response {
             Response::Digest(digest) => {
                 out.push(STATUS_DIGEST);
                 out.extend_from_slice(digest);
+            }
+            Response::TreeDelta { now, digest, changed } => {
+                out.push(STATUS_TREE_DELTA);
+                out.extend_from_slice(&now.to_le_bytes());
+                out.extend_from_slice(digest);
+                put_u32(&mut out, changed.len());
+                for version in changed {
+                    encode_version(&mut out, version);
+                }
             }
             Response::Kept { folders, files } => {
                 out.push(STATUS_KEPT);
@@ -657,6 +685,16 @@ impl Response {
                 Response::Layout(chunks)
             }
             STATUS_DIGEST => Response::Digest(r.hash()?),
+            STATUS_TREE_DELTA => {
+                let now = r.u64()?;
+                let digest = r.hash()?;
+                let count = r.count()?;
+                let mut changed = Vec::with_capacity(count.min(4096));
+                for _ in 0..count {
+                    changed.push(decode_version(&mut r)?);
+                }
+                Response::TreeDelta { now, digest, changed }
+            }
             STATUS_KEPT => {
                 let count = r.count()?;
                 if count > MAX_KEPT {
@@ -744,14 +782,34 @@ pub fn tree_frames(versions: &[FileVersion]) -> Vec<Vec<u8>> {
     frames
 }
 
-/// A file list's fingerprint: the hash of its frames, as [`tree_frames`]
-/// writes them. The list is in path order, so the same list hashes the same.
+/// A file list's fingerprint: the hash of its entries in one order, by where
+/// each is listed and then by path ([`listed_order`]), however the list was
+/// put together -- sent whole, or rebuilt from what changed (decision 0072).
 pub fn tree_digest(versions: &[FileVersion]) -> [u8; 32] {
+    let mut sorted: Vec<&FileVersion> = versions.iter().collect();
+    sorted.sort_by(|a, b| listed_order(a).cmp(&listed_order(b)));
     let mut hasher = blake3::Hasher::new();
-    for frame in tree_frames(versions) {
-        hasher.update(&frame);
+    let mut entry = Vec::with_capacity(256);
+    for version in sorted {
+        entry.clear();
+        encode_version(&mut entry, version);
+        hasher.update(&entry);
     }
     *hasher.finalize().as_bytes()
+}
+
+/// Where an entry is listed -- 0 the shared area, 1 the asker's vault, 2 the
+/// answering device's own -- and its path: what tells one entry of a list
+/// from another, and the order a list is fingerprinted in. An entry's area
+/// within a vault (sent, or held) is not part of it: a file the other device
+/// comes to hold is the same entry, changed.
+pub fn listed_order(version: &FileVersion) -> (u8, &str) {
+    let class = match version.area {
+        qurb_sync::Area::Shared => 0,
+        qurb_sync::Area::Sent | qurb_sync::Area::Held => 1,
+        qurb_sync::Area::Hold => 2,
+    };
+    (class, version.path.as_str())
 }
 
 /// One frame's versions, its length already read.
@@ -1028,6 +1086,7 @@ mod tests {
             Request::Unlock { nonce: [11; 16], key: [12; 32] },
             Request::Layout { content: [13; 32] },
             Request::TreeDigest,
+            Request::TreeSince { since: 1 << 40 },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -1063,6 +1122,7 @@ mod tests {
                 Choice { folder: "Documents".into(), chosen: false, changed_at: 1_791_980_100_456 },
             ]),
             Response::Digest([14; 32]),
+            Response::TreeDelta { now: 99, digest: [15; 32], changed: vec![version("a/b.txt")] },
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);

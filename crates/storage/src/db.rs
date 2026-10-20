@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -633,6 +633,54 @@ CREATE TABLE IF NOT EXISTS outside_sources (
 /// rewound by a build undone and then redone -- keeps every choice, an untick
 /// included: `INSERT OR IGNORE` takes the V23 rows, all of them ticks then,
 /// only where there is nothing yet. V23's two tables are left, unused.
+/// A counter every change to a file's listing moves (decision 0072): what lets
+/// a device asking for this one's file list be sent only what changed since
+/// the list it holds.
+///
+/// Kept by triggers, so that no write can forget it. **A migration that
+/// rebuilds `files` must create the triggers again**; one that does not would
+/// leave lists sent whole, not wrong -- the asker checks what it rebuilt
+/// against the list's fingerprint and fetches it whole on any difference.
+const V27: &str = r#"
+CREATE TABLE IF NOT EXISTS list_counter (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    n  INTEGER NOT NULL
+) STRICT;
+INSERT OR IGNORE INTO list_counter (id, n) VALUES (1, (SELECT coalesce(max(id), 0) FROM files));
+-- Beside `files` rather than a column of it, so that this can run again on an
+-- index that has it, as every migration here can. Written in the triggers by a
+-- delete and an insert, not `INSERT OR REPLACE`: inside a trigger SQLite puts
+-- the conflict rule of the statement that fired it in place of the trigger's
+-- own, and a row replaced in `files` under the same id then collided here.
+CREATE TABLE IF NOT EXISTS listed (
+    file_id INTEGER PRIMARY KEY,
+    changed INTEGER NOT NULL
+) STRICT;
+INSERT OR IGNORE INTO listed (file_id, changed) SELECT id, id FROM files;
+CREATE INDEX IF NOT EXISTS idx_listed_changed ON listed (changed);
+CREATE TRIGGER IF NOT EXISTS files_listed_insert AFTER INSERT ON files BEGIN
+    UPDATE list_counter SET n = n + 1 WHERE id = 1;
+    DELETE FROM listed WHERE file_id = NEW.id;
+    INSERT INTO listed (file_id, changed) VALUES (NEW.id, (SELECT n FROM list_counter WHERE id = 1));
+END;
+-- Only what a listing shows: not when a file was last opened, nor whether its
+-- bytes are here.
+CREATE TRIGGER IF NOT EXISTS files_listed_update AFTER UPDATE ON files
+WHEN NEW.path IS NOT OLD.path OR NEW.size IS NOT OLD.size
+    OR NEW.content_hash IS NOT OLD.content_hash OR NEW.deleted_at IS NOT OLD.deleted_at
+    OR NEW.vector IS NOT OLD.vector OR NEW.modified_by IS NOT OLD.modified_by
+    OR NEW.updated_at IS NOT OLD.updated_at OR NEW.scope IS NOT OLD.scope
+    OR NEW.held IS NOT OLD.held
+BEGIN
+    UPDATE list_counter SET n = n + 1 WHERE id = 1;
+    DELETE FROM listed WHERE file_id = NEW.id;
+    INSERT INTO listed (file_id, changed) VALUES (NEW.id, (SELECT n FROM list_counter WHERE id = 1));
+END;
+CREATE TRIGGER IF NOT EXISTS files_listed_delete AFTER DELETE ON files BEGIN
+    DELETE FROM listed WHERE file_id = OLD.id;
+END;
+"#;
+
 /// Files whose size and time cannot yet be trusted to say they are unchanged
 /// (`Store::put_file`, *Too recent to trust*).
 const V26: &str = r#"
@@ -3925,6 +3973,46 @@ impl Db {
         Ok(self.local_fact("outside_offered")?.as_deref() == Some("1"))
     }
 
+    /// Where the list counter stands (`V27`): a listing changed since a list
+    /// was read moves it past what it was then.
+    pub fn list_mark(&self) -> Result<u64> {
+        Ok(self.conn.query_row("SELECT n FROM list_counter WHERE id = 1", [], |r| r.get::<_, i64>(0))? as u64)
+    }
+
+    /// Which listings changed after `since`, by where each is listed -- 0 the
+    /// shared area, 2 this device's own vault, 1 any other vault -- and path:
+    /// the class a list's entry carries in its area (decision 0072).
+    pub fn listed_since(&self, since: u64) -> Result<ChangedListings> {
+        let me = self.local_device()?;
+        let mut statement = self.conn.prepare(
+            "SELECT f.path, f.scope FROM listed l JOIN files f ON f.id = l.file_id WHERE l.changed > ?1",
+        )?;
+        let since = since.min(i64::MAX as u64) as i64;
+        let rows = statement.query_map(params![since], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, Option<Vec<u8>>>(1)?))
+        })?;
+        let mut out = std::collections::HashSet::new();
+        for row in rows {
+            let (path, scope) = row?;
+            let class = match scope {
+                None => 0,
+                Some(scope) if scope.as_slice() == me.as_bytes().as_slice() => 2,
+                Some(_) => 1,
+            };
+            out.insert((class, path));
+        }
+        Ok(out)
+    }
+
+    /// Run `read` inside one read of the index, so that what it reads is all
+    /// of one moment.
+    pub fn at_once<T>(&self, read: impl FnOnce(&Db) -> Result<T>) -> Result<T> {
+        let snapshot = self.conn.unchecked_transaction()?;
+        let out = read(self)?;
+        snapshot.commit()?;
+        Ok(out)
+    }
+
     /// Mark `path`'s size and time as too recent to trust, or trusted again
     /// (`Store::put_file`, *Too recent to trust*).
     pub fn set_racy(&self, path: &str, racy: bool) -> Result<()> {
@@ -4401,6 +4489,9 @@ pub struct Freeable {
     /// The largest of them, biggest first.
     pub files: Vec<FolderEntry>,
 }
+
+/// Which listings changed, by where each is listed and path (`Db::listed_since`).
+pub type ChangedListings = std::collections::HashSet<(u8, String)>;
 
 /// One row of a listing: what a file browser needs and nothing more.
 #[derive(Debug, Clone, PartialEq, Eq)]

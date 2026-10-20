@@ -137,7 +137,7 @@ qurb.removeDevice(peer.fingerprint, deleteKept = false)
 ```
 
 And two free functions: `engineVersion()` — `qurb 0.1.0 · protocol qurb/2 ·
-index schema 26` on 2026-10-18 — and `qrCode(text)`, the matrix a phone draws to show a
+index schema 27` on 2026-10-20 — and `qrCode(text)`, the matrix a phone draws to show a
 pairing code, so the app needs no image library.
 
 `outstanding()` is the honest answer to "did it get there yet": live files this

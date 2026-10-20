@@ -526,7 +526,7 @@ impl PeerClient {
         Ok(fetched)
     }
 
-    async fn request(&self, request: Request) -> Result<Response> {
+    pub(crate) async fn request(&self, request: Request) -> Result<Response> {
         let (mut send, mut recv) = self.connection.open_bi().await?;
         send.write_all(&request.encode()).await?;
         // Finishing the stream is what tells the peer the request is complete;
@@ -575,6 +575,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Kept { .. } => "listing of a kept folder",
         Response::Layout(_) => "layout of a file",
         Response::Digest(_) => "fingerprint of a file list",
+        Response::TreeDelta { .. } => "changes to a file list",
     };
     Error::Protocol { detail: format!("asked for a {wanted}, got a {kind}") }
 }

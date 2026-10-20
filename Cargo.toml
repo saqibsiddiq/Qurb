@@ -13,6 +13,7 @@ members = [
     "crates/sync",
     "crates/tray",
     "crates/watcher",
+    "experiments/list-sizes",
     "experiments/phase0-spike",
     "experiments/phone-serving",
     "experiments/service-capacity",

@@ -141,6 +141,24 @@ not enough to stand in for the device showing them: the code they fetch
 names its fingerprint, which the connection then checks. Tested in
 `tests/six_digits.rs`, over multicast loopback.
 
+## The file list, kept
+
+A sync starts from the other device's file list, and a phone's list on the
+computer keeping its backups holds every one of them: 38,006 entries, 7.9 MB,
+for the S23 on 2026-10-20. So each device's last list is kept on disk
+(`trees::Trees`, `.qurb/trees/list-<fingerprint>.bin`) with the other
+device's list counter as it stood then, and `PeerClient::tree_kept` asks
+only what changed since (`TreeSince`). It puts the changed entries in place,
+and uses the result only if it has the fingerprint the other device sent with
+them. If it does not, or nothing was kept, or the other device sends its list
+only whole, the fingerprint is compared with the kept list's (`TreeDigest`),
+and the list is fetched whole only if they differ
+([decisions 0071](../../docs/decisions/0071-a-file-list-fetched-only-when-it-changed.md)
+and [0072](../../docs/decisions/0072-only-what-changed-in-a-list.md)).
+The counter is only a hint, and a change it missed costs a fetch, never a
+wrong list. On a copy of the laptop's index, one changed file costs 194 bytes
+rather than the whole list; this has not yet run on the S23.
+
 ## The wire format
 
 Hand-rolled and explicit. Every field is length-prefixed and bounded, so a
@@ -355,11 +373,15 @@ a set that only grew would keep letting it in.
   removing a device is done on each device that trusted it
   ([decision 0041](../../docs/decisions/0041-removing-a-device.md)); nothing
   tells the others.
-- **Only what changed.** The whole tree is sent each sync, in frames of
-  about 1 MiB since a million files' list outgrew one 64 MiB message
-  ([decision 0065](../../docs/decisions/0065-the-scale-qurb-is-built-for.md));
-  a large library still needs an incremental exchange rather than a full
-  list per sync.
+- **A list's removals.** Changes are sent, entries leaving a list are not:
+  the server cannot say which of its changed rows the asker had seen without
+  telling it about rows that were never its own. An entry that leaves (a
+  folder shared without the asker, a device no longer keeping this one's
+  vault, a phone going onto mobile data) shows as a fingerprint mismatch, and
+  the list is fetched whole, in frames of about 1 MiB
+  ([decision 0065](../../docs/decisions/0065-the-scale-qurb-is-built-for.md)).
+  The cases are listed in
+  [decision 0072](../../docs/decisions/0072-only-what-changed-in-a-list.md).
 - **A measured gain from the two sections above** over a real link. They
   were built after an 800 MB video failed to cross from a phone; the speed
   before and after, on that phone and Wi-Fi, has not been measured yet.

@@ -763,7 +763,9 @@ qurb/
 │   │   ├── src/ranged.rs    part of a file on another device, read as a
 │   │   │                    player asks: chunks by their sizes, checked
 │   │   ├── src/trees.rs     each device's last file list, kept with its
-│   │   │                    fingerprint, fetched again only when it changed
+│   │   │                    fingerprint and counter; brought up to date
+│   │   │                    with only what changed, fetched whole when that
+│   │   │                    does not match (0071, 0072)
 │   │   └── src/source.rs    plugs the client into the engine; who holds what,
 │   │                        reported and asked about (`confirm_kept`)
 │   │
@@ -1034,7 +1036,7 @@ The unbuilt parts are listed at the end of this section.
 | Content-defined chunking | FastCDC, 128 KiB / 512 KiB / 2 MiB |
 | Compression and encryption at rest | Zstd then XChaCha20-Poly1305 |
 | Content-addressable store | crash-safe writes via temp file + rename |
-| SQLite index | paths, chunk lists, reference counts via triggers |
+| SQLite index | paths, chunk lists, reference counts via triggers; a list counter, moved by triggers on every change to a file's listing (schema 27, [0072](decisions/0072-only-what-changed-in-a-list.md)) |
 | Deduplication | within a file, across files, across versions |
 | Single-copy storage | a materialised file *is* its own payload store |
 | Deletion, tombstones, restore | content survives a retention window |
@@ -1120,7 +1122,8 @@ for the workspace as it stands.
 | A phone knows what its computer keeps | `confirm_kept`: each sync, a phone asks the computer keeping its vault about up to 64 of its files with no record of it keeping them, at random, and records each yes; a `Got` lost with a connection had left 130 of the S23's WhatsApp files "still to go" for good — [0062](decisions/0062-backing-up-whatsapp.md) |
 | The relay carries meetings | one relay connection, several names: a device's own and one per meeting with another person's device, so a computer reaches a guest it cannot dial — [0061](decisions/0061-the-relay-carries-meetings.md) |
 | Staying on the relay | the connection dialled again when it goes, from one second doubling to a minute, every name registered again; a relay down at start kept, known down, and not dialled through until up — tested by restarting a relay under a socket ([0068](decisions/0068-the-rendezvous-service-relays.md), amended 2026-10-18) |
-| A list fetched only when it changed | `TreeDigest`: the fingerprint of the list a device would send; the asker keeps each device's last list (`trees`) and fetches only a changed one, so a pass with nothing changed received 24 KiB rather than 9.8 MB on the S23 — [0071](decisions/0071-a-file-list-fetched-only-when-it-changed.md); a pass after a change still fetches the whole list |
+| A list fetched only when it changed | `TreeDigest`: the fingerprint of the list a device would send; the asker keeps each device's last list (`trees`) and fetches only a changed one, so a pass with nothing changed received 24 KiB rather than 9.8 MB on the S23 — [0071](decisions/0071-a-file-list-fetched-only-when-it-changed.md) |
+| Only what changed in a list | `TreeSince`: the entries changed since the asker's kept list, by a counter in the index that triggers move (schema 27), with the whole list's fingerprint; the asker rebuilds its list and uses it only if the fingerprint matches, else fetches it whole. On a copy of the laptop's index, one changed file costs 194 bytes rather than 7.9 MB; not yet run on the S23 or on a hotspot — [0072](decisions/0072-only-what-changed-in-a-list.md) |
 | The relay alongside a slow direct path | the relay tried once the announced addresses have had four seconds, whichever connects first kept, rather than after all of them time out (0071) |
 | An edit in the clock's tick | a file read within three seconds of its time is read again on each scan until older, so a second write of the same size in the same tick is not missed (`racy`, index schema 26) — found on Android 8, [0069](decisions/0069-too-recent-to-trust.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |

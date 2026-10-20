@@ -1,0 +1,15 @@
+[package]
+name = "list-sizes"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+# Throwaway. What a phone receives for a computer's file list, whole and as
+# changes (decision 0072), measured on a copy of a real index. See ./README.md.
+
+[dependencies]
+anyhow.workspace = true
+qurb-peer = { path = "../../crates/peer" }
+qurb-storage = { path = "../../crates/storage" }
+qurb-sync = { path = "../../crates/sync" }
+rusqlite = { version = "0.32", features = ["bundled"] }

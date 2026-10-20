@@ -323,6 +323,7 @@ fn upgrading_remembers_every_delivery_already_taken() {
         .conn()
         .execute_batch(
             "DELETE FROM taken;
+             DROP TRIGGER IF EXISTS files_listed_update;
              ALTER TABLE files DROP COLUMN held;
              DROP TABLE holders;
              PRAGMA user_version = 10;",

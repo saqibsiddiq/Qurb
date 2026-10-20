@@ -176,7 +176,15 @@ existing index, the index is copied with `VACUUM INTO` to
 refused ([decision 0047](../../docs/decisions/0047-versions-and-upgrades.md)).
 `tests/upgrading.rs` checks both. Schema 26 (2026-10-18) added `racy`: the paths
 read too soon after being written for their size and time to be trusted
-([decision 0069](../../docs/decisions/0069-too-recent-to-trust.md)).
+([decision 0069](../../docs/decisions/0069-too-recent-to-trust.md)). Schema
+27 (2026-10-20) added the list counter: `list_counter`, and `listed`, which
+holds the counter's value at each file's last change. Triggers on `files`
+keep both, so any write that changes a list entry moves the counter, written
+through the store or not. `Store::tree_since` reads a list, the counter, and
+what changed since a given count in one transaction
+([decision 0072](../../docs/decisions/0072-only-what-changed-in-a-list.md)).
+`tests/upgrading.rs` runs the newest migration again on an index that already
+has it, so V27 creates tables of its own: adding a column cannot be done twice.
 
 ## Testing
 

@@ -2626,6 +2626,11 @@ Found, and fixed the same day unless said:
   ([0071](../decisions/0071-a-file-list-fetched-only-when-it-changed.md)):
   24–27 KiB a pass with nothing changed. **Not finished**: a pass after any
   change still fetches it whole, and on that hotspot still runs out of time.
+  On 2026-10-20 only the changes are sent
+  ([0072](../decisions/0072-only-what-changed-in-a-list.md)): on a copy of
+  the laptop's index, one changed file costs 194 bytes rather than 7.9 MB.
+  **Not run on the S23 or on any hotspot**; see *Only what changed in a list,
+  2026-10-20* below.
 - **F. The relay was asked only after eleven seconds** of direct attempts; now
   alongside them after four (0071).
 - **G. A send whose name was taken was received again on every sync**: it
@@ -2639,6 +2644,34 @@ name at the rendezvous; background passes waiting below 15% battery, by design;
 the dial-back loop of the morning, which was the phone's old build. The
 phone's mobile data stopped carrying traffic at about 19:20 while Android still
 called it connected; the hotspot tests used the other phone's.
+
+## Only what changed in a list, 2026-10-20
+
+The owner: "do the recommended fix but ive no way to test it". The hotspot
+and the mobile data of the day before were no longer available to them.
+Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
+
+- **Built:** a list counter in the index, moved by triggers on every change
+  to a file's listing (schema 27); `TreeSince`, answered with the changes and
+  the whole list's fingerprint; the phone and the daemon rebuilding their kept
+  list and using it only when the fingerprint matches.
+- **Measured** on a copy of the laptop's index, on the laptop
+  ([experiments/list-sizes](../../experiments/list-sizes/README.md)). The
+  S23's list is 38,006 entries, 7,941,674 bytes whole. With nothing changed
+  the answer is 45 bytes; one file edited or deleted, 166–194; ten, 2,215; a
+  thousand, 208,125. Every rebuilt list had the whole list's fingerprint.
+- **Found while building it:**
+  - A file re-read and found unchanged was given a new `updated_at`, which
+    sent it to peers as changed. It no longer is.
+  - The first version left a computer that keeps another person's vault
+    sealed fetching its whole list every pass. It now uses 0071's
+    fingerprint, and a test covers it.
+- **Not done:**
+  - The S23 has not run it: the phone's wireless debugging needs pairing
+    again. Until it is updated, it fetches the laptop's whole list every pass,
+    because the laptop already runs 0072 and the two builds fingerprint lists
+    differently.
+  - Nothing has been run on a hotspot or on mobile data.
 
 ## Deliberately left undone
 

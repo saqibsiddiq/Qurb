@@ -85,6 +85,11 @@ fn start_hostile(
                         // any list is, and a kept one used only if its own
                         // fingerprint matches.
                         (_, Request::TreeDigest) => Some(Response::Digest([0x42; 32]).encode()),
+                        // Changes that do not add up to the fingerprint they
+                        // come with: the asker fetches the list whole.
+                        (_, Request::TreeSince { .. }) => Some(
+                            Response::TreeDelta { now: 7, digest: [0x43; 32], changed: Vec::new() }.encode(),
+                        ),
                         (_, Request::Short { .. } | Request::ShortConfirm { .. } | Request::Kept { .. } | Request::Layout { .. }) => {
                             Some(Response::NotFound.encode())
                         }

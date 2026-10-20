@@ -849,8 +849,13 @@ impl Store {
                         Some(owner) => *owner == self.db.local_device()?,
                     };
                     let holding = (backed && self.supplies(logical_path)) || self.tree.is_none();
+                    // Not `updated_at`: the same bytes are not a change, and
+                    // that time is what every list says the file last changed
+                    // at. Moved on each read of a file read again -- one too
+                    // recent to trust is, every scan -- every such file looked
+                    // changed to the devices asking (2026-10-20, decision 0072).
                     self.db.conn().execute(
-                        "UPDATE files SET mtime_ns = ?1, updated_at = unixepoch(),
+                        "UPDATE files SET mtime_ns = ?1,
                                           materialised = ?3,
                                           wanted = CASE WHEN ?3 = 1 THEN 0 ELSE wanted END
                           WHERE id = ?2",
@@ -2681,6 +2686,18 @@ impl Store {
         // a rule that arrived since the last answer must already hold.
         self.refresh_shares()?;
         self.db.versions_for(audience)
+    }
+
+    /// An audience's file list, the list counter as it stood when it was
+    /// read, and which listings changed after `since`, all of one moment:
+    /// what answering for only the changes needs (decision 0072).
+    pub fn tree_since(
+        &self,
+        audience: db::Audience<'_>,
+        since: u64,
+    ) -> Result<(u64, Vec<FileVersion>, db::ChangedListings)> {
+        self.refresh_shares()?;
+        self.db.at_once(|db| Ok((db.list_mark()?, db.versions_for(audience)?, db.listed_since(since)?)))
     }
 
     /// Whether an audience may fetch this chunk's bytes.
