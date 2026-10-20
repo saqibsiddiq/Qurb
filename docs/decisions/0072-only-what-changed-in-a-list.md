@@ -2,10 +2,11 @@
 
 **Status:** Accepted, 2026-10-20. Built in `qurb_storage` (index schema 27)
 and `qurb_peer` (`wire`, `server`, `trees`). The laptop has run it since
-2026-10-20. Measured on a copy of the laptop's index. **Not yet run on the
-S23, and not on a hotspot or mobile data**: the owner no longer has either to
-test with, and the phone's wireless debugging has to be paired again before a
-build can go onto it. See *Not yet tested*.
+2026-10-20. Measured on a copy of the laptop's index, and **run on the S23
+over the home Wi-Fi the same evening**: after a change on the laptop the
+phone received the two changed entries, not its 38,032. **Not run on a
+hotspot or on mobile data**: the owner no longer has either to test with. See
+*On the S23* and *Not yet tested*.
 **Date:** 2026-10-20
 
 ## What was asked
@@ -132,24 +133,47 @@ The suite: 908 tests, none failing, `cargo clippy` clean. New tests:
 - the wire round trip, and a hostile peer whose changes do not add up to the
   fingerprint they come with.
 
+## On the S23
+
+2026-10-20, 19:27–19:40, the S23 on the home Wi-Fi beside the laptop, over
+wireless debugging. The owner was using the phone at the time, WhatsApp among
+other things, so the phone's Wi-Fi counter (`/proc/net/dev`, wlan0) counts
+their traffic as well as qurb's.
+
+| | the phone's build | received on Wi-Fi meanwhile | what the app said |
+|---|---|---|---|
+| two passes, nothing changed | 2026-10-19's (0071), the laptop on this | 8,156 and 8,187 KiB | 8.6 s and 7.9 s; the whole list each time, since the two builds fingerprint differently |
+| a file written on the laptop: the first pass after the update | this | 10,487 KiB | the phone woken by push, the file there 12.3 s after it was written; the whole list, once, as expected |
+| another file written on the laptop | this | 2,200 KiB | the file there 7.2 s after it was written; `its file list brought up to date changed=2 files=38032` |
+
+The second change is what this decision is for. The phone's log says two
+entries were sent. The 2.2 MB counted meanwhile is the phone's whole Wi-Fi,
+not qurb's alone, and has not been broken down. It is not the two files the
+phone refuses on every pass (`a file sent to this device already has that
+name`, as the message then read, left over from the conflict test of
+2026-10-19): those are refused before anything is fetched. See the phase-5
+document's section for 2026-10-20.
+
+The laptop, for its part, fetched the phone's whole list once after the
+phone's update (19:29:08), and its syncs every 20 s after that did not write
+the kept list again: nothing had changed.
+
+The phone's index migrated to schema 27 on the first start of the new build
+(`index.before-schema-27.db`, 44 MB). That start was not timed.
+
 ## Not yet tested
 
-- **On the S23.** The laptop runs this, and the phone still runs the build of
-  2026-10-19, which has 0071 and not this. Until the phone is updated, the two
-  fingerprint lists differently, so **the phone now fetches the laptop's whole
-  list on every pass**, as it did before 0071. On the home Wi-Fi that is
-  about 8 MB a pass; a pass with nothing to do took 9 s that way on
-  2026-10-19. Over mobile data that is 8 MB a pass, and on a hotspot like the
-  one in 0071 passes would run out of time again. Installing the
-  phone's build ends it; that needs wireless debugging paired again.
 - **On a hotspot or on mobile data.** What 0071 measured failing (a pass
   after a change ran out of time on another phone's hotspot) has not been run
   again, and the owner no longer has either network to run it on. The
   measurement above says the bytes are gone; whether that makes the pass fit
   is not shown.
-- **The phone rebuilding the list.** It reads its kept 8 MB list and checks
-  its fingerprint every pass, as in 0071, and now also writes it again after
-  each change. Measured on the laptop only.
+- **The phone rebuilding the list, timed apart.** It reads its kept 8 MB list
+  and checks its fingerprint every pass, as in 0071, and now also writes it
+  again after each change. On the S23 everything from "connected" to
+  "brought up to date" in its log took 0.54 s: reading the kept list, asking,
+  rebuilding, checking and writing. That is one pass, and its parts were not
+  timed separately.
 
 ## What still sends the whole list
 

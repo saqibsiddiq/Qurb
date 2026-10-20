@@ -2666,12 +2666,26 @@ Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
   - The first version left a computer that keeps another person's vault
     sealed fetching its whole list every pass. It now uses 0071's
     fingerprint, and a test covers it.
-- **Not done:**
-  - The S23 has not run it: the phone's wireless debugging needs pairing
-    again. Until it is updated, it fetches the laptop's whole list every pass,
-    because the laptop already runs 0072 and the two builds fingerprint lists
-    differently.
-  - Nothing has been run on a hotspot or on mobile data.
+- **On the S23**, the same evening, on the home Wi-Fi over wireless
+  debugging, while the owner was using the phone:
+  - A file written on the laptop reached it 7.2 s later, by push.
+  - The phone's log: `its file list brought up to date changed=2
+    files=38032`, meaning two entries were sent, not the 38,032-entry list.
+  - Before the update the same phone, against the updated laptop, received
+    about 8 MB a pass with nothing changed.
+
+  The numbers are in
+  [0072](../decisions/0072-only-what-changed-in-a-list.md), *On the S23*.
+- **Found on the phone, not yet decided:** two of the conflict test's files
+  from 2026-10-19 are shared on the laptop and private on the phone, at the
+  same paths. On every pass the phone refuses the shared version before
+  fetching it: `a file sent to this device already has that name`. That is
+  the engine's rule (a private file is never overwritten, and the shared one
+  waits until the name is free), but it means a warning on every pass, and
+  the shared versions never arrive. The message was also wrong for this case,
+  since the private file was not sent to the phone but is the phone's own. It
+  now reads `a private file here already has that name`.
+- **Not done:** nothing has been run on a hotspot or on mobile data.
 
 ## Deliberately left undone
 

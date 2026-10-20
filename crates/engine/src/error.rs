@@ -27,12 +27,13 @@ pub enum Error {
     #[error("{wanted} cannot be stored: {existing} already exists and differs only in case")]
     CaseCollision { wanted: String, existing: String },
 
-    /// A shared file whose name is taken by one somebody sent to this device.
+    /// A shared file whose name is taken by a private one here: one somebody
+    /// sent to this device, or this device's own in its vault.
     ///
     /// Refused rather than written, for the same reason as a case collision:
     /// the write would destroy the file already there. The shared one waits
     /// until the name is free.
-    #[error("{path} cannot be stored: a file sent to this device already has that name")]
+    #[error("{path} cannot be stored: a private file here already has that name")]
     TakenPrivately { path: String },
 
     /// A version naming somewhere this device will not write: outside the
