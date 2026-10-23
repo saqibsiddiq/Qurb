@@ -6,7 +6,8 @@ screens are in the Figma redesign ([design/redesign.md](../design/redesign.md),
 [0067](0067-a-folder-for-each-person.md), whose phone could only browse its
 folder on the computer, and makes one exception to the rule that a device
 serves read-only ([crates/peer](../../crates/peer/README.md), *The server is
-read-only*).
+read-only*). Amended the same day by the owner's next list: Files lists
+every computer, and the device is chosen on Home (points 1 and 5 below).
 **Date:** 2026-10-24
 
 ## What was asked
@@ -35,8 +36,11 @@ and choosing one in Devices is for what it keeps and where Send goes.
 
 ## Decision
 
-1. **Files on the phone is four places**: the folder of the computer selected
-   in Devices, the Private Vault, Received, and Deleted.
+1. **Files on the phone has two sections**: *This phone* (the Private Vault,
+   Received, and Deleted), then *Devices*, each computer's folder. Nothing is
+   selected for Files. (First written as four places, with the folder of a
+   computer selected in Devices; the owner changed it the same day: "i dont
+   like the idea of selecting device for files section".)
 2. **The phone has no shared files.** The area every device holds the same
    (`files.scope` NULL) is not shown on the phone, and the phone takes no part
    in it. A file added on the phone goes into its Vault, or is sent to a
@@ -51,6 +55,11 @@ and choosing one in Devices is for what it keeps and where Send goes.
      computer.
 4. **The computer's folder can be searched from the phone**, across its
    subfolders, while the computer is on.
+5. **Home shows one device, chosen on Home.** Its status is that device's, a
+   list opened from its name on Home changes it, and Send goes to it. Every
+   device goes on syncing in the background. The owner: "selecting device
+   should be for home section, and we can change the selected device in the
+   home section itself".
 
 ## Why
 
@@ -68,7 +77,7 @@ and choosing one in Devices is for what it keeps and where Send goes.
 - **Engine and protocol work**, none of it begun:
   - requests that change files, with their checks;
   - a search request answered by the computer;
-  - "the selected device" as a setting;
+  - the device chosen on Home, as a setting;
   - a backup set for each device (item 4 of the redesign).
 - **The rule that a device serves read-only gets an exception.** It is to be
   written into `crates/peer/README.md` when built, with the tests a hostile

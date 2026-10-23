@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
-**Status:** started 2026-10-20. Home is at draft 2, which the owner liked at
-draft 1; Devices is at draft 3; Files is at draft 2, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
+**Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
+Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -183,3 +183,18 @@ needed a way to select one; the owner: "yes add it to devices". The selected
 computer's card has a green outline and a tick where its arrow was; its page
 has *Use for Files*, a switch just under Send. One computer is selected at a
 time; switching it on for another moves the selection.
+
+## The owner's fourth list, 2026-10-24
+
+1. "files folder should have 2 sections i.e 1st 'this phone' which has vault,
+   recieved and deleted, 2nd 'devices' which has all the device folder
+   listed(i dont like the idea of selecting device for files section)". **Files,
+   draft 3**: those two sections, each computer a card with its on/off dot.
+2. "selecting device should be for home section, and we can change the
+   selected device in the home section itself". **Home, draft 3**: under the
+   status, the chosen device's name with a small arrow; tapping it opens a list
+   of devices, the chosen one ticked, and *Add a device*. A frame shows Office
+   PC chosen while it is off. **Devices, draft 4**: the outline, tick and *Use
+   for Files* of draft 3 taken out again.
+
+Decision 0073 is amended to match.
