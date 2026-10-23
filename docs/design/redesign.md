@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 2, which the owner liked at
-draft 1; Devices is at draft 1. Nothing is built in the apps yet: everything
+draft 1; Devices is at draft 2. Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -113,3 +113,21 @@ second way for item 4. Six screens, below Home on the Android page:
 What the engine does not do yet: a different backup set for each device, and
 WhatsApp and the folders kept by one device and not another. Today every
 device keeping the vault keeps all of it.
+
+## Devices, draft 2 (2026-10-23)
+
+The owner on draft 1:
+
+1. "can the whatsapp icon look similar to whatsapp logo?" A new icon in the
+   app's line style: a speech bubble with a solid handset in it. It is drawn
+   for qurb, not WhatsApp's logo; before a release uses it, WhatsApp's brand
+   guidelines on showing their mark are to be checked.
+2. Send on each device's page: kept.
+3. Identity: behind an info button on the device's page, with when it was
+   paired; and in Settings, when Settings is redesigned.
+4. "remove saqib? looks very messy and asymmetric and ugly". Rebuilt: a mark in
+   a pale red circle, the title and one line centred, one full-width warning,
+   one full-width option, and Cancel and Remove of equal width.
+
+A colour was added to the foundations for it: `error-bg`, #F7E9E7, as in the
+app's colours.
