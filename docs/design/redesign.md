@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 2, which the owner liked at
-draft 1; Devices is at draft 2; Files is at draft 2, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
+draft 1; Devices is at draft 3; Files is at draft 2, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -174,3 +174,12 @@ below draft 1:
   which says it waits 30 days in the computer's Deleted.
 - **The computer off**: its folder opens when it is on.
 - **Received**: a small device mark on each file for which device sent it.
+
+## Devices, draft 3 (2026-10-24)
+
+Files shows the selected computer's folder
+([0073](../decisions/0073-the-phone-works-with-its-computer.md)), so Devices
+needed a way to select one; the owner: "yes add it to devices". The selected
+computer's card has a green outline and a tick where its arrow was; its page
+has *Use for Files*, a switch just under Send. One computer is selected at a
+time; switching it on for another moves the selection.
