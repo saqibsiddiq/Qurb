@@ -1,8 +1,8 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 2, which the owner liked at
-draft 1. Nothing is built in the apps yet: everything here is a design in
-Figma.
+draft 1; Devices is at draft 1. Nothing is built in the apps yet: everything
+here is a design in Figma.
 
 The owner, 2026-10-20:
 
@@ -87,3 +87,29 @@ the phone, and were not yet.
    count as a badge; progress as a bar. A sentence stays only where a choice
    needs explaining. Home draft 2 applies it.
 3. "i like the redesign".
+
+## Devices, draft 1 (2026-10-23)
+
+Asked for by the owner ("lets do devices section now") after choosing the
+second way for item 4. Six screens, below Home on the Android page:
+
+- **Devices**: each device a card with its icon, name, an on/off dot, how long
+  since it was seen when it is off, and small icons for what it keeps (a chat
+  bubble for WhatsApp, a folder with how many, a lock for Private Vault). *This
+  phone* is listed apart. A second computer, *Office PC*, is made up, to show
+  two devices keeping different things.
+- **A device** opens to its own page rather than a sheet: Send, what it backs up
+  (WhatsApp and Private Vault as switches, Folders opening a list), its
+  identity, and Remove.
+- **Its folders**: the phone's folders as switches with their sizes, and *Wi-Fi
+  only* beneath.
+- **Add a device**: four choices with icons and no descriptions.
+- **Show my code**: the QR code, the six digits, the time left, *Copy code* and
+  *Stop*. The long typed code moved behind *Copy code*. The QR code drawn is a
+  pattern, not a working code.
+- **Remove saqib?**: the one place a few words stay, because removing can lose
+  files.
+
+What the engine does not do yet: a different backup set for each device, and
+WhatsApp and the folders kept by one device and not another. Today every
+device keeping the vault keeps all of it.
