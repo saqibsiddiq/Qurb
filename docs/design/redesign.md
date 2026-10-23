@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
-Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
+Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -288,3 +288,24 @@ Activity:
    *Qurb colours, dark*, of the same names, and the dark screens are copies
    bound to it. A change to a light screen is not carried to its dark copy.
 3. The desktop, next. 4. Building, after.
+
+## The desktop, draft 1 (2026-10-24)
+
+The owner chose, when asked: the same four places as the phone; Files as *This
+computer*, then *Phones*; Home as on the phone. Eight windows at 1280 by 800,
+on the Figma file's Desktop page, to the right of the window as it is:
+
+- **Home**: the device chosen here, its status in the centre, Sync and Send,
+  Backups and Activity at the top; files dropped anywhere on the window are sent
+  to the chosen device (a second window shows the drop).
+- **Files**: *This computer* (Shared, the folder the computers share; Vault;
+  Received; Deleted), then *Phones*, each phone's folder kept here.
+- **A phone's folder**: search, then its folders.
+- **Shared**: the list, and a file's details beside it rather than over it.
+- **Devices**: phones, then computers.
+- **A phone's page**: what it backs up here, with its folder tree beside it.
+- **Settings** in two columns: this computer, storage (with where received
+  files go), the app (with *Start at login*), and Advanced.
+
+On the way the device chip was given a swappable icon, so a chip can name a
+phone with a phone; it had shown a laptop for every device.
