@@ -698,7 +698,9 @@ qurb/
 │   │                      consistency.md, how the parts line up on both apps;
 │   │                      inventory.md, every page, pop-up, message and
 │   │                      notification with its words, made by a script
-│   │                      from the code (2026-10-20)
+│   │                      from the code (2026-10-20); redesign.md, the
+│   │                      redesign in Figma: where it is, and the owner's
+│   │                      lists and where each item stands
 │   ├── releasing.md       Building a release: every package, what each is
 │   │                      for, and what has run on what
 │   ├── decisions/         Why each choice was made (one file per decision)
