@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 2, which the owner liked at
-draft 1; Devices is at draft 2. Nothing is built in the apps yet: everything
+draft 1; Devices is at draft 2; Files is at draft 1. Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -131,3 +131,26 @@ The owner on draft 1:
 
 A colour was added to the foundations for it: `error-bg`, #F7E9E7, as in the
 app's colours.
+
+## Files, draft 1 (2026-10-24)
+
+Asked for by the owner ("lets do files"). Nine screens, below Devices:
+
+- **Files**: a search icon and a menu beside the title, no sentence under it.
+  Private Vault, the phone's folder on the computer, and Recently deleted as
+  three tiles. Folders as tiles with how many files. Each file is its name and
+  size; where it is, a badge on its icon: a green tick on this phone, a cloud
+  on another device, an amber mark on none. Add is a round plus.
+- **A folder**, **Search** with its results counted in a badge.
+- **A file**: which devices have it as chips, and what can be done as a grid of
+  icons with one word each (Open, Send, Save, Rename, Move, Vault, Free up,
+  Delete).
+- **Delete**, in the centred form of Remove, with *30 days in Deleted*.
+- **Deleted**: how many days each has left as a badge, and a restore icon.
+- **Vault**, with the device it is backed up on as a chip.
+- **On saqib**: the phone's folders kept there, as tiles.
+- **The menu**: sorting as a three-way switch, then New folder and Save all here.
+
+File names in these screens are examples. The folder tiles were first a
+single line and cut names short at two to a row; they are now an icon, the
+name and the count, stacked.
