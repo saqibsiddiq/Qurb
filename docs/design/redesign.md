@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
-Settings is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
+Settings is at draft 2; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -215,3 +215,11 @@ every device; Send goes to the chosen one). Six screens, below Files draft 3:
 Gone from Settings, because the new model put them elsewhere or ended them:
 Backups (each device's page), *Who has each folder* and *Keep new files
 private* (no shared files on the phone), Recently deleted (Files).
+
+## Settings, draft 2 (2026-10-24)
+
+The owner: "merge key and recovery, hide rendezvous and relay under advanced,
+lets keep notification one switch only". *Key* is one row (Safe) opening *Your
+key is safe*; *Connection* is Background sync and *Advanced*, a page of its
+own with Rendezvous, Relay and the version; Notifications is one switch with
+no words under it.
