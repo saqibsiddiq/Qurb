@@ -1,7 +1,8 @@
 # The redesign of 2026-10
 
-**Status:** started 2026-10-20. Home is at draft 1. Nothing is built in the apps
-yet: everything here is a design in Figma.
+**Status:** started 2026-10-20. Home is at draft 2, which the owner liked at
+draft 1. Nothing is built in the apps yet: everything here is a design in
+Figma.
 
 The owner, 2026-10-20:
 
@@ -47,7 +48,7 @@ and notification in both apps, with its words.
 | 1 | The first page as simple as possible | Draft 1: one status in the middle, said once |
 | 2 | Only a Sync and a Send button | Draft 1 |
 | 3 | Which device does a phone with several sync with; how does it switch; how does the computer manage several? | Answered: every paired device, at once, each pass; nothing to switch (see below) |
-| 4 | Devices in the phone app to select one device at a time, each with its own files backed up | Open: a question back to the owner (see below) |
+| 4 | Devices in the phone app to select one device at a time, each with its own files backed up | Decided 2026-10-23: (b), below. To be designed with Devices; needs engine work |
 | 5 | Backups like the Activity button at the top | Draft 1: a Backups button beside the clock |
 | 6 | The sync circle in the centre; Waiting only when something is queued | Draft 1 |
 | 7 | Why a conflict at all, if the phone and the laptop carry their own files? | Answered (see below) |
@@ -59,13 +60,30 @@ every device. The Private Vault, and with it the WhatsApp and folder backups,
 goes to each device chosen to keep it, and a folder can be limited to chosen
 devices ([0044](../decisions/0044-sharing-with-chosen-devices.md)).
 
-**4, the question back.** Either the phone works with only the device
-selected, and the others wait; or every device goes on syncing, and selecting
-one is for choosing what it keeps and where Send goes. Recommended: the
-second. A backup set for each device is not in the engine today: every device
-keeping the vault keeps all of it.
+**4.** Asked: either the phone works with only the device selected, and the
+others wait; or every device goes on syncing, and selecting one is for
+choosing what it keeps and where Send goes. **The owner chose the second.** A
+backup set for each device is not in the engine today, where every device
+keeping the vault keeps all of it: building it is engine work, and gets a
+decision record when it is built.
 
 **7.** Files are not separate copies: after a sync both devices hold the same
 files. A conflict is the same file changed on two devices before they meet,
 and Qurb keeps both versions rather than lose one. The four on the S23 were
 made on purpose by the network tests of 2026-10-19, one for each network.
+At the owner's word the laptop's `qurb-tests` folder (27 test files, 915 MB)
+went to its Trash on 2026-10-23, so Recently deleted and the Trash both have
+them. The phone's own private test files under the same name are deleted on
+the phone, and were not yet.
+
+## The owner's second list, 2026-10-23
+
+1. Item 4 above: the second way. Clear the test folder: done, above.
+2. "i dont like '.' that we are using, i want to convey the information while
+   keeping minimum texts since i want the app to be so intuitive that the user
+   understands everything without alot of texts". This is now a rule for every
+   surface: no ` · ` separators and no full stops on short labels; titles of
+   two or three words; a device as a chip (icon, name, a dot for on or off); a
+   count as a badge; progress as a bar. A sentence stays only where a choice
+   needs explaining. Home draft 2 applies it.
+3. "i like the redesign".
