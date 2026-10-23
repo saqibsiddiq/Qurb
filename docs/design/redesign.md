@@ -309,3 +309,19 @@ on the Figma file's Desktop page, to the right of the window as it is:
 
 On the way the device chip was given a swappable icon, so a chip can name a
 phone with a phone; it had shown a laptop for every device.
+
+## The owner's list of 2026-10-24, two things forgotten
+
+1. "we forgot to include shared folder in phone ui, which can be accessed by
+   all the phone users". Asked back: opened on the computer, not copied to
+   phones; reachable by the owner's phones and his guests'. **Files, draft 4**:
+   *Shared* between *This phone* and *Devices*, a card naming the computer it is
+   on, whether that is on, and how many people can reach it; inside, search,
+   folders, files, a new folder and a plus. Decision 0073 is amended: item 6,
+   and the widening of what a guest can reach, still to be bounded (which
+   guests; read only or not).
+2. "we forgot to redesign the qr code scanner". **QR scanner**: the camera
+   filling the screen with a frame in the middle and the rest dimmed; close and
+   the torch at the top; *Point at the code*; found turns the frame green and
+   names the device; a code that is not Qurb's turns it red and says so; *Type 6
+   digits* at hand. The same scanner serves *Visit a computer*.

@@ -61,6 +61,14 @@ and choosing one in Devices is for what it keeps and where Send goes.
    should be for home section, and we can change the selected device in the
    home section itself".
 
+6. **The computer's shared folder is reachable from phones, live**, as a
+   phone's own folder there is: opened on the computer, nothing copied to the
+   phone, needing the computer on. Not only the owner's phones: **the phones
+   of guests too** (people visiting the computer,
+   [0060](0060-a-computer-keeps-private-folders-for-several-people.md)). Added
+   the same day: "we forgot to include shared folder in phone ui, which can be
+   accessed by all the phone users", and, asked back, opened on the computer,
+   for the owner's phones and his guests'.
 ## Why
 
 - **The owner's use is a phone working with its computer**: backups of
@@ -79,6 +87,11 @@ and choosing one in Devices is for what it keeps and where Send goes.
   - a search request answered by the computer;
   - the device chosen on Home, as a setting;
   - a backup set for each device (item 4 of the redesign).
+- **Guests reach more than what was sent to them.** Under 0060 a guest sees
+  only its own sends and what the computer keeps for its person; the shared
+  folder is a deliberate widening, to be bounded when built: which guests,
+  set on the computer, and whether a guest may change it or only read it.
+  Neither is decided yet.
 - **The rule that a device serves read-only gets an exception.** It is to be
   written into `crates/peer/README.md` when built, with the tests a hostile
   peer would need to fail (`tests/hostile.rs`).
