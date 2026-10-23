@@ -24,6 +24,7 @@ import com.qurb.databinding.RowItemBinding
 import com.qurb.databinding.RowSettingBinding
 import uniffi.qurb_mobile.Available
 import uniffi.qurb_mobile.FileEntry
+import uniffi.qurb_mobile.PeerInfo
 
 /**
  * The components every place is built from (docs/design/direction.md §48):
@@ -240,6 +241,198 @@ class Kit(private val app: MainActivity) {
         row.toggle.isChecked = on
         row.root.setOnClickListener { row.toggle.toggle() }
         row.toggle.setOnCheckedChangeListener { _, checked -> onChange(checked) }
+        return row
+    }
+
+    // --------------------------------------------------- the redesign's parts
+    // docs/design/redesign.md. Information as icons, dots, badges and bars
+    // rather than words (the owner, 2026-10-23: "i want to convey the
+    // information while keeping minimum texts").
+
+    /**
+     * A device as a chip: its icon, its name, and a dot, green when it
+     * answered the last pass and grey when it did not. With [onTap], a small
+     * arrow too, for choosing another (the redesign's Device selector).
+     */
+    fun deviceChip(peer: PeerInfo, off: Boolean, onTap: (() -> Unit)? = null): LinearLayout {
+        val chip = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.chip)
+            minimumHeight = dp(38)
+            setPadding(dp(14), 0, dp(if (onTap != null) 12 else 14), 0)
+            contentDescription = "${peer.name}, ${if (off) "off" else "on"}" +
+                if (onTap != null) ". Choose another device" else ""
+        }
+        chip.addView(ImageView(app).apply {
+            setImageResource(States.device(peer.name, peer.kind))
+            imageTintList = ColorStateList.valueOf(color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(18), dp(18)))
+        chip.addView(TextView(app).apply {
+            text = peer.name
+            setTextAppearance(R.style.Text_Name)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { marginStart = dp(8) })
+        chip.addView(dot(off), LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginStart = dp(8) })
+        if (onTap != null) {
+            chip.addView(ImageView(app).apply {
+                setImageResource(R.drawable.ic_chevron_down)
+                imageTintList = ColorStateList.valueOf(color(R.color.text_2))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginStart = dp(8) })
+            chip.foreground = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            chip.setOnClickListener { onTap() }
+        }
+        return chip
+    }
+
+    /** Whether a device answered the last pass: green if it did, grey if not. */
+    fun dot(off: Boolean): View = View(app).apply {
+        background = ContextCompat.getDrawable(app, R.drawable.dot)
+        backgroundTintList = ColorStateList.valueOf(color(if (off) R.color.text_3 else R.color.healthy))
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    /** A count as a small pill (the redesign's Count badge). */
+    fun badge(count: Int, tone: Tone? = null): TextView = TextView(app).apply {
+        text = if (count > 99) "99+" else count.toString()
+        setTextAppearance(R.style.Text_Label)
+        isAllCaps = false
+        letterSpacing = 0f
+        gravity = Gravity.CENTER
+        minWidth = dp(24)
+        minHeight = dp(22)
+        setPadding(dp(7), 0, dp(7), 0)
+        background = ContextCompat.getDrawable(app, R.drawable.badge)
+        val (fill, words) = when (tone) {
+            Tone.ATTENTION -> R.color.attention to R.color.surface
+            Tone.ERROR -> R.color.error to R.color.surface
+            else -> R.color.green_soft to R.color.green
+        }
+        backgroundTintList = ColorStateList.valueOf(color(fill))
+        setTextColor(color(words))
+    }
+
+    /**
+     * A device to choose, as a card (the redesign's Device card): its icon
+     * in a green tile, its name, its dot and how long since it answered, and
+     * a tick on the one chosen.
+     */
+    fun deviceCard(parent: ViewGroup, peer: PeerInfo, off: Boolean, chosen: Boolean, onTap: () -> Unit): View {
+        val card = cardRow(if (chosen) R.drawable.card_chosen else R.drawable.card, States.device(peer.name, peer.kind))
+        val words = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        words.addView(TextView(app).apply {
+            text = peer.name
+            setTextAppearance(R.style.Text_Section)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0f))
+        words.addView(dot(off), LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginStart = dp(8) })
+        peer.lastSeen?.let { seen ->
+            words.addView(TextView(app).apply {
+                text = Words.since(seen)
+                setTextAppearance(R.style.Text_Meta)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { marginStart = dp(8) })
+        }
+        card.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (chosen) card.addView(ImageView(app).apply {
+            setImageResource(R.drawable.ic_circle_check)
+            imageTintList = ColorStateList.valueOf(color(R.color.green))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(20), dp(20)))
+        card.contentDescription = "${peer.name}, ${if (off) "off" else "on"}${if (chosen) ", chosen" else ""}"
+        card.setOnClickListener { onTap() }
+        parent.addView(card, cardParams(parent))
+        return card
+    }
+
+    /** The card that adds one more, the same size as the cards above it, its
+     *  edge dashed (the owner, 2026-10-24: the old one was "asymmetric"). */
+    fun addCard(parent: ViewGroup, label: String, onTap: () -> Unit): View {
+        val card = cardRow(R.drawable.card_dashed, R.drawable.ic_plus)
+        card.addView(TextView(app).apply {
+            text = label
+            setTextAppearance(R.style.Text_Section)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        card.setOnClickListener { onTap() }
+        parent.addView(card, cardParams(parent))
+        return card
+    }
+
+    private fun cardRow(@DrawableRes background: Int, @DrawableRes icon: Int): LinearLayout {
+        val card = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            this.background = ContextCompat.getDrawable(app, background)
+            foreground = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            minimumHeight = dp(76)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        val tile = FrameLayout(app).apply { this.background = ContextCompat.getDrawable(app, R.drawable.tile_green) }
+        tile.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(color(R.color.green))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
+        card.addView(tile, LinearLayout.LayoutParams(dp(52), dp(52)).apply { marginEnd = dp(14) })
+        return card
+    }
+
+    private fun cardParams(parent: ViewGroup) = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+    ).apply { if (parent.childCount > 0) topMargin = dp(8) }
+
+    /**
+     * Something on its way, in a queue (the redesign's Queue row): its icon,
+     * its name, how much of it, and, where how far it has got is known, a
+     * bar under the name.
+     */
+    fun queueRow(parent: ViewGroup, @DrawableRes icon: Int, name: String, size: String, done: Float? = null): View {
+        val row = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(64)
+            setPadding(dp(12), 0, dp(14), 0)
+        }
+        val tile = FrameLayout(app).apply { background = ContextCompat.getDrawable(app, R.drawable.tile_quiet) }
+        tile.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER))
+        row.addView(tile, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
+        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(TextView(app).apply {
+            text = name
+            setTextAppearance(R.style.Text_Name)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+        })
+        if (done != null) words.addView(
+            android.widget.ProgressBar(app, null, android.R.attr.progressBarStyleHorizontal).apply {
+                progressDrawable = ContextCompat.getDrawable(app, R.drawable.progress_bar)
+                max = 1000
+                progress = (done.coerceIn(0f, 1f) * 1000).toInt()
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4)).apply { topMargin = dp(6) },
+        )
+        row.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(TextView(app).apply {
+            text = size
+            setTextAppearance(R.style.Text_Meta)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { marginStart = dp(12) })
+        row.contentDescription = "$name, $size" + (done?.let { ", ${(it * 100).toInt()}% there" } ?: "")
+        parent.addView(row)
         return row
     }
 

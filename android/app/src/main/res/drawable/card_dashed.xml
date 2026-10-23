@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A card that adds one more of what is listed above it: the same size and
+     corners, its edge dashed (the redesign's Add a device). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <stroke android:width="1.5dp" android:color="@color/border_strong"
+        android:dashWidth="6dp" android:dashGap="4dp" />
+    <corners android:radius="@dimen/radius_l" />
+</shape>

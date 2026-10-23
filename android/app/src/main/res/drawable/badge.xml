@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A count, as a small pill (the redesign's Count badge). Green by default;
+     a view that means something else tints it. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/green_soft" />
+    <corners android:radius="11dp" />
+</shape>

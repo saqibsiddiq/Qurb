@@ -1,8 +1,9 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
-Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
-here is a design in Figma.
+Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
+2026-10-24 with Android's Home** ([below](#built-android-home-2026-10-24)); everything else here is
+still a design in Figma.
 
 The owner, 2026-10-20:
 
@@ -325,3 +326,41 @@ phone with a phone; it had shown a laptop for every device.
    the torch at the top; *Point at the code*; found turns the frame green and
    names the device; a code that is not Qurb's turns it red and says so; *Type 6
    digits* at hand. The same scanner serves *Visit a computer*.
+
+## Built: Android Home (2026-10-24)
+
+The owner: "start building". Home draft 3 is in the app (`HomeScreen.kt`,
+`screen_home.xml`, `StatusMark.kt`):
+
+- the status mark, 168 dp, in the middle of the screen: All synced, Syncing (a
+  third of the ring lit, travelling), Two versions (with a count badge and
+  *Review*), *<device> is off*, Backing up, Not synced yet, and the first Home's
+  *Add a device*;
+- the chosen device as a chip (icon, name, a green or grey dot, an arrow),
+  opening device cards with the chosen one ticked and a dashed *Add a device*
+  card; the choice is kept on the phone (`Engine.chosen`, `Engine.choose`);
+- Sync and Send of one size; Send goes straight to the chosen device's
+  Downloads (the list of where to send is gone);
+- Waiting only while something is queued: a count badge and queue rows, a bar
+  on a backup's row;
+- Backups and Activity at the top. Backups is an **interim** page: the old
+  WhatsApp and folders rows under chips naming where they go. Its design waits
+  on a backup set for each device (engine work, 0073).
+
+*Off* is honest only as far as the phone knows: a pass marks each device that
+answers as seen, so a device not seen since the start of the last pass that
+tried someone is off (`Engine.isOff`). A device no pass has tried yet is not
+called off.
+
+The shared parts went into `Kit`: `deviceChip`, `dot`, `badge`, `deviceCard`,
+`addCard`, `queueRow`. The large icons are `mark_*.xml`, written by
+`scripts/android-icons.py` at 60 dp with a thinned stroke.
+
+**Checked** on an emulator shaped like the S23 (`qurb-34g`, Android 34 with
+Google APIs, 1080 by 2340 at 480 dpi), paired with a throwaway daemon run from
+a scratch folder with its own config: the first Home, light and dark; Backups;
+pairing; *All synced* with the device on. Pairing it needed a temporary,
+uncommitted patch to setup, because the emulator's camera could not get the
+barcode model from Google services. **Not yet checked:** the device list, *off*,
+Waiting and Two versions on screen, and anything on the S23. The old snackbar
+still says *All synced* under the title after a Sync.

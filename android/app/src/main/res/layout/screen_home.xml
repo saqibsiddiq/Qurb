@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home: is my Qurb space okay? The state; Sync now and Send side by side;
-     a line of facts; attention when something needs a decision; what is still
-     waiting to reach the other devices; and the backups (the owner's items 8
-     and 10, 2026-10-14, which widen direction §5's one action). What happened
-     lately is the clock, a button away. Pulling down syncs. -->
+<!-- Home, as redesigned (docs/design/redesign.md, Home draft 3): the device
+     chosen here, its state in the middle of the screen as a large mark and
+     two or three words, the device as a chip that chooses another, then Sync
+     and Send of one size. What is still on its way shows under them, and only
+     while something is. Backups and Activity are buttons at the top. Pulling
+     down syncs. -->
 <androidx.swiperefreshlayout.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/refresh"
@@ -14,24 +15,24 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
+        android:fillViewport="true"
         android:paddingBottom="@dimen/nav_clearance">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:orientation="vertical"
-            android:paddingHorizontal="@dimen/gutter"
-            android:paddingTop="12dp">
+            android:paddingHorizontal="@dimen/gutter">
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="56dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <ImageView
-                    android:layout_width="26dp"
-                    android:layout_height="26dp"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
                     android:importantForAccessibility="no"
                     android:src="@drawable/qurb_mark" />
 
@@ -41,7 +42,18 @@
                     android:layout_marginStart="10dp"
                     android:layout_weight="1"
                     android:text="Qurb"
-                    android:textAppearance="@style/Text.Section" />
+                    android:textAppearance="@style/Text.Title" />
+
+                <ImageView
+                    android:id="@+id/backups"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="2dp"
+                    android:background="@drawable/row_bg"
+                    android:contentDescription="Backups"
+                    android:padding="10dp"
+                    android:src="@drawable/ic_hard_drive"
+                    app:tint="@color/text" />
 
                 <ImageView
                     android:id="@+id/activity"
@@ -52,53 +64,76 @@
                     android:contentDescription="Activity"
                     android:padding="10dp"
                     android:src="@drawable/ic_clock"
-                    app:tint="@color/text_2" />
+                    app:tint="@color/text" />
             </LinearLayout>
 
-            <FrameLayout
-                android:id="@+id/mark"
-                android:layout_width="68dp"
-                android:layout_height="68dp"
-                android:layout_marginTop="40dp"
-                android:background="@drawable/mark">
+            <!-- Above and below the state: equal, so that it sits in the
+                 middle of the screen; small, while a queue shows under it. -->
+            <Space
+                android:id="@+id/above"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
-                <ImageView
-                    android:id="@+id/mark_arc"
+            <FrameLayout
+                android:id="@+id/mark_box"
+                android:layout_width="168dp"
+                android:layout_height="168dp"
+                android:layout_gravity="center_horizontal">
+
+                <com.qurb.StatusMark
+                    android:id="@+id/mark"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/mark_arc"
-                    android:visibility="gone" />
+                    android:background="?attr/selectableItemBackgroundBorderless" />
 
-                <ImageView
-                    android:id="@+id/mark_icon"
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:layout_gravity="center"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_check"
-                    app:tint="@color/healthy" />
+                <FrameLayout
+                    android:id="@+id/mark_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="10dp"
+                    android:layout_marginEnd="10dp" />
             </FrameLayout>
 
             <TextView
                 android:id="@+id/state"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="24dp"
                 android:accessibilityHeading="true"
+                android:gravity="center"
                 android:textAppearance="@style/Text.Hero" />
 
+            <!-- Two versions: the way to them, under the words. -->
             <TextView
-                android:id="@+id/state_says"
-                android:layout_width="match_parent"
+                android:id="@+id/review"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
                 android:layout_marginTop="6dp"
-                android:textAppearance="@style/Text.Quiet" />
+                android:background="@drawable/row_bg"
+                android:drawableEnd="@drawable/ic_chevron_right"
+                android:drawablePadding="2dp"
+                android:drawableTint="@color/green"
+                android:gravity="center_vertical"
+                android:minHeight="40dp"
+                android:paddingHorizontal="10dp"
+                android:text="Review"
+                android:textAppearance="@style/Text.Name"
+                android:textColor="@color/green"
+                android:visibility="gone" />
 
-            <!-- The two things Home is for (the owner's item 8, 2026-10-14):
-                 bring everything up to date, and send something. Equal, side
-                 by side; with no device yet, one: add a device. -->
+            <!-- The device chosen here; tapping it chooses another. -->
+            <FrameLayout
+                android:id="@+id/device"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp" />
+
             <LinearLayout
+                android:id="@+id/actions"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="28dp"
@@ -108,52 +143,58 @@
                     android:id="@+id/sync"
                     style="@style/Widget.Qurb.Button.Secondary"
                     android:layout_width="0dp"
-                    android:layout_height="54dp"
-                    android:layout_marginEnd="12dp"
+                    android:layout_height="52dp"
+                    android:layout_marginEnd="16dp"
                     android:layout_weight="1"
-                    android:text="Sync now"
+                    android:text="Sync"
+                    android:textColor="@color/text"
+                    app:backgroundTint="@color/surface"
+                    app:cornerRadius="26dp"
                     app:icon="@drawable/ic_refresh_cw"
-                    app:iconGravity="textStart" />
+                    app:iconGravity="textStart"
+                    app:iconTint="@color/text"
+                    app:strokeColor="@color/border" />
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/action"
+                    android:id="@+id/send"
                     style="@style/Widget.Qurb.Button"
                     android:layout_width="0dp"
-                    android:layout_height="54dp"
+                    android:layout_height="52dp"
                     android:layout_weight="1"
                     android:text="Send"
+                    app:cornerRadius="26dp"
                     app:icon="@drawable/ic_send"
                     app:iconGravity="textStart" />
             </LinearLayout>
 
-            <TextView
-                android:id="@+id/facts"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:textAppearance="@style/Text.Meta" />
+            <!-- No device yet: the one thing to do. -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/add"
+                style="@style/Widget.Qurb.Button"
+                android:layout_width="240dp"
+                android:layout_height="52dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="28dp"
+                android:text="Add a device"
+                android:visibility="gone"
+                app:cornerRadius="26dp"
+                app:icon="@drawable/ic_plus"
+                app:iconGravity="textStart" />
 
-            <LinearLayout
-                android:id="@+id/attention"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-
-            <!-- What has not reached the other devices yet (item 8). -->
+            <!-- What is still on its way: shown only while something is. -->
             <LinearLayout
                 android:id="@+id/waiting"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:layout_marginTop="32dp"
+                android:orientation="vertical"
+                android:visibility="gone" />
 
-            <!-- WhatsApp and this phone's folders, kept on the computer
-                 (item 10). -->
-            <LinearLayout
-                android:id="@+id/backups"
+            <Space
+                android:id="@+id/below"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-
+                android:layout_height="0dp"
+                android:layout_weight="1" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A card that is the one chosen: the green edge, twice as wide. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/surface" />
+    <stroke android:width="2dp" android:color="@color/green" />
+    <corners android:radius="@dimen/radius_l" />
+</shape>

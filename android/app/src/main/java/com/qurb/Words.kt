@@ -51,6 +51,18 @@ object Words {
 
     private fun plural(n: Long, unit: String) = "$n $unit${if (n == 1L) "" else "s"} ago"
 
+    /** Unix seconds as the fewest characters that say how long ago: now,
+     *  5 min, 3 h, 2 d. For a chip or a card, where a sentence will not fit. */
+    fun since(seconds: Long): String {
+        val gone = (System.currentTimeMillis() / 1000 - seconds).coerceAtLeast(0)
+        return when {
+            gone < 90 -> "now"
+            gone < 5400 -> "${gone / 60} min"
+            gone < 86400 -> "${gone / 3600} h"
+            else -> "${(gone + 43200) / 86400} d"
+        }
+    }
+
     /** A count as the desktop writes it, its thousands apart: 36,062. */
     fun count(n: Long): String = String.format(java.util.Locale.US, "%,d", n)
     fun count(n: ULong): String = count(n.toLong())

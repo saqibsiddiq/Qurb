@@ -53,6 +53,12 @@
     <color name="tile_fill">#CCFFFFFF</color>
     <color name="mark_fill">#E6FFFFFF</color>
     <color name="mark_ring">#2E287052</color>
+    <!-- The rings of Home's status mark (the redesign's Status mark): the
+         state's colour, faint, 8 dp wide around its disc. -->
+    <color name="healthy_ring">#38287052</color>
+    <color name="neutral_ring">#38626A68</color>
+    <color name="attention_ring">#4D946A24</color>
+    <color name="error_ring">#38A3423A</color>
     <color name="attention_fill">#D9F7F0DD</color>
     <color name="attention_edge">#24946A24</color>
     <color name="folder_top">#F2F0F6F3</color>

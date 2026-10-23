@@ -2694,6 +2694,17 @@ Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
   too: such a clash is refused on every pass until one of the names changes.
 - **Not done:** nothing has been run on a hotspot or on mobile data.
 
+## The redesign, built: Home, 2026-10-24
+
+The Figma redesign ([design/redesign.md](../design/redesign.md)) is being
+built, Android first. Home is done to draft 3: one device chosen on Home, its
+state as a large mark, Sync and Send, Waiting only while something is queued
+([details](../design/redesign.md#built-android-home-2026-10-24)). Checked on an
+emulator paired with a throwaway daemon; **not yet run on the S23**. Backups is
+an interim page. Devices, Files, Settings, Activity, setup, pairing and the
+desktop are not built yet, nor the engine work of
+[0073](../decisions/0073-the-phone-works-with-its-computer.md).
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

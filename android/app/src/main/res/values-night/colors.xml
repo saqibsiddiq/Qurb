@@ -41,6 +41,10 @@
     <color name="tile_fill">#CC282A26</color>
     <color name="mark_fill">#E6282A26</color>
     <color name="mark_ring">#4074C29B</color>
+    <color name="healthy_ring">#4074C29B</color>
+    <color name="neutral_ring">#40A2AAA7</color>
+    <color name="attention_ring">#4DDCB064</color>
+    <color name="error_ring">#40E5847A</color>
     <color name="attention_fill">#D92D2617</color>
     <color name="attention_edge">#33DCB064</color>
     <color name="folder_top">#F2222F29</color>

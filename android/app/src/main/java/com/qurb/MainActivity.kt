@@ -640,6 +640,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             var result: SyncOutcome? = null
             var inBackground = false
+            val started = System.currentTimeMillis()
             try {
                 val engine = Engine.open(this@MainActivity)
                 val forOthers = withContext(Dispatchers.IO) {
@@ -669,6 +670,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 result = outcome
                 if (outcome.reached > 0u) Engine.noteSynced(this@MainActivity)
+                if (outcome.reached > 0u || outcome.unreachable > 0u) Engine.noteTried(this@MainActivity, started)
                 withContext(Dispatchers.IO) { Folders.startChosen(this@MainActivity, engine) }
                 // On screen, so nothing is raised; what was shown here is
                 // marked as seen, and not announced later.
@@ -685,7 +687,7 @@ class MainActivity : AppCompatActivity() {
                         outcome.reached == 0u ->
                             "No device answered. It has to be on with Qurb running, and this phone online."
                         outcome.adopted == 0u && outcome.conflicts == 0u ->
-                            "Everything is synced"
+                            "All synced"
                         else -> buildString {
                             append("${Words.files(outcome.adopted.toInt())} updated")
                             if (outcome.conflicts > 0u) {
@@ -974,41 +976,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Home's *Send* (the owner's item 3, decision 0067): to a computer that
-     * keeps this phone's folder, either *My folder on saqib*, which opens
-     * there only with this phone's yes, or *saqib's Downloads*, which opens
-     * freely; to any other device, as before.
+     * Send files to [to], chosen with the system's picker. Home's *Send* goes
+     * to the device chosen on Home (decision 0073, item 5); until the redesign
+     * it opened a list of where to send, a computer keeping this phone's folder
+     * offered twice (decision 0067, item 3).
      */
-    fun chooseWhereToSend() {
-        lifecycleScope.launch {
-            val (peers, keepers) = try {
-                withContext(Dispatchers.IO) {
-                    val engine = Engine.open(this@MainActivity)
-                    engine.peers() to engine.holders().map { it.fingerprint }.toSet()
-                }
-            } catch (e: Exception) {
-                fail("Could not read your devices", e)
-                return@launch
-            }
-            val sheet = kit.sheet().header(R.drawable.ic_send, "Send")
-            if (peers.isEmpty()) {
-                sheet.text("No devices yet. Add one first.")
-                    .buttons("Add a device") { pair() }
-            }
-            for (peer in peers.filter { it.fingerprint in keepers }) {
-                sheet.action(R.drawable.ic_lock_keyhole, "My folder on ${peer.name}",
-                    meta = "Opens there only with a yes on this phone") { pickFilesToAdd("", private = true) }
-                sheet.action(R.drawable.ic_download, "${peer.name}'s Downloads",
-                    meta = "Opens there freely · ${Words.seen(peer.lastSeen)}") { pickFilesToSend(peer) }
-            }
-            for (peer in peers.filter { it.fingerprint !in keepers }) {
-                val named = if (peer.relation == "host") "${peer.name}'s Downloads" else peer.name
-                sheet.action(States.device(peer.name, peer.kind), named, meta = Words.seen(peer.lastSeen)) { pickFilesToSend(peer) }
-            }
-            sheet.show()
-        }
-    }
-
     fun pickFilesToSend(to: PeerInfo) {
         sendingTo = to
         sender.launch(arrayOf("*/*"))

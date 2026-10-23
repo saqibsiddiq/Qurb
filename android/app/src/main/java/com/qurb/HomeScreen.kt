@@ -1,12 +1,9 @@
 package com.qurb
 
-import android.animation.ObjectAnimator
-import android.animation.ValueAnimator
-import android.content.res.ColorStateList
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
-import android.view.animation.LinearInterpolator
+import android.widget.TextView
 import com.qurb.databinding.ScreenHomeBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,34 +13,34 @@ import uniffi.qurb_mobile.ConflictInfo
 import uniffi.qurb_mobile.ConflictSide
 import uniffi.qurb_mobile.Outstanding
 import uniffi.qurb_mobile.PeerInfo
-import uniffi.qurb_mobile.Usage
 import uniffi.qurb_mobile.Waiting
 
 /**
- * Home (direction §5): is my Qurb space okay?
+ * Home, as redesigned (docs/design/redesign.md, Home draft 3; decision 0073,
+ * item 5): is the device I chose up to date?
  *
- * The state, a line of secondary facts, and attention only when something
- * needs a decision; a healthy Home should be almost boring. The owner widened
- * it (item 8 of 2026-10-14), as on the desktop: *Sync now* and *Send* side by
- * side, of one size -- *Add a device* alone until there is one -- then what
- * is still waiting to reach the other devices, and the backups. Pulling down
- * syncs too. What happened lately is the clock at the top, a button away: the
- * owner wanted it off Home (2026-10-13).
+ * One device is shown, the one chosen here: its state as a large mark in the
+ * middle of the screen and two or three words, the device as a chip that
+ * opens the list to choose another, then Sync and Send, of one size. Sync
+ * syncs every device; Send goes to the chosen one. What is still on its way
+ * shows under them, and only while something is (the owner's item 6,
+ * 2026-10-23). Backups and Activity are buttons at the top. Pulling down
+ * syncs too.
+ *
+ * Words are few (the owner, 2026-10-23: "i want to convey the information
+ * while keeping minimum texts"): which device and whether it is on is the
+ * chip and its dot, a count is a badge, how far a backup has got is a bar.
  *
  * A phone has no daemon running to ask whether it is up to date, so the state
- * is built from what it does know: whether it is syncing now, whether
- * anything made here has not reached another device, and when it last
- * reached one.
+ * is built from what it does know: whether it is syncing now, two versions of
+ * a file, whether the chosen device answered the last pass that tried it
+ * ([Engine.isOff]), and whether anything is still on its way.
  */
 class HomeScreen(app: MainActivity) : Screen(app) {
 
     private val views = ScreenHomeBinding.inflate(app.layoutInflater)
     override val view: View get() = views.root
     override val tab = R.id.tab_home
-
-    private var turning: ObjectAnimator? = null
-
-    private val backups = Backups(app) { refresh() }
 
     /** The state last drawn, to notice the moment everything becomes synced. */
     private var lastTitle: String? = null
@@ -56,6 +53,8 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         }
         views.sync.setOnClickListener { app.sync() }
         views.mark.setOnClickListener { app.sync() }
+        views.add.setOnClickListener { app.pair() }
+        views.backups.setOnClickListener { app.push(BackupsScreen(app)) }
         views.activity.setOnClickListener { app.push(ActivityScreen(app)) }
     }
 
@@ -64,12 +63,10 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         val peers: List<PeerInfo>,
         val holders: List<PeerInfo>,
         val outstanding: Outstanding,
-        val usage: Usage,
         val conflicts: List<ConflictInfo>,
         /** Sent from here, not collected yet. */
         val sends: List<Waiting>,
         val whatsApp: BackupState,
-        val chosen: Int,
         val folders: BackupState,
     )
 
@@ -82,240 +79,180 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                         engine.peers(),
                         engine.holders(),
                         engine.outstanding(),
-                        engine.usage(),
                         engine.conflicts(),
                         runCatching { engine.waiting() }.getOrDefault(emptyList()),
                         engine.whatsappBackup(),
-                        engine.chosenFolders().size,
                         engine.foldersBackup(),
                     )
                 }
                 show(state)
             } catch (e: Exception) {
-                hero("error", R.drawable.ic_circle_alert, "Qurb can't read this phone's files", e.message ?: "")
+                hero(StatusMark.Look.ERROR, R.drawable.mark_circle_alert, "Can't read this phone's files")
+                app.fail("Qurb can't read this phone's files", e)
             }
         }
     }
 
     private fun show(state: State) {
-        val waiting = state.outstanding.files
+        val chosen = Engine.chosen(app, state.peers, state.holders)
+        val off = chosen != null && Engine.isOff(app, chosen)
         // The later of the app's own note and the engine's record of when each
-        // device was last reached. The note began with this screen, so on a
-        // phone upgraded to it, it is empty until the next sync that reaches a
-        // device -- and Home said "Not synced yet" of a phone that had synced
-        // for weeks. The engine has recorded every device it reached since
-        // 2026-09-27.
+        // device was last reached: the note began on 2026-10-14, the engine's
+        // record on 2026-09-27.
         val synced = listOfNotNull(Engine.lastSynced(app), state.peers.mapNotNull { it.lastSeen }.maxOrNull())
             .maxOrNull()
+        views.markBadge.removeAllViews()
+        views.review.visibility = View.GONE
         when {
-            state.peers.isEmpty() -> hero(
-                "away", R.drawable.ic_monitor_smartphone, "Add your first device",
-                "Qurb keeps your files on devices you own. Connect your computer or another phone to begin.",
-            )
-            app.syncing -> hero("syncing", R.drawable.ic_arrow_up_down, "Syncing…", "Bringing your devices up to date.")
-            waiting.isNotEmpty() -> hero(
-                "away", R.drawable.ic_upload,
-                if (waiting.size == 1) "1 file is waiting to reach your devices"
-                else "${waiting.size} files are waiting to reach your devices",
-                onlyHereSays(state),
-            )
-            // Backups and sends on their way are not "everything is synced":
-            // on 2026-10-15 the S23 said so above a Waiting list of 130
-            // WhatsApp files still to go.
-            backupsLeft(state) > 0 -> {
-                val keeper = state.holders.joinToString(" and ") { it.name }
-                hero("away", R.drawable.ic_upload, "Backing up to $keeper",
-                    "${Words.files(backupsLeft(state))} still to go. It carries on whenever $keeper is on.")
+            chosen == null -> hero(StatusMark.Look.FIRST, R.drawable.mark_plus, "Add a device")
+            app.syncing -> hero(StatusMark.Look.SYNCING, R.drawable.mark_refresh_cw, "Syncing")
+            state.conflicts.isNotEmpty() -> {
+                hero(StatusMark.Look.NEEDS_YOU, R.drawable.mark_git_compare, "Two versions")
+                views.markBadge.addView(kit.badge(state.conflicts.size, Kit.Tone.ATTENTION))
+                views.review.visibility = View.VISIBLE
+                views.review.setOnClickListener {
+                    if (state.conflicts.size == 1) review(state.conflicts[0]) else choose(state.conflicts)
+                }
             }
-            state.sends.isNotEmpty() -> {
-                val to = state.sends.map { it.to }.distinct().joinToString(" and ")
-                hero("away", R.drawable.ic_send, "Waiting for $to to collect",
-                    if (state.sends.size == 1) "1 file sent, not collected yet."
-                    else "${state.sends.size} files sent, not collected yet.")
-            }
-            synced == null -> hero("away", R.drawable.ic_refresh_cw, "Not synced yet", "Sync to bring your devices up to date.")
-            else -> hero(
-                "", R.drawable.ic_check, "Everything is synced.",
-                if (state.conflicts.isNotEmpty()) {
-                    "Your files are safe. ${if (state.conflicts.size == 1) "One thing needs" else "${state.conflicts.size} things need"} your attention."
-                } else {
-                    "Your files are safe. Nothing needs your attention."
-                },
-            )
+            off -> hero(StatusMark.Look.OFF, R.drawable.mark_cloud_off, "${chosen.name} is off")
+            // Backups and sends on their way are not "all synced": on
+            // 2026-10-15 the S23 said so above 130 WhatsApp files still to go.
+            backupsLeft(state) > 0 -> hero(StatusMark.Look.WAITING, R.drawable.mark_hard_drive, "Backing up")
+            state.outstanding.files.isNotEmpty() || synced == null ->
+                hero(StatusMark.Look.WAITING, R.drawable.mark_upload, "Not synced yet")
+            state.sends.isNotEmpty() ->
+                hero(StatusMark.Look.WAITING, R.drawable.mark_upload, "Waiting for ${Words.list(state.sends.map { it.to }.distinct())}")
+            else -> hero(StatusMark.Look.SYNCED, R.drawable.mark_check, SYNCED)
         }
 
-        if (state.peers.isEmpty()) {
-            views.action.text = "Add a device"
-            views.action.setIconResource(R.drawable.ic_plus)
-            views.action.setOnClickListener { app.pair() }
-        } else {
-            views.action.text = "Send"
-            views.action.setIconResource(R.drawable.ic_send)
-            views.action.setOnClickListener { sendSomething() }
-        }
-        views.sync.visibility = if (state.peers.isEmpty()) View.GONE else View.VISIBLE
+        views.device.removeAllViews()
+        if (chosen != null) views.device.addView(kit.deviceChip(chosen, off) { chooseDevice(state, chosen) })
+        views.device.visibility = if (chosen == null) View.GONE else View.VISIBLE
+        views.actions.visibility = if (chosen == null) View.GONE else View.VISIBLE
+        views.add.visibility = if (chosen == null) View.VISIBLE else View.GONE
         views.sync.isEnabled = !app.syncing
+        views.send.setOnClickListener { if (chosen != null) app.pickFilesToSend(chosen) }
+        views.send.contentDescription = chosen?.let { "Send to ${it.name}" }
 
-        views.facts.text = listOfNotNull(
-            "${Words.size(state.usage.logical)} of files",
-            if (state.peers.isNotEmpty()) Words.devices(state.peers.size) else null,
-            synced?.let { "synced ${Words.ago(it)}" },
-        ).joinToString("  ·  ")
-
-        views.attention.removeAllViews()
-        showConflicts(state.conflicts)
-        showWaiting(state)
-        showBackups(state)
+        val queued = chosen != null && showWaiting(state)
+        // In the middle of the screen while it is the only thing on it; near
+        // the top, and smaller, while a queue shows under it.
+        val size = kit.dp(if (queued) 128 else 168)
+        views.markBox.layoutParams = views.markBox.layoutParams.apply { width = size; height = size }
+        for (space in listOf(views.above, views.below)) {
+            space.layoutParams = (space.layoutParams as LinearLayout.LayoutParams).apply {
+                weight = if (queued) 0f else 1f
+                height = if (queued && space === views.above) kit.dp(16) else 0
+            }
+        }
     }
 
     /**
-     * What has not reached the other devices yet (the owner's item 8): files
-     * made here that no other device has, sends not collected, and backups
-     * still on their way. Said as nothing waiting when nothing is.
+     * What is still on its way (the owner's item 6): files made here that no
+     * other device has, sends not collected, and backups still going, each a
+     * row with its size, a backup with a bar of how far it has got. Returns
+     * whether there was anything; with nothing, the section is not shown.
      */
-    private fun showWaiting(state: State) {
+    private fun showWaiting(state: State): Boolean {
         val box = views.waiting
         box.removeAllViews()
-        if (state.peers.isEmpty()) return
-        kit.section(box, "Waiting")
-        val keeper = state.holders.joinToString(" and ") { it.name }.ifEmpty { null }
-        val going = keeper ?: state.peers.joinToString(" and ") { it.name }
-        val rows = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        box.addView(rows, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { marginStart = -kit.dp(8); marginEnd = -kit.dp(8) })
-
         val files = state.outstanding.files
+        val whatsAppLeft = left(state.whatsApp)
+        val foldersLeft = left(state.folders)
+        val count = files.size + state.sends.size + whatsAppLeft + foldersLeft
+        box.visibility = if (count == 0) View.GONE else View.VISIBLE
+        if (count == 0) return false
+
+        val heading = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        heading.addView(TextView(app).apply {
+            text = "Waiting"
+            setTextAppearance(R.style.Text_Label)
+            androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
+        })
+        heading.addView(kit.badge(count), LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { marginStart = kit.dp(8) })
+        box.addView(heading)
+
+        val queue = LinearLayout(app).apply {
+            orientation = LinearLayout.VERTICAL
+            background = androidx.core.content.ContextCompat.getDrawable(app, R.drawable.card)
+            clipToOutline = true
+        }
+        box.addView(queue, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = kit.dp(8) })
+
         for (f in files.take(WAITING_ROWS)) {
-            kit.row(rows, States.icon(f.path), f.path.substringAfterLast('/'),
-                "Not on $going yet  ·  ${Words.size(f.size)}")
+            kit.queueRow(queue, States.icon(f.path), f.path.substringAfterLast('/'), Words.size(f.size))
         }
         if (files.size > WAITING_ROWS) {
-            kit.row(rows, R.drawable.ic_upload, "${files.size - WAITING_ROWS} more files",
-                "${Words.size(files.drop(WAITING_ROWS).sumOf { it.size })} not on $going yet")
+            kit.queueRow(queue, R.drawable.ic_upload, "${files.size - WAITING_ROWS} more",
+                Words.size(files.drop(WAITING_ROWS).sumOf { it.size }))
         }
         for (w in state.sends.take(WAITING_ROWS)) {
-            kit.row(rows, States.icon(w.path), w.path.substringAfterLast('/'),
-                "Sent to ${w.to}, not collected yet  ·  ${Words.size(w.size)}")
+            kit.queueRow(queue, R.drawable.ic_send, w.path.substringAfterLast('/'), Words.size(w.size))
         }
         if (state.sends.size > WAITING_ROWS) {
-            val more = state.sends.size - WAITING_ROWS
-            kit.row(rows, R.drawable.ic_send, if (more == 1) "1 more send" else "$more more sends",
-                "Not collected yet")
+            kit.queueRow(queue, R.drawable.ic_send, "${state.sends.size - WAITING_ROWS} more",
+                Words.size(state.sends.drop(WAITING_ROWS).sumOf { it.size }))
         }
-        val whatsApp = state.whatsApp
-        if (keeper != null && whatsApp.files > 0uL && whatsApp.heldFiles < whatsApp.files) {
-            kit.row(rows, R.drawable.ic_hard_drive, "WhatsApp backup",
-                "${Words.files((whatsApp.files - whatsApp.heldFiles).toInt())} still to go to $keeper")
-        }
-        val folders = state.folders
-        if (keeper != null && folders.files > 0uL && folders.heldFiles < folders.files) {
-            kit.row(rows, R.drawable.ic_folder, "Your folders",
-                "${Words.files((folders.files - folders.heldFiles).toInt())} still to go to $keeper")
-        }
-        if (rows.childCount == 0) {
-            kit.row(rows, R.drawable.ic_check, "Nothing waiting", "Everything here has reached $going.",
-                iconTint = R.color.healthy)
-        }
+        if (whatsAppLeft > 0) kit.queueRow(queue, R.drawable.ic_hard_drive, "WhatsApp",
+            Words.files(whatsAppLeft), done(state.whatsApp))
+        if (foldersLeft > 0) kit.queueRow(queue, R.drawable.ic_folder, "Folders",
+            Words.files(foldersLeft), done(state.folders))
+        return true
     }
 
-    /** Files of the WhatsApp and folder backups not yet on the computer
-     *  keeping them: what Waiting lists as still to go. */
-    private fun backupsLeft(state: State): Int {
-        if (state.holders.isEmpty()) return 0
-        fun left(b: BackupState) = if (b.heldFiles < b.files) (b.files - b.heldFiles).toInt() else 0
-        return left(state.whatsApp) + left(state.folders)
-    }
+    /** Files of a backup not yet on the computer keeping it. */
+    private fun left(b: BackupState): Int = if (b.heldFiles < b.files) (b.files - b.heldFiles).toInt() else 0
 
-    /** WhatsApp and this phone's folders, kept on the computer (item 10). */
-    private fun showBackups(state: State) {
-        val box = views.backups
-        box.removeAllViews()
-        if (state.peers.isEmpty()) return
-        val keeper = state.holders.joinToString(" and ") { it.name }.ifEmpty { null }
-        kit.section(box, "Backups")
-        val group = kit.group(box)
-        val backing = WhatsApp.tree(app) != null
-        kit.item(group, "WhatsApp", backups.whatsAppLine(state.whatsApp, keeper, backing)) {
-            backups.whatsApp(state.whatsApp, keeper, backing)
-        }
-        kit.item(group, "Your folders", backups.foldersLine(state.chosen, state.folders, keeper)) {
-            app.push(FoldersScreen(app, "Home", R.id.tab_home))
-        }
-    }
+    private fun done(b: BackupState): Float = if (b.files == 0uL) 0f else b.heldFiles.toFloat() / b.files.toFloat()
 
-    /**
-     * What to say about files that exist only on this phone, by which of three
-     * situations it is: this phone's own files with nobody chosen to keep
-     * them; or a device that will take them and has not been reached yet.
-     */
-    private fun onlyHereSays(state: State): String {
-        val ownWithNoKeeper = state.outstanding.files.any { it.private } && state.holders.isEmpty()
-        return if (ownWithNoKeeper) {
-            "They're in your Private Vault, and no device is keeping a backup yet. Choose one in Devices."
-        } else {
-            val going = (state.holders.ifEmpty { state.peers }).map { it.name }
-            val to = Words.list(going)
-            if (going.size == 1) "Until then they're only on this phone. They go to $to the next time both are online."
-            else "Until then they're only on this phone. They go to $to, each the next time it and this phone are online."
-        }
-    }
+    /** Files of the WhatsApp and folder backups still to go, when a computer keeps them. */
+    private fun backupsLeft(state: State): Int =
+        if (state.holders.isEmpty()) 0 else left(state.whatsApp) + left(state.folders)
 
-    /** The state, one action's worth of context, and the mark that shows it. */
-    private fun hero(mark: String, icon: Int, title: String, says: String) {
-        val tint = when (mark) {
-            "syncing" -> R.color.green
-            "away" -> R.color.neutral
-            "attention" -> R.color.attention
-            "error" -> R.color.error
-            else -> R.color.healthy
-        }
-        views.markIcon.setImageResource(icon)
-        views.markIcon.imageTintList = ColorStateList.valueOf(kit.color(tint))
+    /** The state: its mark, and its two or three words. */
+    private fun hero(look: StatusMark.Look, icon: Int, title: String) {
+        views.mark.show(look, icon)
+        views.mark.contentDescription = "$title. Sync"
         views.state.text = title
-        views.stateSays.text = says
-
-        // §32: a light travels round the mark while syncing -- not a spinner.
-        val moving = mark == "syncing" && !Kit.calm()
-        views.markArc.visibility = if (moving) View.VISIBLE else View.GONE
-        if (moving && turning == null) {
-            turning = ObjectAnimator.ofFloat(views.markArc, View.ROTATION, 0f, 360f).apply {
-                duration = 1600
-                repeatCount = ValueAnimator.INFINITE
-                interpolator = LinearInterpolator()
-                start()
-            }
-        } else if (!moving) {
-            turning?.cancel()
-            turning = null
-        }
 
         // §33: when everything becomes synced, the mark settles with one soft
         // pulse. Then nothing moves.
-        if (title == "Everything is synced." && lastTitle != null && lastTitle != title && !Kit.calm()) {
-            views.mark.scaleX = 0.92f
-            views.mark.scaleY = 0.92f
-            views.mark.animate().scaleX(1f).scaleY(1f).setDuration(600)
+        if (title == SYNCED && lastTitle != null && lastTitle != title && !Kit.calm()) {
+            views.markBox.scaleX = 0.92f
+            views.markBox.scaleY = 0.92f
+            views.markBox.animate().scaleX(1f).scaleY(1f).setDuration(600)
                 .setInterpolator(android.view.animation.OvershootInterpolator(2f)).start()
         }
         lastTitle = title
     }
 
-    /** Send to device: which files, then which device. */
-    private fun sendSomething() = app.chooseWhereToSend()
-
-    /** Two versions of a file (§14): attention, and a review. */
-    private fun showConflicts(conflicts: List<ConflictInfo>) {
-        if (conflicts.isEmpty()) return
-        val title = if (conflicts.size == 1) "1 thing needs attention" else "${conflicts.size} things need attention"
-        val says = if (conflicts.size == 1) {
-            "${conflicts[0].path.substringAfterLast('/')} has two versions."
-        } else {
-            "${conflicts.size} files have two versions."
+    /**
+     * The devices to choose from, as cards, the chosen one ticked, and one
+     * more that adds a device (Home draft 3; the owner, 2026-10-24: "choose a
+     * device in home page"). Every device goes on syncing whichever is chosen.
+     */
+    private fun chooseDevice(state: State, chosen: PeerInfo) {
+        val sheet = kit.sheet()
+        val cards = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        for (peer in state.peers) {
+            kit.deviceCard(cards, peer, Engine.isOff(app, peer), peer.fingerprint == chosen.fingerprint) {
+                sheet.dismiss()
+                Engine.choose(app, peer.fingerprint)
+                refresh()
+            }
         }
-        kit.attention(views.attention, R.drawable.ic_git_compare, title, says, "Review") {
-            if (conflicts.size == 1) review(conflicts[0]) else choose(conflicts)
+        kit.addCard(cards, "Add a device") {
+            sheet.dismiss()
+            app.pair()
         }
+        sheet.view(cards, top = 0).show()
     }
 
     private fun choose(conflicts: List<ConflictInfo>) {
@@ -333,7 +270,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
      */
     private fun review(c: ConflictInfo) {
         fun describe(s: ConflictSide?) = if (s == null) "Since deleted or renamed" else
-            "${s.by}  ·  ${Words.ago(s.changedAt)}  ·  ${Words.size(s.size)}" +
+            "${s.by}, ${Words.ago(s.changedAt)}\n${Words.size(s.size)}" +
                 if (s.here) "" else "\nNot on this phone yet"
         val sheet = kit.sheet()
             .header(States.icon(c.path), c.path.substringAfterLast('/'), "Two devices changed it at the same time")
@@ -397,5 +334,6 @@ class HomeScreen(app: MainActivity) : Screen(app) {
     private companion object {
         /** Files listed one by one under Waiting; the rest are counted. */
         const val WAITING_ROWS = 3
+        const val SYNCED = "All synced"
     }
 }

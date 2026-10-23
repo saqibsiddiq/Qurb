@@ -10,7 +10,10 @@ match. Only the icons named below are written; the app carries nothing else.
 
 Each icon is android/app/src/main/res/drawable/ic_<name>.xml, dashes as
 underscores, drawn in the app's secondary text colour; a view that wants
-another colour tints it. Lucide draws with circles, rectangles, lines and
+another colour tints it. The few drawn large inside Home's status mark are
+written again as mark_<name>.xml, 60 dp across with the stroke thinned to
+match: a vector's stroke grows with it, and at 60 dp the 1.75 stroke would be
+4.4 dp, heavier than the redesign draws it (docs/design/redesign.md). Lucide draws with circles, rectangles, lines and
 polylines as well as paths, and a vector drawable knows only paths, so those
 are turned into path data here. Lucide is ISC-licensed; its notice is in each
 file.
@@ -28,8 +31,14 @@ ICONS = """
     x chevron-right laptop smartphone upload external-link key-round qr-code
     keyboard refresh-cw pencil copy circle-check info plus file file-text
     file-image file-video file-audio file-archive file-code hard-drive history
-    save bell palette sliders-horizontal shield-check link
+    save bell palette sliders-horizontal shield-check link chevron-down
 """.split()
+
+# Drawn at 60 dp in Home's status mark (the redesign's Status mark component).
+MARKS = """
+    check refresh-cw git-compare cloud-off upload plus circle-alert hard-drive
+""".split()
+MARK_SIZE = 60
 
 OUT = Path(__file__).resolve().parent.parent / "android/app/src/main/res/drawable"
 
@@ -73,7 +82,7 @@ def shape_to_path(tag: str, a: dict) -> str | None:
     return None
 
 
-def drawable(svg: str, version: str) -> str:
+def drawable(svg: str, version: str, size: int = 24) -> str:
     root = ET.fromstring(re.sub(r"<!--.*?-->", "", svg, flags=re.S))
     paths = []
     for el in root.iter():
@@ -87,7 +96,7 @@ def drawable(svg: str, version: str) -> str:
             "    <path\n"
             f'        android:pathData="{d}"\n'
             '        android:strokeColor="@color/text_2"\n'
-            '        android:strokeWidth="1.75"\n'
+            f'        android:strokeWidth="{num(round(1.75 * 24 / size, 3))}"\n'
             '        android:strokeLineCap="round"\n'
             '        android:strokeLineJoin="round" />'
         )
@@ -95,8 +104,8 @@ def drawable(svg: str, version: str) -> str:
         '<?xml version="1.0" encoding="utf-8"?>\n'
         + NOTICE.format(version=version)
         + '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
-        '    android:width="24dp"\n'
-        '    android:height="24dp"\n'
+        f'    android:width="{size}dp"\n'
+        f'    android:height="{size}dp"\n'
         '    android:viewportWidth="24"\n'
         '    android:viewportHeight="24">\n'
         + "\n".join(paths)
@@ -112,7 +121,10 @@ def main() -> None:
     for name in ICONS:
         svg = (package / "icons" / f"{name}.svg").read_text()
         (OUT / f"ic_{name.replace('-', '_')}.xml").write_text(drawable(svg, version))
-    print(f"wrote {len(ICONS)} icons to {OUT}")
+    for name in MARKS:
+        svg = (package / "icons" / f"{name}.svg").read_text()
+        (OUT / f"mark_{name.replace('-', '_')}.xml").write_text(drawable(svg, version, MARK_SIZE))
+    print(f"wrote {len(ICONS)} icons and {len(MARKS)} large ones to {OUT}")
 
 
 if __name__ == "__main__":

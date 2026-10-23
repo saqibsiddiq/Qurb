@@ -432,6 +432,56 @@ object Engine {
             .putLong("last_reached_at", System.currentTimeMillis() / 1000).apply()
     }
 
+    /**
+     * When the last pass that tried to reach the devices began, in Unix
+     * seconds: what lets Home say a device is off. A pass marks each device
+     * that answers as seen (`mark_peer_seen`, after it began), so a device
+     * last seen before this was tried and did not answer. Noted only by a pass
+     * that tried someone -- not one that ran out of time before it could.
+     */
+    fun lastTried(context: Context): Long? =
+        context.getSharedPreferences("qurb", Context.MODE_PRIVATE).getLong("last_tried_at", 0L)
+            .takeIf { it > 0 }
+
+    fun noteTried(context: Context, startedMillis: Long) {
+        context.getSharedPreferences("qurb", Context.MODE_PRIVATE).edit()
+            .putLong("last_tried_at", startedMillis / 1000).apply()
+    }
+
+    /**
+     * Whether [peer] did not answer the last pass that tried it. Not known,
+     * and so not said, of a device no pass has tried yet: one paired since
+     * the last, or any before the first.
+     */
+    fun isOff(context: Context, peer: uniffi.qurb_mobile.PeerInfo): Boolean {
+        val tried = lastTried(context) ?: return false
+        if (peer.pairedAt >= tried) return false
+        return (peer.lastSeen ?: 0L) < tried
+    }
+
+    /**
+     * The device Home shows, and where its Send goes (decision 0073, item 5):
+     * the one chosen on Home, or, until one is, the computer keeping this
+     * phone's Private Vault, else the first computer, else the first device.
+     * Every device syncs whichever is chosen.
+     */
+    fun chosen(
+        context: Context,
+        peers: List<uniffi.qurb_mobile.PeerInfo>,
+        holders: List<uniffi.qurb_mobile.PeerInfo>,
+    ): uniffi.qurb_mobile.PeerInfo? {
+        val picked = context.getSharedPreferences("qurb", Context.MODE_PRIVATE).getString("home_device", null)
+        return peers.firstOrNull { it.fingerprint == picked }
+            ?: peers.firstOrNull { p -> holders.any { it.fingerprint == p.fingerprint } }
+            ?: peers.firstOrNull { it.kind == "computer" }
+            ?: peers.firstOrNull()
+    }
+
+    fun choose(context: Context, fingerprint: String) {
+        context.getSharedPreferences("qurb", Context.MODE_PRIVATE).edit()
+            .putString("home_device", fingerprint).apply()
+    }
+
     /** That `housekeep` just ran, here or in the worker. */
     fun noteHousekept(context: Context) {
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE).edit()

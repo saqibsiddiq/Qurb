@@ -148,6 +148,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 started,
             )
             if (outcome.reached > 0u) Engine.noteSynced(applicationContext)
+            if (outcome.reached > 0u || outcome.unreachable > 0u) Engine.noteTried(applicationContext, started)
             Folders.startChosen(applicationContext, engine)
 
             // Refused the foreground with a large collection waiting, while a
