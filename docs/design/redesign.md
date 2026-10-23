@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 2, which the owner liked at
-draft 1; Devices is at draft 2; Files is at draft 1. Nothing is built in the apps yet: everything
+draft 1; Devices is at draft 2; Files is at draft 2, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -154,3 +154,23 @@ Asked for by the owner ("lets do files"). Nine screens, below Devices:
 File names in these screens are examples. The folder tiles were first a
 single line and cut names short at two to a row; they are now an icon, the
 name and the count, stacked.
+
+## Files, draft 2: simpler (2026-10-24)
+
+The owner, after the explanation of Files as it is: "this page is too
+complicated". His list, and his three answers, are in
+[0073](../decisions/0073-the-phone-works-with-its-computer.md). Eight screens,
+below draft 1:
+
+- **Files**: the selected computer's folder as one large card, and Vault,
+  Received and Deleted as three tiles.
+- **The computer's folder**: whether it is on, a search box, its folders as
+  tiles.
+- **A folder there**: its files, a new-folder button, and a round plus to add
+  files from the phone.
+- **A file there**: six actions, three and three: Open, Save, Send, Rename,
+  Move, Delete.
+- **Rename**, which says the change is made on the computer at once; **Delete**,
+  which says it waits 30 days in the computer's Deleted.
+- **The computer off**: its folder opens when it is on.
+- **Received**: a small device mark on each file for which device sent it.
