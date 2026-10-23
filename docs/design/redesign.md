@@ -30,7 +30,9 @@ most a free Figma plan allows:
   text styles, and the components the new screens are made of.
 
 The checklist is [inventory.md](inventory.md): every page, pop-up, message
-and notification in both apps, with its words.
+and notification in both apps, with its words. Until 2026-10-24 it missed the words
+written into Android's layout files (27 of them, among them the whole welcome
+screen); the script reads those too since.
 
 ## Not captured, and why
 

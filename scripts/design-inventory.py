@@ -28,6 +28,12 @@ for path in sorted(list((root/'android/app/src/main/java/com/qurb').glob('*.kt')
             if len(s) < 3 or not words(s): continue
             if re.search(r'^[a-z_\-]+(\.[a-z_\-]+)+$|^[a-z][a-z0-9_]*$|^#|^\.[a-z]|=>|\bfunction\b|^\w+://', s): continue
             out.append((str(path.relative_to(root)), n, s))
+# Android layouts and menus: words written into the XML rather than the code.
+res = root/'android/app/src/main/res'
+for path in sorted(list((res/'layout').glob('*.xml')) + list((res/'menu').glob('*.xml'))):
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        for m in re.finditer(r'android:(?:text|hint|contentDescription|title)="([^"@][^"]*)"', line):
+            out.append((str(path.relative_to(root)), n, m.group(1)))
 html = (root/'crates/desktop/ui/index.html').read_text()
 for n, line in enumerate(html.splitlines(), 1):
     for m in re.finditer(r'>([^<>{}]*[A-Za-z]{2,}[^<>{}]*)<', line):
@@ -63,7 +69,7 @@ def enclosing(f, n):
             if m: cls = m.group(1)
         if fn and (cls or not f.endswith('.kt')): break
     return (cls + '.' if cls else '') + fn
-rows = [[f, n, enclosing(f, n), s] for f, n, s in out]
+rows = [[f, n, (pathlib.Path(f).stem if f.endswith('.xml') else enclosing(f, n)), s] for f, n, s in out]
 
 src = {}
 def lines(f):
@@ -85,6 +91,10 @@ def place(f, n, fn):
     stem = pathlib.Path(f).stem
     if f.endswith('.kt') or 'mobile-ffi' in f:
         return 'A', A.get(stem, 'Behind the scenes')
+    if '/res/' in f:
+        LAYOUTS = {'activity_setup': 'Setup', 'activity_share': 'Sending into Qurb from another app', 'activity_scan': 'Add a device: scan a code',
+                   'screen_home': 'Home', 'screen_files': 'Files and Private Vault', 'card_device': 'Devices', 'activity_main': 'The app frame: tabs, sending, asks, unlocking', 'tabs': 'The app frame: tabs, sending, asks, unlocking'}
+        return 'A', LAYOUTS.get(stem, 'Shared components')
     if f.endswith('index.html'):
         p = 'Setup'
         for start, name in html_places:
@@ -124,7 +134,7 @@ commit = subprocess.run(['git','-C',str(root),'rev-parse','--short','HEAD'],capt
 out = []
 w = out.append
 w('# Every surface, as it is\n')
-w(f'What a person can see in the Android app and the desktop window: every page, pop-up, message and notification, with its words as the code has them. Made on 2026-10-20 from the code at `{commit}` by `scripts/design-inventory.py`, which reads the source and writes this file again, as the starting checklist for the redesign the owner asked for that day:\n')
+w(f'What a person can see in the Android app and the desktop window: every page, pop-up, message and notification, with its words as the code has them. Made on {__import__('datetime').date.today().isoformat()} from the code at `{commit}` by `scripts/design-inventory.py`, which reads the source and writes this file again, as the checklist for the redesign the owner asked for on 2026-10-20:\n')
 w('> can u run figma, i would like to redesign our application again with your help, i want to go through every page, pop up, text, notfication\n')
 w('Each item is numbered so that it can be ticked off: **A** for Android, **D** for the desktop window. Within a place, *page* is what is on the screen itself, *pop-up* is a sheet, dialog or panel, *message* is a short line that appears and goes (a snackbar or toast) or an error, and *notification* is the system\'s. Each line gives the words and where they are in the code.\n')
 w('## Known gaps\n')

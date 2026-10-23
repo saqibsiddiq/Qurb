@@ -1,6 +1,6 @@
 # Every surface, as it is
 
-What a person can see in the Android app and the desktop window: every page, pop-up, message and notification, with its words as the code has them. Made on 2026-10-20 from the code at `5effffb` by `scripts/design-inventory.py`, which reads the source and writes this file again, as the starting checklist for the redesign the owner asked for that day:
+What a person can see in the Android app and the desktop window: every page, pop-up, message and notification, with its words as the code has them. Made on 2026-10-24 from the code at `e5d1ad1` by `scripts/design-inventory.py`, which reads the source and writes this file again, as the checklist for the redesign the owner asked for on 2026-10-20:
 
 > can u run figma, i would like to redesign our application again with your help, i want to go through every page, pop up, text, notfication
 
@@ -41,6 +41,26 @@ This list was made by a script, so:
 
 - Could not use the backed-up key <sub>160</sub>
 - There is no key in your Google backup any more. <sub>161</sub>
+
+**A1.6** page — `activity_setup.xml`, `activity_setup`
+
+- Qurb <sub>38</sub>
+- Your files stay on your own devices. They move directly between them, encrypted end to end, and are never stored on anyone else's server. <sub>45</sub>
+- Set up Qurb here <sub>91</sub>
+- This phone becomes your first device. There is nothing to write down. <sub>99</sub>
+- I already use Qurb <sub>148</sub>
+- Join the devices you already have, with the code one of them shows. <sub>155</sub>
+- Use the key from your Google backup <sub>179</sub>
+- Scan the code from your other device <sub>196</sub>
+- On your computer, open Qurb, go to Devices and choose Add a device. Scan the code it shows, or type its six digits on the same Wi-Fi. It brings your key with it, so there is nothing else to type. <sub>203</sub>
+- Scan the code <sub>211</sub>
+- Or type its six digits <sub>219</sub>
+- Back <sub>246</sub>
+- Join <sub>254</sub>
+- Use my 24 words instead <sub>265</sub>
+- Enter your 24 words <sub>280</sub>
+- The 24 words, separated by spaces <sub>286</sub>
+- Restore <sub>317</sub>
 
 ### A2. Home
 
@@ -117,12 +137,19 @@ This list was made by a script, so:
 
 - Could not settle that <sub>390</sub>
 
-**A2.9** pop-up: “Two versions” — `HomeScreen.kt`, `choose`
+**A2.9** page — `screen_home.xml`, `screen_home`
+
+- Qurb <sub>43</sub>
+- Activity <sub>52</sub>
+- Sync now <sub>114</sub>
+- Send <sub>124</sub>
+
+**A2.10** pop-up: “Two versions” — `HomeScreen.kt`, `choose`
 
 - Two versions <sub>322</sub>
 - Both are kept. Nothing is lost whichever you choose. <sub>323</sub>
 
-**A2.10** pop-up: “Two devices changed it at the same time” — `HomeScreen.kt`, `describe`
+**A2.11** pop-up: “Two devices changed it at the same time” — `HomeScreen.kt`, `describe`
 
 - Since deleted or renamed <sub>335</sub>
 -  ¶ Not on this phone yet <sub>337</sub>
@@ -135,7 +162,7 @@ This list was made by a script, so:
 - Keep the other version <sub>377</sub>
 - Keep both <sub>378</sub>
 
-**A2.11** message — `HomeScreen.kt`, `settle`
+**A2.12** message — `HomeScreen.kt`, `settle`
 
 - Kept ${kept.substringAfterLast('/')} <sub>387</sub>
 - Kept both <sub>387</sub>
@@ -209,14 +236,21 @@ This list was made by a script, so:
 
 - Could not ask for that <sub>443</sub>
 
-**A3.11** pop-up — `FilesScreen.kt`, `more`
+**A3.11** page — `screen_files.xml`, `screen_files`
+
+- Files <sub>36</sub>
+- More <sub>62</sub>
+- Search files <sub>81</sub>
+- Add files <sub>154</sub>
+
+**A3.12** pop-up — `FilesScreen.kt`, `more`
 
 - Sort: ${s.label} <sub>249</sub>
 - New folder… <sub>254</sub>
 - Save ${Words.files(here.size)} to this phone… <sub>257</sub>
 - Recently deleted <sub>259</sub>
 
-**A3.12** pop-up — `FilesScreen.kt`, `choose`
+**A3.13** pop-up — `FilesScreen.kt`, `choose`
 
 - Private Vault <sub>271</sub>
 - Qurb <sub>271</sub>
@@ -240,7 +274,7 @@ This list was made by a script, so:
 - Move to Private Vault… <sub>310</sub>
 - Delete <sub>313</sub>
 
-**A3.13** pop-up: “Move $name to Private Vault?” — `FilesScreen.kt`, `moveArea`
+**A3.14** pop-up: “Move $name to Private Vault?” — `FilesScreen.kt`, `moveArea`
 
 - Could not move that <sub>406</sub>
 - No device keeps a backup of your Private Vault, so this phone will have the only copy.  <sub>418</sub>
@@ -252,7 +286,7 @@ This list was made by a script, so:
 - — each keeps it in Recently deleted for 30 days, as with any deletion. $kept <sub>427</sub>
 - Move <sub>428</sub>
 
-**A3.14** pop-up: “Delete ${entry.path.substringAfterLast('/')}?” — `FilesScreen.kt`, `delete`
+**A3.15** pop-up: “Delete ${entry.path.substringAfterLast('/')}?” — `FilesScreen.kt`, `delete`
 
 - It's deleted from this phone, and from any device keeping a backup of your Private Vault. <sub>450</sub>
 - It's in your Qurb space, so it's deleted on every device at its next sync. <sub>452</sub>
@@ -261,20 +295,20 @@ This list was made by a script, so:
 - Delete <sub>457</sub>
 - Could not delete that <sub>464</sub>
 
-**A3.15** message — `FilesScreen.kt`, `moveTo`
+**A3.16** message — `FilesScreen.kt`, `moveTo`
 
 - Now ${to.substringAfterLast('/')} <sub>350</sub>
 
-**A3.16** message — `FilesScreen.kt`, `free`
+**A3.17** message — `FilesScreen.kt`, `free`
 
 - Freed ${Words.size(freed)}. ${entry.path.substringAfterLast('/')} stays in Qurb. <sub>383</sub>
 
-**A3.17** message — `FilesScreen.kt`, `moveArea`
+**A3.18** message — `FilesScreen.kt`, `moveArea`
 
 - $name goes to all your devices <sub>403</sub>
 - $name is in Private Vault <sub>403</sub>
 
-**A3.18** message — `FilesScreen.kt`, `delete`
+**A3.19** message — `FilesScreen.kt`, `delete`
 
 - Deleted. It's in Recently deleted for 30 days. <sub>461</sub>
 
@@ -653,6 +687,10 @@ This list was made by a script, so:
 - Could not open the camera: ${e.message} <sub>78</sub>
 - Could not start the camera: ${e.message} <sub>128</sub>
 
+**A10.3** page — `activity_scan.xml`, `activity_scan`
+
+- Point the camera at the code shown by `qurb pair` <sub>23</sub>
+
 ### A11. Pairing: approving a device
 
 **A11.1** page — `Approval.kt`, `approve`
@@ -977,7 +1015,14 @@ This list was made by a script, so:
 - could not open the destination <sub>1204</sub>
 - Could not save that file <sub>1212</sub>
 
-**A14.15** pop-up: “Transfers” — `MainActivity.kt`, `openTransfers`
+**A14.15** page — `tabs.xml`, `tabs`
+
+- Home <sub>6</sub>
+- Files <sub>7</sub>
+- Devices <sub>8</sub>
+- Settings <sub>9</sub>
+
+**A14.16** pop-up: “Transfers” — `MainActivity.kt`, `openTransfers`
 
 - Could not read what is moving <sub>539</sub>
 - Transfers <sub>542</sub>
@@ -990,7 +1035,7 @@ This list was made by a script, so:
 - Stop <sub>557</sub>
 - Done <sub>565</sub>
 
-**A14.16** pop-up: “Stop sending ${w.path.substringAfterLast('/')}?” — `MainActivity.kt`, `cancelSend`
+**A14.17** pop-up: “Stop sending ${w.path.substringAfterLast('/')}?” — `MainActivity.kt`, `cancelSend`
 
 - Stop sending ${w.path.substringAfterLast('/')}? <sub>583</sub>
 - ${w.to} hasn't collected it yet, so it never arrives there. <sub>584</sub>
@@ -998,7 +1043,7 @@ This list was made by a script, so:
 - Stop sending <sub>585</sub>
 - Could not stop that <sub>595</sub>
 
-**A14.17** pop-up: “Open your folder on ${ask.name}?” — `MainActivity.kt`, `askToOpen`
+**A14.18** pop-up: “Open your folder on ${ask.name}?” — `MainActivity.kt`, `askToOpen`
 
 - Open your folder on ${ask.name}? <sub>770</sub>
 - ${ask.name} is asking <sub>771</sub>
@@ -1013,7 +1058,7 @@ This list was made by a script, so:
 - Open your folder on ${ask.name} <sub>790</sub>
 - Could not answer ${ask.name} <sub>801</sub>
 
-**A14.18** pop-up: “Add a device” — `MainActivity.kt`, `pair`
+**A14.19** pop-up: “Add a device” — `MainActivity.kt`, `pair`
 
 - Add a device <sub>826</sub>
 - Your computer or another phone. It joins with a code, once. <sub>827</sub>
@@ -1026,20 +1071,20 @@ This list was made by a script, so:
 - Visit someone's computer <sub>839</sub>
 - As their guest. This phone keeps its own key. <sub>840</sub>
 
-**A14.19** pop-up: “Enter a code” — `MainActivity.kt`, `typeCode`
+**A14.20** pop-up: “Enter a code” — `MainActivity.kt`, `typeCode`
 
 - Enter a code <sub>868</sub>
 - The six digits the other device shows <sub>868</sub>
 - Both on the same Wi-Fi. Otherwise, scan its QR code. <sub>870</sub>
 - Join <sub>871</sub>
 
-**A14.20** pop-up — `MainActivity.kt`, `chooseDevice`
+**A14.21** pop-up — `MainActivity.kt`, `chooseDevice`
 
 - Could not read your devices <sub>959</sub>
 - No devices yet. Add one first. <sub>964</sub>
 - Add a device <sub>965</sub>
 
-**A14.21** pop-up: “Send” — `MainActivity.kt`, `chooseWhereToSend`
+**A14.22** pop-up: “Send” — `MainActivity.kt`, `chooseWhereToSend`
 
 - Could not read your devices <sub>990</sub>
 - Send <sub>993</sub>
@@ -1050,7 +1095,7 @@ This list was made by a script, so:
 - ${peer.name}'s Downloads <sub>1001</sub>
 - Opens there freely · ${Words.seen(peer.lastSeen)} <sub>1002</sub>
 
-**A14.22** pop-up: “Sent to ${to.name} before” — `MainActivity.kt`, `say`
+**A14.23** pop-up: “Sent to ${to.name} before” — `MainActivity.kt`, `say`
 
 - Sent to ${to.name} before <sub>1093</sub>
 - ${nameOf(e.source)} — as ${e.sentAs}, ${Words.ago(e.at)} <sub>1094</sub>
@@ -1062,45 +1107,45 @@ This list was made by a script, so:
 - Leave it out <sub>1101</sub>
 - Leave them out <sub>1101</sub>
 
-**A14.23** message — `MainActivity.kt`, `confirmWithLock`
+**A14.24** message — `MainActivity.kt`, `confirmWithLock`
 
 - Backing up WhatsApp. The first run starts on Wi-Fi. <sub>150</sub>
 - That isn't WhatsApp's folder. Choose ${WhatsApp.relative().replace( <sub>152</sub>
 
-**A14.24** message — `MainActivity.kt`, `heard`
+**A14.25** message — `MainActivity.kt`, `heard`
 
 - Your folder is open on ${answer.name}. It locks itself after ten minutes unused. <sub>301</sub>
 
-**A14.25** message — `MainActivity.kt`, `cancelSend`
+**A14.26** message — `MainActivity.kt`, `cancelSend`
 
 - Stopped <sub>591</sub>
 
-**A14.26** message — `MainActivity.kt`, `sendGoes`
+**A14.27** message — `MainActivity.kt`, `sendGoes`
 
 - Sending ${names.size} files to ${to.name}… <sub>733</sub>
 - Sending ${names[0]} to ${to.name}… <sub>733</sub>
 - Sending to ${to.name}. It carries on if you leave Qurb; a notification shows how far it has got. <sub>736</sub>
 
-**A14.27** message — `MainActivity.kt`, `askToOpen`
+**A14.28** message — `MainActivity.kt`, `askToOpen`
 
 - Set a screen lock on this phone first, so it can confirm it's you. <sub>787</sub>
 - Opening your folder on ${ask.name}… <sub>798</sub>
 
-**A14.28** message — `MainActivity.kt`, `joinWith`
+**A14.29** message — `MainActivity.kt`, `joinWith`
 
 - Looking for it on this Wi-Fi… <sub>896</sub>
 - Connected to ${peer.name} <sub>913</sub>
 - You visit ${peer.name} as a guest now <sub>913</sub>
 
-**A14.29** message — `MainActivity.kt`, `addFiles`
+**A14.30** message — `MainActivity.kt`, `addFiles`
 
 - Added ${Words.files(added)}${if (addingPrivate)  <sub>944</sub>
 
-**A14.30** message — `MainActivity.kt`, `writeAll`
+**A14.31** message — `MainActivity.kt`, `writeAll`
 
 - Saved ${Words.files(saved)} <sub>1182</sub>
 
-**A14.31** message — `MainActivity.kt`, `writeCopy`
+**A14.32** message — `MainActivity.kt`, `writeCopy`
 
 - Saved a copy <sub>1210</sub>
 
@@ -1174,7 +1219,12 @@ This list was made by a script, so:
 - device in Qurb's Devices. <sub>305</sub>
 -  ¶  ¶ $failed could not be read and was not saved. <sub>309</sub>
 
-**A15.7** message — `ShareActivity.kt`, `say`
+**A15.7** page — `activity_share.xml`, `activity_share`
+
+- Saving to Qurb <sub>17</sub>
+- Done <sub>41</sub>
+
+**A15.8** message — `ShareActivity.kt`, `say`
 
 - Send it again <sub>201</sub>
 - Send them again <sub>201</sub>
