@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
-Settings is at draft 2; Backups and Activity are at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
+Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -246,3 +246,28 @@ top bar. Six screens, below Settings:
   sent, deleted, changed, two versions), the device involved by its icon and
   name, and the time on the right; *Show older* at the end. When nothing has
   happened yet, an empty state.
+
+## Setup, Sharing into Qurb, Pairing and Notifications, draft 1 (2026-10-24)
+
+The owner: "yes, next 4 in order". Each in its own section, below Backups and
+Activity:
+
+- **Setup**: *Welcome* (the mark, one line, *Start here* or *I already use
+  Qurb*); *Welcome, key found* when the Google backup holds a key (*Use my
+  key*); *Join*, with where the code is shown as icons (Qurb, Devices, plus),
+  then *Scan a code* or *Type 6 digits*; six digits as six boxes; 24 words as
+  24 numbered boxes; and the first Home, whose one action is to add a device.
+- **Sharing into Qurb** from another app: *Save to* the Vault on this phone,
+  or *Send to* a device; then the file sending with a bar and *Hide*; then
+  *Sent to saqib*, or *Nothing to save*. *Save to Files* is gone with the
+  shared files.
+- **Pairing**: *Pair with saqib?* and *Let saqib join?* (a device that takes
+  this phone's key, said in a warning chip), each with the number to compare
+  large; *Approve on saqib* while this phone waits; *Open your folder on
+  saqib?*, then the screen lock.
+- **Notifications**, as Android draws them: what is ours is the words, the
+  small icon, a progress bar and the buttons. Received (*Open*), delivered,
+  the folder ask (*Answer*), sending with a bar, waiting to finish, and a
+  failed send. *Open*, *Answer* and *Try again* on a notification are
+  proposals: today's notifications have no buttons. The failure's words are an
+  example; the real ones come from what failed.
