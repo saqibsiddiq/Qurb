@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
-Settings is at draft 2; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
+Settings is at draft 2; Backups and Activity are at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -223,3 +223,24 @@ lets keep notification one switch only". *Key* is one row (Safe) opening *Your
 key is safe*; *Connection* is Background sync and *Advanced*, a page of its
 own with Rendezvous, Relay and the version; Notifications is one switch with
 no words under it.
+
+## Backups and Activity, draft 1 (2026-10-24)
+
+The owner: "lets do backups and activity now". Both are reached from Home's
+top bar. Six screens, below Settings:
+
+- **Backups** shows the device chosen on Home, and switches it the same way.
+  WhatsApp, Folders and Private Vault are cards: a tick and the size when up to
+  date, a bar and how many files are left while one runs, a switch when off.
+  WhatsApp opens its details (files, size, what was deleted in WhatsApp and
+  kept, when it last ran, Wi-Fi only) with *Stop* and *Back up now*. Setting it
+  up names the two steps Android asks for: choose WhatsApp's folder, then
+  Allow.
+- One sentence is kept on Backups and on setting WhatsApp up: keep WhatsApp's
+  own Google backup on too. A restore from the computer has not been tried
+  ([0062](../decisions/0062-backing-up-whatsapp.md)), and until it has, nothing
+  should suggest turning Google's off.
+- **Activity**, by day. Each file carries a badge for what happened (arrived,
+  sent, deleted, changed, two versions), the device involved by its icon and
+  name, and the time on the right; *Show older* at the end. When nothing has
+  happened yet, an empty state.
