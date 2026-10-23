@@ -1,7 +1,7 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
-Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
+Settings is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). Nothing is built in the apps yet: everything
 here is a design in Figma.
 
 The owner, 2026-10-20:
@@ -198,3 +198,20 @@ time; switching it on for another moves the selection.
    for Files* of draft 3 taken out again.
 
 Decision 0073 is amended to match.
+
+## Settings, draft 1 (2026-10-24)
+
+The owner: "sync all devices is fine, lets do settings now" (Sync on Home syncs
+every device; Send goes to the chosen one). Six screens, below Files draft 3:
+
+- **Settings**, in four groups of rows, each an icon, a name and a short value:
+  *This phone* (Name, Identity, Key, Recovery), *Storage* (space used, with
+  Free up beside it), *App* (Notifications, Theme, Motion), *Connection*
+  (Background sync, Rendezvous, Relay), and the version beneath.
+- **Name**, **Theme** (Auto, Light, Dark as a three-way switch), **Recovery**
+  (where the key is safe; the 24 words behind the screen lock), **Background
+  sync** (when it last ran, how often, Run now).
+
+Gone from Settings, because the new model put them elsewhere or ended them:
+Backups (each device's page), *Who has each folder* and *Keep new files
+private* (no shared files on the phone), Recently deleted (Files).
