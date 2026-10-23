@@ -271,3 +271,20 @@ Activity:
   failed send. *Open*, *Answer* and *Try again* on a notification are
   proposals: today's notifications have no buttons. The failure's words are an
   example; the real ones come from what failed.
+
+## The owner's list of 2026-10-24, last on Android
+
+1. "in previous version, there was no proper folder hierarchy while selecting
+   folders to backup". **Folders to back up, a tree**: every folder opens, to
+   any depth, each level indented under its parent; a checkbox ticked for all
+   of it, a dash for some of what is inside, empty for none; ticking a folder
+   takes everything inside it, folders added later too; what is chosen and
+   *Wi-Fi only* stay above the tab bar. Today's chooser goes two levels deep and
+   fixes the inner switch of a chosen folder; choosing folders at any depth is
+   engine work.
+2. "dark mode". **Dark**: ten of the key screens again, in the app's own night
+   colours (`values-night/colors.xml`). The free Figma plan allows a colour
+   collection one mode only, so the night colours are a second collection,
+   *Qurb colours, dark*, of the same names, and the dark screens are copies
+   bound to it. A change to a light screen is not carried to its dark copy.
+3. The desktop, next. 4. Building, after.
