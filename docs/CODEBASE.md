@@ -900,9 +900,11 @@ qurb/
 │       │                                      what each keeps of this phone
 │       │                  DeviceScreen.kt     one device's page: Send, what it
 │       │                                      backs up, who it is, removing it
-│       │                  SettingsScreen.kt   grouped lists: storage, who has each
-│       │                                      folder, backups, privacy, recovery,
-│       │                                      advanced
+│       │                  SettingsScreen.kt   four short groups: this phone (name,
+│       │                                      identity, key), storage, the app,
+│       │                                      connection
+│       │                  AdvancedScreen.kt   rendezvous, relay, version; for now
+│       │                                      the shared files' settings too
 │       │                  Backups.kt          the backups' lines and WhatsApp's
 │       │                                      sheets, for Backups, a device's
 │       │                                      page and Settings alike

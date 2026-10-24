@@ -1,63 +1,65 @@
 package com.qurb
 
+import android.view.Gravity
 import android.view.View
-import android.widget.EditText
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.qurb_mobile.BackupState
 import uniffi.qurb_mobile.DeletedFile
-import uniffi.qurb_mobile.PeerInfo
-import uniffi.qurb_mobile.ShareTarget
-import uniffi.qurb_mobile.SharedFolder
 import uniffi.qurb_mobile.Usage
 
 /**
- * Settings (direction §23): grouped lists, quieter than everything else, in
- * the direction's order -- this phone, devices, storage, privacy,
- * notifications, recovery, appearance, advanced.
+ * Settings, as redesigned (docs/design/redesign.md, Settings draft 2): four
+ * short groups of rows, each an icon, a name and a short value. *This phone*:
+ * its name, its identity, and its key (one row, opening where the key is safe
+ * and the 24 words behind the screen lock). *Storage*: the space Qurb takes,
+ * and Free up. *App*: notifications as one switch, the theme, motion.
+ * *Connection*: background sync, and Advanced on a page of its own.
+ *
+ * Gone with the redesign: Backups (each device's page has them), and the
+ * Devices row. Kept for now, though the design moves them: Recently deleted
+ * here until Files has it, and the shared files' settings under Advanced until
+ * the phone stops holding shared files (decision 0073).
+ *
+ * The name is shown and not changed here: a device learns this phone's name
+ * when they pair and keeps it, so a new name would reach no device already
+ * paired. Renaming waits on the engine telling devices a new name.
  */
 class SettingsScreen(app: MainActivity) : Screen(app) {
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
-    private val backups = Backups(app) { refresh() }
     override val view: View get() = views.root
     override val tab = R.id.tab_settings
 
     init {
         views.title.text = "Settings"
-        // Every page says in a line what it is for; this one did not.
-        views.subtitle.text = "How Qurb works on this phone."
-        views.subtitle.visibility = View.VISIBLE
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
     }
 
     private class State(
         val usage: Usage,
-        val background: String,
+        val identity: String,
         val deleted: List<DeletedFile>,
-        val peers: List<PeerInfo>,
         val sentCopies: ULong,
-        val whatsApp: BackupState,
-        /** Who keeps this phone's Private Vault, and so the WhatsApp backup. */
-        val keepers: List<PeerInfo>,
-        /** The folders chosen on that computer, and their backup (decision 0063). */
-        val chosen: List<String>,
-        val folders: BackupState,
+        /** Whether the key this phone holds is the one its backup gives back. */
+        val keyKept: Boolean,
+        /** Whether that backup leaves the phone: Google's, with a screen lock. */
+        val keyInCloud: Boolean,
     )
 
     override fun refresh() {
         refreshing {
             try {
                 val state = withContext(Dispatchers.IO) {
-                    // `state` waits on WorkManager's own database; off the main
-                    // thread like everything else.
                     val engine = engine()
-                    // Access just granted, in the system's page this screen
+                    // Access just granted, in the system's page the folders
                     // opened: the folders listed at once, for the computer to
                     // show, and the nightly run scheduled (decision 0063).
                     if (Folders.allowed(app) && !Folders.noticed(app)) {
@@ -65,9 +67,19 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                         WhatsApp.schedule(app)
                         SyncWorker.runNow(app)
                     }
-                    State(engine.usage(), SyncWorker.state(app), engine.recentlyDeleted(), engine.peers(),
-                        engine.sentCopies(), engine.whatsappBackup(), engine.holders(),
-                        engine.chosenFolders(), engine.foldersBackup())
+                    // Where the key is safe, checked rather than assumed
+                    // (decision 0053): the key the backup gives back is
+                    // compared with this phone's own.
+                    val found = Backup.find(app)
+                    val mine = runCatching { engine.recoveryPhrase() }.getOrNull()
+                    State(
+                        engine.usage(),
+                        runCatching { engine.identityShort() }.getOrDefault(""),
+                        engine.recentlyDeleted(),
+                        engine.sentCopies(),
+                        found != null && found == mine,
+                        Backup.leavesThePhone(app),
+                    )
                 }
                 show(state)
             } catch (e: Exception) {
@@ -82,132 +94,116 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         val page = views.sections
         page.removeAllViews()
 
-        kit.groupTitle(page, "This phone")
-        var group = kit.group(page)
-        kit.item(group, "Name", "${android.os.Build.MODEL ?: "Phone"} — what your other devices call it")
-        // Said as it is: the Keystore key is not tied to unlocking the phone
-        // (AndroidKeyStore.kt says why), so the screen lock guards the app,
-        // not the key.
-        kit.item(group, "Key protection",
-            "In the Android Keystore: only Qurb on this phone can use it. It works while the phone " +
-                "is locked, so syncing in the background can too — your screen lock keeps others out of the app.")
+        kit.label(page, "This phone", top = 12)
+        var card = kit.card(page)
+        kit.setting(card, R.drawable.ic_smartphone, "Name", android.os.Build.MODEL ?: "Phone")
+        if (state.identity.isNotEmpty()) kit.setting(card, R.drawable.ic_info, "Identity", state.identity)
+        kit.setting(card, R.drawable.ic_shield_check, "Key", when {
+            !state.keyKept -> "Not kept yet"
+            state.keyInCloud -> "Safe"
+            else -> "This phone only"
+        }) { key(state) }
 
-        kit.groupTitle(page, "Devices")
-        group = kit.group(page)
-        kit.item(group, "Your devices",
-            if (state.peers.isEmpty()) "None yet" else state.peers.joinToString(", ") { it.name }) {
-            app.go(R.id.tab_devices)
-        }
-
-        kit.groupTitle(page, "Storage")
-        group = kit.group(page)
-        kit.item(group, "Your files", Words.size(state.usage.logical))
-        kit.item(group, "Qurb on this phone", Words.size(state.usage.onDisk))
-        kit.item(group, "Who has each folder",
-            "Which devices each folder is on, and whether this phone keeps it") { chooseFolder() }
-        kit.item(group, "Recently deleted",
-            if (state.deleted.isEmpty()) "Nothing. Files deleted on any device are kept 30 days"
-            else "${Words.files(state.deleted.size)}, ${Words.size(state.deleted.sumOf { it.size })} — restorable for 30 days") {
-            app.push(DeletedScreen(app, fromSettings = true))
-        }
-        kit.item(group, "Free unused space", "Clears what nothing needs any more", chevron = false) { tidy() }
-        // Its own line, never part of the one above: the devices sent to have
+        kit.label(page, "Storage")
+        card = kit.card(page)
+        // Free up beside the space it frees, as words: never the destructive
+        // one, so never red.
+        val used = kit.setting(card, R.drawable.ic_hard_drive, "Space used", Words.size(state.usage.onDisk))
+        used.root.addView(kit.button("Free up", Kit.Style.TEXT) { tidy() }.apply {
+            minWidth = 0
+            minimumWidth = 0
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { marginEnd = -kit.dp(8) })
+        // Its own row, never part of the one above: the devices sent to have
         // these, but one may have lost its copy since (decision 0030).
         if (state.sentCopies > 0uL) {
-            kit.item(group, "Copies of files you sent",
-                "${Words.size(state.sentCopies)}, kept here after they arrived") { letGoOfSentCopies(state.sentCopies) }
-        }
-
-        // Decision 0062: WhatsApp kept by the computer that keeps this phone's
-        // vault, instead of in the person's Google account. Decision 0063:
-        // the phone's other folders too, chosen on that computer.
-        kit.groupTitle(page, "Backups")
-        group = kit.group(page)
-        val keeper = state.keepers.joinToString(" and ") { it.name }.ifEmpty { null }
-        val backing = WhatsApp.tree(app) != null
-        kit.item(group, "Back up WhatsApp", backups.whatsAppLine(state.whatsApp, keeper, backing)) {
-            backups.whatsApp(state.whatsApp, keeper, backing)
-        }
-        kit.item(group, "Back up your folders", backups.foldersLine(state.chosen.size, state.folders, keeper)) {
-            app.push(FoldersScreen(app, "Settings", R.id.tab_settings))
-        }
-
-        kit.groupTitle(page, "Privacy")
-        group = kit.group(page)
-        val private = Engine.ownFilesPrivate(app)
-        kit.toggle(group, "Keep new files private",
-            if (private) "Files that arrive on this phone from other apps go to your Private Vault"
-            else "Files that arrive on this phone from other apps go to all your devices",
-            private) { setPrivate(it) }
-
-        kit.groupTitle(page, "Notifications")
-        group = kit.group(page)
-        // The desktop's three (Notices.kt): sent to you, delivered, failed.
-        val notifying = Notices.enabled(app) && Notices.permitted(app)
-        kit.toggle(group, "On this phone",
-            when {
-                !Notices.enabled(app) -> "Off. What happens is still in Activity, from Home."
-                !Notices.permitted(app) -> "Android isn't letting Qurb notify yet: turn this on to allow it."
-                else -> "When somebody sends you a file, a device collects one you sent, or something fails. " +
-                    "Nothing else."
-            },
-            notifying) { on ->
-            Notices.setEnabled(app, on)
-            if (on && !Notices.permitted(app)) app.askToNotify()
-            refresh()
-        }
-
-        kit.groupTitle(page, "Recovery")
-        group = kit.group(page)
-        // Where the key is safe, said plainly (decision 0053), and checked:
-        // the key Block Store gives back is compared with this phone's own,
-        // so the row says what is kept rather than what could be. Block Store
-        // backs it up end to end encrypted only when the phone has a screen
-        // lock, and a phone without one should know its key stays here.
-        val safe = kit.item(group, "Where your key is safe", "Checking…")
-        scope.launch {
-            val (kept, cloud) = withContext(Dispatchers.IO) {
-                val found = Backup.find(app)
-                val mine = runCatching { engine().recoveryPhrase() }.getOrNull()
-                (found != null && found == mine) to Backup.leavesThePhone(app)
-            }
-            safe.value.text = when {
-                !kept -> "Not kept for this phone yet: a new phone restored from this one's backup would " +
-                    "not have it. Tap to keep it now. Any of your devices can also give it to a new one with a code."
-                cloud -> "On this phone, and in your Google backup, end-to-end encrypted with your screen lock " +
-                    "— read back and checked just now. Any of your devices can also give it to a new one with a code."
-                else -> "On this phone only: with no screen lock, it is not backed up. Set one, or keep your " +
-                    "computer paired: it can give the key to a new phone with a code."
-            }
-            if (!kept) {
-                safe.chevron.visibility = View.VISIBLE
-                safe.root.isClickable = true
-                safe.root.setOnClickListener { keepKey() }
+            kit.setting(card, R.drawable.ic_send, "Copies of files you sent", Words.size(state.sentCopies)) {
+                letGoOfSentCopies(state.sentCopies)
             }
         }
-        kit.item(group, "Recovery phrase", "The 24 words that spell your key, if you want them. Nobody needs to write them down.") {
-            warnThenShowPhrase()
+        // Until Files has it (the redesign puts Deleted there).
+        kit.setting(card, R.drawable.ic_trash_2, "Recently deleted",
+            if (state.deleted.isEmpty()) "" else Words.files(state.deleted.size)) {
+            app.push(DeletedScreen(app, fromSettings = true))
         }
 
-        kit.groupTitle(page, "Appearance")
-        group = kit.group(page)
-        kit.item(group, "Theme", Appearance.chosen(app).words) { chooseTheme() }
-        kit.item(group, "Motion", if (Kit.calm()) "Reduced, as this phone's settings ask" else "Full; follows this phone's animation settings")
+        kit.label(page, "App")
+        card = kit.card(page)
+        // One switch, and no words under it (the owner, 2026-10-24: "lets
+        // keep notification one switch only"). On means asked of Android too.
+        kit.setting(card, R.drawable.ic_bell, "Notifications",
+            on = Notices.enabled(app) && Notices.permitted(app), onChange = { on ->
+                Notices.setEnabled(app, on)
+                if (on && !Notices.permitted(app)) app.askToNotify()
+                refresh()
+            })
+        kit.setting(card, R.drawable.ic_palette, "Theme", Appearance.chosen(app).words) { chooseTheme() }
+        // Follows the phone's own animation setting; nothing to choose here.
+        kit.setting(card, R.drawable.ic_sliders_horizontal, "Motion", if (Kit.calm()) "Reduced" else "Full")
 
-        kit.groupTitle(page, "Advanced")
-        group = kit.group(page)
-        kit.item(group, "Background sync", state.background) { explainBackground() }
-        kit.item(group, "Rendezvous service",
-            Engine.signalUrl(app).ifEmpty { "Not set — only devices on this Wi-Fi" }) { editSignal() }
-        kit.item(group, "Relay", when (val relay = Engine.relayAddress(app)) {
-            null -> "Beside your rendezvous service"
-            "off" -> "None — devices must reach each other directly"
-            else -> relay
-        }) { editRelay() }
-        val version = runCatching {
-            app.packageManager.getPackageInfo(app.packageName, 0).versionName
-        }.getOrNull() ?: "unknown"
-        kit.item(group, "Version", "$version\n${uniffi.qurb_mobile.engineVersion()}")
+        kit.label(page, "Connection")
+        card = kit.card(page)
+        kit.setting(card, R.drawable.ic_history, "Background sync",
+            SyncWorker.lastAt(app)?.let { Words.since(it / 1000) } ?: "") { background() }
+        kit.setting(card, R.drawable.ic_link, "Advanced") { app.push(AdvancedScreen(app)) }
+    }
+
+    /**
+     * Where the key is safe (decision 0053), checked: on this phone, in the
+     * Android Keystore; and in Google's backup, end-to-end encrypted with the
+     * screen lock, when there is one. The 24 words behind the screen lock.
+     */
+    private fun key(state: State) {
+        val title = when {
+            !state.keyKept -> "Your key isn't kept yet"
+            state.keyInCloud -> "Your key is safe"
+            else -> "Your key is on this phone only"
+        }
+        val facts = LinearLayout(app).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.group_quiet)
+            setPadding(0, kit.dp(4), 0, kit.dp(4))
+        }
+        // Said as it is: the Keystore key is not tied to unlocking the phone
+        // (AndroidKeyStore.kt says why), so background syncing works locked.
+        kit.setting(facts, R.drawable.ic_smartphone, "This phone", "Android Keystore")
+        kit.setting(facts, R.drawable.ic_cloud, "Google backup", when {
+            !state.keyKept -> "Not kept"
+            state.keyInCloud -> "Encrypted with your screen lock"
+            else -> "Off: no screen lock"
+        })
+        val sheet = kit.sheet()
+            .mark(R.drawable.ic_shield_check,
+                if (state.keyKept && state.keyInCloud) R.color.green_soft else R.color.attention_bg,
+                if (state.keyKept && state.keyInCloud) R.color.green else R.color.attention)
+            .title(title, centred = true)
+            .view(facts, top = 16)
+        if (!state.keyKept) {
+            sheet.view(kit.button("Keep it now") { sheet.dismiss(); keepKey() },
+                top = 18)
+        }
+        sheet.view(kit.button("Show the 24 words", Kit.Style.SECONDARY) {
+            sheet.dismiss()
+            showPhrase()
+        }, top = if (state.keyKept) 18 else 10)
+        if (ScreenLock.available(app)) {
+            val note = TextView(app).apply {
+                text = "Asks for your screen lock"
+                setTextAppearance(R.style.Text_Meta)
+                gravity = Gravity.CENTER
+                compoundDrawablePadding = kit.dp(6)
+                setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    ContextCompat.getDrawable(app, R.drawable.ic_lock_keyhole)?.mutate()?.apply {
+                        setBounds(0, 0, kit.dp(14), kit.dp(14))
+                        setTint(kit.color(R.color.text_3))
+                    }, null, null, null)
+            }
+            val centre = FrameLayout(app)
+            centre.addView(note, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            sheet.view(centre, top = 10)
+        }
+        sheet.show()
     }
 
     /**
@@ -215,149 +211,86 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
      *
      * Not a secret kept from the person holding the phone: anyone who can
      * open this app can read every file already, so the words give away
-     * nothing new (decision 0033). But they are the key, so the screen says
-     * so first, and the sheet is kept out of screenshots while they are on it.
+     * nothing new (decision 0033). But they are the key, so the screen lock is
+     * asked first where there is one (the redesign), and the sheet is kept
+     * out of screenshots while they are on it.
      */
-    private fun warnThenShowPhrase() {
-        kit.sheet()
-            .header(R.drawable.ic_key_round, "Show your recovery phrase?")
-            .text("Anyone who sees these 24 words can read every file you keep in Qurb, on any device. " +
-                "Make sure nobody is looking.")
-            .buttons("Show") {
-                scope.launch {
-                    try {
-                        val phrase = withContext(Dispatchers.IO) { engine().recoveryPhrase() }
-                        kit.sheet()
-                            .header(R.drawable.ic_key_round, "Your recovery phrase", "Numbered, in order")
-                            .view(Words.phraseView(app, phrase), top = 16)
-                            .buttons("Hide", secondary = "Close") {}
-                            .secure()
-                            .show()
-                    } catch (e: Exception) {
-                        app.fail("Could not show the words", e)
-                    }
-                }
+    private fun showPhrase() {
+        if (ScreenLock.available(app)) {
+            ScreenLock.confirm(app, "Show your 24 words", "Anyone who sees them can read your files") { yes ->
+                if (yes) app.runOnUiThread { phrase() }
             }
-            .show()
+        } else {
+            kit.sheet()
+                .mark(R.drawable.ic_key_round, R.color.attention_bg, R.color.attention)
+                .title("Show your 24 words?", centred = true)
+                .line("Anyone who sees them can read every file you keep in Qurb")
+                .buttons("Show") { phrase() }
+                .show()
+        }
     }
 
-    private fun setPrivate(on: Boolean) {
+    private fun phrase() {
         scope.launch {
             try {
-                Engine.setOwnFilesPrivate(app, on)
-                app.say(if (on) "New files stay private" else "New files go to all your devices")
+                val words = withContext(Dispatchers.IO) { engine().recoveryPhrase() }
+                kit.sheet()
+                    .title("Your 24 words")
+                    .view(Words.phraseView(app, words), top = 16)
+                    .closing("Hide")
+                    .secure()
+                    .show()
             } catch (e: Exception) {
-                app.fail("Could not change that", e)
-            } finally {
-                refresh()
+                app.fail("Could not show the words", e)
             }
         }
+    }
+
+    /** Light, dark, or as the phone is set (decision 0056), applied at once: three of one width. */
+    private fun chooseTheme() {
+        val chosen = Appearance.chosen(app)
+        val sheet = kit.sheet().title("Theme")
+        val row = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
+        for (theme in Appearance.Theme.entries) {
+            row.addView(kit.button(theme.words, if (theme == chosen) Kit.Style.PRIMARY else Kit.Style.SECONDARY) {
+                sheet.dismiss()
+                Appearance.choose(app, theme)
+                refresh()
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (row.childCount > 0) marginStart = kit.dp(8)
+            })
+        }
+        sheet.view(row, top = 16).show()
     }
 
     /**
-     * Which devices a folder is on (decision 0044), and whether this phone
-     * keeps it or downloads each file when opened (0045).
+     * When the background sync last ran, and how often it does. The honest
+     * answer is "about every fifteen minutes, when Android allows", or every
+     * hour once another device's push has woken this phone lately.
      */
-    private fun chooseFolder() {
-        scope.launch {
-            val (folders, devices) = try {
-                withContext(Dispatchers.IO) { engine().sharing() to engine().shareTargets() }
-            } catch (e: Exception) {
-                app.fail("Could not read the folders", e)
-                return@launch
-            }
-            val sheet = kit.sheet().header(R.drawable.ic_folder, "Who has each folder",
-                "A folder is on every device unless you choose")
-            if (folders.isEmpty()) sheet.text("No folders yet. Folders appear here once they hold a file.")
-            for (f in folders) {
-                val who = if (f.everyone) "Every device" else f.members.joinToString(", ") { id ->
-                    devices.find { it.id == id }?.name ?: "a removed device"
-                }
-                sheet.action(R.drawable.ic_folder, f.folder + "  ·  " + who +
-                    if (f.remote) "  ·  downloaded when opened" else "") { folderSheet(f, devices) }
-            }
-            sheet.show()
+    private fun background() {
+        val facts = LinearLayout(app).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.group_quiet)
+            setPadding(0, kit.dp(4), 0, kit.dp(4))
         }
-    }
-
-    private fun folderSheet(folder: SharedFolder, devices: List<ShareTarget>) {
-        val sheet = kit.sheet().header(R.drawable.ic_folder, folder.folder,
-            "A device you leave out keeps what it has, and gets nothing new")
-        val chosen = devices.associate { it.id to (folder.everyone || it.id in folder.members) }.toMutableMap()
-        val box = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        val group = kit.group(box)
-        for (d in devices) {
-            kit.toggle(group, d.name, if (d.here) "This phone" else "", chosen[d.id] == true) { chosen[d.id] = it }
-        }
-        sheet.view(box, top = 16)
-        sheet.action(
-            if (folder.remote) R.drawable.ic_download else R.drawable.ic_cloud_off,
-            if (folder.remote) "Keep this folder on this phone" else "Free local space: download files when opened",
-        ) { if (folder.remote) keepHere(folder.folder) else keepRemotely(folder.folder) }
-        sheet.buttons("Save") {
-            val members = chosen.filterValues { it }.keys.toList()
-            // All ticked is no rule at all, so a device paired later is in too.
-            setSharing(folder.folder, if (members.size == devices.size) emptyList() else members)
-        }
-        sheet.show()
-    }
-
-    /** Decision 0045: listed here, fetched when opened, never the only copy freed. */
-    private fun keepRemotely(folder: String) {
-        scope.launch {
-            try {
-                val r = withContext(Dispatchers.IO) { engine().keepRemotely(folder) }
-                val kept = if (r.kept.isEmpty()) "" else
-                    " ${Words.files(r.kept.size)} stayed: this phone has the only copy."
-                app.say("Freed ${Words.size(r.bytes)}. Nothing was deleted.$kept")
-            } catch (e: Exception) {
-                app.fail("Could not free that folder", e)
-            } finally {
-                app.changed()
-            }
-        }
-    }
-
-    private fun keepHere(folder: String) {
-        scope.launch {
-            try {
-                val asked = withContext(Dispatchers.IO) { engine().keepLocally(folder) }
-                app.say(if (asked > 0u) "${Words.files(asked.toInt())} on their way back" else "Kept here")
-                SyncWorker.runNow(app)
-            } catch (e: Exception) {
-                app.fail("Could not change that", e)
-            } finally {
-                app.changed()
-            }
-        }
-    }
-
-    private fun setSharing(folder: String, members: List<String>) {
-        scope.launch {
-            try {
-                withContext(Dispatchers.IO) { engine().setSharing(folder, members) }
-                app.say(
-                    if (members.isEmpty()) "$folder is on all your devices"
-                    else "Saved. A device left out keeps what it has, and gets nothing new."
-                )
-                SyncWorker.runNow(app)
-            } catch (e: Exception) {
-                app.fail("Could not change that", e)
-            }
-        }
-    }
-
-    /** Light, dark, or as the phone is set (decision 0056), applied at once. */
-    private fun chooseTheme() {
-        val chosen = Appearance.chosen(app)
-        val sheet = kit.sheet().header(R.drawable.ic_palette, "Theme")
-        for (theme in Appearance.Theme.entries) {
-            sheet.action(if (theme == chosen) R.drawable.ic_check else R.drawable.ic_palette, theme.words) {
-                Appearance.choose(app, theme)
-                refresh()
-            }
-        }
-        sheet.show()
+        val at = SyncWorker.lastAt(app)
+        val result = SyncWorker.lastResult(app)
+        kit.setting(facts, R.drawable.ic_circle_check, "Last",
+            if (at == null) "Not yet" else listOfNotNull(Words.ago(at / 1000), result).joinToString(", "))
+        kit.setting(facts, R.drawable.ic_history, "Every",
+            if (SyncWorker.periodMinutes(app) == 60L) "Hour, or when woken" else "15 minutes, when Android allows")
+        val sheet = kit.sheet()
+            .mark(R.drawable.ic_history, R.color.green_soft, R.color.green)
+            .title("Background sync", centred = true)
+            .view(facts, top = 16)
+        sheet.view(kit.button("Run now") {
+            sheet.dismiss()
+            // Through the scheduler rather than directly, so this exercises
+            // the same path the periodic schedule uses.
+            SyncWorker.runNow(app)
+            app.say("Queued. It runs when Android allows.")
+        }, top = 18).show()
     }
 
     /** Keep the key in Block Store now, for a phone that does not have it. */
@@ -395,8 +328,9 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
      */
     private fun letGoOfSentCopies(bytes: ULong) {
         kit.sheet()
-            .header(R.drawable.ic_send, "Let go of ${Words.size(bytes)}?")
-            .text(SentCopies.COST)
+            .mark(R.drawable.ic_send)
+            .title("Let go of ${Words.size(bytes)}?", centred = true)
+            .line(SentCopies.COST)
             .buttons("Let go", danger = true, secondary = "Keep") {
                 scope.launch {
                     try {
@@ -408,97 +342,6 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                         refresh()
                     }
                 }
-            }
-            .show()
-    }
-
-    /**
-     * What the background scheduler does, in plain words. The honest answer is
-     * "roughly every fifteen minutes, when Android allows", and an app that
-     * quietly does nothing for hours while claiming to sync is worse than one
-     * that says so.
-     */
-    private fun explainBackground() {
-        kit.sheet()
-            .header(R.drawable.ic_refresh_cw, "Background sync")
-            .text("Android decides when this runs. Fifteen minutes is the shortest period it accepts, " +
-                "and an idle phone may go much longer between attempts. With push, another device " +
-                "wakes this phone when it has something.\n\nBoth devices have to be on at the same " +
-                "moment for a sync to happen, so a computer that is off is missed until next time.")
-            .buttons("Run one now", secondary = "Close") {
-                // Through the scheduler rather than directly, so this exercises
-                // the same path the periodic schedule uses.
-                SyncWorker.runNow(app)
-                app.say("Queued. It runs when Android allows.")
-            }
-            .show()
-    }
-
-    private fun field(start: String, hint: String): EditText = EditText(app).apply {
-        setText(start)
-        this.hint = hint
-        setPadding(kit.dp(16), kit.dp(14), kit.dp(16), kit.dp(14))
-        background = ContextCompat.getDrawable(app, R.drawable.glass_group)
-    }
-
-    /**
-     * The relay, for when two devices cannot reach each other directly --
-     * which on mobile data is often. Checked by the engine's own rule as it is
-     * saved, so a mistyped address is refused here rather than found out by
-     * every sync after.
-     */
-    private fun editRelay() {
-        val input = field(Engine.relayAddress(app).orEmpty(), "relay.example.com:9001")
-        val says = android.widget.TextView(app).apply {
-            setTextAppearance(R.style.Text_Meta)
-            setTextColor(kit.color(R.color.error))
-            visibility = View.GONE
-        }
-        val sheet = kit.sheet()
-            .header(R.drawable.ic_arrow_up_down, "Relay")
-            .text("When this phone and another device can't reach each other directly — common on " +
-                "mobile data — their encrypted traffic goes through a relay instead. It can't read it.\n\n" +
-                "Leave it empty to use the relay beside your rendezvous service, which is what " +
-                "most people want. Or enter the address of a relay of your own — " +
-                "relay.example.com:9001, or a wss:// address — or off for none.")
-            .view(input, top = 14)
-            .view(says, top = 6)
-        val save = kit.button("Save") {
-            val text = input.text.toString().trim()
-            val problem = if (text.isEmpty()) null else uniffi.qurb_mobile.relayAddressProblem(text)
-            if (problem != null) {
-                says.text = problem
-                says.visibility = View.VISIBLE
-                return@button
-            }
-            Engine.setRelayAddress(app, text.ifEmpty { null })
-            sheet.dismiss()
-            app.say(if (text.isEmpty()) "Using the relay beside your rendezvous service" else "Saved")
-            refresh()
-        }
-        sheet.view(save, top = 16).show()
-    }
-
-    /**
-     * Where the rendezvous service is: on a server of your own, run
-     * `qurb signal` and point the phone at it.
-     */
-    private fun editSignal() {
-        val input = field(Engine.signalUrl(app), "wss://…")
-        kit.sheet()
-            .header(R.drawable.ic_link, "Rendezvous service")
-            .text("Two devices find each other through this when they're not on the same network. " +
-                "Run `qurb signal` on a server of your own and enter the address it prints — wss://… " +
-                "for one reachable from anywhere. It never sees your files.")
-            .view(input, top = 14)
-            .buttons("Save") {
-                val url = input.text.toString().trim()
-                Engine.setSignalUrl(app, url)
-                // Kept with the key, so a reinstall or a new phone restored
-                // from this one's backup has it back.
-                scope.launch(Dispatchers.IO) { Backup.saveSignal(app, url) }
-                app.say("Saved")
-                refresh()
             }
             .show()
     }

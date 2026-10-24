@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home and Devices** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home, Devices and Settings** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -416,3 +416,30 @@ Checked on the same emulator: the list, a device's page, its details, Add a
 device, Show my code, Remove (cancelled), keeping the vault (the rows and the
 lock pill appear), Home's list of devices.
 
+
+## Built: Android Settings (2026-10-24)
+
+Settings draft 2 is in the app (`SettingsScreen.kt`, `AdvancedScreen.kt`):
+*This phone* (Name, Identity, Key), *Storage* (Space used with Free up),
+*App* (Notifications as one switch with no words, Theme, Motion),
+*Connection* (Background sync, Advanced). Key opens where the key is kept,
+checked as before, and *Show the 24 words* asks for the screen lock first
+where the phone has one. Theme is three buttons of one width. Background sync
+opens when it last ran and how often, and *Run now*. Advanced has Rendezvous,
+Relay and Version. The engine's version line lost its `·` too.
+
+**Where it differs from the design, and why:**
+
+- **Name is not changeable.** A device learns this phone's name when they
+  pair and keeps it, so a new name would reach no device already paired. The
+  design's Name sheet waits on the engine telling devices a new name.
+- **Recently deleted stays in Storage** until Files has it.
+- **The shared files' two settings** (*Who has each folder*, *Keep new files
+  private*) **are under Advanced**, labelled *Shared files*. The design drops
+  them with the shared files, but the phone holds shared files until 0073's
+  engine work, and until then they still do something.
+- Identity needed a new engine call, `identityShort()`.
+
+Checked on the same emulator: the page, scrolled; Advanced; the Key, Theme and
+Background sync sheets. The emulator has no screen lock, so the screen-lock
+path for the 24 words is not checked, and the words were not shown.

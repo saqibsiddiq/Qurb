@@ -2694,7 +2694,7 @@ Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
   too: such a clash is refused on every pass until one of the names changes.
 - **Not done:** nothing has been run on a hotspot or on mobile data.
 
-## The redesign, built: Home and Devices, 2026-10-24
+## The redesign, built: Home, Devices and Settings, 2026-10-24
 
 The Figma redesign ([design/redesign.md](../design/redesign.md)) is being
 built, Android first. Home is done to draft 3: one device chosen on Home, its
@@ -2716,7 +2716,12 @@ through the relay was called off. Three tests in `crates/peer/tests/served.rs`;
 the first fails without the change. `cargo test -p qurb-peer -p qurb-mobile`:
 250 passed, none failed.
 
-Not built yet: Files, Settings, Activity, the full Backups page, setup,
+Settings is done to draft 2, with three differences the redesign log
+explains: the name is shown, not changed; Recently deleted stays until Files
+has it; the shared files' settings wait under Advanced
+([details](../design/redesign.md#built-android-settings-2026-10-24)).
+
+Not built yet: Files, Activity, the full Backups page, setup,
 pairing approval, sharing into Qurb, notifications, the desktop; and the
 engine work of [0073](../decisions/0073-the-phone-works-with-its-computer.md).
 

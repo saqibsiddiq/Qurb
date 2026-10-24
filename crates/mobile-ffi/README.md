@@ -136,8 +136,9 @@ qurb.removalPlan(peer.fingerprint)    // what removing it would do, before doing
 qurb.removeDevice(peer.fingerprint, deleteKept = false)
 ```
 
-And two free functions: `engineVersion()` — `qurb 0.1.0 · protocol qurb/2 ·
-index schema 27` on 2026-10-20 — and `qrCode(text)`, the matrix a phone draws to show a
+And two free functions: `engineVersion()` — `engine 0.1.0, protocol qurb/2,
+index schema 27` on 2026-10-24, commas since the redesign dropped the `·` — and
+`qrCode(text)`, the matrix a phone draws to show a
 pairing code, so the app needs no image library.
 
 `outstanding()` is the honest answer to "did it get there yet": live files this
@@ -163,6 +164,7 @@ qurb.joinPairing(scannedCode)         // the other direction, usually the phone'
 qurb.joinPairing("240667")            //   ...or six digits on the same Wi-Fi (0066)
 offer.digits()                        // the six digits this device's code offers
 qurb.peers()                          // who this device trusts
+qurb.identityShort()                  // this device's own identity, as peers show theirs
 
 qurb.syncWithin(25)                   // one pass, giving up after 25 seconds
 qurb.waitingForOthersBytes()          // what a device reached would come and take

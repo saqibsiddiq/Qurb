@@ -1273,6 +1273,13 @@ impl Qurb {
         Ok(())
     }
 
+    /// This device's own identity, in the short form a device's page shows
+    /// for each of the others: what Settings shows, to compare with what
+    /// another device says this phone is.
+    pub fn identity_short(&self) -> Result<String, QurbError> {
+        Ok(self.identity()?.fingerprint().short())
+    }
+
     /// Devices this one trusts.
     pub fn peers(&self) -> Result<Vec<PeerInfo>, QurbError> {
         let engine = self.look()?;
@@ -3466,7 +3473,7 @@ pub struct QrCode {
 #[uniffi::export]
 pub fn engine_version() -> String {
     format!(
-        "engine {} · protocol {} · index schema {}",
+        "engine {}, protocol {}, index schema {}",
         env!("CARGO_PKG_VERSION"),
         String::from_utf8_lossy(qurb_peer::tls::ALPN),
         qurb_storage::db::SCHEMA_VERSION

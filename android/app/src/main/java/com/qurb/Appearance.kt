@@ -23,7 +23,7 @@ object Appearance {
     private const val THEME = "theme"
 
     enum class Theme(val words: String, val mode: Int) {
-        SYSTEM("As your phone is set", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM),
+        SYSTEM("Auto", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM),
         LIGHT("Light", AppCompatDelegate.MODE_NIGHT_NO),
         DARK("Dark", AppCompatDelegate.MODE_NIGHT_YES),
     }

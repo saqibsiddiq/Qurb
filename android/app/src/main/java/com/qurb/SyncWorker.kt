@@ -317,6 +317,14 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                 .apply()
         }
 
+        /** When the last background sync began, in Unix milliseconds. */
+        fun lastAt(context: Context): Long? =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(LAST_AT, 0L).takeIf { it > 0 }
+
+        /** What came of the last background sync: "up to date", "no device answered". */
+        fun lastResult(context: Context): String? =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(LAST_RESULT, null)
+
         /** When the last background sync ran and what came of it. */
         fun lastRun(context: Context): String? {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
