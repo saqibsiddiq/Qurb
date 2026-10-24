@@ -105,8 +105,54 @@ and choosing one in Devices is for what it keeps and where Send goes.
 - **The rule that a device serves read-only gets an exception.** It is to be
   written into `crates/peer/README.md` when built, with the tests a hostile
   peer would need to fail (`tests/hostile.rs`).
-- **A phone stops holding the shared area.** What happens to shared files
-  already on a phone at the upgrade, which today has the S23's test files and
-  nothing else, is to be decided when it is built.
+- **A phone stops holding the shared area.** Decided 2026-10-24, asked: each
+  shared file a computer keeps is dropped from the phone, and stays in that
+  computer's Shared folder; one only the phone has moves into its Vault, so
+  nothing is lost.
 - **Real time** means while both are connected. With the computer off, its
   folder cannot be opened, and nothing is queued for later.
+
+## Backups in a phone's folder there
+
+Asked 2026-10-24 how far the phone may change its backups -- WhatsApp, and the
+folders it backs up -- the owner chose: **opened, saved and sent like any
+file, and deleted once the original is gone from the phone.** Rename, move, a
+new folder and adding files are for the Private Vault part of the folder only.
+
+Why that and not more: a backup follows the phone's own file. While the
+original is on the phone, the next backup would put back a copy deleted or
+renamed on the computer, so offering it would be offering something that
+undoes itself.
+
+## Plan, 2026-10-24
+
+The shared folder and a phone's own folder are different work. The shared
+folder is the computer's own, plain files in a folder on its disk, so a change
+to it is one the computer makes when asked: the exception to read-only serving
+this decision names. A phone's folder there is the phone's vault, which the
+computer holds and the phone has the say over, so a change to it is the
+phone's, carried to the computer as its other changes are.
+
+In this order, each built with its tests before the next:
+
+1. **The shared folder, read** (item 6). A request listing a folder of it, to
+   the computer's own person's phones and to its guests, live; never to
+   another computer, which syncs it. Guests may fetch its files' bytes, which
+   they could not. Folders shared with only some devices stay theirs: a guest
+   is in no such list.
+2. **The shared folder, written** (item 6). Requests to make a folder, rename
+   or move, delete -- to the computer's Recently deleted, saying which device
+   did it -- and add a file, sent in pieces and checked against its hash
+   before it is put in place. Each made by the computer on its own folder, as
+   a change of its own, refused with a reason a person can read: a name
+   taken, a path outside the folder. Tested as a hostile peer would try it
+   (`tests/hostile.rs`): `..`, the store's own folder, another person's.
+3. **Searching** the shared folder, and a phone's own folder (item 4).
+4. **A phone's own folder, changed from the phone** (item 3): rename, move,
+   delete, a new folder, adding files, in its Private Vault; delete for a
+   backup whose original is gone (above). The phone's own vault changes, and
+   the computer follows at once while connected.
+5. **The phone leaves the shared area** (item 2), as decided above.
+6. **The app**: Files, drafts 3 and 4.
+
+Item 5, the device chosen on Home, was built with Home (draft 3).
