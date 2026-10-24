@@ -928,7 +928,10 @@ qurb/
 │       │                  ShowCode.kt         this phone showing a pairing code,
 │       │                                      its six digits, and Copy code
 │       │                  Approval.kt         a device asking to join, approved by
-│       │                                      the six digits both screens show
+│       │                                      the six digits both screens show;
+│       │                                      and, joining, the page that says
+│       │                                      where to approve (waiting_for.xml,
+│       │                                      setup's last step too)
 │       │                  ScreenLock.kt       the fingerprint, face or screen lock,
 │       │                                      before a computer may open this
 │       │                                      phone's folder there (0060)

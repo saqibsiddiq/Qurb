@@ -3,8 +3,8 @@
 **Status:** Accepted. Built in `crates/peer`, the phone's engine, the command
 line and the Android app's setup; tested in the peer crate and the phone's
 engine; checked on an emulator against `qurb pair`, and against a build from
-before it. Not used yet by the desktop window, nor by a phone that is already
-set up and pairing from Devices. Amends [0053](0053-approval-same-key-and-safe-copies.md).
+before it. Used by Android's setup and, since the same day, by a phone
+already set up joining from Devices; not yet by the desktop window. Amends [0053](0053-approval-same-key-and-safe-copies.md).
 **Date:** 2026-10-24
 
 ## What was asked

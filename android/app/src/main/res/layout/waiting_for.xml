@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Joining: the number this phone shows while the other device asks whether
+     to let it in (decision 0053), large, for the person to compare, and where
+     to approve it, by that device's name when it says it (decision 0074).
+     Setup's last step, and the page over Devices when this phone joins from
+     there (Pairing draft 1, Waiting for saqib); filled by Approval.fill. A
+     join cannot be called off midway, so there is no Cancel. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_horizontal"
+    android:orientation="vertical">
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="0.7" />
+
+    <com.qurb.StatusMark
+        android:id="@+id/waitMark"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/waitTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:accessibilityHeading="true"
+        android:gravity="center"
+        android:text="Approve on your other device"
+        android:textAppearance="@style/Text.Hero" />
+
+    <TextView
+        android:id="@+id/waitNumber"
+        android:layout_width="match_parent"
+        android:layout_height="82dp"
+        android:layout_marginTop="24dp"
+        android:background="@drawable/group_quiet"
+        app:fontFamily="@font/inter_semibold"
+        android:fontFeatureSettings="tnum"
+        android:gravity="center"
+        android:letterSpacing="0.08"
+        android:textColor="@color/text"
+        android:textSize="40sp" />
+
+    <TextView
+        android:id="@+id/waitSays"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:text="It shows this number too"
+        android:textAppearance="@style/Text.Meta" />
+
+    <Space
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+</LinearLayout>

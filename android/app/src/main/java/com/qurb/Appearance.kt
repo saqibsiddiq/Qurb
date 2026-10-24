@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
+import android.view.Window
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 
@@ -52,22 +53,26 @@ object Appearance {
      * stretched, it is one layer; the gradients are far too soft for the
      * stretch to show. Kept for the process, per size and light or dark.
      */
-    fun paintEnvironment(activity: Activity) {
-        val metrics = activity.resources.displayMetrics
+    fun paintEnvironment(activity: Activity) = paintEnvironment(activity, activity.window)
+
+    /** [paintEnvironment], for a window of [context]'s that is not an
+     *  activity's own: a page over the app, as joining from Devices is. */
+    fun paintEnvironment(context: Context, window: Window) {
+        val metrics = context.resources.displayMetrics
         val width = maxOf(1, metrics.widthPixels / ENVIRONMENT_SCALE)
         val height = maxOf(1, metrics.heightPixels / ENVIRONMENT_SCALE)
-        val night = (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+        val night = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES
         val key = Triple(width, height, night)
         val bitmap = environment?.takeIf { it.first == key }?.second ?: run {
-            val layers = ContextCompat.getDrawable(activity, R.drawable.environment) ?: return
+            val layers = ContextCompat.getDrawable(context, R.drawable.environment) ?: return
             Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { drawn ->
                 layers.setBounds(0, 0, width, height)
                 layers.draw(Canvas(drawn))
                 environment = key to drawn
             }
         }
-        activity.window.setBackgroundDrawable(BitmapDrawable(activity.resources, bitmap).apply { isFilterBitmap = true })
+        window.setBackgroundDrawable(BitmapDrawable(context.resources, bitmap).apply { isFilterBitmap = true })
     }
 
     /** How much smaller than the screen the environment is drawn. */

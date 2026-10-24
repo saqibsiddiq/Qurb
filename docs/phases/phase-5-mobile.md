@@ -2744,8 +2744,16 @@ model, and the six digits cannot be heard behind its NAT. *Use my key* was not
 checked: the emulator's Block Store kept no key across a reinstall. **Not yet
 run on the S23.**
 
-Not built yet: Files, the pairing approval on the device showing the code,
-sharing into Qurb, notifications, the desktop; and the engine work of
+Pairing is done to draft 1
+([details](../design/redesign.md#built-android-pairing-2026-10-24)): the
+approval on the phone showing a code, *Pair with saqib?* or *Let saqib join?*;
+the page while it joins from Devices, setup's, now named too; and *Open your
+folder on saqib?*. Checked on the emulator against the command line built for
+Android and run beside the app, approved, declined and swiped away; the folder
+ask only as a made-up one. **Not yet run on the S23.**
+
+Not built yet: Files, sharing into Qurb, notifications, the QR scanner, the
+desktop; and the engine work of
 [0073](../decisions/0073-the-phone-works-with-its-computer.md).
 
 ## Deliberately left undone

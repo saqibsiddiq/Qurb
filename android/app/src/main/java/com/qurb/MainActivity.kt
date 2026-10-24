@@ -772,17 +772,15 @@ class MainActivity : AppCompatActivity() {
         // Set by either button. A sheet swiped away instead is a "Not now":
         // otherwise this computer's asks would never be shown again here.
         var decided = false
+        // Pairing draft 1: what is asked, when it ends, and the one thing to
+        // check. The computer locks it again after ten minutes unused, or
+        // when it is locked there (crates/desktop, stream.rs).
         kit.sheet()
-            .header(R.drawable.ic_lock_keyhole, "Open your folder on ${ask.name}?",
-                "${ask.name} is asking")
-            // The owner's own computer keeps the folder unsealed, and says
-            // so; a computer this phone visits keeps it sealed (0067, 0060).
-            .text((if (ask.own) "${ask.name} keeps your backups, your WhatsApp and your Private Vault, and " +
-                "shows them only after you say yes here. Approve, and it can"
-                else "Your folder is kept on ${ask.name} sealed: it can't open it. Approve, and it can") +
-                " — for whoever is at that computer, until it's locked there, or ten minutes unused.\n\n" +
-                "Only approve if you're there and asked for it.")
-            .buttons("Open it there", secondary = "Not now", onSecondary = {
+            .mark(R.drawable.ic_lock_keyhole, fill = R.color.green_soft, tint = R.color.green)
+            .title("Open your folder on ${ask.name}?", centred = true)
+            .line("It locks itself after 10 minutes unused")
+            .warning("Only if you asked at ${ask.name}", R.drawable.ic_info, compact = true)
+            .buttons("Open", secondary = "Not now", onSecondary = {
                 decided = true
                 askShown = null
                 engine.declineOpen(ask.fingerprint)
@@ -897,12 +895,13 @@ class MainActivity : AppCompatActivity() {
                 if (code.length == 6) say("Looking for it on this Wi-Fi…")
                 // The other device asks its person to approve this phone: the
                 // number to compare is on this screen meanwhile (decision 0053).
-                val number = withContext(Dispatchers.IO) {
+                // And where to approve it, by name (decision 0074).
+                val with = withContext(Dispatchers.IO) {
                     Engine.hearingTheNetwork(this@MainActivity) {
-                        pairingWith(Engine.root(this@MainActivity).absolutePath, code).number
+                        pairingWith(Engine.root(this@MainActivity).absolutePath, code)
                     }
                 }
-                val showing = Approval.showWhileJoining(this@MainActivity, number)
+                val showing = Approval.showWhileJoining(this@MainActivity, with)
                 val peer = try {
                     withContext(Dispatchers.IO) { Engine.open(this@MainActivity).joinPairing(code) }
                 } finally {

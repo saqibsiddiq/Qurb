@@ -307,67 +307,14 @@
                 android:text="Restore" />
         </LinearLayout>
 
-        <!-- Joining: the number this phone shows while the other device asks
-             whether to let it in (decision 0053), large, for the person to
-             compare, and where to approve it, by that device's name when it
-             says it (decision 0074). A join cannot be called off midway, so
-             there is no Cancel. -->
-        <LinearLayout
+        <!-- Joining: the number to compare, and where to approve it. Its own
+             layout, since joining from Devices shows it too. -->
+        <include
             android:id="@+id/waitPanel"
+            layout="@layout/waiting_for"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:gravity="center_horizontal"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <Space
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="0.7" />
-
-            <com.qurb.StatusMark
-                android:id="@+id/waitMark"
-                android:layout_width="96dp"
-                android:layout_height="96dp"
-                android:importantForAccessibility="no" />
-
-            <TextView
-                android:id="@+id/waitTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:accessibilityHeading="true"
-                android:gravity="center"
-                android:text="Approve on your other device"
-                android:textAppearance="@style/Text.Hero" />
-
-            <TextView
-                android:id="@+id/waitNumber"
-                android:layout_width="match_parent"
-                android:layout_height="82dp"
-                android:layout_marginTop="24dp"
-                android:background="@drawable/group_quiet"
-                app:fontFamily="@font/inter_semibold"
-                android:fontFeatureSettings="tnum"
-                android:gravity="center"
-                android:letterSpacing="0.08"
-                android:textColor="@color/text"
-                android:textSize="40sp" />
-
-            <TextView
-                android:id="@+id/waitSays"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center"
-                android:text="It shows this number too"
-                android:textAppearance="@style/Text.Meta" />
-
-            <Space
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1" />
-        </LinearLayout>
+            android:visibility="gone" />
 
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/progress"

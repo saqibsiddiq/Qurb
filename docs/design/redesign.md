@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices, Settings, Backups, Activity and Setup** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup and Pairing** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -564,3 +564,67 @@ Block Store kept no key across a reinstall, though the S23's did on 2026-10-08.
 Also not checked: restoring from 24 real words, scanning a code, a phrase
 pasted into the boxes, and anything on the S23.
 
+
+## Built: Android Pairing (2026-10-24)
+
+Pairing draft 1 is in the app (`Approval.kt`, `waiting_for.xml`, and the folder
+ask in `MainActivity.kt`), all four of its screens:
+
+- **Pair with saqib?** and **Let saqib join?**, on the phone showing a code: a
+  sheet with the device's icon in a round green mark, the title, the number
+  large on the second surface, *The same number on saqib?* after a tick, and
+  Decline and Approve. *Let saqib join?* is for a device that takes this phone's
+  key, and says so in a chip, *It gets this phone's key*, under a key. Swiped
+  away, the sheet is a no; a code that lapses while it is up takes it away.
+- **Waiting for saqib**, joining from this phone: setup's page, moved to a
+  layout of its own (`waiting_for.xml`) so that Devices shows the same thing,
+  over the whole app. It had been a dialog, *Approve this phone on the other
+  device*.
+- **Open your folder on saqib?**: a lock in the round mark, the title, *It
+  locks itself after 10 minutes unused*, the chip *Only if you asked at
+  saqib*, and Not now and Open; then the screen lock, as before. It had been
+  four sentences.
+
+The chips are a size under the warning chip elsewhere, their words in the
+middle, as the design draws them (`Sheet.warning(compact = true)`).
+
+**Where it differs, and why:**
+
+- **"after 10 minutes unused", not "after 10 minutes".** The computer locks
+  the folder after ten minutes in which nothing used it, not ten minutes after
+  opening (`crates/desktop/src/stream.rs`); the design's words would promise
+  less time than there is.
+- **No Join back link and no Cancel on Waiting for saqib**, as in setup: the
+  engine cannot call a join off midway, and back does nothing there.
+- **Own or visited is no longer said.** The old ask told the owner's computer,
+  which keeps the folder unsealed, from one visited, which keeps it sealed. The
+  design says neither, and the app now follows it.
+- **A long name wraps the chip** onto two lines, centred, the icon at the
+  start. The design's names fit on one.
+
+**Checked** on the emulator (`qurb-34g`, light and dark), with the command line
+built for x86_64 Android and run on the emulator itself, beside the app. The
+emulator's NAT redirect does not reach its guest at 10.0.2.16, so a laptop
+could not reach the code the phone showed.
+
+- *Let a device join?* from a folder with no key, which told the phone's name
+  (`Who`, answered by the phone): declined, and the command line was told *the
+  other device said no*, with no key written; again with the same code,
+  approved, and that folder took the key. The numbers matched each time.
+- *Pair with Emu-Laptop?* from that folder, now holding the key: swiped away,
+  and the command line was told no.
+- Joining from Devices: *Approve on Emu-Laptop* over the app, back pressed and
+  nothing happening; approved there, paired; declined there, the page went and
+  *Could not connect: The other device said no.* followed. The long code was
+  handed to `joinWith` by a temporary, uncommitted patch.
+- Setup's last step from a phone cleared of its data, after the move to the
+  shared layout: *Approve on Emu-Laptop*, then Home.
+- *Open your folder on Scratch-Laptop?*, made up by the same patch, since no
+  computer asked. Not now answered it without failing. Open, and the screen
+  lock after it, were not checked here.
+
+**Not checked:** anything on the S23; the approval sheet going when the code
+lapses under it, five minutes on, which is from reading `Asker`; a computer
+really asking to open the folder; the desktop window showing a code to a phone, the usual case, since the
+desktop window is not redesigned yet. *Could not connect* is still the old
+dialog.

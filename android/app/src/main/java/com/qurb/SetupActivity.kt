@@ -111,7 +111,7 @@ class SetupActivity : AppCompatActivity() {
      */
     private val stepBack = object : androidx.activity.OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
-            if (views.waitPanel.visibility == View.VISIBLE) return
+            if (views.waitPanel.root.visibility == View.VISIBLE) return
             val inStep = views.digitsPanel.visibility == View.VISIBLE || views.restorePanel.visibility == View.VISIBLE
             show(if (inStep) views.joinPanel else null)
         }
@@ -120,7 +120,7 @@ class SetupActivity : AppCompatActivity() {
     /** One step, or Welcome for none. */
     private fun show(panel: View?) {
         views.welcome.visibility = if (panel == null) View.VISIBLE else View.GONE
-        for (p in listOf(views.joinPanel, views.digitsPanel, views.restorePanel, views.waitPanel)) p.visibility = View.GONE
+        for (p in listOf(views.joinPanel, views.digitsPanel, views.restorePanel, views.waitPanel.root)) p.visibility = View.GONE
         panel?.visibility = View.VISIBLE
         stepBack.isEnabled = panel != null
         if (panel != views.digitsPanel) hideKeyboard()
@@ -340,19 +340,10 @@ class SetupActivity : AppCompatActivity() {
             }
             // Where to approve, by name when the other device says it
             // (decision 0074); one from before then is "your other device".
-            val name = with.name
-            views.waitTitle.text = if (name != null) "Approve on $name" else "Approve on your other device"
-            views.waitSays.text = if (name != null) "$name shows this number too" else "It shows this number too"
-            views.waitNumber.text = with.number
-            views.waitNumber.contentDescription = with.number.replace(" ", "")
-            views.waitMark.show(StatusMark.Look.SYNCING, when (with.kind) {
-                "computer", "replica" -> R.drawable.mark_laptop
-                "phone" -> R.drawable.mark_smartphone
-                else -> R.drawable.mark_monitor_smartphone
-            })
+            Approval.fill(views.waitPanel, with)
             // The travelling ring is the waiting; the bar would say it twice.
             views.progress.visibility = View.GONE
-            show(views.waitPanel)
+            show(views.waitPanel.root)
             Engine.join(this, code)
         }
     }

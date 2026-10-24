@@ -1162,24 +1162,33 @@ class Sheet(private val app: AppCompatActivity, private val kit: Kit) {
         return this
     }
 
-    /** The one warning a choice carries, as a chip the width of the sheet. */
-    fun warning(words: String, @DrawableRes icon: Int = R.drawable.ic_triangle_alert): Sheet {
+    /**
+     * The one warning a choice carries, as a chip the width of the sheet.
+     * [compact]: a size smaller and its words in the middle, under a number
+     * to compare (Pairing draft 1).
+     */
+    fun warning(words: String, @DrawableRes icon: Int = R.drawable.ic_triangle_alert, compact: Boolean = false): Sheet {
         val chip = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            gravity = if (compact) Gravity.CENTER else Gravity.CENTER_VERTICAL
             background = ContextCompat.getDrawable(app, R.drawable.warning)
-            setPadding(kit.dp(16), kit.dp(14), kit.dp(16), kit.dp(14))
+            if (compact) setPadding(kit.dp(14), kit.dp(12), kit.dp(14), kit.dp(12))
+            else setPadding(kit.dp(16), kit.dp(14), kit.dp(16), kit.dp(14))
         }
+        val side = kit.dp(if (compact) 18 else 20)
         chip.addView(ImageView(app).apply {
             setImageResource(icon)
             imageTintList = ColorStateList.valueOf(kit.color(R.color.attention))
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(kit.dp(20), kit.dp(20)).apply { marginEnd = kit.dp(10) })
+        }, LinearLayout.LayoutParams(side, side).apply { marginEnd = kit.dp(if (compact) 8 else 10) })
         chip.addView(TextView(app).apply {
             text = words
             setTextAppearance(R.style.Text_Name)
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        return view(chip, top = 18)
+            // A long name wraps it: its lines stay in the middle too.
+            if (compact) gravity = Gravity.CENTER_HORIZONTAL
+        }, if (compact) LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        else LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return view(chip, top = if (compact) 12 else 18)
     }
 
     /**
