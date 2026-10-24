@@ -780,8 +780,7 @@ setup and in Devices, and for *Visit a computer*:
 
 **Found on the way, and fixed:** the scanner took only codes beginning
 `qurb1-`, so a guest code, `qurbg1-`, was looked past without a word, and
-*Visit a computer* by scanning could never work. It takes both now. Typing or
-pasting a guest code was not affected.
+*Visit a computer* by scanning could never work. It takes both now.
 
 **Checked** on the emulator (`qurb-34g`, its emulated back camera): looking,
 with the veil over the camera's picture and the torch; found, the corners
