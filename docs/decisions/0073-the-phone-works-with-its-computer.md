@@ -4,8 +4,9 @@
 day: every step of the plan below -- the shared folder read, written and
 searched; the phone's own folder there changed from the phone; the phone out
 of the shared area; and Files, drafts 3 and 4 -- with the gaps under
-*Progress*. The desktop window is not changed yet, and the owner's own S23 and
-laptop do not run it yet. The screens are in the Figma redesign
+*Progress*. The desktop window is not changed yet. The owner's S23 and
+laptop run it since 2026-10-25, 00:07; what the S23 did leaving the shared
+area is not yet read from it. The screens are in the Figma redesign
 ([design/redesign.md](../design/redesign.md), *Files, draft 2* onwards). Amends
 [0067](0067-a-folder-for-each-person.md), whose phone could only browse its
 folder on the computer, and makes one exception to the rule that a device
@@ -370,5 +371,18 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   showed until opened again or pulled, as every page in the app does;
   Received misses a send older than the last 500 happenings; `FilesScreen.kt`
   still carries the shared area's browsing, which nothing opens now; the
-  desktop window; and the S23 and the owner's laptop, which run builds from
-  before this.
+  desktop window; and on the S23 and the owner's laptop, which run it since
+  2026-10-25 (below), all of it but the installing.
+- **On the owner's S23 and laptop, 2026-10-25.** Before installing, the
+  laptop's `qurb ls` showed none of its 17 shared files held there -- 15 on
+  no device, 2 *not here*, freed on 2026-09-29 -- which is what made leaving
+  wait on a computer's confirmed word (step 5). The laptop's `install.sh`
+  copies were replaced with a release build of `bacf491` and the window
+  started again at 00:06, the same folder, index schema 27 before and after,
+  the S23 still paired; the fast build of the same commit installed on the
+  S23 over its data at 00:07, over wireless debugging, while it was in use,
+  without touching its screen. The S23 reached the laptop after that, so
+  the new app has opened, and the laptop recorded no deletion from it.
+  **Not yet read:** the S23's log line *left the shared area* and its three
+  counts -- wireless debugging went off before it was looked for -- and Files
+  on the S23 as it now is.

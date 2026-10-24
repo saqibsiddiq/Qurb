@@ -947,4 +947,4 @@ the computer, where *Download* brought its 21 bytes to the phone from the
 computer.
 
 **Not checked:** a backup's file deleted from the phone's folder; any of this
-on the S23, which runs a build from before it.
+on the S23, which runs it since 2026-10-25 but has not been looked at.

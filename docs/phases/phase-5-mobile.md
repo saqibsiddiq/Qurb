@@ -2813,9 +2813,11 @@ engine's tests and again in the app on the emulator. And, as 0073 has it,
 in the computer's Recently deleted too, so that a lost phone's deletions can
 be undone there: restored on the computer, the file is back in the phone's
 folder there and the phone takes it back at its next sync, a new sync step
-that takes back only the very file the phone deleted. **Not run on the S23**, which, like the owner's
-laptop, runs a build from before this; installing it there takes the S23 out
-of the shared area, so it waits on the owner.
+that takes back only the very file the phone deleted. Installed on the S23
+and the owner's laptop on 2026-10-25 at the owner's word, after the change
+above; the S23 has synced with the laptop since, and what it did leaving
+the shared area is **not yet read** from its log
+([0073](../decisions/0073-the-phone-works-with-its-computer.md), *Progress*).
 
 Not built yet: the folders to back up as a tree, the desktop, and a new
 folder in the phone's folder on a computer
