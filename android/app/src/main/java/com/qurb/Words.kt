@@ -75,38 +75,6 @@ object Words {
     /** When a device was last here, in the desktop's words. */
     fun seen(lastSeen: Long?) = lastSeen?.let { "Last seen ${ago(it)}" } ?: "Not connected yet"
 
-    /**
-     * One entry of history: its icon, its subject -- the file, or the device
-     * for a pairing -- and what happened, in words rather than the engine's
-     * event names.
-     */
-    fun happened(h: Happening): Triple<Int, String, String> {
-        val subject = h.path?.substringAfterLast('/') ?: h.device ?: ""
-        val who = h.device ?: "another device"
-        val (icon, what) = when (h.kind) {
-            "stored" -> R.drawable.ic_hard_drive to "Saved on this phone"
-            "deleted" -> R.drawable.ic_trash_2 to "Deleted"
-            "received" -> R.drawable.ic_download to
-                if (h.detail?.startsWith("sent to this device") == true) "Sent to you by $who" else "Arrived from $who"
-            "sent" -> R.drawable.ic_send to "Ready for $who"
-            "collected" -> R.drawable.ic_circle_check to "Collected by $who"
-            "evicted" -> R.drawable.ic_cloud_off to "Local space freed"
-            "restored" -> R.drawable.ic_rotate_ccw to "Restored"
-            "conflicted" -> R.drawable.ic_git_compare to "Changed here and on $who"
-            // True of a guest or a computer this phone visits as well as of
-            // this person's own devices, and worded as the desktop words it.
-            "paired" -> R.drawable.ic_monitor_smartphone to "Paired with this phone"
-            "removed" -> R.drawable.ic_x to "Removed from this phone"
-            "cancelled" -> R.drawable.ic_x to "Send cancelled"
-            "failed" -> R.drawable.ic_circle_alert to "Didn't finish"
-            else -> R.drawable.ic_info to h.kind
-        }
-        // The detail only where it adds something: why it failed. A
-        // connection's detail is the device's name, which the subject says.
-        val extra = h.detail?.takeIf { h.kind == "failed" && it.isNotBlank() }
-        return Triple(icon, subject, listOfNotNull(what, ago(h.at), extra).joinToString("  ·  "))
-    }
-
     /** What a finished transfer somebody meant came to, or null for sync. */
     fun finished(h: Happening): String? {
         val who = h.device ?: "another device"

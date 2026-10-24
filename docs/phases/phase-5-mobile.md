@@ -2694,7 +2694,7 @@ Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
   too: such a clash is refused on every pass until one of the names changes.
 - **Not done:** nothing has been run on a hotspot or on mobile data.
 
-## The redesign, built: Home, Devices and Settings, 2026-10-24
+## The redesign, built: Home, Devices, Settings, Backups and Activity, 2026-10-24
 
 The Figma redesign ([design/redesign.md](../design/redesign.md)) is being
 built, Android first. Home is done to draft 3: one device chosen on Home, its
@@ -2721,7 +2721,10 @@ explains: the name is shown, not changed; Recently deleted stays until Files
 has it; the shared files' settings wait under Advanced
 ([details](../design/redesign.md#built-android-settings-2026-10-24)).
 
-Not built yet: Files, Activity, the full Backups page, setup,
+Backups and Activity are done to draft 1
+([details](../design/redesign.md#built-android-backups-and-activity-2026-10-24)).
+
+Not built yet: Files, setup,
 pairing approval, sharing into Qurb, notifications, the desktop; and the
 engine work of [0073](../decisions/0073-the-phone-works-with-its-computer.md).
 

@@ -891,9 +891,12 @@ qurb/
 │       │                                      device as a chip that chooses
 │       │                                      another, Sync and Send, what is
 │       │                                      waiting while anything is (0073)
-│       │                  BackupsScreen.kt    Backups, from Home's top bar: an
-│       │                                      interim page of WhatsApp and the
-│       │                                      folders
+│       │                  BackupsScreen.kt    Backups, from Home's top bar: the
+│       │                                      device chosen on Home, and what goes
+│       │                                      to it, a card each
+│       │                  Keeping.kt          keeping the Private Vault on a
+│       │                                      device, and stopping, asked alike
+│       │                                      from Backups and a device's page
 │       │                  FilesScreen.kt      Files and Private Vault: one browser,
 │       │                                      two areas, each file's state
 │       │                  DevicesScreen.kt    the devices as cards: on or off, and
@@ -905,9 +908,8 @@ qurb/
 │       │                                      connection
 │       │                  AdvancedScreen.kt   rendezvous, relay, version; for now
 │       │                                      the shared files' settings too
-│       │                  Backups.kt          the backups' lines and WhatsApp's
-│       │                                      sheets, for Backups, a device's
-│       │                                      page and Settings alike
+│       │                  Backups.kt          a backup's state for its card, and
+│       │                                      WhatsApp's details and setting up
 │       │                  FoldersScreen.kt    Your folders: which of the phone's
 │       │                                      folders back up, chosen here (0063)
 │       │                  KeptScreen.kt       Your folder on saqib: what the
@@ -917,7 +919,8 @@ qurb/
 │       │                  StreamProvider.kt   a large file of it opened in another
 │       │                                      app as it arrives, seekable, read
 │       │                                      a chunk at a time
-│       │                  ActivityScreen.kt   everything this phone did, from Home
+│       │                  ActivityScreen.kt   everything this phone did, by day,
+│       │                                      from the clock on Home
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
 │       │                                      change your mind
 │       │                  ShowCode.kt         this phone showing a pairing code,

@@ -37,6 +37,7 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
     override val tab = R.id.tab_devices
 
     private val backups = Backups(app) { refresh() }
+    private val keeping = Keeping(app) { refresh() }
 
     init {
         views.back.visibility = View.VISIBLE
@@ -162,11 +163,7 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
             }
         }
         kit.setting(card, R.drawable.ic_lock_keyhole, "Private Vault", on = state.keeps, onChange = { on ->
-            when {
-                on && host -> keepWithHost()
-                on -> keep()
-                else -> stopKeeping()
-            }
+            if (on) keeping.keep(peer) else keeping.stop(peer)
         })
 
         page.addView(kit.button(if (host) "Stop visiting" else "Remove", Kit.Style.SECONDARY) { askToRemove() },
@@ -184,41 +181,6 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
         kit.setting(facts, R.drawable.ic_clock, "Paired", Words.ago(peer.pairedAt))
         if (peer.relation == "host") kit.setting(facts, R.drawable.ic_laptop, "Someone else's", "You visit as a guest")
         kit.sheet().title(peer.name).view(facts, top = 14).show()
-    }
-
-    private fun keep() {
-        kit.sheet()
-            .mark(R.drawable.ic_lock_keyhole, R.color.green_soft, R.color.green)
-            .title("Keep your Private Vault on ${peer.name}?", centred = true)
-            .line("Nobody using ${peer.name} sees it. This phone can then free its own copies.")
-            .buttons("Keep it there") { setKeeping(true) }
-            // However it closes, the switch goes back to what is so.
-            .onDismiss { refresh() }
-            .show()
-    }
-
-    /** On a computer of another person: sealed, and nothing kept here (decision 0060). */
-    private fun keepWithHost() {
-        kit.sheet()
-            .mark(R.drawable.ic_lock_keyhole, R.color.green_soft, R.color.green)
-            .title("Keep your files on ${peer.name}?", centred = true)
-            .line("Sealed on this phone first: whoever uses ${peer.name} can't open them or see their names.")
-            .warning("It's their computer: they can delete what it keeps")
-            .buttons("Keep them there") { setKeeping(true) }
-            // However it closes, the switch goes back to what is so.
-            .onDismiss { refresh() }
-            .show()
-    }
-
-    private fun stopKeeping() {
-        kit.sheet()
-            .mark(R.drawable.ic_lock_keyhole, R.color.neutral_bg, R.color.neutral)
-            .title("Stop keeping it on ${peer.name}?", centred = true)
-            .line("Nothing new goes there. What it has, it keeps.")
-            .buttons("Stop") { setKeeping(false) }
-            // However it closes, the switch goes back to what is so.
-            .onDismiss { refresh() }
-            .show()
     }
 
     /**
@@ -271,22 +233,6 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
             } catch (e: Exception) {
                 app.fail("Could not remove it", e)
             } finally {
-                app.changed()
-            }
-        }
-    }
-
-    private fun setKeeping(keep: Boolean) {
-        scope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    if (keep) engine().addHolder(peer.fingerprint) else engine().removeHolder(peer.fingerprint)
-                }
-                // The next sync is now: choosing a device to keep the vault is
-                // a change it should act on while the person is looking.
-                if (keep) app.madeChange() else app.changed()
-            } catch (e: Exception) {
-                app.fail("Could not change that", e)
                 app.changed()
             }
         }

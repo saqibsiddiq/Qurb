@@ -524,6 +524,239 @@ class Kit(private val app: MainActivity) {
         return row
     }
 
+    /** What happened to a file, as the small badge on its tile (the redesign's What). */
+    enum class What(@DrawableRes val icon: Int, val fill: Int, val tint: Int, val words: String) {
+        ARRIVED(R.drawable.ic_arrow_down, R.color.healthy, R.color.surface, "arrived"),
+        SENT(R.drawable.ic_arrow_up, R.color.green, R.color.surface, "sent"),
+        DELETED(R.drawable.ic_trash_2, R.color.error_bg, R.color.error, "deleted"),
+        CHANGED(R.drawable.ic_pencil, R.color.neutral_bg, R.color.neutral, "changed"),
+        TWO_VERSIONS(R.drawable.ic_git_compare, R.color.attention, R.color.surface, "two versions"),
+        FREED(R.drawable.ic_cloud_off, R.color.neutral_bg, R.color.neutral, "space freed"),
+        RESTORED(R.drawable.ic_rotate_ccw, R.color.neutral_bg, R.color.neutral, "restored"),
+        PAIRED(R.drawable.ic_plus, R.color.green, R.color.surface, "paired"),
+        STOPPED(R.drawable.ic_x, R.color.neutral_bg, R.color.neutral, "stopped"),
+        FAILED(R.drawable.ic_circle_alert, R.color.error, R.color.surface, "failed"),
+    }
+
+    /**
+     * One thing that happened (the redesign's Activity row): the file's icon
+     * in a tile with a badge for what happened, its name, the device involved
+     * by its icon and name, and the time at the end.
+     */
+    fun activityRow(
+        parent: ViewGroup,
+        @DrawableRes icon: Int,
+        what: What,
+        name: String,
+        @DrawableRes deviceIcon: Int?,
+        device: String,
+        time: String,
+    ): View {
+        val row = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(60)
+            setPadding(dp(4), 0, dp(4), 0)
+            contentDescription = "$name, ${what.words}, $device, $time"
+        }
+        val corner = FrameLayout(app).apply { clipChildren = false }
+        val tile = FrameLayout(app).apply { background = ContextCompat.getDrawable(app, R.drawable.card_small) }
+        tile.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER))
+        corner.addView(tile, FrameLayout.LayoutParams(dp(40), dp(40), Gravity.TOP or Gravity.START))
+        val badge = FrameLayout(app).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(color(what.fill))
+                setStroke(dp(2), color(R.color.bg))
+            }
+        }
+        badge.addView(ImageView(app).apply {
+            setImageResource(what.icon)
+            imageTintList = ColorStateList.valueOf(color(what.tint))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(dp(11), dp(11), Gravity.CENTER))
+        corner.addView(badge, FrameLayout.LayoutParams(dp(20), dp(20), Gravity.BOTTOM or Gravity.END))
+        row.addView(corner, LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginEnd = dp(10) })
+
+        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(TextView(app).apply {
+            text = name
+            setTextAppearance(R.style.Text_Name)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+        })
+        val who = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        if (deviceIcon != null) who.addView(ImageView(app).apply {
+            setImageResource(deviceIcon)
+            imageTintList = ColorStateList.valueOf(color(R.color.text_3))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(13), dp(13)).apply { marginEnd = dp(4) })
+        who.addView(TextView(app).apply {
+            text = device
+            setTextAppearance(R.style.Text_Meta)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        words.addView(who, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(2) })
+        row.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(TextView(app).apply {
+            text = time
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(color(R.color.text_2))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { marginStart = dp(10) })
+        parent.addView(row)
+        return row
+    }
+
+    /** A backup's state, said with an icon and a few words, and a bar while it runs. */
+    class Progress(@DrawableRes val icon: Int, val words: String, val done: Float? = null)
+
+    /**
+     * One backup as a card (the redesign's Backups): its icon in a green
+     * tile, its name, its state under it with a bar while it runs, and at the
+     * end a switch ([on] not null) or an arrow ([onTap]).
+     */
+    fun backupCard(
+        parent: ViewGroup,
+        @DrawableRes icon: Int,
+        name: String,
+        state: Progress,
+        on: Boolean? = null,
+        onChange: ((Boolean) -> Unit)? = null,
+        onTap: (() -> Unit)? = null,
+    ): View {
+        val card = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.card)
+            foreground = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            minimumHeight = dp(78)
+            setPadding(dp(16), dp(14), dp(14), dp(14))
+        }
+        val tile = FrameLayout(app).apply { background = ContextCompat.getDrawable(app, R.drawable.tile_soft) }
+        tile.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(color(R.color.green))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+        card.addView(tile, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(14) })
+        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(TextView(app).apply {
+            text = name
+            setTextAppearance(R.style.Text_Name)
+        })
+        val status = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        status.addView(ImageView(app).apply {
+            setImageResource(state.icon)
+            imageTintList = ColorStateList.valueOf(color(
+                if (state.icon == R.drawable.ic_circle_check) R.color.healthy else R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) })
+        status.addView(TextView(app).apply {
+            text = state.words
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(color(R.color.text_2))
+        })
+        words.addView(status, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(6) })
+        if (state.done != null) words.addView(
+            android.widget.ProgressBar(app, null, android.R.attr.progressBarStyleHorizontal).apply {
+                progressDrawable = ContextCompat.getDrawable(app, R.drawable.progress_bar)
+                max = 1000
+                progress = (state.done.coerceIn(0f, 1f) * 1000).toInt()
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6)).apply { topMargin = dp(6) },
+        )
+        card.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        card.contentDescription = "$name, ${state.words}"
+        if (on != null) {
+            val toggle = com.google.android.material.materialswitch.MaterialSwitch(app).apply {
+                isChecked = on
+                thumbTintList = ContextCompat.getColorStateList(app, R.color.switch_thumb)
+                trackTintList = ContextCompat.getColorStateList(app, R.color.switch_track)
+                contentDescription = name
+                setOnCheckedChangeListener { _, checked -> onChange?.invoke(checked) }
+            }
+            card.addView(toggle, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { marginStart = dp(8) })
+            card.setOnClickListener { toggle.toggle() }
+        } else if (onTap != null) {
+            card.addView(ImageView(app).apply {
+                setImageResource(R.drawable.ic_chevron_right)
+                imageTintList = ColorStateList.valueOf(color(R.color.text_3))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginStart = dp(8) })
+            card.setOnClickListener { onTap() }
+        } else {
+            card.foreground = null
+        }
+        parent.addView(card, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { if (parent.childCount > 0) topMargin = dp(12) })
+        return card
+    }
+
+    /** A note to keep in mind, as a chip the width of the page: the one sentence a page keeps. */
+    fun note(parent: ViewGroup, words: String, top: Int = 14): View {
+        val chip = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.warning)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+        }
+        chip.addView(ImageView(app).apply {
+            setImageResource(R.drawable.ic_info)
+            imageTintList = ColorStateList.valueOf(color(R.color.attention))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginEnd = dp(10) })
+        chip.addView(TextView(app).apply {
+            text = words
+            setTextAppearance(R.style.Text_Quiet)
+            setTextColor(color(R.color.text))
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        parent.addView(chip, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(top) })
+        return chip
+    }
+
+    /**
+     * The devices to choose from, as cards, the chosen one ticked, and one
+     * more that adds a device (Home draft 3; the owner, 2026-10-24: "choose a
+     * device in home page"). From Home, and from Backups, which shows the same
+     * device. Every device goes on syncing whichever is chosen.
+     */
+    fun chooseDevice(peers: List<PeerInfo>, chosen: PeerInfo, onChosen: () -> Unit) {
+        val sheet = sheet()
+        val cards = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        for (peer in peers) {
+            deviceCard(cards, peer, Engine.isOff(app, peer), peer.fingerprint == chosen.fingerprint) {
+                sheet.dismiss()
+                Engine.choose(app, peer.fingerprint)
+                onChosen()
+            }
+        }
+        addCard(cards, "Add a device") {
+            sheet.dismiss()
+            app.pair()
+        }
+        sheet.view(cards, top = 0).show()
+    }
+
     /**
      * Something on its way, in a queue (the redesign's Queue row): its icon,
      * its name, how much of it, and, where how far it has got is known, a
@@ -905,10 +1138,13 @@ class Sheet(private val app: MainActivity, private val kit: Kit) {
         return this
     }
 
-    /** A mark in the middle, over a centred title: what a grave choice is about. */
-    fun mark(@DrawableRes icon: Int, fill: Int = R.color.error_bg, tint: Int = R.color.error): Sheet {
+    /**
+     * A mark in the middle, over a centred title: what a grave choice is
+     * about, round; or what a sheet is about, in a rounded tile ([round] false).
+     */
+    fun mark(@DrawableRes icon: Int, fill: Int = R.color.error_bg, tint: Int = R.color.error, round: Boolean = true): Sheet {
         val disc = FrameLayout(app).apply {
-            background = ContextCompat.getDrawable(app, R.drawable.round)
+            background = ContextCompat.getDrawable(app, if (round) R.drawable.round else R.drawable.tile_mark)
             backgroundTintList = ColorStateList.valueOf(kit.color(fill))
         }
         disc.addView(ImageView(app).apply {

@@ -126,7 +126,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         }
 
         views.device.removeAllViews()
-        if (chosen != null) views.device.addView(kit.deviceChip(chosen, off) { chooseDevice(state, chosen) })
+        if (chosen != null) views.device.addView(kit.deviceChip(chosen, off) { kit.chooseDevice(state.peers, chosen) { refresh() } })
         views.device.visibility = if (chosen == null) View.GONE else View.VISIBLE
         views.actions.visibility = if (chosen == null) View.GONE else View.VISIBLE
         views.add.visibility = if (chosen == null) View.VISIBLE else View.GONE
@@ -231,28 +231,6 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                 .setInterpolator(android.view.animation.OvershootInterpolator(2f)).start()
         }
         lastTitle = title
-    }
-
-    /**
-     * The devices to choose from, as cards, the chosen one ticked, and one
-     * more that adds a device (Home draft 3; the owner, 2026-10-24: "choose a
-     * device in home page"). Every device goes on syncing whichever is chosen.
-     */
-    private fun chooseDevice(state: State, chosen: PeerInfo) {
-        val sheet = kit.sheet()
-        val cards = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        for (peer in state.peers) {
-            kit.deviceCard(cards, peer, Engine.isOff(app, peer), peer.fingerprint == chosen.fingerprint) {
-                sheet.dismiss()
-                Engine.choose(app, peer.fingerprint)
-                refresh()
-            }
-        }
-        kit.addCard(cards, "Add a device") {
-            sheet.dismiss()
-            app.pair()
-        }
-        sheet.view(cards, top = 0).show()
     }
 
     private fun choose(conflicts: List<ConflictInfo>) {

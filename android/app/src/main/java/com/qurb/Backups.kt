@@ -1,98 +1,123 @@
 package com.qurb
 
+import android.view.Gravity
+import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.core.content.ContextCompat
 import uniffi.qurb_mobile.BackupState
 
 /**
  * The phone's backups to the computer that keeps its Private Vault, said the
  * same way wherever they are reached: WhatsApp's (decision 0062) and the
- * phone's folders (0063), from Home and from Settings (the owner's items 8 and
- * 10, 2026-10-14). The folders have a place of their own, [FoldersScreen].
+ * phone's folders (0063). As redesigned (docs/design/redesign.md, Backups
+ * and Activity, draft 1): a card's state in an icon and a few words, a bar
+ * while one runs; WhatsApp's details and its setting up as sheets of facts.
+ *
+ * One sentence is kept wherever WhatsApp's backup is shown or set up: keep
+ * WhatsApp's own Google backup on too. Restoring from the computer has not
+ * been tried (decision 0062), and until it has, nothing here suggests
+ * turning Google's off.
  */
 class Backups(private val app: MainActivity, private val refresh: () -> Unit) {
 
     private val kit get() = app.kit
 
-    /** The folders' line: how many, and how far the computer has them. */
-    fun foldersLine(chosen: Int, backup: BackupState, keeper: String?): String = when {
-        !Folders.allowed(app) -> "Off. Photos, documents, any folder, kept on ${keeper ?: "your computer"}"
-        chosen == 0 -> "Choose which, here or on ${keeper ?: "your computer"}"
-        backup.files == 0uL -> "${Words.folders(chosen)}: starting, on Wi-Fi"
-        backup.heldFiles == backup.files ->
-            "${Words.folders(chosen)}, all ${Words.files(backup.files.toInt())}, on $keeper"
-        else -> "${Words.folders(chosen)}: ${Words.count(backup.heldFiles)} of ${Words.files(backup.files.toInt())} " +
-            "on ${keeper ?: "your computer"} so far"
-    }
-
-    fun whatsAppLine(backup: BackupState, keeper: String?, backing: Boolean): String = when {
-        !backing -> "Off. Keeps WhatsApp's chats and media on ${keeper ?: "your computer"} " +
-            "instead of in your Google account"
-        backup.files == 0uL -> "Starting: it runs on Wi-Fi"
-        backup.heldFiles == backup.files ->
-            "All ${Words.files(backup.files.toInt())}, ${Words.size(backup.bytes)}, on $keeper"
-        else -> "${Words.count(backup.heldFiles)} of ${Words.files(backup.files.toInt())} on ${keeper ?: "your computer"} so far"
+    /** A backup's state for its card: off, starting, how many to go, or up to date. */
+    fun progress(backup: BackupState, on: Boolean, none: String = "Off"): Kit.Progress = when {
+        !on -> Kit.Progress(R.drawable.ic_info, none)
+        backup.files == 0uL -> Kit.Progress(R.drawable.ic_history, "Starting, on Wi-Fi")
+        backup.heldFiles < backup.files -> Kit.Progress(R.drawable.ic_history,
+            "${Words.count(backup.files - backup.heldFiles)} files to go",
+            backup.heldFiles.toFloat() / backup.files.toFloat())
+        else -> Kit.Progress(R.drawable.ic_circle_check, "${Words.size(backup.bytes)}, up to date")
     }
 
     /** Setting the backup up, or what it is doing (decision 0062). */
     fun whatsApp(backup: BackupState, keeper: String?, backing: Boolean) {
         if (!backing) {
-            val sheet = kit.sheet().header(R.drawable.ic_hard_drive, "Back up WhatsApp",
-                keeper?.let { "To $it" } ?: "")
+            val sheet = kit.sheet()
+                .mark(R.drawable.ic_whatsapp, R.color.green_soft, R.color.green, round = false)
+                .title("Back up WhatsApp", centred = true)
             if (keeper == null) {
-                sheet.text("No computer keeps this phone's Private Vault yet. Choose one in Devices: " +
-                    "the backup goes to it.")
-                    .buttons("Devices") { app.go(R.id.tab_devices) }
+                sheet.line("No device keeps this phone's Private Vault yet: the backup goes to it")
+                    .buttons("Devices", secondary = "Not now") { app.go(R.id.tab_devices) }
                     .show()
                 return
             }
-            sheet.text("WhatsApp's chats, photos, videos and documents, kept on $keeper in this phone's " +
-                "Private Vault: out of sight there, and nothing copied on this phone. Photos and videos " +
-                "you delete in WhatsApp stay on $keeper.", R.style.Text_Body)
-                .text("Over Wi-Fi only. The first time is everything WhatsApp keeps; after that, " +
-                    "what changed each night.")
-                // Decision 0062, answer 4: said where it is set up, and again
-                // below, until a restore has been watched working.
-                .text("Restoring WhatsApp from it hasn't been tried yet, so keep WhatsApp's own Google " +
-                    "backup on for now. Turning off Include videos there saves the most space.")
-                .text("Next, Android opens WhatsApp's folder: choose Use this folder, then Allow.")
-                // Short: on the S23's 360 dp, "Choose WhatsApp's folder" broke
-                // over two lines inside the button.
-                .buttons("Choose folder", secondary = "Not now") { app.pickWhatsApp() }
+            sheet.view(where(R.drawable.ic_laptop, "To $keeper, on Wi-Fi"), top = 4)
+            // The two steps Android asks for, named before it asks.
+            val steps = facts()
+            kit.setting(steps, R.drawable.ic_folder, "Next, choose WhatsApp's folder")
+            kit.setting(steps, R.drawable.ic_circle_check, "Then tap Allow")
+            sheet.view(steps, top = 16)
+            // Decision 0062, answer 4: said where it is set up, and on the
+            // page, until a restore has been watched working.
+            kit.note(sheet.body, "Keep WhatsApp's own Google backup on too", top = 12)
+            sheet.buttons("Choose folder", secondary = "Not now") { app.pickWhatsApp() }
                 .show()
             return
         }
 
-        val sheet = kit.sheet().header(R.drawable.ic_hard_drive, "WhatsApp backup",
-            keeper?.let { "On $it" } ?: "No computer keeps it yet")
-        val facts = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        val group = kit.group(facts)
-        kit.item(group, "On ${keeper ?: "a computer"}",
-            if (backup.files == 0uL) "Nothing yet"
-            else "${Words.count(backup.heldFiles)} of ${Words.files(backup.files.toInt())}, " +
-                "${Words.size(backup.heldBytes)} of ${Words.size(backup.bytes)}")
+        val facts = facts()
+        kit.setting(facts, R.drawable.ic_circle_check, "Files",
+            if (backup.heldFiles < backup.files) "${Words.count(backup.heldFiles)} of ${Words.count(backup.files)}"
+            else Words.count(backup.files))
+        kit.setting(facts, R.drawable.ic_download, "Size", Words.size(backup.bytes))
         if (backup.onlyKept > 0uL) {
-            kit.item(group, "Deleted in WhatsApp", "${Words.files(backup.onlyKept.toInt())}, kept on $keeper")
+            kit.setting(facts, R.drawable.ic_trash_2, "Deleted in WhatsApp", "${Words.count(backup.onlyKept)} kept")
         }
-        kit.item(group, "Last run", WhatsApp.lastRun(app)?.let { (at, said) -> "${Words.ago(at)}: $said" }
-            ?: "Not yet. It runs on Wi-Fi.")
-        sheet.view(facts, top = 16)
-            .text("Restoring WhatsApp from it hasn't been tried yet: keep WhatsApp's own Google backup on " +
-                "for now.")
-            .action(R.drawable.ic_refresh_cw, "Back up now", meta = "On Wi-Fi") {
+        kit.setting(facts, R.drawable.ic_history, "Last",
+            WhatsApp.lastRun(app)?.let { (at, _) -> Words.ago(at) } ?: "Not yet")
+        kit.setting(facts, R.drawable.ic_wifi, "Runs on", "Wi-Fi")
+        kit.sheet()
+            .mark(R.drawable.ic_whatsapp, R.color.green_soft, R.color.green, round = false)
+            .title("WhatsApp", centred = true)
+            .apply { if (keeper != null) view(where(R.drawable.ic_laptop, "On $keeper"), top = 4) }
+            .view(facts, top = 16)
+            .buttons("Back up now", secondary = "Stop", onSecondary = { stopWhatsApp(keeper) }) {
                 WhatsApp.runNow(app)
                 app.say("Backing up WhatsApp on Wi-Fi")
             }
-            .action(R.drawable.ic_x, "Stop backing up…", danger = true) { stopWhatsApp(keeper) }
             .show()
     }
 
     fun stopWhatsApp(keeper: String?) {
-        kit.sheet().header(R.drawable.ic_hard_drive, "Stop backing up WhatsApp?")
-            .text("Nothing new goes to ${keeper ?: "the computer"}. What it keeps already stays there.")
+        kit.sheet()
+            .mark(R.drawable.ic_whatsapp)
+            .title("Stop backing up WhatsApp?", centred = true)
+            .line("What ${keeper ?: "the computer"} keeps stays there")
             .buttons("Stop", danger = true) {
                 WhatsApp.stop(app)
                 refresh()
             }
+            .onDismiss { refresh() }
             .show()
+    }
+
+    /** Facts in a sheet, on the second surface. */
+    private fun facts(): LinearLayout = LinearLayout(app).apply {
+        orientation = LinearLayout.VERTICAL
+        background = ContextCompat.getDrawable(app, R.drawable.group_quiet)
+        setPadding(0, kit.dp(4), 0, kit.dp(4))
+    }
+
+    /** Where it goes, under a centred title: a small icon and a few words. */
+    private fun where(icon: Int, words: String): ViewGroup {
+        val line = TextView(app).apply {
+            text = words
+            setTextAppearance(R.style.Text_Quiet)
+            compoundDrawablePadding = kit.dp(6)
+            gravity = Gravity.CENTER_VERTICAL
+            setCompoundDrawablesRelativeWithIntrinsicBounds(
+                ContextCompat.getDrawable(app, icon)?.mutate()?.apply {
+                    setBounds(0, 0, kit.dp(16), kit.dp(16))
+                    setTint(kit.color(R.color.text_2))
+                }, null, null, null)
+        }
+        val centre = android.widget.FrameLayout(app)
+        centre.addView(line, android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        return centre
     }
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What a sheet is about, as a large rounded tile over its title, filled by
+     whoever uses it (backgroundTint). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/green_soft" />
+    <corners android:radius="16dp" />
+</shape>

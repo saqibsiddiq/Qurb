@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices and Settings** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home, Devices, Settings, Backups and Activity** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -343,9 +343,7 @@ The owner: "start building". Home draft 3 is in the app (`HomeScreen.kt`,
   Downloads (the list of where to send is gone);
 - Waiting only while something is queued: a count badge and queue rows, a bar
   on a backup's row;
-- Backups and Activity at the top. Backups is an **interim** page: the old
-  WhatsApp and folders rows under chips naming where they go. Its design waits
-  on a backup set for each device (engine work, 0073).
+- Backups and Activity at the top (both built since, [below](#built-android-backups-and-activity-2026-10-24)).
 
 *Off* is honest only as far as the phone knows: a pass marks each device that
 answers as seen, so a device not seen since the start of the last pass that
@@ -443,3 +441,35 @@ Relay and Version. The engine's version line lost its `·` too.
 Checked on the same emulator: the page, scrolled; Advanced; the Key, Theme and
 Background sync sheets. The emulator has no screen lock, so the screen-lock
 path for the 24 words is not checked, and the words were not shown.
+
+## Built: Android Backups and Activity (2026-10-24)
+
+Backups and Activity draft 1 is in the app (`BackupsScreen.kt`,
+`ActivityScreen.kt`, `Backups.kt`, `Keeping.kt`):
+
+- **Backups**: the device chosen on Home beside the title, chosen the same way
+  (the list moved into `Kit.chooseDevice`, shared with Home); WhatsApp,
+  Folders and Private Vault as cards, each a tick and the size when up to date,
+  a bar and how many are left while it runs, a switch or *None chosen* when it
+  is off; *Keep WhatsApp's own Google backup on too* under them while
+  WhatsApp's backup is on.
+- **WhatsApp**: its details as a sheet of facts (files, size, what was
+  deleted in WhatsApp and kept, when it last ran, Wi-Fi), with *Stop* and *Back
+  up now*; setting it up names the two steps Android asks for, says the
+  sentence about Google's backup, and has *Not now* and *Choose folder*.
+- **Activity**: by day (*Today*, *Yesterday*, then the date); each entry the
+  file's icon with a badge for what happened, the device by its icon and name,
+  the time as the phone is set. A failure says why, in its device's place.
+  *Nothing yet* when empty.
+
+**Where it differs, and why:** on a device that does not keep the Private
+Vault, Backups shows the vault alone, as a switch, since WhatsApp and the
+folders go only where the vault goes (no backup set per device, 0073). The
+Private Vault card says how many private files are still to go, not a size: the
+engine reports none. *Off* for WhatsApp shows a switch only while it is off;
+on, the card opens the details.
+
+Checked on the same emulator: Backups for a device keeping the vault, the
+WhatsApp setup sheet, Activity with real entries from the tests above. Not
+checked: WhatsApp's details while it backs up (the emulator has no WhatsApp),
+*Nothing yet*, dark.
