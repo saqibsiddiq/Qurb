@@ -257,6 +257,17 @@ impl PeerClient {
         }
     }
 
+    /// The files whose place holds `query` in the peer's shared folder or in
+    /// this phone's own folder there (decision 0073, item 4), each named by
+    /// its place, or `None` when it will not say.
+    pub async fn search(&self, within: crate::wire::Within, query: &str) -> Result<Option<Vec<crate::wire::KeptEntry>>> {
+        match self.request(Request::Search { within, query: query.to_string() }).await? {
+            Response::Kept { files, .. } => Ok(Some(files)),
+            Response::NotFound => Ok(None),
+            other => Err(unexpected("search", &other)),
+        }
+    }
+
     /// Make a folder in the peer's shared folder (decision 0073, item 6).
     /// `Ok(Ok(()))` made; `Ok(Err(why))` not, in words for a person -- a
     /// computer that takes no changes from this device says so too.

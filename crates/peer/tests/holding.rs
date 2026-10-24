@@ -531,6 +531,11 @@ async fn a_phone_reaches_its_folder_on_the_computer_and_what_it_kept_before() {
     assert_eq!(files[0].owner, *before.id().as_bytes());
     let fetched = client.fetch_content(&phone.reader(), files[0].content, files[0].size).await.unwrap();
     assert_eq!(fetched, diary);
+    // Found by searching, named by its place in the phone's folder
+    // (decision 0073, item 4).
+    let found = client.search(qurb_peer::wire::Within::Kept, "DIARY").await.unwrap().expect("not told");
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].name, "the other one, earlier/Private Vault/diary.txt");
     client.close();
     let content = files[0].content;
 
@@ -538,6 +543,7 @@ async fn a_phone_reaches_its_folder_on_the_computer_and_what_it_kept_before() {
     let client = PeerClient::connect(addr, &laptop.identity, fingerprint).await.unwrap();
     let (top, _) = client.kept("").await.unwrap().unwrap();
     assert_eq!(top, vec!["the other one".to_string()], "shown another device's folder");
+    assert!(client.search(qurb_peer::wire::Within::Kept, "diary").await.unwrap().unwrap().is_empty(), "found another device's file");
     assert!(client.fetch_content(&laptop.reader(), content, diary.len() as u64).await.is_err(), "fetched another device's file");
     client.close();
 }

@@ -72,6 +72,30 @@ pub fn listing(db: &Db, phones: &[(String, DeviceId)], dir: &str) -> Result<(Vec
     Ok((folders.into_iter().collect(), files))
 }
 
+/// The files of a folder made of `phones` whose place in it holds `text`,
+/// ignoring case, the newest first and at most `limit` (decision 0073, item
+/// 4). Each is named by its place in the folder, from the phone's name down,
+/// which is what a list of results shows.
+pub fn search(db: &Db, phones: &[(String, DeviceId)], text: &str, limit: usize) -> Result<Vec<Shown>> {
+    let text = text.trim().to_lowercase();
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut found = Vec::new();
+    for (name, owner) in phones {
+        for (path, size, mtime, content) in db.held_entries(owner)? {
+            let Some(shown) = shown_as(&path) else { continue };
+            let shown = format!("{name}/{shown}");
+            if shown.to_lowercase().contains(&text) {
+                found.push(Shown { name: shown, path, owner: *owner, content, size, modified_at: mtime / 1_000_000_000 });
+            }
+        }
+    }
+    found.sort_by(|a, b| b.modified_at.cmp(&a.modified_at).then_with(|| a.name.cmp(&b.name)));
+    found.truncate(limit);
+    Ok(found)
+}
+
 /// The folders a phone sees of its own on a computer: its own, and each
 /// earlier self's, set up again (`Db::earlier_selves`), named as the window
 /// names them.

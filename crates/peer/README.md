@@ -222,6 +222,8 @@ that asked. A reason a person can read comes back as `Refused { why }`.
 Nobody else may ask: its other computers, a computer it visits, and anyone
 unplaced are told *not found*. Pieces wait in `.qurb/incoming`, never in the
 folder (`tests/shared_folder.rs`, and `storage/tests/shared_changes.rs`).
+`Search { within, query }` looks through the shared folder, or the asking
+phone's own folder there, for whoever may list it.
 
 And a phone of the computer's own person asks for **its folder there**,
 `Kept { dir }`: the folders and files kept for that phone, and for it

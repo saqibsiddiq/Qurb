@@ -207,7 +207,26 @@ pub enum Request {
     /// its bytes hash to `content`. Answered [`Response::Placed`], with where
     /// -- numbered when the name was taken.
     UploadDone { id: [u8; 16], path: String, content: [u8; 32] },
+
+    /// The files whose place holds `query`, ignoring case, in this
+    /// computer's shared folder or in the asking phone's own folder here
+    /// (decision 0073, item 4), to whoever may list that folder: answered in
+    /// [`Response::Kept`]'s shape with no folders, each file named by its
+    /// place, the newest first, at most [`SEARCH_MOST`].
+    Search { within: Within, query: String },
 }
+
+/// Which folder a [`Request::Search`] looks in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Within {
+    /// The computer's shared folder.
+    Shared,
+    /// The asking phone's own folder on the computer.
+    Kept,
+}
+
+/// The most files one search answers with.
+pub const SEARCH_MOST: usize = 500;
 
 /// One file of a phone's folder on a computer, as listed to the phone.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -343,6 +362,7 @@ const TAG_SHARED_MOVE: u8 = 24;
 const TAG_SHARED_DELETE: u8 = 25;
 const TAG_UPLOAD: u8 = 26;
 const TAG_UPLOAD_DONE: u8 = 27;
+const TAG_SEARCH: u8 = 28;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -506,6 +526,14 @@ impl Request {
                 put_path(&mut out, path);
                 out.extend_from_slice(content);
             }
+            Request::Search { within, query } => {
+                out.push(TAG_SEARCH);
+                out.push(match within {
+                    Within::Shared => 0,
+                    Within::Kept => 1,
+                });
+                put_path(&mut out, query);
+            }
         }
         out
     }
@@ -567,6 +595,14 @@ impl Request {
                 let mut id = [0u8; 16];
                 id.copy_from_slice(r.take(16)?);
                 Request::UploadDone { id, path: r.path()?, content: r.hash()? }
+            }
+            TAG_SEARCH => {
+                let within = match r.u8()? {
+                    0 => Within::Shared,
+                    1 => Within::Kept,
+                    other => return Err(Error::Protocol { detail: format!("search within {other}") }),
+                };
+                Request::Search { within, query: r.path()? }
             }
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
@@ -1211,6 +1247,8 @@ mod tests {
             Request::SharedDelete { path: "Old".into() },
             Request::Upload { id: [5; 16], offset: 4 << 20, bytes: vec![1, 2, 3] },
             Request::UploadDone { id: [5; 16], path: "Photos/beach.jpg".into(), content: [6; 32] },
+            Request::Search { within: Within::Shared, query: "beach".into() },
+            Request::Search { within: Within::Kept, query: "Chats".into() },
             Request::About,
             Request::Folders,
             Request::Chosen,

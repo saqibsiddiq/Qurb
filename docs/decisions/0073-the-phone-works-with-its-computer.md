@@ -1,8 +1,8 @@
 # 0073 — The phone works with one computer: no shared files on it, and it may change its own folder there
 
-**Status:** Accepted as the design, 2026-10-24. Being built: steps 1 and 2
-of the plan below, the shared folder read and written, are done in the
-engine; the rest is not, nor anything in the app. The
+**Status:** Accepted as the design, 2026-10-24. Being built: steps 1 to 3
+of the plan below -- the shared folder read and written, and searching --
+are done in the engine; the rest is not, nor anything in the app. The
 screens are in the Figma redesign ([design/redesign.md](../design/redesign.md),
 *Files, draft 2*); the engine does none of the new parts yet. Amends
 [0067](0067-a-folder-for-each-person.md), whose phone could only browse its
@@ -194,3 +194,11 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   limit on how much a guest may add but the disk's own. Pieces of an upload
   nobody finished wait in `.qurb/incoming` until the next upload starts a day
   later. Nothing in the app uses it yet.
+- **Step 3, searching, built 2026-10-24.** `Search { within, query }`, the
+  shared folder or the asking phone's own folder, to whoever may list it:
+  files whose place holds the words, ignoring case for ASCII only as the
+  phone's own search does, the newest first, at most 500, each named by its
+  place. Tested: a guest finds files at any depth and none in a folder shared
+  without it, and has no folder of its own person's to search; the phone finds
+  its file kept from before it was set up again, and a computer of the same
+  person finds none of it (`tests/shared_folder.rs`, `tests/holding.rs`).

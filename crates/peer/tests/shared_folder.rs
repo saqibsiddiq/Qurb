@@ -295,3 +295,27 @@ async fn only_its_guests_and_its_owners_phones_may_change_it() {
     assert!(visitor.root.join("mine.txt").is_file());
     client.close();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_search_finds_what_the_guest_may_see_at_any_depth() {
+    let mut host = Device::new(42);
+    let guest = Device::new(7);
+    welcome(&host, &guest).await;
+    host.write("Trips/2025/beach.jpg", b"sand");
+    host.write("Beach umbrella.txt", b"blue");
+    host.write("Private/beach-secret.txt", b"nobody else's");
+    host.write("notes.txt", b"shopping");
+    let other = qurb_sync::DeviceId::from_bytes([9; 32]);
+    let rules = BTreeMap::from([("Private".to_string(), BTreeSet::from([other]))]);
+    host.engine.store().db().replace_shares(&qurb_sync::sharing::Rules::new(rules), "test").unwrap();
+
+    let client = connect(&host, &guest).await;
+    let found = client.search(qurb_peer::wire::Within::Shared, "BEACH").await.unwrap().expect("a guest may search");
+    let mut found: Vec<&str> = found.iter().map(|f| f.name.as_str()).collect();
+    found.sort();
+    assert_eq!(found, vec!["Beach umbrella.txt", "Trips/2025/beach.jpg"]);
+    assert!(client.search(qurb_peer::wire::Within::Shared, "").await.unwrap().unwrap().is_empty());
+    // A guest has no folder of its own person's phones here to search.
+    assert_eq!(client.search(qurb_peer::wire::Within::Kept, "beach").await.unwrap(), None);
+    client.close();
+}

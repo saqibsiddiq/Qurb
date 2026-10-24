@@ -766,6 +766,38 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             _ => Response::NotFound,
         },
 
+        // A search of the shared folder, or of the asking phone's own folder
+        // here, to whoever may list it (decision 0073, item 4).
+        Request::Search { within, query } => {
+            let found = match (within, &owner) {
+                (crate::wire::Within::Shared, Some(device)) if reaches_shared => Some(
+                    qurb_storage::shared_folder::search(store.db(), &store.device_id()?, device, query, crate::wire::SEARCH_MOST)?,
+                ),
+                (crate::wire::Within::Kept, Some(device)) if !other_person => {
+                    let phones = qurb_storage::person::own_phones(store.db(), device)?;
+                    Some(qurb_storage::person::search(store.db(), &phones, query, crate::wire::SEARCH_MOST)?)
+                }
+                _ => None,
+            };
+            match found {
+                Some(files) => Response::Kept {
+                    folders: Vec::new(),
+                    files: files
+                        .into_iter()
+                        .map(|f| crate::wire::KeptEntry {
+                            name: f.name,
+                            path: f.path,
+                            owner: *f.owner.as_bytes(),
+                            content: *f.content.as_bytes(),
+                            size: f.size,
+                            modified_at: f.modified_at,
+                        })
+                        .collect(),
+                },
+                None => Response::NotFound,
+            }
+        }
+
         Request::Kept { dir } => match (&owner, other_person) {
             (Some(device), false) => {
                 let phones = qurb_storage::person::own_phones(store.db(), device)?;

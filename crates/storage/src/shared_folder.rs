@@ -69,6 +69,32 @@ pub fn listing(
     Ok((folders.into_iter().collect(), files))
 }
 
+/// The files of the shared area whose path holds `text`, ignoring case, as
+/// `device` may see them, the newest first and at most `limit` (decision 0073,
+/// item 4). Each is named by its whole path, which a list of results shows.
+pub fn search(db: &Db, here: &DeviceId, device: &DeviceId, text: &str, limit: usize) -> Result<Vec<Shown>> {
+    let text = text.trim().to_lowercase();
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut found: Vec<Shown> = db
+        .shared_entries_under("", device)?
+        .into_iter()
+        .filter(|(path, ..)| !qurb_sync::sharing::is_rule_path(path) && path.to_lowercase().contains(&text))
+        .map(|(path, size, mtime, content)| Shown {
+            name: path.clone(),
+            path,
+            owner: *here,
+            content,
+            size,
+            modified_at: mtime / 1_000_000_000,
+        })
+        .collect();
+    found.sort_by(|a, b| b.modified_at.cmp(&a.modified_at).then_with(|| a.name.cmp(&b.name)));
+    found.truncate(limit);
+    Ok(found)
+}
+
 // ---------------------------------------------------------------- changes
 //
 // Made by this computer on its own shared folder when one of its own
