@@ -214,5 +214,8 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   folders, an empty one included; a folder made; a 6.3 MB picture added from
   the picker, its bytes the same there; renamed; found by searching *PASTA*;
   the folder deleted, and the computer's `qurb deleted` naming the phone; a
-  file opened. Not on the S23 yet. Not done: Files itself, drafts 3 and 4
-  around it.
+  file opened. On the S23 the same day, as a guest of a throwaway computer on
+  the laptop: listed, a folder made, a picture added, renamed, found,
+  deleted, Recently deleted there naming the S23. Not done: Files itself,
+  drafts 3 and 4 around it; and the owner's laptop runs a Qurb from before
+  this, whose Shared the S23 cannot open until it is updated.

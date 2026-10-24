@@ -2785,8 +2785,10 @@ Files' Shared page is built
 ([details](../design/redesign.md#built-android-the-shared-page-2026-10-24)):
 a computer's shared folder, which the owner's phones and the guests' reach
 live, browsed, searched and changed from the phone, each change made by the
-computer (decision 0073, steps 1 to 3 in the engine). Checked on the emulator.
-**Not yet run on the S23.**
+computer (decision 0073, steps 1 to 3 in the engine). Checked on the emulator,
+and on the S23 as a guest of a throwaway computer on the laptop. The owner's
+laptop runs a Qurb from before this, so its own Shared is not reachable from
+the S23 until it is updated.
 
 Not built yet: the rest of Files, the folders to back up as a tree, the
 desktop; and the rest of the engine work of

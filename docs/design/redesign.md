@@ -858,5 +858,18 @@ picker, the same bytes there; renamed *sea.png*, the stem chosen in the field
 finding *Recipes/pasta.txt*; *Trips* held and deleted, and `qurb deleted` on
 the computer listing it *deleted on* the phone; a text file opened.
 
-**Not checked:** anything on the S23; a guest's phone; a refusal shown; a
-large file's progress; dark mode.
+**On the S23**, the same day, the fast build over its data, dark theme, as a
+guest: it visited a throwaway `qurb pair --guest` on the laptop (*Scratch-PC*)
+by its six digits, typed over wireless debugging and found on the home Wi-Fi,
+with *Approve on Scratch-PC* while it waited. Then *Shared, On Scratch-PC* in
+Files: the folders and a file listed; *From the S23* made; a 3.8 MB picture
+added from the picker, the same bytes there; renamed, the stem chosen;
+*PASTA* finding *Recipes/pasta.txt*; the folder deleted, and Scratch-PC's
+`qurb deleted` listing both files *deleted on SM-S911B*.
+
+Files also listed *Shared, On saqib*, the owner's laptop, whose Qurb is from
+before this: its page can only say it is not reachable until the laptop runs
+this build. Saying *update Qurb on saqib* instead is not done.
+
+**Not checked:** a refusal shown; a large file's progress; a file opened on
+the S23.
