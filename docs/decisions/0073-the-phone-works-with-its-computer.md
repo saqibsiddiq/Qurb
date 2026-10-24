@@ -230,13 +230,47 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   as long as Recently deleted keeps a file, 30 days (`gc::collect`); the
   shared area's keep the seven days given, and a window of zero still
   collects everything.
-  **This differs from item 3**, which puts the deletion in the computer's
-  Recently deleted so that it can be undone at the computer -- the case of a
-  lost phone in the wrong hands. As built it is in the phone's, and the
-  computer lists nothing: its `qurb deleted` shows no deletion of a phone's
-  vault, and nothing there puts one back. The bytes do stay on the computer
-  for the 30 days, so a file deleted from a lost phone is not gone, but
-  undoing it at the computer is **not built**.
+  **Undone at the computer, as item 3 has it, built the same day.** A
+  Private Vault file deleted on the phone is in the computer's Recently
+  deleted too, naming the phone (`Store::unhold`), so that a mistake, or a
+  lost phone in the wrong hands, can be undone there. Restoring it there
+  (`Store::restore_held`, `qurb restore`, the window's Restore) puts it back
+  in the phone's folder on the computer as a version of the computer's after
+  the phone's deletion: the deletion, offered again by a phone not yet told,
+  is not taken again (`holding` compares the two). The phone takes it back
+  at its next sync -- a new step, `Action::Restored`, planned only for a path
+  whose last word on the phone is a deletion of that very content, by a
+  version after it (`Store::restored_elsewhere`), so nothing else a computer
+  offers becomes a file of the phone's -- from the bytes its own Recently
+  deleted kept, or left on the computer as before, and out of the phone's
+  Recently deleted. Either restore empties the other side's entry. Deleting
+  it for good on the computer lets the bytes go at the next collection. Not
+  a backup: WhatsApp's and the folders' files go when their original goes
+  from the phone, as the owner chose, and listing those would bury the rest;
+  one deleted from the phone's folder is in the phone's own Recently deleted.
+  Nor a guest's, sealed. **A gap:** the deleted row on the computer is dated
+  by the phone's clock, as every row from another device is, so a deletion
+  that reached the computer days late, or from a phone whose clock is wrong,
+  is kept less than the 30 days its entry shows -- restoring it then says
+  the file is no longer there. **And another:** a different file the phone
+  makes at that path before it next syncs is the phone's word, and replaces
+  the one restored on the computer, which is then lost there. Tested: listed, restored with a version after
+  the deletion, deleted for good and collected, a backup's and a guest's not
+  listed, the phone's own restore emptying the entry, the phone taking back
+  a freed file and one whose bytes it kept and nothing else
+  (`tests/held_deletion.rs`); the computer keeping the restored file while
+  the phone offers its deletion again, then both settled
+  (`crates/engine/tests/holding.rs`); through the engine as the app runs it
+  (`a_phone_changes_its_own_folder_on_the_computer`); and on the emulator,
+  the command line built for Android as the computer, paired fresh and
+  keeping the Vault: *letter.txt* added, freed, deleted from the phone's
+  folder there; `qurb deleted` listing *sdk_gphone64_x86_64/Private
+  Vault/letter.txt deleted on sdk_gphone64_x86_64*; `qurb restore` saying
+  the phone takes it back at its next sync; the phone's Recently deleted
+  listing it until that sync and not after, the Vault listing it again
+  (*Available elsewhere*), Activity saying *restored* by the computer, and
+  its 23 bytes downloaded from the computer intact. The window's Restore was
+  not run.
   Tested: a freed file renamed into a new folder, the same chunks, nothing
   written, the old path gone (`tests/freed_rename.rs`); a freed file deleted,
   listed in Recently deleted, its row outliving the seven days and gone after

@@ -1124,7 +1124,7 @@ impl Daemon {
                 matches!(remote.content, qurb_sync::Content::File { .. })
             }
             qurb_sync::Action::Resurrect { .. } | qurb_sync::Action::Conflict { .. } => true,
-            qurb_sync::Action::Merge { .. } | qurb_sync::Action::Offer { .. } => false,
+            qurb_sync::Action::Merge { .. } | qurb_sync::Action::Offer { .. } | qurb_sync::Action::Restored { .. } => false,
         });
         let _awake = brings.then(|| crate::awake::Awake::while_collecting(&format!("Collecting from {from}")));
 

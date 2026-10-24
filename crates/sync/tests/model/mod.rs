@@ -91,6 +91,7 @@ impl Device {
                 // Holding another device's vault is not part of the shared area
                 // this model converges, and reconciliation never produces it.
                 Action::Hold { .. } => unreachable!("reconcile does not plan holding"),
+                Action::Restored { .. } => unreachable!("reconcile does not plan taking back"),
             }
         }
     }

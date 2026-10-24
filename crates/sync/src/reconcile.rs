@@ -50,6 +50,12 @@ pub enum Action {
     /// (decision 0036). Not reconciliation: the owner is the only device that
     /// writes its vault, so its version is simply taken.
     Hold { owner: DeviceId, remote: FileVersion },
+
+    /// This device's own file, deleted here and put back by a device keeping
+    /// it (decision 0073): taken back as that device restored it, its bytes
+    /// left there. Not reconciliation either: only a deletion of that very
+    /// file is undone this way.
+    Restored { remote: FileVersion },
 }
 
 impl Action {
@@ -61,6 +67,7 @@ impl Action {
             Action::Resurrect { resolved } => &resolved.path,
             Action::Merge { resolved } => &resolved.path,
             Action::Hold { remote, .. } => &remote.path,
+            Action::Restored { remote } => &remote.path,
         }
     }
 }
@@ -275,6 +282,7 @@ mod tests {
                     Action::Merge { .. } => "merge",
                     // Never produced by reconciliation; see the engine.
                     Action::Hold { .. } => "hold",
+                    Action::Restored { .. } => "restored",
                 };
                 format!("{kind} {}", a.path())
             })

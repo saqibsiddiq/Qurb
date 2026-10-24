@@ -226,3 +226,42 @@ fn a_device_that_is_not_a_holder_sees_nothing() {
     let tree = phone.engine.store().tree_for(Audience::Device(&desktop_id)).unwrap();
     assert!(tree.is_empty());
 }
+
+/// A deletion undone at the desktop (decision 0073, item 3): restored from
+/// its Recently deleted, the desktop keeps it although the phone, not yet
+/// told, offers its deletion again; then the phone takes it back, from the
+/// bytes its own Recently deleted kept, and the two agree.
+#[test]
+fn a_deletion_undone_at_the_desktop_is_not_taken_again_and_the_phone_takes_it_back() {
+    let (mut phone, mut desktop) = phone_and_desktop();
+    let bytes = b"a note the phone should not have deleted";
+    phone.write("note.txt", bytes);
+    desktop.sync_from(&phone);
+    assert!(desktop.holds(&phone.id(), "note.txt", bytes));
+
+    phone.engine.store_mut().delete_to_trash("note.txt", None).unwrap();
+    desktop.sync_from(&phone);
+    assert!(!desktop.holds(&phone.id(), "note.txt", bytes));
+    let listed = desktop.engine.store().recently_deleted().unwrap();
+    assert_eq!(listed.len(), 1, "not in the desktop's Recently deleted");
+    desktop.engine.store_mut().restore_from_trash(listed[0].id).unwrap();
+
+    // The phone's deletion, offered again: the restore is after it.
+    desktop.sync_from(&phone);
+    assert!(desktop.holds(&phone.id(), "note.txt", bytes), "deleted again by the deletion it undid");
+
+    let stats = phone.sync_from(&desktop);
+    assert_eq!(stats.adopted, 1);
+    assert_eq!(fs::read(phone.root.join("note.txt")).unwrap(), bytes);
+    assert!(phone.engine.store().recently_deleted().unwrap().is_empty());
+    let history = phone.engine.store().db().activity(10, None).unwrap();
+    assert!(history.iter().any(|a| a.path.as_deref() == Some("note.txt") && a.device == Some(desktop.id())));
+
+    // Settled: nothing more either way.
+    let stats = desktop.sync_from(&phone);
+    assert_eq!((stats.held, stats.adopted), (0, 0));
+    assert!(desktop.holds(&phone.id(), "note.txt", bytes));
+    assert!(desktop.engine.store().recently_deleted().unwrap().is_empty());
+    let stats = phone.sync_from(&desktop);
+    assert_eq!(stats.adopted, 0);
+}

@@ -3929,6 +3929,28 @@ impl Db {
         Ok(self.conn.execute("DELETE FROM trash WHERE id = ?1", params![id])? > 0)
     }
 
+    /// The entries for one file of `owner`'s vault: `content` at `path`.
+    pub fn trash_of(&self, path: &str, owner: &DeviceId, content: &blake3::Hash) -> Result<Vec<Trashed>> {
+        self.trash_where(
+            "path = ?1 AND scope = ?2 AND content_hash = ?3",
+            params![path, owner.as_bytes().as_slice(), content.as_bytes().as_slice()],
+        )
+    }
+
+    /// The paths in this device's own vault whose last word is a deletion:
+    /// all that a device keeping the vault could have put back (decision
+    /// 0073), asked once a sync rather than once a file.
+    pub fn own_deleted_paths(&self) -> Result<std::collections::HashSet<String>> {
+        let me = self.local_device()?;
+        let mut stmt = self.conn.prepare(
+            "SELECT path FROM files f
+              WHERE scope = ?1 AND deleted_at IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM files l WHERE l.path = f.path AND l.scope = ?1 AND l.deleted_at IS NULL)",
+        )?;
+        let rows = stmt.query_map(params![me.as_bytes().as_slice()], |r| r.get::<_, String>(0))?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
     /// What the trash is costing on disk.
     pub fn trash_bytes(&self) -> Result<u64> {
         let n: i64 = self.conn.query_row("SELECT coalesce(sum(size), 0) FROM trash", [], |r| r.get(0))?;

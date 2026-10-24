@@ -1168,16 +1168,39 @@ fn deleted(root: &Path) -> Result<()> {
             None => String::new(),
         };
         let why = entry.why.as_deref().map(|w| format!("  ({w})")).unwrap_or_default();
+        // A file kept here for another device has no bytes in this list's
+        // own folder: they stay with its deleted row (decision 0073).
+        let size = match entry.size {
+            0 => String::new(),
+            n => human(n),
+        };
         println!(
             "  #{:<5} {:>12}  {:>9}  {}  deleted {by}{why}",
             entry.id,
             ago(entry.deleted_at),
-            human(entry.size),
-            entry.path
+            size,
+            shown_deleted(entry, &names, &me)
         );
     }
     println!("\n`qurb restore #n` puts one back where it was. Kept for 30 days.");
     Ok(())
+}
+
+/// Where a deleted file was, as the window shows it: a file of another
+/// device's Private Vault kept here, in that device's folder (decision 0073).
+fn shown_deleted(
+    entry: &qurb_storage::db::Trashed,
+    names: &std::collections::HashMap<qurb_sync::DeviceId, String>,
+    me: &qurb_sync::DeviceId,
+) -> String {
+    match entry.scope.filter(|owner| owner != me) {
+        Some(owner) => format!(
+            "{}/{}",
+            names.get(&owner).cloned().unwrap_or_else(|| owner.short()),
+            qurb_storage::person::shown_as(&entry.path).unwrap_or_else(|| entry.path.clone())
+        ),
+        None => entry.path.clone(),
+    }
 }
 
 /// The Recently deleted entry `which` names: `#n`, or a path, meaning its most
@@ -1195,6 +1218,14 @@ fn restore(root: &Path, which: &str) -> Result<()> {
     let entries = store.recently_deleted()?;
     let entry = trashed(&entries, which)?;
     let at = store.restore_from_trash(entry.id)?;
+    let me = store.device_id()?;
+    if let Some(owner) = entry.scope.filter(|owner| *owner != me) {
+        let names = store.db().device_names()?;
+        let name = names.get(&owner).cloned().unwrap_or_else(|| owner.short());
+        println!("restored {}", shown_deleted(entry, &names, &me));
+        println!("  {name} takes it back at its next sync");
+        return Ok(());
+    }
     match at == entry.path {
         true => println!("restored {at}"),
         false => println!("restored {} as {at}: something is at its old path now", entry.path),

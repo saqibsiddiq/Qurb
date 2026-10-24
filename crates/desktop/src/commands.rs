@@ -2478,6 +2478,10 @@ pub struct Deleted {
     why: Option<String>,
     /// From this computer's Private Vault, where restoring puts it back.
     private: bool,
+    /// The device whose Private Vault it was in, when not this computer's:
+    /// one of this person's phones, which takes it back once it is restored
+    /// here (decision 0073).
+    of: Option<String>,
 }
 
 #[tauri::command]
@@ -2500,6 +2504,10 @@ pub fn recently_deleted(hosted: Host<'_>) -> Answer<Vec<Deleted>> {
                     }),
                     why: entry.why,
                     private: entry.scope == Some(me),
+                    of: entry
+                        .scope
+                        .filter(|owner| *owner != me)
+                        .map(|owner| names.get(&owner).cloned().unwrap_or_else(|| owner.short())),
                 })
                 .collect())
         })

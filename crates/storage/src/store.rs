@@ -1697,13 +1697,19 @@ impl Store {
         };
         let data: &[u8] = mapped.as_deref().unwrap_or(&[]);
         let manifest = chunker::chunk_bytes(data);
-        self.put_manifest(
+        let stats = self.put_manifest(
             &version.path,
             &manifest,
             data,
             0,
             Placement::remote(version).in_vault(Some(owner)).held(),
-        )
+        )?;
+        // Put back by its owner, from that device's own Recently deleted:
+        // nothing left to restore here.
+        for entry in self.db.trash_of(&version.path, owner, &manifest.file_hash)? {
+            self.db.remove_trash(entry.id)?;
+        }
+        Ok(stats)
     }
 
     /// The owner deleted a file this device holds for it.
@@ -1712,10 +1718,29 @@ impl Store {
     /// absent from the owner's list is left alone: a wiped phone must not
     /// delete its own backup. See decision 0036.
     pub fn unhold(&mut self, version: &FileVersion, owner: &DeviceId) -> Result<()> {
-        if self.db.live_row_in(&version.path, Some(owner))?.is_none() {
+        let Some(row) = self.db.live_row_in(&version.path, Some(owner))? else {
             return Ok(());
+        };
+        self.tombstone(&version.path, Stamp::Remote(version), Some(*owner))?;
+        // A file of the Private Vault of one of this person's own devices
+        // goes into Recently deleted here too, naming that device (decision
+        // 0073), so that a deletion made there -- a mistake, or a lost phone
+        // in the wrong hands -- can be undone here. Nothing goes into
+        // `trash/`: the deleted row keeps its chunks as long as the entry
+        // lasts (`gc::collect`). Not a backup, which goes when its original
+        // goes from the phone, as the owner chose; nor a guest's, sealed.
+        let backup = row.path.starts_with(&format!("{}/", db::OUTSIDE));
+        if !backup && self.db.relation_of(owner)? == Some(db::Relation::Own) {
+            self.db.add_trash(&db::NewTrash {
+                path: &version.path,
+                scope: Some(owner),
+                content: &row.content_hash,
+                size: 0,
+                by: Some(owner),
+                why: None,
+            })?;
         }
-        self.tombstone(&version.path, Stamp::Remote(version), Some(*owner))
+        Ok(())
     }
 
     /// Keep a file that lives outside the folder in this device's own vault,
@@ -2608,6 +2633,8 @@ impl Store {
         let me = self.device_id()?;
         let target = if entry.scope == Some(me) && !self.trash_file(id).is_file() {
             self.restore_freed(&root, &entry, &me)?
+        } else if let Some(owner) = entry.scope.filter(|owner| *owner != me && !self.trash_file(id).is_file()) {
+            self.restore_held(&entry, &owner)?
         } else {
             let target = self.free_path_near(&root, &entry.path)?;
             let to = root.join(&target);
@@ -2655,6 +2682,101 @@ impl Store {
         Ok(target)
     }
 
+    /// Put back a file of another of this person's devices' vaults, deleted
+    /// there and kept here for it (decision 0073), at its path in that
+    /// device's folder here: a version after the deletion, so that the
+    /// deletion, offered again, does not take it again, and which that device
+    /// takes back at its next sync ([`take_back_restored`](Self::take_back_restored)).
+    /// Its chunks are the ones the deleted row kept here. Refused when the
+    /// device has a file at that path again.
+    fn restore_held(&mut self, entry: &db::Trashed, owner: &DeviceId) -> Result<String> {
+        if self.db.live_row_in(&entry.path, Some(owner))?.is_some() {
+            return Err(Error::Sharing { why: format!("{} is there again", entry.path) });
+        }
+        let Some(row) = self.db.deleted_row_in(&entry.path, owner, &entry.content)? else {
+            return Err(Error::NotHere { path: entry.path.clone() });
+        };
+        let manifest = self.listed_manifest(&row, &entry.path)?;
+        for chunk in &manifest.chunks {
+            if !self.cas.contains(&chunk.hash) {
+                return Err(Error::NotHere { path: entry.path.clone() });
+            }
+        }
+        let me = self.device_id()?;
+        let mut vector = row.vector.clone();
+        vector.increment(me);
+        let version = FileVersion::file(&entry.path, *row.content_hash.as_bytes(), row.size, vector, me, db::now());
+        self.put_manifest(&entry.path, &manifest, &[], row.mtime_ns, Placement::remote(&version).in_vault(Some(owner)).held())?;
+        Ok(entry.path.clone())
+    }
+
+    /// Whether `version`, offered by a device keeping this device's vault, is
+    /// one of this vault's own files deleted here and put back there (decision
+    /// 0073): the same content, at the same path, after the deletion. Nothing
+    /// else a device keeping the vault offers becomes a file of it.
+    pub fn restored_elsewhere(&self, version: &FileVersion) -> Result<bool> {
+        let Content::File { hash, .. } = &version.content else {
+            return Ok(false);
+        };
+        if !qurb_sync::is_safe_path(&version.path) || version.path.starts_with(&format!("{}/", db::OUTSIDE)) {
+            return Ok(false);
+        }
+        let me = self.device_id()?;
+        if self.db.live_row_in(&version.path, Some(&me))?.is_some() {
+            return Ok(false);
+        }
+        let Some(row) = self.db.deleted_row_in(&version.path, &me, &blake3::Hash::from(*hash))? else {
+            return Ok(false);
+        };
+        Ok(version.vector.compare(&row.vector) == qurb_sync::Causality::After)
+    }
+
+    /// Take back this device's own file that a device keeping the vault put
+    /// back ([`restored_elsewhere`](Self::restored_elsewhere)), as that device
+    /// restored it, and out of Recently deleted here: from `trash/` when its
+    /// bytes went there, otherwise left with that device, as before it was
+    /// deleted. Returns whether it was taken.
+    pub fn take_back_restored(&mut self, version: &FileVersion) -> Result<bool> {
+        if !self.restored_elsewhere(version)? {
+            return Ok(false);
+        }
+        let Some(root) = self.tree.clone() else {
+            return Ok(false);
+        };
+        let me = self.device_id()?;
+        let content = version.content.hash().map(|h| blake3::Hash::from(*h)).unwrap_or(blake3::Hash::from([0; 32]));
+        let entries = self.db.trash_of(&version.path, &me, &content)?;
+        match entries.iter().find(|e| self.trash_file(e.id).is_file()) {
+            Some(kept) => {
+                let to = root.join(&version.path);
+                if to.exists() {
+                    return Err(Error::Sharing { why: format!("something is already called {}", version.path) });
+                }
+                if let Some(parent) = to.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+                }
+                move_file(&self.trash_file(kept.id), &to).map_err(|e| Error::io(&to, e))?;
+                let mtime = std::fs::metadata(&to).map(|m| mtime_from(&m)).unwrap_or(0);
+                self.adopt_file_scoped(version, &to, mtime, Some(&me))?;
+            }
+            None => {
+                let row = self
+                    .db
+                    .deleted_row_in(&version.path, &me, &content)?
+                    .ok_or_else(|| Error::NotHere { path: version.path.clone() })?;
+                let manifest = self.listed_manifest(&row, &version.path)?;
+                let placement = Placement::remote(version).in_vault(Some(&me)).by_reference();
+                self.put_manifest(&version.path, &manifest, &[], row.mtime_ns, placement)?;
+                self.db.set_materialised(&version.path, false)?;
+            }
+        }
+        for entry in entries {
+            let _ = std::fs::remove_file(self.trash_file(entry.id));
+            self.db.remove_trash(entry.id)?;
+        }
+        Ok(true)
+    }
+
     /// A row's content as its chunk list describes it, without reading a
     /// byte: what a file whose bytes are not here is put somewhere else from.
     fn listed_manifest(&self, row: &db::FileRow, path: &str) -> Result<Manifest> {
@@ -2677,6 +2799,16 @@ impl Store {
                 return Err(Error::io(self.trash_file(id), e))
             }
             _ => {}
+        }
+        // Another device's file kept here (`unhold`): its bytes go with the
+        // deleted row, at the next collection, rather than in 30 days.
+        if let Some(entry) = self.db.trash_entry(id)? {
+            let me = self.device_id()?;
+            if let Some(owner) = entry.scope.filter(|owner| *owner != me) {
+                if let Some(row) = self.db.deleted_row_in(&entry.path, &owner, &entry.content)? {
+                    self.db.forget_row(row.id)?;
+                }
+            }
         }
         self.db.remove_trash(id)?;
         Ok(())

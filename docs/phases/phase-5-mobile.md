@@ -2806,9 +2806,11 @@ the computer, kept nowhere to restore it from, though the app said it would
 be, and the computer letting go of its copy within two weeks: such a file now
 goes into the phone's Recently deleted, put back from the computer's chunks,
 which every device keeps 30 days for a vault's deletions; checked in the
-engine's tests and again in the app on the emulator. It is the phone's Recently deleted,
-where 0073 has the computer's, so a lost phone's deletions cannot yet be
-undone at the computer. **Not run on the S23**, which, like the owner's
+engine's tests and again in the app on the emulator. And, as 0073 has it,
+in the computer's Recently deleted too, so that a lost phone's deletions can
+be undone there: restored on the computer, the file is back in the phone's
+folder there and the phone takes it back at its next sync, a new sync step
+that takes back only the very file the phone deleted. **Not run on the S23**, which, like the owner's
 laptop, runs a build from before this; installing it there takes the S23 out
 of the shared area, so it waits on the owner.
 

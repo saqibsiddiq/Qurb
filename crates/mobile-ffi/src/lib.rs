@@ -1310,7 +1310,9 @@ impl Qurb {
     /// item 3): this phone's own vault changes, and the computer follows at
     /// the next sync. It goes into this phone's Recently deleted, its bytes
     /// here or not: one freed to the computer is put back from the chunks
-    /// the computer keeps as long (`Store::delete_to_trash_by`). A backup -- of
+    /// the computer keeps as long (`Store::delete_to_trash_by`). A Private
+    /// Vault file goes into the computer's as well, and restored there comes
+    /// back here at the next sync (`Store::take_back_restored`). A backup -- of
     /// WhatsApp, or of a folder -- only once its original is gone from this
     /// phone: while it is here, the next backup would put the copy back, so
     /// that is refused with why. Never a file kept for this phone before it

@@ -936,7 +936,9 @@ most there are -- put nothing in Recently deleted, though the sheet promised
 it, and the computer let go of its copy within two weeks. Such a file now
 goes into the phone's Recently deleted costing nothing on the phone, and
 restoring it puts it back from the chunks the computer still holds; the
-computer keeps a vault's deletions 30 days (0073, *Progress*). Checked again
+computer keeps a vault's deletions 30 days, and lists a Private Vault one in
+its own Recently deleted too, where restoring it puts it back on the phone
+(0073, *Progress*). Checked again
 on the same emulator with the fix: *journal.txt* freed on the phone
 (*Available elsewhere*), deleted from *Private Vault › Notes* on the
 computer, the folder empty; in Deleted with 30 days, its sheet with no size;

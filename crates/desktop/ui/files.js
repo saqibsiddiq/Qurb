@@ -582,7 +582,7 @@ async function drawDeleted() {
       iconName: KIND_ICON[kindOf(d.path)],
       name: base(d.path),
       sub: [
-        `${d.private ? "Private Vault · " : ""}Deleted ${when(d.at)}${d.by ? ` on ${d.by}` : ""}`,
+        `${d.of ? `${d.of}'s Private Vault · ` : d.private ? "Private Vault · " : ""}Deleted ${when(d.at)}${d.by ? ` on ${d.by}` : ""}`,
         days === 0 ? "Expires today" : `Expires in ${count(days, "day")}`,
       ],
       trail: [forget, restore],
@@ -592,7 +592,9 @@ async function drawDeleted() {
       restore.disabled = true;
       try {
         const at = await invoke("restore_deleted", { id: d.id });
-        toast(at !== d.path
+        toast(d.of
+          ? `${base(at)} is back in ${d.of}'s folder. ${d.of} takes it back at its next sync.`
+          : at !== d.path
           ? `Restored as ${base(at)}: something else is at ${base(d.path)} now.`
           : d.private
             ? `${base(at)} is back in Private Vault.`

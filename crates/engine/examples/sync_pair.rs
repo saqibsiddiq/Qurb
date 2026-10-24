@@ -93,5 +93,6 @@ fn kind(action: &qurb_sync::Action) -> &'static str {
         qurb_sync::Action::Resurrect { .. } => "resurrect",
         qurb_sync::Action::Hold { .. } => "hold",
         qurb_sync::Action::Merge { .. } => "merge",
+        qurb_sync::Action::Restored { .. } => "restored",
     }
 }

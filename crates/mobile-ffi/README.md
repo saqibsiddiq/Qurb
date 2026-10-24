@@ -252,7 +252,10 @@ qurb.deleteKept("Archive/a.txt")      // this phone's own only; a backup only on
                                       //   its original is gone from the phone;
                                       //   into this phone's Recently deleted,
                                       //   freed or not, and restoreDeleted puts
-                                      //   a freed one back on the computer's chunks
+                                      //   a freed one back on the computer's chunks;
+                                      //   a Private Vault one into the computer's
+                                      //   too, restored there and taken back here
+                                      //   at the next sync
 qurb.syncWithin(15u)                  // what the app does after each
 ```
 

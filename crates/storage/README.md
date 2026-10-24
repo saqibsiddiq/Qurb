@@ -148,6 +148,17 @@ storage cap the order is: released held content, then the trash, then
 eviction. Settling a conflict (`settle_conflict`) sends the version not kept
 here too.
 
+Two kinds of entry have no bytes in `trash/`; their deleted row's chunk list
+is what is put back, and a vault's deleted rows are kept the thirty days for
+that (`gc::collect`, [decision 0073](../../docs/decisions/0073-the-phone-works-with-its-computer.md)).
+On a phone, a file of its own vault deleted while its bytes were on the
+computer (`restore_freed`). On a computer, a file of the Private Vault of one
+of the person's own phones, deleted on the phone (`unhold`): restoring it
+(`restore_held`) puts it back in the phone's folder here as a version after
+the deletion, and the phone takes it back at its next sync
+(`take_back_restored`, only the very file it deleted). Deleting one of these
+for good on the computer lets its bytes go at the next collection.
+
 ## Areas, sharing, and a folder kept remotely
 
 Every row has a `scope`: `NULL` for the shared area, a device id for that

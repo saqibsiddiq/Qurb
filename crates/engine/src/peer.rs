@@ -17,7 +17,7 @@
 use crate::{Engine, Error, Result};
 use qurb_storage::db;
 use qurb_storage::Store;
-use qurb_sync::{Action, Area, Content, DeviceId, FileVersion};
+use qurb_sync::{Action, Area, Causality, Content, DeviceId, FileVersion};
 use std::io::Write;
 use std::path::Path;
 
@@ -236,7 +236,7 @@ fn asks_source(action: &Action) -> bool {
         Action::Adopt { remote } | Action::Hold { remote, .. } => file(remote),
         Action::Resurrect { resolved } => file(resolved),
         Action::Conflict { keeps_path, renamed } => file(keeps_path) || file(renamed),
-        Action::Merge { .. } | Action::Offer { .. } => false,
+        Action::Merge { .. } | Action::Offer { .. } | Action::Restored { .. } => false,
     }
 }
 
@@ -331,6 +331,7 @@ impl Engine {
             actions.extend(self.holding(remote, owner)?);
         }
         actions.extend(self.own_wanted(remote)?);
+        actions.extend(self.own_restored(remote)?);
         actions.extend(self.wanted_actions()?);
         Ok(actions)
     }
@@ -390,7 +391,10 @@ impl Engine {
             let existing = db.live_row_in(&version.path, Some(owner))?;
             let needed = match (&version.content, &existing) {
                 (Content::Deleted, None) => false,
-                (Content::Deleted, Some(_)) => true,
+                // Not a deletion this device has since undone, restoring the
+                // file from its Recently deleted (decision 0073): the owner
+                // offers it again until it takes the file back.
+                (Content::Deleted, Some(row)) => row.vector.compare(&version.vector) != Causality::After,
                 (Content::File { hash, .. }, Some(row)) => {
                     row.content_hash != blake3::Hash::from(*hash)
                         || !db.is_held(&version.path, owner)?
@@ -422,6 +426,24 @@ impl Engine {
             let Some(mine) = self.store().db().own_vault_row(&version.path)? else { continue };
             if mine.content_hash == blake3::Hash::from(*hash) {
                 out.push(Action::Adopt { remote: version.clone() });
+            }
+        }
+        Ok(out)
+    }
+
+    /// This device's own files deleted here that a device keeping them put
+    /// back (decision 0073), to take back. Only paths whose last word here is
+    /// a deletion are looked at, so a sync with nothing deleted costs one
+    /// question of the index, whatever the device keeps.
+    fn own_restored(&self, remote: &[FileVersion]) -> Result<Vec<Action>> {
+        let deleted = self.store().db().own_deleted_paths()?;
+        if deleted.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut out = Vec::new();
+        for version in remote.iter().filter(|v| v.area == Area::Held && deleted.contains(&v.path)) {
+            if self.store().restored_elsewhere(version)? {
+                out.push(Action::Restored { remote: version.clone() });
             }
         }
         Ok(out)
@@ -558,6 +580,24 @@ impl Engine {
                 Action::Hold { owner, remote } => {
                     stats.held += 1;
                     self.take_hold(owner, remote, source, &mut stats)
+                }
+                Action::Restored { remote } => {
+                    stats.adopted += 1;
+                    self.store_mut().take_back_restored(remote).map(|taken| {
+                        if taken {
+                            crate::note(
+                                self.store(),
+                                db::Event::Restored,
+                                Some(&remote.path),
+                                match remote.content {
+                                    Content::File { size, .. } => Some(size),
+                                    Content::Deleted => None,
+                                },
+                                Some(&remote.modified_by),
+                                Some("put back there from Recently deleted"),
+                            );
+                        }
+                    }).map_err(Error::from)
                 }
                 Action::Conflict { keeps_path, renamed } => {
                     stats.conflicts += 1;

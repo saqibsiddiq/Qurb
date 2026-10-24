@@ -281,6 +281,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     qurb_sync::Action::Merge { .. } => "merged",
                     qurb_sync::Action::Offer { .. } => continue,
                     qurb_sync::Action::Hold { .. } => "held",
+                    qurb_sync::Action::Restored { .. } => "taken back",
                 };
                 println!("    {} -> {}  {kind:<9} {}", from.name, to.name, action.path());
             }
