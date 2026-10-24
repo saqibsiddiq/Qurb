@@ -938,7 +938,7 @@ qurb/
 │       │                                      or typing its six digits (six
 │       │                                      boxes), or the 24 words (24 boxes);
 │       │                                      then the number to compare while
-│       │                                      the other device approves
+│       │                                      the other device, named, approves
 │       │                  Backup.kt           the key, kept in Block Store
 │       │                  ScanActivity.kt     reading a pairing QR code
 │       │                  ShareActivity.kt    the share sheet's way in: save it,
@@ -1145,7 +1145,7 @@ for the workspace as it stands.
 | Mutual authentication | pinned fingerprints, handshake signature verified |
 | Wire format | length-bounded; decoder has no panicking path |
 | Incremental transfer | only chunks the receiver lacks cross the wire, eight in flight at once; a fetch that was cut off chunks what it has and carries on — [0050](decisions/0050-large-files-from-a-phone.md). From a phone over Wi-Fi this measured about 5 MB/s under Cubic, barely faster than one at a time ([phase 5](phases/phase-5-mobile.md#measured-on-the-s23-2026-10-05)); the next row is what changed that |
-| Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md) |
+| Pairing | approved at the device showing the code, both screens showing the same six digits; refused between devices holding different keys; each side records whether the other is a phone, computer or replica — [0053](decisions/0053-approval-same-key-and-safe-copies.md); the device joining is told who shows the code, to say where to approve — [0074](decisions/0074-who-shows-the-code.md) |
 | Six digits to pair | beside the QR code, six digits a device on the same network types: the showing device multicasts an offer (port 47318), the typing one connects unpinned and runs SPAKE2 with the digits, both certificates bound in, and is given the long code sealed under the key; then pairs with it as if scanned, approval included. Five wrong tries and the digits stop working for that code — [0066](decisions/0066-six-digits-to-pair.md) |
 | Guests | another person's device visits with a guest code, keeping its own key; the two meet at the rendezvous service under a secret of their own and are shown each other only what was sent to them (the `Guest` audience) — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |
 | A guest's folder, sealed | a guest's Private Vault kept by the computer it visits under sealed names and sealed chunks the computer cannot open, filed under the guest's person; freed on the phone once kept, fetched back and checked when opened — [0060](decisions/0060-a-computer-keeps-private-folders-for-several-people.md) |

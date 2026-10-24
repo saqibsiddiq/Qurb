@@ -309,9 +309,9 @@
 
         <!-- Joining: the number this phone shows while the other device asks
              whether to let it in (decision 0053), large, for the person to
-             compare. The engine learns that device's name only once the join
-             is done, so it is "your other device" here, not its name; and a
-             join cannot be called off midway, so there is no Cancel. -->
+             compare, and where to approve it, by that device's name when it
+             says it (decision 0074). A join cannot be called off midway, so
+             there is no Cancel. -->
         <LinearLayout
             android:id="@+id/waitPanel"
             android:layout_width="match_parent"
@@ -332,6 +332,7 @@
                 android:importantForAccessibility="no" />
 
             <TextView
+                android:id="@+id/waitTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
@@ -354,6 +355,7 @@
                 android:textSize="40sp" />
 
             <TextView
+                android:id="@+id/waitSays"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"

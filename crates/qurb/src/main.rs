@@ -648,8 +648,11 @@ fn kind_of(store: &Arc<Mutex<qurb_storage::Store>>) -> String {
 
 async fn join(root: PathBuf, code: String) -> Result<()> {
     if !qurb_cli::is_set_up(&root) {
-        let number = qurb_cli::setup::number_for(&root, &code).await?;
-        println!("Joining your other device. It will ask you to approve this one:");
+        let (number, name) = qurb_cli::setup::number_and_name(&root, &code).await?;
+        match name {
+            Some(name) => println!("Joining {name}. It will ask you to approve this device:"),
+            None => println!("Joining your other device. It will ask you to approve this one:"),
+        }
         println!("check that it shows {number}.");
         let peer = qurb_cli::setup::join(&root, &code).await?;
         println!("Set up {} as another of your devices.", root.display());
@@ -661,7 +664,11 @@ async fn join(root: PathBuf, code: String) -> Result<()> {
 
     let invite = qurb_cli::setup::invite(&code, &identity).await?;
     println!("Joining {} ...", invite.address);
-    println!("Approve it there: it should show {}.", invite.number_for(&identity.fingerprint()));
+    let number = invite.number_for(&identity.fingerprint());
+    match qurb_peer::who(&invite, &identity, now()).await {
+        Some((name, _)) => println!("Approve it on {name}: it should show {number}."),
+        None => println!("Approve it there: it should show {number}."),
+    }
 
     let kind = kind_of(&store);
     let ours = qurb_peer::Ours { name: &config.name, kind: &kind, key: &master };

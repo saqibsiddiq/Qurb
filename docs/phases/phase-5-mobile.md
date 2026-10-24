@@ -2726,9 +2726,13 @@ Backups and Activity are done to draft 1
 
 Setup is done to draft 1, with the page that waits while the other device
 approves ([details](../design/redesign.md#built-android-setup-2026-10-24)).
-It says *your other device* rather than its name, which the phone does not
-know until the join is done, and has no Cancel, since a join cannot be called
-off midway. Two things it turned up were wrong across the app and are fixed:
+It names that device, which asking before joining made possible
+([decision 0074](../decisions/0074-who-shows-the-code.md): a new request,
+`Who`, that older devices refuse harmlessly; two tests in the peer crate, one
+in the phone's engine; a build from before it went on waiting when asked, and
+paired), and has no Cancel, since a join cannot be called off
+midway. Start again here asks first, and with a key found, joining with a code
+is offered too. Two things it turned up were wrong across the app and are fixed:
 from Android 9, text weights named in layouts and every button's came out
 regular (AppCompat loses them; `QurbViewInflater` puts them back), and a
 refused join read *Network problem.* (one engine test added;

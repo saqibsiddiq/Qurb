@@ -218,6 +218,11 @@ fn a_new_phone_joins_with_the_code_and_needs_no_words() {
     let offer = desktop.offer_pairing().unwrap();
     let code = offer.code();
     let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
+    // What the phone shows while the desktop asks: the number, and where to
+    // approve it (decision 0074).
+    let showing = qurb_mobile::pairing_with(phone_root.clone(), code.clone()).unwrap();
+    assert_eq!(showing.name.as_deref(), Some("desktop"));
+    assert_eq!(showing.number.len(), 7, "six digits in two threes: {}", showing.number);
     let joined = join_new(phone_root.clone(), code, "phone".into(), None).unwrap();
     let hosted = waiting.join().unwrap().unwrap();
     assert_eq!(joined.name, "desktop");

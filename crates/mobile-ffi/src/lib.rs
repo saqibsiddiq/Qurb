@@ -960,15 +960,32 @@ pub fn join_new(
     })
 }
 
-/// The number this phone will show while the device showing `code` approves it
-/// (decision 0053). Shown before joining, so the person can compare the two
-/// screens; the certificate it is derived from is made here if this phone has
-/// none yet, and is the one joining then presents.
+/// What this phone shows while the device showing `code` approves it
+/// (decision 0053): the number, for the person to compare the two screens,
+/// and that device's name and kind, when it says them, for where to approve --
+/// *Approve on saqib* (decision 0074). The certificate the number is derived
+/// from is made here if this phone has none yet, and is the one joining then
+/// presents.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct PairingWith {
+    /// Six digits, as "482 913".
+    pub number: String,
+    /// What the device showing the code calls itself, or None from one too
+    /// old to say, or that did not answer in time.
+    pub name: Option<String>,
+    /// "phone", "computer" or "replica", as that device says.
+    pub kind: Option<String>,
+}
+
+/// The number this phone shows while the device showing `code` approves it,
+/// and who that device is ([`PairingWith`]). Shown before joining.
 ///
 /// Six digits are found on this network here (decision 0066), and what they
-/// fetched is remembered for the joining that follows.
+/// fetched is remembered for the joining that follows. Asking the device its
+/// name waits a few seconds at most, and a device that does not answer is
+/// left nameless rather than failing here: the join says what went wrong.
 #[uniffi::export]
-pub fn pairing_number(root: String, code: String) -> Result<String, QurbError> {
+pub fn pairing_with(root: String, code: String) -> Result<PairingWith, QurbError> {
     logging();
     let store_dir = store_dir(Path::new(&root));
     std::fs::create_dir_all(&store_dir).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
@@ -980,7 +997,12 @@ pub fn pairing_number(root: String, code: String) -> Result<String, QurbError> {
         .build()
         .map_err(|e| QurbError::Other { detail: format!("no runtime: {e}") })?;
     let invite = typed_code(&runtime, &code, &identity)?;
-    Ok(invite.number_for(&identity.fingerprint()))
+    let named = runtime.block_on(qurb_peer::who(&invite, &identity, now()));
+    Ok(PairingWith {
+        number: invite.number_for(&identity.fingerprint()),
+        name: named.as_ref().map(|(name, _)| name.clone()),
+        kind: named.and_then(|(_, kind)| kind),
+    })
 }
 
 /// A typed code, the long one or six digits found on this network
@@ -1344,7 +1366,7 @@ impl Qurb {
 
     /// Visit another person's computer as a guest, with the guest code it
     /// shows (decision 0060): this phone keeps its own key, shows the number
-    /// from [`pairing_number`] while the person there approves, and from then
+    /// from [`pairing_with`] while the person there approves, and from then
     /// on can send that computer files and be sent them.
     pub fn visit_computer(&self, code: String) -> Result<PeerInfo, QurbError> {
         let identity = self.identity()?;
@@ -1374,7 +1396,7 @@ impl Qurb {
         let store = self.shared_store()?;
 
         // The other device asks its person to approve this one, comparing the
-        // number `pairing_number` gave this screen (decision 0053).
+        // number `pairing_with` gave this screen (decision 0053).
         let ours = qurb_peer::Ours { name: &self.device_name, kind: "phone", key: &self.master };
         let paired = runtime
             .block_on(qurb_peer::accept(&invite, &identity, store, &ours, now()))

@@ -168,6 +168,15 @@ pub enum Request {
     /// [`Response::NotFound`] when the changes are too many to be worth
     /// sending apart from the list.
     TreeSince { since: u64 },
+
+    /// Who the device showing a code is, asked by a device about to join or
+    /// visit with it, presenting the code's token: answered with
+    /// [`Response::Who`] before anybody approves anything, so the joining
+    /// device can say where to approve it -- *Approve on saqib* -- rather than
+    /// "your other device". Asked on a connection of its own: a device from
+    /// before this does not know it, answers *not found* and drops that
+    /// connection, and the join goes on as before on another.
+    Who { token: [u8; 16] },
 }
 
 /// One file of a phone's folder on a computer, as listed to the phone.
@@ -263,6 +272,11 @@ pub enum Response {
     /// entries of it that changed. The asker puts them in place of its own
     /// and checks the result against the fingerprint.
     TreeDelta { now: u64, digest: [u8; 32], changed: Vec<FileVersion> },
+
+    /// The name and kind of the device showing a code, answering
+    /// [`Request::Who`]. Claims, as a joining device's own name is: the
+    /// number both screens show is what is checked.
+    Who { name: String, kind: String },
 }
 
 const TAG_TREE: u8 = 1;
@@ -285,6 +299,7 @@ const TAG_KEPT: u8 = 17;
 const TAG_LAYOUT: u8 = 18;
 const TAG_TREE_DIGEST: u8 = 19;
 const TAG_TREE_SINCE: u8 = 20;
+const TAG_WHO: u8 = 21;
 
 /// The most entries one listing of a phone's folder may hold: a folder of a
 /// hundred thousand photos is a phone's; more is not.
@@ -327,6 +342,7 @@ const STATUS_KEPT: u8 = 19;
 const STATUS_LAYOUT: u8 = 20;
 const STATUS_DIGEST: u8 = 21;
 const STATUS_TREE_DELTA: u8 = 22;
+const STATUS_WHO: u8 = 23;
 
 /// The most folders one answer may list: two levels of a phone's storage come
 /// to a few hundred. A peer claiming more is not describing a phone.
@@ -406,6 +422,10 @@ impl Request {
                 out.push(TAG_TREE_SINCE);
                 out.extend_from_slice(&since.to_le_bytes());
             }
+            Request::Who { token } => {
+                out.push(TAG_WHO);
+                out.extend_from_slice(token);
+            }
         }
         out
     }
@@ -444,6 +464,11 @@ impl Request {
             TAG_LAYOUT => Request::Layout { content: r.hash()? },
             TAG_TREE_DIGEST => Request::TreeDigest,
             TAG_TREE_SINCE => Request::TreeSince { since: r.u64()? },
+            TAG_WHO => {
+                let mut token = [0u8; 16];
+                token.copy_from_slice(r.take(16)?);
+                Request::Who { token }
+            }
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -554,6 +579,11 @@ impl Response {
                 out.push(STATUS_ABOUT);
                 put_name(&mut out, kind);
             }
+            Response::Who { name, kind } => {
+                out.push(STATUS_WHO);
+                put_name(&mut out, name);
+                put_name(&mut out, kind);
+            }
             Response::Asks { opening } => {
                 out.push(STATUS_ASKS);
                 match opening {
@@ -613,6 +643,7 @@ impl Response {
                 key_check: r.hash()?,
             },
             STATUS_ABOUT => Response::About { kind: r.name()? },
+            STATUS_WHO => Response::Who { name: r.name()?, kind: r.name()? },
             STATUS_ASKS => Response::Asks {
                 opening: match r.u8()? {
                     0 => None,
@@ -1064,6 +1095,7 @@ mod tests {
             Request::Manifest { content: [1; 32] },
             Request::Chunk { hash: [2; 32] },
             Request::Join { token: [3; 16], name: "Phone".into(), kind: "phone".into() },
+            Request::Who { token: [4; 16] },
             Request::About,
             Request::Folders,
             Request::Chosen,
@@ -1103,6 +1135,7 @@ mod tests {
             Response::Chunk(vec![]),
             Response::Key { key: [4; 32] },
             Response::About { kind: "replica".into() },
+            Response::Who { name: "saqib".into(), kind: "computer".into() },
             Response::Mismatch,
             Response::Declined,
             Response::Paired { device_id: [1; 32], name: "Phone".into(), kind: "phone".into(), key_check: [2; 32] },

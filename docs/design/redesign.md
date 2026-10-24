@@ -489,17 +489,21 @@ Setup draft 1 is in the app (`SetupActivity.kt`, `activity_setup.xml`), with
   WhatsApp's linking code does; *Join* is there for trying again.
 - **24 words** as 24 numbered boxes, three to a row, the one being typed in
   edged green; a phrase pasted into any box fills it and the boxes after it.
-- **Waiting**: *Approve on your other device*, the number large, *It shows
-  this number too*, and Home's status mark at 96 dp with its ring travelling
-  round a devices icon. A join that fails goes back to the step it came from.
+- **Waiting**: *Approve on saqib*, the number large, *saqib shows this
+  number too*, and Home's status mark at 96 dp with its ring travelling round
+  the other device's icon, a laptop or a phone. A join that fails goes back to
+  the step it came from.
 - *Join* and *Restore* are enabled only once six digits or 24 words are in.
   Before, tapped short, they did nothing and said nothing.
 
 **Where it differs, and why:**
 
-- **"Your other device", not its name.** The phone learns the other device's
-  name only once the join is done: the code carries no name. Saying *Approve
-  on saqib* needs the engine to say the name earlier.
+- **The name, since decision 0074.** Built first as *Approve on your other
+  device*: the phone learned the other device's name only once the join was
+  done, since the code carries no name. Now it asks who shows the code before
+  joining (`pairingWith`). A device from before that, or one that does not
+  answer within three seconds, is still *your other device*, with a devices
+  icon.
 - **No Cancel while waiting, and back does nothing there.** The engine cannot
   call a join off midway, so a Cancel would leave it running behind a page
   saying it had stopped. It ends when the other device answers, or when the

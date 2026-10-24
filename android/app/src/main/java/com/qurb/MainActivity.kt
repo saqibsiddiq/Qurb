@@ -26,7 +26,7 @@ import uniffi.qurb_mobile.FileEntry
 import uniffi.qurb_mobile.PeerInfo
 import uniffi.qurb_mobile.SyncOutcome
 import uniffi.qurb_mobile.Waiting
-import uniffi.qurb_mobile.pairingNumber
+import uniffi.qurb_mobile.pairingWith
 import java.io.File
 
 /**
@@ -899,7 +899,7 @@ class MainActivity : AppCompatActivity() {
                 // number to compare is on this screen meanwhile (decision 0053).
                 val number = withContext(Dispatchers.IO) {
                     Engine.hearingTheNetwork(this@MainActivity) {
-                        pairingNumber(Engine.root(this@MainActivity).absolutePath, code)
+                        pairingWith(Engine.root(this@MainActivity).absolutePath, code).number
                     }
                 }
                 val showing = Approval.showWhileJoining(this@MainActivity, number)

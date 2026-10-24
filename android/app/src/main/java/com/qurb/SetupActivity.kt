@@ -17,7 +17,7 @@ import com.qurb.databinding.ActivitySetupBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.qurb_mobile.pairingNumber
+import uniffi.qurb_mobile.pairingWith
 
 /**
  * First launch: make a key, or join the devices the person already has.
@@ -332,15 +332,24 @@ class SetupActivity : AppCompatActivity() {
             // certificate that then joins.
             // Six digits are looked for on this Wi-Fi (decision 0066), which
             // the phone hears only while it holds the multicast lock.
-            val number = withContext(Dispatchers.IO) {
+            val with = withContext(Dispatchers.IO) {
                 Engine.root(this@SetupActivity).mkdirs()
                 Engine.hearingTheNetwork(this@SetupActivity) {
-                    pairingNumber(Engine.root(this@SetupActivity).absolutePath, code)
+                    pairingWith(Engine.root(this@SetupActivity).absolutePath, code)
                 }
             }
-            views.waitNumber.text = number
-            views.waitNumber.contentDescription = number.replace(" ", "")
-            views.waitMark.show(StatusMark.Look.SYNCING, R.drawable.mark_monitor_smartphone)
+            // Where to approve, by name when the other device says it
+            // (decision 0074); one from before then is "your other device".
+            val name = with.name
+            views.waitTitle.text = if (name != null) "Approve on $name" else "Approve on your other device"
+            views.waitSays.text = if (name != null) "$name shows this number too" else "It shows this number too"
+            views.waitNumber.text = with.number
+            views.waitNumber.contentDescription = with.number.replace(" ", "")
+            views.waitMark.show(StatusMark.Look.SYNCING, when (with.kind) {
+                "computer", "replica" -> R.drawable.mark_laptop
+                "phone" -> R.drawable.mark_smartphone
+                else -> R.drawable.mark_monitor_smartphone
+            })
             // The travelling ring is the waiting; the bar would say it twice.
             views.progress.visibility = View.GONE
             show(views.waitPanel)

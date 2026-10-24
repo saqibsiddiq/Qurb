@@ -556,6 +556,56 @@ async fn a_device_with_no_key_joins_with_the_code_and_gets_the_key() {
     assert_eq!(host.trusted().len(), 1);
 }
 
+/// A device about to join asks who is showing the code, to say where to
+/// approve it -- *Approve on Desktop* -- and is told; the join goes on after,
+/// on a connection of its own.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_device_about_to_join_is_told_who_shows_the_code_and_joins() {
+    let host = Device::new();
+    let key = qurb_keys::MasterKey::generate();
+    let fresh = Fresh::new();
+    let got = Arc::new(Mutex::new(None));
+
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let invite = listener.invite().clone();
+    let host_store = Arc::clone(&host.store);
+    let waiting = async { listener.wait(host_store, &Ours { name: "Desktop", kind: "computer", key: &key }, NOW, approve_all).await };
+    let joining = async {
+        let named = qurb_peer::who(&invite, &fresh.identity, NOW).await;
+        let joined = join(&invite, &fresh.identity, "Phone", "phone", NOW, fresh.set_up(Arc::clone(&got))).await;
+        (named, joined)
+    };
+    let (host_saw, (named, joined)) = tokio::join!(waiting, joining);
+
+    assert_eq!(named, Some(("Desktop".to_string(), Some("computer".to_string()))));
+    assert!(joined.is_ok(), "{joined:?}");
+    assert_eq!(host_saw.expect("host side").name, "Phone");
+    assert_eq!(*got.lock().unwrap(), Some(key.for_another_device()));
+}
+
+/// Who shows a code is said only to a device that saw it: one with the
+/// wrong token is told nothing, and nothing is held up by asking.
+#[tokio::test(flavor = "multi_thread")]
+async fn who_shows_a_code_is_not_said_without_it() {
+    let host = Device::new();
+    let key = qurb_keys::MasterKey::generate();
+    let fresh = Fresh::new();
+
+    // Expiring in two seconds, so the host stops waiting by itself.
+    let now = NOW + 300 - 2;
+    let listener = PairingHost::open(LOOPBACK.parse().unwrap(), &host.identity, NOW).unwrap();
+    let mut guessed = listener.invite().clone();
+    guessed.token[0] ^= 1;
+    let host_store = Arc::clone(&host.store);
+    let waiting = async { listener.wait(host_store, &Ours { name: "Desktop", kind: "computer", key: &key }, now, approve_all).await };
+    let asking = qurb_peer::who(&guessed, &fresh.identity, now);
+    let (host_saw, named) = tokio::join!(waiting, asking);
+
+    assert_eq!(named, None);
+    assert!(host_saw.is_err());
+    assert!(host.trusted().is_empty());
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn without_the_code_a_device_gets_no_key_and_sets_nothing_up() {
     let host = Device::new();

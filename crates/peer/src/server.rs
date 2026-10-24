@@ -394,6 +394,7 @@ async fn serve_request(
         | Response::Asks { .. }
         | Response::Key { .. }
         | Response::About { .. }
+        | Response::Who { .. }
         | Response::Mismatch
         | Response::Declined
         | Response::Changed { .. }
@@ -544,6 +545,7 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         Request::Pair { .. }
         | Request::Join { .. }
         | Request::Visit { .. }
+        | Request::Who { .. }
         | Request::Short { .. }
         | Request::ShortConfirm { .. } => Response::NotFound,
 

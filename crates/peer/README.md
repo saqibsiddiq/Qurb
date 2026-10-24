@@ -128,6 +128,13 @@ shows (`Invite::number_for`). Each side sends a one-way check of the key
 each says whether it is a `phone`, `computer` or `replica`. Devices paired
 before that ask once with `Request::About`.
 
+Before joining or visiting, the device asking can learn who shows the code:
+`who` sends `Request::Who` with the code's token on a connection of its own and
+gets the name and kind back, so its screen can say *Approve on saqib*
+([decision 0074](../../docs/decisions/0074-who-shows-the-code.md)). It waits
+three seconds at most and gives `None` rather than an error; a device from
+before this answers *not found* and goes on waiting for the join.
+
 **Six digits** ([decision 0066](../../docs/decisions/0066-six-digits-to-pair.md),
 `short.rs`). While a code is shown, `PairingHost` offers it on the local
 network by multicast (`239.255.113.7:47318`) under six random digits. A

@@ -564,6 +564,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Asks { .. } => "ask",
         Response::Key { .. } => "key",
         Response::About { .. } => "description",
+        Response::Who { .. } => "name of a device showing a code",
         Response::Mismatch => "key mismatch",
         Response::Declined => "refusal",
         Response::Changed { .. } => "change notification",

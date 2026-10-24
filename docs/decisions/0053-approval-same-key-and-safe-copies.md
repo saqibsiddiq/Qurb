@@ -5,7 +5,9 @@ Android; watched on the S23 with the laptop's command line on 2026-10-07,
 not in the desktop window (see *Checked, and not*); amends
 [0014](0014-pairing.md), [0025](0025-a-storage-cap-that-cannot-lose-data.md),
 [0036](0036-a-phone-keeps-its-own-files.md) and
-[0052](0052-the-key-travels-with-the-code.md)
+[0052](0052-the-key-travels-with-the-code.md); amended by
+[0074](0074-who-shows-the-code.md): the device asking is told who shows the
+code, to say where to approve
 **Date:** 2026-10-07
 
 ## What happened

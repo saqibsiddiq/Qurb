@@ -181,10 +181,12 @@ that collects through a relay while the phone cannot reach it is on, and Home
 says so: a device last seen before the last pass that tried it is called off
 (`Engine.isOff` in the app).
 
-A typed code is read the same way everywhere (`joinNew` and `pairingNumber`
+A typed code is read the same way everywhere (`joinNew` and `pairingWith`
 too): the long code as it is; six digits found by multicast on the network,
 fetched by SPAKE2, and then used as the long code. Hold Android's multicast
-lock while they are looked for, or the offers are not heard.
+lock while they are looked for, or the offers are not heard. `pairingWith`
+gives the number to show while the other device approves, and that device's
+name and kind when it says them (decision 0074), for *Approve on saqib*.
 
 Backups, kept by a computer of this person's that keeps the phone's vault
 (decisions 0062 and 0063), read from where they lie, on unmetered networks:

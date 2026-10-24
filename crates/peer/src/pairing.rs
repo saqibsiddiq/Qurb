@@ -446,6 +446,20 @@ impl PairingHost {
                         return Ok(guest);
                     }
 
+                    // Who is showing this code, to a device that saw it, so
+                    // that it can say where to approve it; on a connection of
+                    // its own, answered and let go.
+                    Ok(Request::Who { token }) => {
+                        let reply = if constant_time_eq(&token, &self.invite.token) {
+                            Response::Who { name: ours.name.to_string(), kind: ours.kind.to_string() }
+                        } else {
+                            tracing::warn!(peer = %peer_fingerprint.short(), "wrong pairing token");
+                            Response::NotFound
+                        };
+                        answer(&mut send, &reply, &connection).await;
+                        break;
+                    }
+
                     // A guest invite is for guests: it never gives this
                     // device's key, nor pairs a device as one of this
                     // person's own.
@@ -626,6 +640,43 @@ async fn answer(send: &mut quinn::SendStream, response: &Response, connection: &
     let _ = send.write_all(&response.encode()).await;
     let _ = send.finish();
     let _ = tokio::time::timeout(Duration::from_secs(2), connection.closed()).await;
+}
+
+/// How long [`who`] waits for its answer: the number waits on it, and must
+/// not wait long for a device that is not there, which the join after it will
+/// say anyway.
+const WHO_WAIT: Duration = Duration::from_secs(3);
+
+/// Who is showing `invite` -- its name and kind -- asked before joining or
+/// visiting with it ([`Request::Who`]), so the person can be told where to
+/// approve. `None` from a device older than the question, which answers *not
+/// found*, and from one that does not answer within [`WHO_WAIT`]: never an
+/// error, since the join that follows says what went wrong, as it did before
+/// this was asked. Claims, as the joining device's own name is.
+pub async fn who(invite: &Invite, identity: &Identity, now: i64) -> Option<(String, Option<String>)> {
+    if invite.is_expired(now) {
+        return None;
+    }
+    let asked = async {
+        let bind: SocketAddr =
+            if invite.address.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" }.parse().expect("literal");
+        let mut endpoint = quinn::Endpoint::client(bind).ok()?;
+        endpoint.set_default_client_config(tls::client_config(identity, invite.fingerprint).ok()?);
+        let connection = endpoint.connect(invite.address, "qurb-device").ok()?.await.ok()?;
+        let reply = async {
+            let (mut send, mut recv) = connection.open_bi().await.ok()?;
+            send.write_all(&Request::Who { token: invite.token }.encode()).await.ok()?;
+            send.finish().ok()?;
+            recv.read_to_end(MAX_MESSAGE).await.ok()
+        }
+        .await;
+        hang_up(&connection, &endpoint).await;
+        match Response::decode(&reply?).ok()? {
+            Response::Who { name, kind } => Some((sanitise(&name), known_kind(&kind))),
+            _ => None,
+        }
+    };
+    tokio::time::timeout(WHO_WAIT, asked).await.ok().flatten()
 }
 
 /// Join as a device with no key: connect to the device showing the code, get

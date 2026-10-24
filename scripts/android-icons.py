@@ -38,7 +38,7 @@ ICONS = """
 # Drawn at 60 dp in Home's status mark (the redesign's Status mark component).
 MARKS = """
     check refresh-cw git-compare cloud-off upload plus circle-alert hard-drive
-    monitor-smartphone
+    monitor-smartphone laptop smartphone
 """.split()
 MARK_SIZE = 60
 

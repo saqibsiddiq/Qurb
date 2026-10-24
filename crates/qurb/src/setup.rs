@@ -169,6 +169,20 @@ pub async fn number_for(root: &Path, code: &str) -> Result<String> {
     Ok(invite(code, &identity).await?.number_for(&identity.fingerprint()))
 }
 
+/// [`number_for`], and the name of the device showing `code` when it says it
+/// (decision 0074), for "approve it on saqib". A device too old to say, or
+/// that does not answer within a few seconds, is left nameless.
+pub async fn number_and_name(root: &Path, code: &str) -> Result<(String, Option<String>)> {
+    let identity = identity_for_joining(root)?;
+    let invite = invite(code, &identity).await?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let named = qurb_peer::who(&invite, &identity, now).await;
+    Ok((invite.number_for(&identity.fingerprint()), named.map(|(name, _)| name)))
+}
+
 /// A typed code, long or six digits (decision 0066), as an invite.
 pub async fn invite(code: &str, identity: &Identity) -> Result<qurb_peer::Invite> {
     match qurb_peer::short::resolve(code.trim(), identity).await {
