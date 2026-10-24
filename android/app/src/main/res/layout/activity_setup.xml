@@ -20,7 +20,8 @@
         android:paddingVertical="24dp">
 
         <!-- Welcome: start here, or join the devices you have; or, with a key
-             in the Google backup, use it. -->
+             in the Google backup, use it, start again (asked first), or join
+             with a code. -->
         <LinearLayout
             android:id="@+id/welcome"
             android:layout_width="match_parent"
@@ -91,6 +92,16 @@
                 android:layout_marginTop="12dp"
                 android:text="I already use Qurb"
                 android:visibility="invisible" />
+
+            <!-- With a key found: joining, as I already use Qurb does. -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/joinInstead"
+                style="@style/Widget.Qurb.Button.Text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Join with a code"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Join: where the other device shows its code, as icons; scan it,

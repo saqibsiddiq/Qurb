@@ -504,10 +504,18 @@ Setup draft 1 is in the app (`SetupActivity.kt`, `activity_setup.xml`), with
   call a join off midway, so a Cancel would leave it running behind a page
   saying it had stopped. It ends when the other device answers, or when the
   code lapses after five minutes.
-- **Start again here replaces the key in the Google backup** with the new one,
-  without asking, as *Set up Qurb here* did beside the old text link. The
-  redesign gives it a full button, so it is easier to reach than it was. Whether
-  it should ask first is open.
+- **Start again here asks first**: a sheet, *Start again with a new key?*, with
+  one warning, *The key in your Google backup is replaced*, and Cancel and
+  Start again. It replaces it, as *Set up Qurb here* did beside the old text
+  link without asking; the redesign gives it a full button, easier to reach.
+- **Join with a code, with a key found**: a text button under the two. The
+  design offered only the key or a new one, so a phone whose backed-up key was
+  left from a setup nobody uses could join only after *Clear data*. Joining
+  keeps the joined key in Block Store in its place.
+
+  Both were put to the owner as questions after the first build; the answer,
+  "do the recommended options and continue". Seen on the emulator with the
+  key-found state forced by a temporary, uncommitted patch.
 - The first Home was built with Home.
 
 **Found on the way, and fixed:**

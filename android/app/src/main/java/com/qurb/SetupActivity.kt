@@ -30,6 +30,7 @@ import uniffi.qurb_mobile.pairingNumber
 class SetupActivity : AppCompatActivity() {
 
     private lateinit var views: ActivitySetupBinding
+    private val kit by lazy { Kit(this) }
 
     private val scanner = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -55,7 +56,10 @@ class SetupActivity : AppCompatActivity() {
         // words never typed back. Start here keeps that key; joining puts it
         // aside -- which a phone set up as new by mistake needs to do.
         views.start.setOnClickListener { if (keyFound) fromBackup() else create() }
-        views.other.setOnClickListener { if (keyFound) create() else show(views.joinPanel) }
+        views.other.setOnClickListener { if (keyFound) askToStartAgain() else show(views.joinPanel) }
+        // With a key found, joining is still a way in: for a key left from a
+        // setup nobody uses any more, which joining replaces.
+        views.joinInstead.setOnClickListener { show(views.joinPanel) }
         // A step goes back a step, by its link or the phone's back.
         views.joinBack.setOnClickListener { show(null) }
         views.digitsBack.setOnClickListener { show(views.joinPanel) }
@@ -79,6 +83,7 @@ class SetupActivity : AppCompatActivity() {
                 views.found.visibility = View.VISIBLE
                 views.start.text = "Use my key"
                 views.other.text = "Start again here"
+                views.joinInstead.visibility = View.VISIBLE
             }
             // Shown only once Block Store has answered (ten seconds at most):
             // shown before, Start here could become Use my key under a finger,
@@ -283,6 +288,20 @@ class SetupActivity : AppCompatActivity() {
         views.restoreConfirm.isEnabled = words.size == 24 && words.all { it.text.isNotBlank() }
     }
 
+    /**
+     * Starting again with a key found makes a new key and keeps it in Block
+     * Store in place of the one there, which this phone then no longer has
+     * any way back to: asked first, as removing a device is.
+     */
+    private fun askToStartAgain() {
+        kit.sheet()
+            .mark(R.drawable.ic_key_round, R.color.attention_bg, R.color.attention)
+            .title("Start again with a new key?", centred = true)
+            .warning("The key in your Google backup is replaced")
+            .buttons("Start again", danger = true) { create() }
+            .show()
+    }
+
     private fun create() {
         settle("Could not set up") {
             if (Engine.unfinished(this)) {
@@ -383,7 +402,7 @@ class SetupActivity : AppCompatActivity() {
     private fun busy(working: Boolean) {
         views.progress.visibility = if (working) View.VISIBLE else View.GONE
         listOf(
-            views.start, views.other, views.scan, views.typeDigits, views.joinConfirm, views.joinBack,
+            views.start, views.other, views.joinInstead, views.scan, views.typeDigits, views.joinConfirm, views.joinBack,
             views.digitsBack, views.useWords, views.restoreConfirm, views.restoreBack,
         ).forEach { it.isEnabled = !working }
         if (!working) ready()

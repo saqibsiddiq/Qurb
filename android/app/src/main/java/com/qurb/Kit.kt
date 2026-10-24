@@ -13,6 +13,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.DrawableRes
 import androidx.annotation.StyleRes
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.setPadding
@@ -33,7 +34,7 @@ import uniffi.qurb_mobile.PeerInfo
  * so a pattern looks and behaves the same wherever it appears -- the Android
  * half of what `crates/desktop/ui/core.js` is to the window.
  */
-class Kit(private val app: MainActivity) {
+class Kit(private val app: AppCompatActivity) {
 
     fun dp(value: Int): Int = (value * app.resources.displayMetrics.density).toInt()
 
@@ -753,7 +754,7 @@ class Kit(private val app: MainActivity) {
         }
         addCard(cards, "Add a device") {
             sheet.dismiss()
-            app.pair()
+            (app as? MainActivity)?.pair()
         }
         sheet.view(cards, top = 0).show()
     }
@@ -989,7 +990,7 @@ object States {
     }
 }
 
-class Sheet(private val app: MainActivity, private val kit: Kit) {
+class Sheet(private val app: AppCompatActivity, private val kit: Kit) {
 
     val dialog = BottomSheetDialog(app)
     val body = LinearLayout(app).apply {
