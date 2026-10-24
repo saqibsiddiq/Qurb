@@ -2781,8 +2781,15 @@ the laptop's screen, named the computer, and the visit was made. Scanning a
 code already used ends in the old *Could not connect*, blaming a firewall: a
 known gap, noted in the redesign log.
 
-Not built yet: Files, the folders to back up as a tree, the desktop; and the
-engine work of
+Files' Shared page is built
+([details](../design/redesign.md#built-android-the-shared-page-2026-10-24)):
+a computer's shared folder, which the owner's phones and the guests' reach
+live, browsed, searched and changed from the phone, each change made by the
+computer (decision 0073, steps 1 to 3 in the engine). Checked on the emulator.
+**Not yet run on the S23.**
+
+Not built yet: the rest of Files, the folders to back up as a tree, the
+desktop; and the rest of the engine work of
 [0073](../decisions/0073-the-phone-works-with-its-computer.md).
 
 ## Deliberately left undone

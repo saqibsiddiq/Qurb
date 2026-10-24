@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb, Notifications and the QR scanner** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb, Notifications, the QR scanner and Files' Shared page** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -822,3 +822,41 @@ here: the phone cannot tell the two apart from what the network gives it.
 **Not checked:** the torch lighting; *Camera not allowed* and *No camera*;
 *Not a Qurb code* on the S23, which needs a code that is not Qurb's in front
 of it.
+
+## Built: Android, the Shared page (2026-10-24)
+
+The Shared page of Files draft 4 is in the app (`SharedScreen.kt`), reached
+from Files as *Shared, On saqib* -- one for each of the owner's computers and
+each computer visited -- and backed by decision 0073's steps 1 to 3:
+
+- **The page**: *Files* to go back; *Shared* with a new-folder button and the
+  round plus; which computer, its laptop and its dot; *Search Shared*; the
+  folders as tiles two to a row; the files with their kind in a small tile and
+  their size at the end. Inside a folder, its name in the title and the folder
+  above it to go back to.
+- **A file**: Open, Download, Rename, Delete. **A folder held**: Rename,
+  Delete. Deleting asks first, *… keeps it in Recently deleted for 30 days*.
+  **New folder** and **Rename** ask for the name in a sheet, its stem chosen.
+- **The plus** adds files from the phone's picker into the folder on screen,
+  a sheet with each file's name and a bar while it goes.
+
+**Where it differs, and why:**
+
+- **No count of the people who can reach it**, on the card or the page, and
+  **no count on a folder's tile**: the computer does not say either yet.
+- **The plus stands in the title**, as Devices' does, not floating at the foot:
+  the page's layout has no place for one that floats.
+- **Files around it is not redesigned yet**: *Shared* is a row in today's
+  Files, not the card of draft 4.
+
+**Checked** on the emulator (`qurb-34g`), the command line built for Android
+running on it as the phone's own computer (`qurb run`), with two folders and a
+file in its shared folder: the page as drawn, the empty folder on its disk
+listed; *Trips* made, there on its disk; a 6.3 MB picture added from the
+picker, the same bytes there; renamed *sea.png*, the stem chosen in the field
+-- which the first build did not do, the name typed after `.png`; *PASTA*
+finding *Recipes/pasta.txt*; *Trips* held and deleted, and `qurb deleted` on
+the computer listing it *deleted on* the phone; a text file opened.
+
+**Not checked:** anything on the S23; a guest's phone; a refusal shown; a
+large file's progress; dark mode.

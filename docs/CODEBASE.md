@@ -922,6 +922,12 @@ qurb/
 │       │                                      computer keeps for this phone, a
 │       │                                      hundred files at a time, opened,
 │       │                                      downloaded or restored (0067)
+│       │                  SharedScreen.kt     a computer's shared folder, live:
+│       │                                      search, folder tiles, files; a new
+│       │                                      folder, files added, renamed,
+│       │                                      deleted (0073, Files draft 4)
+│       │                  Opened.kt           a file of a computer's folder,
+│       │                                      opened without keeping it
 │       │                  StreamProvider.kt   a large file of it opened in another
 │       │                                      app as it arrives, seekable, read
 │       │                                      a chunk at a time

@@ -1186,3 +1186,83 @@ fn a_phone_opens_its_folder_on_the_computer() {
     done.store(true, std::sync::atomic::Ordering::Relaxed);
     serving.join().unwrap();
 }
+
+/// The computer's shared folder through the engine as the app calls it
+/// (decision 0073, item 6): listed live, a folder made, a file added with
+/// its progress heard, renamed, found by searching, and deleted -- each made
+/// by the computer on its own folder.
+#[test]
+fn a_phone_changes_the_computers_shared_folder() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
+    logging();
+    let (_runtime, signal) = signalling();
+    let desktop_dir = tempfile::tempdir().unwrap();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let setup = create(desktop_dir.path().display().to_string()).unwrap();
+    restore(phone_dir.path().display().to_string(), setup.recovery_phrase.clone()).unwrap();
+    let desktop =
+        Qurb::open_with(desktop_dir.path().display().to_string(), None, settings("desktop", &signal)).unwrap();
+    let phone = Qurb::open_with(phone_dir.path().display().to_string(), None, settings("phone", &signal)).unwrap();
+
+    let offer = desktop.offer_pairing().unwrap();
+    let code = offer.code();
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
+    phone.join_pairing(code).unwrap();
+    waiting.join().unwrap().unwrap();
+    let laptop = phone.peers().unwrap().remove(0);
+
+    // Something in the computer's shared area.
+    let source = desktop_dir.path().join("outside.txt");
+    std::fs::write(&source, b"for everyone").unwrap();
+    desktop.import_into(source.display().to_string(), "Family/notes.txt".into(), false).unwrap();
+
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let desktop = Arc::new(desktop);
+    let serving = keep_syncing(Arc::clone(&desktop), Arc::clone(&done));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    let mut last = String::new();
+    let folder = loop {
+        assert!(std::time::Instant::now() < deadline, "never listed the shared folder: {last}");
+        let _ = phone.sync_within(5);
+        match phone.open_kept_folder(laptop.fingerprint.clone(), 5) {
+            Ok(folder) => match folder.shared(String::new()) {
+                Ok(top) if top.folders.contains(&"Family".to_string()) => break folder,
+                other => {
+                    last = format!("{other:?}");
+                    folder.disconnect();
+                }
+            },
+            Err(e) => last = e.to_string(),
+        }
+    };
+
+    folder.make_folder("Trips".into()).unwrap();
+    let file = phone_dir.path().join("beach.jpg");
+    std::fs::write(&file, vec![7u8; 5 << 20]).unwrap();
+    struct Heard(std::sync::Mutex<Vec<u64>>);
+    impl qurb_mobile::Progress for Heard {
+        fn sent(&self, bytes: u64) {
+            self.0.lock().unwrap().push(bytes);
+        }
+    }
+    let heard = Arc::new(Heard(std::sync::Mutex::new(Vec::new())));
+    let placed = folder.add_file(file.display().to_string(), "Trips/beach.jpg".into(), heard.clone()).unwrap();
+    assert_eq!(placed, "Trips/beach.jpg");
+    assert_eq!(*heard.0.lock().unwrap(), vec![4 << 20, 5 << 20]);
+    assert_eq!(folder.shared("Trips".into()).unwrap().files[0].name, "beach.jpg");
+
+    folder.rename("Trips/beach.jpg".into(), "Trips/sea.jpg".into()).unwrap();
+    let found = folder.search(true, "SEA".into()).unwrap();
+    assert_eq!(found.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), vec!["Trips/sea.jpg"]);
+    match folder.make_folder("Trips".into()) {
+        Err(qurb_mobile::QurbError::Refused { detail }) => assert!(detail.contains("already called"), "{detail}"),
+        other => panic!("a taken name was not refused with its reason: {other:?}"),
+    }
+    folder.delete("Trips".into()).unwrap();
+    assert!(!folder.shared(String::new()).unwrap().folders.contains(&"Trips".to_string()));
+
+    folder.disconnect();
+    drop(folder);
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    serving.join().unwrap();
+}

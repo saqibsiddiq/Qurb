@@ -46,6 +46,8 @@ fun QurbException.readable(): String = when (this) {
         "This is the only copy — no other device has it yet, so it cannot be freed here. " +
             "Choose a device to keep your files, or send it somewhere first."
 
+    // The computer's own words for a change it would not make (decision 0073).
+    is QurbException.Refused -> detail.replaceFirstChar { it.uppercase() } + "."
     is QurbException.Other -> detail
 }
 

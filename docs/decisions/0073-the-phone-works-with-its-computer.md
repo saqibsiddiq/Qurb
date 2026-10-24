@@ -2,7 +2,7 @@
 
 **Status:** Accepted as the design, 2026-10-24. Being built: steps 1 to 3
 of the plan below -- the shared folder read and written, and searching --
-are done in the engine; the rest is not, nor anything in the app. The
+are done in the engine, and the app has the Shared page; the rest is not. The
 screens are in the Figma redesign ([design/redesign.md](../design/redesign.md),
 *Files, draft 2*); the engine does none of the new parts yet. Amends
 [0067](0067-a-folder-for-each-person.md), whose phone could only browse its
@@ -202,3 +202,17 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   without it, and has no folder of its own person's to search; the phone finds
   its file kept from before it was set up again, and a computer of the same
   person finds none of it (`tests/shared_folder.rs`, `tests/holding.rs`).
+- **Step 6, the app, begun 2026-10-24: the Shared page** (Files draft 4).
+  The phone's engine reaches the shared folder through the connection it
+  opens to a computer for the phone's own folder there (`KeptFolder::shared`,
+  `search`, `make_folder`, `rename`, `delete`, `add_file`), with
+  `QurbError::Refused` carrying the computer's reason; tested through the
+  engine as the app calls it (`a_phone_changes_the_computers_shared_folder`).
+  Android: *Shared* in Files for each of the owner's computers and each one
+  visited, and its page (`SharedScreen.kt`). Checked on the emulator against
+  the command line built for Android, paired as the phone's own computer: the
+  folders, an empty one included; a folder made; a 6.3 MB picture added from
+  the picker, its bytes the same there; renamed; found by searching *PASTA*;
+  the folder deleted, and the computer's `qurb deleted` naming the phone; a
+  file opened. Not on the S23 yet. Not done: Files itself, drafts 3 and 4
+  around it.

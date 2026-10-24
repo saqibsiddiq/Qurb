@@ -124,6 +124,28 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.OpenMultipleDocuments()
     ) { uris -> if (uris.isNotEmpty()) addFiles(uris) }
 
+    /** What a screen does with the files picked for it, while the picker is open. */
+    private var pickedThen: ((List<Uri>) -> Unit)? = null
+
+    private val picker = registerForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        val then = pickedThen
+        pickedThen = null
+        if (then != null && uris.isNotEmpty()) then(uris)
+    }
+
+    /** Pick files with the system's picker, for a screen to do `then` with. */
+    fun pickFiles(then: (List<Uri>) -> Unit) {
+        pickedThen = then
+        try {
+            picker.launch(arrayOf("*/*"))
+        } catch (e: Exception) {
+            pickedThen = null
+            fail("Could not open the file picker", e)
+        }
+    }
+
     /** The device files are being picked for, while the picker is open. */
     private var sendingTo: PeerInfo? = null
 

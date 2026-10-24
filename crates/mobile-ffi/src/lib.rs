@@ -81,6 +81,12 @@ pub enum QurbError {
     #[error("only copy: {detail}")]
     OnlyCopy { detail: String },
 
+    /// A change asked of a computer's shared folder that it would not make,
+    /// and why, in words for the person: a name taken, a folder that is not
+    /// theirs (decision 0073).
+    #[error("{detail}")]
+    Refused { detail: String },
+
     /// Anything else, including bugs.
     #[error("{detail}")]
     Other { detail: String },
@@ -3679,20 +3685,62 @@ impl KeptFolder {
         let Some((folders, files)) = answer else {
             return Err(QurbError::NotFound { detail: format!("{} keeps no folder for this phone", self.name) });
         };
-        Ok(KeptListing {
-            folders,
-            files: files
-                .into_iter()
-                .map(|f| KeptFile {
-                    name: f.name,
-                    path: f.path,
-                    mine: f.owner == self.me,
-                    content: hex(&f.content),
-                    size: f.size,
-                    modified_at: f.modified_at,
-                })
-                .collect(),
-        })
+        Ok(KeptListing { folders, files: self.files(files) })
+    }
+
+    /// One folder of the computer's shared folder, at `dir` (decision 0073,
+    /// item 6): its own, reached live, nothing of it kept on this phone. A
+    /// file in it is fetched and streamed as one of this phone's folder is.
+    pub fn shared(&self, dir: String) -> Result<KeptListing, QurbError> {
+        let answer = self
+            .runtime
+            .block_on(self.client.shared(&dir))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let Some((folders, files)) = answer else {
+            return Err(QurbError::NotFound { detail: format!("{} shares no folder with this phone", self.name) });
+        };
+        Ok(KeptListing { folders, files: self.files(files) })
+    }
+
+    /// The files whose place holds `query`: in the computer's shared folder,
+    /// or in this phone's own folder there (decision 0073, item 4). Each
+    /// named by its place, the newest first.
+    pub fn search(&self, shared: bool, query: String) -> Result<Vec<KeptFile>, QurbError> {
+        let within = if shared { qurb_peer::wire::Within::Shared } else { qurb_peer::wire::Within::Kept };
+        let answer = self
+            .runtime
+            .block_on(self.client.search(within, &query))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let files = answer.ok_or_else(|| QurbError::NotFound { detail: format!("{} cannot be searched from here", self.name) })?;
+        Ok(self.files(files))
+    }
+
+    /// Make a folder in the computer's shared folder, at `path`.
+    pub fn make_folder(&self, path: String) -> Result<(), QurbError> {
+        changed(self.runtime.block_on(self.client.shared_mkdir(&path)))
+    }
+
+    /// Rename or move a file or folder of the computer's shared folder.
+    pub fn rename(&self, from: String, to: String) -> Result<(), QurbError> {
+        changed(self.runtime.block_on(self.client.shared_move(&from, &to)))
+    }
+
+    /// Delete a file or folder of the computer's shared folder, into its
+    /// Recently deleted for 30 days.
+    pub fn delete(&self, path: String) -> Result<(), QurbError> {
+        changed(self.runtime.block_on(self.client.shared_delete(&path)))
+    }
+
+    /// Add the file at `source`, an absolute path on this phone, to the
+    /// computer's shared folder at `to`, checked whole there before it is put
+    /// in place. `progress` hears the bytes sent after each piece. Returns
+    /// where it was put: numbered when the name was taken.
+    pub fn add_file(&self, source: String, to: String, progress: Arc<dyn Progress>) -> Result<String, QurbError> {
+        let placed = self
+            .runtime
+            .block_on(self.client.shared_upload(std::path::Path::new(&source), &to, |sent| progress.sent(sent)))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        placed.map_err(|why| QurbError::Refused { detail: why })
     }
 
     /// Fetch `file` from the computer to `to`, an absolute path, checked
@@ -3745,6 +3793,37 @@ impl KeptFolder {
             task.abort();
         }
     }
+}
+
+impl KeptFolder {
+    fn files(&self, files: Vec<qurb_peer::wire::KeptEntry>) -> Vec<KeptFile> {
+        files
+            .into_iter()
+            .map(|f| KeptFile {
+                name: f.name,
+                path: f.path,
+                mine: f.owner == self.me,
+                content: hex(&f.content),
+                size: f.size,
+                modified_at: f.modified_at,
+            })
+            .collect()
+    }
+}
+
+/// A change asked of a computer's shared folder: made, or refused with its
+/// reason for the person.
+fn changed(answer: qurb_peer::Result<std::result::Result<(), String>>) -> Result<(), QurbError> {
+    answer
+        .map_err(|e| QurbError::Network { detail: e.to_string() })?
+        .map_err(|why| QurbError::Refused { detail: why })
+}
+
+/// Told how far a file being added to a computer has gone, in bytes
+/// ([`KeptFolder::add_file`]).
+#[uniffi::export(with_foreign)]
+pub trait Progress: Send + Sync {
+    fn sent(&self, bytes: u64);
 }
 
 /// A file of this phone's folder on a computer, read in parts as a player

@@ -128,6 +128,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
     /** This person's computers keeping this phone's folder, reached from the
      *  top of Files (decision 0067, step 4). */
     private var keepers: List<uniffi.qurb_mobile.PeerInfo> = emptyList()
+    private var computers: List<uniffi.qurb_mobile.PeerInfo> = emptyList()
 
     override fun refresh() {
         drawCrumbs()
@@ -140,6 +141,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                         keptOn = engine.peers().firstOrNull { it.relation == "host" && it.fingerprint in keepers }?.name
                     } else if (dir.isEmpty()) {
                         keepers = engine.holders().filter { it.relation == "own" }
+                        computers = engine.peers().filter { it.relation == "host" || (it.relation == "own" && it.kind == "computer") }
                     }
                     if (query.isNotEmpty()) {
                         emptyList<String>() to engine.searchIn(query, SEARCH_LIMIT.toUInt(), private)
@@ -174,6 +176,14 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                         for (keeper in keepers) {
                             add(Item.Link(R.drawable.ic_hard_drive, "Your folder on ${keeper.name}",
                                 "Backups, WhatsApp, deleted files · while it's on") { app.push(KeptScreen(app, keeper)) })
+                        }
+                        // Each computer's shared folder, which this phone and
+                        // its guests' phones reach live (decision 0073): the
+                        // owner's computers, and any this phone visits.
+                        for (computer in computers) {
+                            add(Item.Link(R.drawable.ic_users, "Shared", "On ${computer.name}") {
+                                app.push(SharedScreen(app, computer))
+                            })
                         }
                     }
                     if (folders.isNotEmpty()) add(Item.Label("Folders"))

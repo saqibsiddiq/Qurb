@@ -215,6 +215,22 @@ folder.download(file, "/sdcard/Download/Qurb/${file.name}")  // checked, never o
 folder.disconnect()                   //   a file already there
 ```
 
+The same connection reaches the computer's **shared folder** (decision 0073),
+live -- the computer's own person's phones and its guests' -- and changes it,
+the computer making each change and saying why when it will not
+(`QurbException.Refused`, its words for the person):
+
+```kotlin
+folder.shared("Family photos")        // folders and files, nothing kept here
+folder.search(true, "beach")          // true: the shared folder; false: this
+                                      //   phone's own folder there
+folder.makeFolder("Trips")
+folder.rename("Trips/a.jpg", "Trips/b.jpg")   // a folder too, file by file
+folder.delete("Trips")                // into the computer's Recently deleted
+folder.addFile(path, "Trips/a.jpg", progress)   // pieces of 4 MiB, checked
+                                      //   whole there; returns where it went
+```
+
 Each sync with a computer keeping the vault also asks it about up to 64 of
 the vault's files with no record of it keeping them (`confirm_kept`), so a
 *got it* lost on the way does not leave a file "still to go".
