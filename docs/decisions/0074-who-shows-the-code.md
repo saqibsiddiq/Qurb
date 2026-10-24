@@ -91,7 +91,11 @@ already calls itself on every other screen.
   said *your other device*, the old one went on waiting, asked, was approved
   and paired. 0.66 s for the whole join, approval included, both on this
   laptop: an older device's *not found* costs no wait.
-- **Not checked:** on the S23; an older Android app or desktop window showing
+- **On the S23**, 2026-10-24: scanning a throwaway computer's guest code from
+  Devices, the scanner named it, *Scratch-PC*, and so did the page while it
+  joined, *Approve on Scratch-PC*. The same code scanned again after it was
+  used named nothing: the device no longer listens for it.
+- **Not checked:** setup's page on the S23; an older Android app or desktop window showing
   the code, which run the same pairing loop as the command line; and the page
   for a device that does not answer at all, which waits the three seconds and
   says *your other device* -- from reading `who`, and the wrong-token test.

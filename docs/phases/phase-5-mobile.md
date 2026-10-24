@@ -2750,7 +2750,8 @@ approval on the phone showing a code, *Pair with saqib?* or *Let saqib join?*;
 the page while it joins from Devices, setup's, now named too; and *Open your
 folder on saqib?*. Checked on the emulator against the command line built for
 Android and run beside the app, approved, declined and swiped away; the folder
-ask only as a made-up one. **Not yet run on the S23.**
+ask only as a made-up one. On the S23, joining a computer from Devices showed
+*Approve on Scratch-PC*; the approval sheets were not run there.
 
 Sharing into Qurb is done to draft 1
 ([details](../design/redesign.md#built-android-sharing-into-qurb-2026-10-24)):
@@ -2758,7 +2759,8 @@ sheets over the app shared from, *Save to* the Vault or a device, the file
 going with a bar, and *Sent to saqib* only once that device has it, or
 *Waiting for saqib*. *Save to Files* is gone, as decision 0073 has it.
 Checked on the emulator, sharing from its Files app to the command line built
-for Android and run beside the app. **Not yet run on the S23.**
+for Android and run beside the app, and on the S23: a Gallery photo sent to a
+computer it was visiting, *Sent to Scratch-PC*, the file there.
 
 Notifications are done to draft 1
 ([details](../design/redesign.md#built-android-notifications-2026-10-24)):
@@ -2773,9 +2775,11 @@ camera behind a veil and a frame, Close and the torch, the device found named
 by `Who`, *Not a Qurb code* for any other, *Type 6 digits* at hand. Building it
 found that scanning a guest code did nothing: the scanner took only `qurb1-`
 codes, and a guest code is `qurbg1-`. It takes both now. Its states were seen
-on the emulator, two of them through a temporary patch; reading a code was
-not, as the emulator's camera cannot load the barcode model. **Not yet run on
-the S23.**
+on the emulator, two of them through a temporary patch, as the emulator's
+camera cannot load the barcode model; and on the S23 it read a guest code off
+the laptop's screen, named the computer, and the visit was made. Scanning a
+code already used ends in the old *Could not connect*, blaming a firewall: a
+known gap, noted in the redesign log.
 
 Not built yet: Files, the folders to back up as a tree, the desktop; and the
 engine work of

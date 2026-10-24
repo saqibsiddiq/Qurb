@@ -624,7 +624,14 @@ could not reach the code the phone showed.
   computer asked. Not now answered it without failing. Open, and the screen
   lock after it, were not checked here.
 
-**Not checked:** anything on the S23; the approval sheet going when the code
+**On the S23**, 2026-10-24, the fast build installed over its data, dark
+theme: visiting a throwaway `qurb pair --guest` on the laptop (*Scratch-PC*)
+from Devices, *Approve on Scratch-PC* came up over the app, round a laptop,
+with the number the terminal asked about, 247 931; approved there, *You visit
+Scratch-PC as a guest now*.
+
+**Not checked:** *Pair with …?* and *Let … join?* on the S23, which would have
+given a throwaway device the S23's key; the approval sheet going when the code
 lapses under it, five minutes on, which is from reading `Asker`; a computer
 really asking to open the folder; the desktop window showing a code to a phone, the usual case, since the
 desktop window is not redesigned yet. *Could not connect* is still the old
@@ -684,8 +691,15 @@ that path was seen.
   sheet had gone.
 - *Nothing to save*, from text shared with no file.
 
-**Not checked:** anything on the S23; *Set up Qurb first*; a swipe or back
-while a file is copied in, which is from reading the code; a share of several
+**On the S23**, the same day: a photo from the Gallery shared into Qurb and
+sent to *Scratch-PC*, a computer it was visiting as a guest; *Sent to
+Scratch-PC*, said by the owner, and the 3.1 MB file in that computer's
+Downloads, collected on the first pass. The copy was deleted after.
+
+**Not checked:** saving to the Vault on the S23, and sending to the owner's own
+laptop, both left alone so as not to put test files in real folders; *Set up
+Qurb first*; a swipe or back while a file is copied in, which is from reading
+the code; a share of several
 files; a file large enough for the worker's notification (32 MB); a share
 while another sync is running.
 
@@ -792,6 +806,19 @@ setup; Close. Found and not a Qurb code were brought on by a temporary,
 uncommitted patch: the emulator's camera cannot load the barcode model, so it
 reads nothing.
 
-**Not checked:** reading a code at all, which needs the S23; the torch
-lighting; *Camera not allowed* and *No camera*; dark mode, which this page
-mostly does not have, being the camera.
+**On the S23**, 2026-10-24, the owner holding it: a guest code shown on the
+laptop's screen (`qurb pair --guest`, drawn by `qrencode`), scanned from
+Devices, *Visit a computer*. The corners turned green and named *Scratch-PC*,
+then *Approve on Scratch-PC*, and the visit was made: the guest code that the
+scanner had looked past before. Screenshots were kept every second over
+wireless debugging while the scanner was up.
+
+The same code scanned again, after it had been used, said *Found* and
+*Approve on your other device* -- the device showing it no longer listens, so
+it cannot say who it is -- and then the old *Could not connect* dialog,
+blaming a firewall. A code used once reads as a device not there. Not fixed
+here: the phone cannot tell the two apart from what the network gives it.
+
+**Not checked:** the torch lighting; *Camera not allowed* and *No camera*;
+*Not a Qurb code* on the S23, which needs a code that is not Qurb's in front
+of it.
