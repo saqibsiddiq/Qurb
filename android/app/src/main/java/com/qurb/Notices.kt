@@ -18,7 +18,8 @@ import uniffi.qurb_mobile.Qurb
 /**
  * The few things worth interrupting somebody about, on the phone: the same
  * three the desktop raises (crates/desktop/src/notify.rs), for the same
- * reasons.
+ * reasons, in the words of the redesign's Notifications draft 1, which the
+ * desktop's are not yet.
  *
  * - **somebody sent you a file** -- a thing another person did, on purpose,
  *   for you;
@@ -71,24 +72,51 @@ object Notices {
         val worth = history.filter { it.id > seen }.sortedBy { it.id }.mapNotNull { h -> say(h)?.let { h to it } }
         if (worth.isEmpty()) return
         channel(context)
-        for ((h, words) in worth.takeLast(AT_ONCE)) {
-            val notification = NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(R.drawable.ic_bell)
+        for ((h, said) in worth.takeLast(AT_ONCE)) {
+            val id = NEWS_BASE + (h.id % 100_000).toInt()
+            val builder = NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.qurb_glyph)
                 .setColor(ContextCompat.getColor(context, R.color.green))
-                .setContentTitle(words.first)
-                .setContentText(words.second)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(words.second))
+                .setContentTitle(said.title)
+                .setContentText(said.words)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(said.words))
                 .setAutoCancel(true)
-                .setContentIntent(
-                    PendingIntent.getActivity(
-                        context, h.id.toInt(),
-                        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                    )
-                )
-                .build()
-            NotificationManagerCompat.from(context).notify(NEWS_BASE + (h.id % 100_000).toInt(), notification)
+                .setContentIntent(opening(context, id, null))
+            when (said.action) {
+                Action.OPEN -> builder.addAction(0, "Open", opening(context, id, Intent().putExtra(OPEN, h.path)))
+                Action.TRY_AGAIN -> builder.addAction(0, "Try again", opening(context, id, Intent().putExtra(AGAIN, true)))
+                null -> {}
+            }
+            NotificationManagerCompat.from(context).notify(id, builder.build())
         }
+    }
+
+    /**
+     * The app, opened from notification [id]: by a tap on it, or with
+     * [extras] by one of its buttons, which the app acts on and then clears
+     * the notification ([answered]), since Android leaves it up after a
+     * button.
+     */
+    private fun opening(context: Context, id: Int, extras: Intent?): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        if (extras != null) intent.putExtras(extras).putExtra(NOTICE, id)
+        // One request code per notification and button, or Android hands back
+        // one intent for them all, with the first one's extras.
+        val code = id * 4 + when {
+            extras == null -> 0
+            extras.hasExtra(OPEN) -> 1
+            else -> 2
+        }
+        return PendingIntent.getActivity(context, code, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** A notification's button acted on: the notification goes with it. */
+    fun answered(context: Context, intent: Intent) {
+        val id = intent.getIntExtra(NOTICE, -1)
+        if (id >= 0) NotificationManagerCompat.from(context).cancel(id)
+        intent.removeExtra(NOTICE)
     }
 
     /**
@@ -107,35 +135,54 @@ object Notices {
         if (prefs.getString(ASKED, null) == ask.fingerprint + ask.name) return
         prefs.edit().putString(ASKED, ask.fingerprint + ask.name).apply()
         channel(context)
+        // Answer opens the app, as a tap does, where the question waits
+        // behind the screen lock.
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_lock_keyhole)
+            .setSmallIcon(R.drawable.qurb_glyph)
             .setColor(ContextCompat.getColor(context, R.color.green))
             .setContentTitle("${ask.name} asks to open your folder")
-            .setContentText("Open Qurb to answer. Only approve if you're there and asked for it.")
+            .setContentText("Only if you asked there")
             .setAutoCancel(true)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    context, ASKED_ID,
-                    Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                )
-            )
+            .setContentIntent(opening(context, ASKED_ID, null))
+            .addAction(0, "Answer", opening(context, ASKED_ID, Intent().putExtra(ANSWER, true)))
             .build()
         NotificationManagerCompat.from(context).notify(ASKED_ID, notification)
     }
 
-    /** The title and words for an entry worth a notification, or null. */
-    fun say(h: Happening): Pair<String, String>? {
+    /** A notification's one button, when it has one (Notifications draft 1). */
+    enum class Action { OPEN, TRY_AGAIN }
+
+    /** What a notification says: its title, a line, and a button. */
+    data class Said(val title: String, val words: String, val action: Action? = null)
+
+    /**
+     * The words for an entry worth a notification, or null: who and what in
+     * the title, the file or the reason under it, as Notifications draft 1
+     * has them.
+     */
+    fun say(h: Happening): Said? {
         val what = h.path?.substringAfterLast('/') ?: ""
+        val detail = h.detail
         return when {
             // Sent to this phone, rather than arriving because it is shared:
-            // the engine writes that in the detail when it files it.
-            h.kind == "received" && h.detail?.startsWith("sent to this device") == true ->
-                (h.device?.let { "$it sent you a file" } ?: "Somebody sent you a file") to what
+            // the engine writes that in the detail when it files it. Opened
+            // from the notification when it is in the store, as it is unless
+            // it was saved out to a folder ("saved to ...").
+            h.kind == "received" && detail?.startsWith("sent to this device") == true ->
+                Said(h.device?.let { "$it sent you a file" } ?: "Somebody sent you a file", what,
+                    if (h.path != null && "saved to" !in detail) Action.OPEN else null)
             h.kind == "collected" ->
-                "Delivered" to (h.device?.let { "$it has $what" } ?: "$what was collected")
+                Said(h.device?.let { "Delivered to $it" } ?: "Delivered", what)
+            // A send called off: the file changed or went before that device
+            // collected it. Sending it again is choosing it again, so no
+            // button.
+            h.kind == "failed" && detail?.startsWith("not sent: ") == true ->
+                Said("Could not send $what", detail.removePrefix("not sent: ").replaceFirstChar { it.uppercase() })
+            // Anything else is tried again by the next sync, which the button
+            // starts now.
             h.kind == "failed" ->
-                "Qurb could not finish something" to listOfNotNull(what.ifEmpty { null }, h.detail).joinToString(": ")
+                Said(if (what.isEmpty()) "Qurb could not finish something" else "Could not finish $what",
+                    detail?.replaceFirstChar { it.uppercase() } ?: "", Action.TRY_AGAIN)
             else -> null
         }
     }
@@ -155,4 +202,10 @@ object Notices {
     /** The one notification for an ask to open the folder. */
     private const val ASKED_ID = 9_000
     private const val ASKED = "asked"
+
+    /** Set on the intent a notification's button opens the app with. */
+    const val OPEN = "com.qurb.OPEN_RECEIVED"
+    const val AGAIN = "com.qurb.TRY_AGAIN"
+    const val ANSWER = "com.qurb.ANSWER"
+    private const val NOTICE = "com.qurb.NOTICE"
 }

@@ -241,11 +241,32 @@ class MainActivity : AppCompatActivity() {
             }
         }
         continueSending(intent)
+        fromNotice(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         continueSending(intent)
+        fromNotice(intent)
+    }
+
+    /**
+     * A notification's button ([Notices]): *Open* a file sent here, *Try
+     * again* what failed, by syncing now, or *Answer* a computer's ask, which
+     * the sync after opening shows. The notification goes once acted on.
+     */
+    private fun fromNotice(intent: Intent?) {
+        intent ?: return
+        val path = intent.getStringExtra(Notices.OPEN)
+        val again = intent.getBooleanExtra(Notices.AGAIN, false)
+        val answer = intent.getBooleanExtra(Notices.ANSWER, false)
+        if (path == null && !again && !answer) return
+        Notices.answered(this, intent)
+        intent.removeExtra(Notices.OPEN)
+        intent.removeExtra(Notices.AGAIN)
+        intent.removeExtra(Notices.ANSWER)
+        if (path != null) openPath(path)
+        if (again) sync()
     }
 
     /**
@@ -1080,9 +1101,11 @@ class MainActivity : AppCompatActivity() {
      * Hand the file to whatever app handles its type, through the app's own
      * DocumentsProvider, so there is one way out of the store rather than two.
      */
-    fun open(entry: FileEntry) {
+    fun open(entry: FileEntry) = openPath(entry.path)
+
+    private fun openPath(path: String) {
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(documentUri(entry.path), mimeType(entry.path))
+            setDataAndType(documentUri(path), mimeType(path))
             // Without this the receiving app cannot read the URI, and fails
             // with something that looks like a corrupt file.
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

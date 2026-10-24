@@ -2760,8 +2760,14 @@ going with a bar, and *Sent to saqib* only once that device has it, or
 Checked on the emulator, sharing from its Files app to the command line built
 for Android and run beside the app. **Not yet run on the S23.**
 
-Not built yet: Files, notifications, the QR scanner, the desktop; and the
-engine work of
+Notifications are done to draft 1
+([details](../design/redesign.md#built-android-notifications-2026-10-24)):
+the redesign's words, the mark's glyph as their icon, and buttons, *Open*,
+*Answer* and *Try again*, where they had none. Checked on the emulator for a
+file sent to the phone and opened from its notification, a delivery, and a
+190 MB send's bar, named for the one device. **Not yet run on the S23.**
+
+Not built yet: Files, the QR scanner, the desktop; and the engine work of
 [0073](../decisions/0073-the-phone-works-with-its-computer.md).
 
 ## Deliberately left undone

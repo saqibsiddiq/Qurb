@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing and Sharing into Qurb** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb and Notifications** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -687,3 +687,59 @@ that path was seen.
 while a file is copied in, which is from reading the code; a share of several
 files; a file large enough for the worker's notification (32 MB); a share
 while another sync is running.
+
+## Built: Android Notifications (2026-10-24)
+
+Notifications draft 1 is in the app (`Notices.kt`, `Transfers.kt`). Android
+draws them; what is the app's is the words, the small icon, the bar and the
+buttons:
+
+- **The icon**: the mark's glyph (`qurb_glyph`) on the app's green, for every
+  notification. It had been a bell, a lock, or arrows.
+- ***saqib* sent you a file**, its name under, and **Open**, which opens the
+  app and hands the file to whatever opens its kind, as Files does.
+- **Delivered to *saqib***, the file's name under. It had been *Delivered*,
+  *saqib has report.pdf*.
+- ***saqib* asks to open your folder**, *Only if you asked there*, and
+  **Answer**, which opens the app to the question behind the screen lock, as a
+  tap does.
+- **Sending to *saqib***, *120 MB of 480 MB* and the bar, for the large
+  transfer the sync worker runs in the foreground; *480 MB waiting* before
+  anything has gone.
+- **Tap to finish sending**, *1.2 GB waiting*. Its old second sentence, on why,
+  is gone.
+- **Could not send *report.pdf***, with the reason under it.
+
+**Where it differs, and why:**
+
+- **Sending names a device only when the phone has one other.** The bytes the
+  worker waits on are sends to one device, shared files for any, and the Vault
+  for its keepers; with two devices or more the notification cannot know which
+  will collect, and says *Sending to your devices*. With one computer, as
+  decision 0073 has a phone, it names it.
+- **Try again only where a sync can retry it.** A send fails only when its file
+  changed or went before it was collected (*Could not send*, with that reason);
+  sending it again is choosing it again, so that notification has no button.
+  Any other failure is retried by the next sync, which *Try again* starts now,
+  under *Could not finish …*. The design's *saqib did not answer* is not a
+  failure the engine has: a send to a device that is off waits for it.
+- **Answer opens the app**, as tapping the notification already did: the
+  question is answered behind the screen lock, never from the shade.
+- The buttons are in Android's accent colour, not the app's green, and the bar
+  in Android's: the system draws both.
+
+**Checked** on the emulator (`qurb-34g`, Android 34), the phone set up anew and
+paired with the command line built for Android and running beside it, the app
+away: *a device sent you a file*, *report.png*, from `qurb send`; *Open* there,
+which showed the picture in Photos and took the notification away; *Delivered
+to a device*, *holiday.png*; and *Sending to a device* with its bar, from *193.1
+MB waiting* through *4.6 MB of 193.1 MB* to *193.1 MB of 193.1 MB*, sharing a
+190 MB picture and pressing Hide.
+
+**Seen and not explained:** four *Delivered to a device* notifications for what
+were three sends of `holiday.png` to that device. The words are not the
+question; which history entries are written is, and that was not looked into.
+
+**Not checked:** anything on the S23; a failure of either kind; *Try again*;
+a computer's ask and *Answer*; *Tap to finish sending*, which needs Android to
+refuse the worker the foreground.

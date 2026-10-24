@@ -38,7 +38,7 @@ object Transfers {
 
     fun shown(sent: ULong, total: ULong): Shown {
         val percent = if (total > 0uL) (sent.toDouble() / total.toDouble() * 100).toInt().coerceIn(0, 100) else 0
-        val text = if (sent == 0uL) "Waiting for a device to collect ${Words.size(total)}"
+        val text = if (sent == 0uL) "${Words.size(total)} waiting"
             else "${Words.size(sent)} of ${Words.size(total)}"
         return Shown(text, percent, sent == 0uL)
     }
@@ -53,8 +53,9 @@ object Transfers {
         sent: ULong,
         total: ULong,
         since: Long = System.currentTimeMillis(),
+        to: String? = null,
     ): ForegroundInfo {
-        val notification = notice(context, sent, total, since)
+        val notification = notice(context, sent, total, since, to)
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ForegroundInfo(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -69,21 +70,30 @@ object Transfers {
      * answers that by posting it twice, starting the service and notifying,
      * and on the S23 each post had the shade rebuild the row (2026-10-13).
      */
-    fun update(context: Context, sent: ULong, total: ULong, since: Long) {
+    fun update(context: Context, sent: ULong, total: ULong, since: Long, to: String? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
         ) return
-        NotificationManagerCompat.from(context).notify(NOTIFICATION, notice(context, sent, total, since))
+        NotificationManagerCompat.from(context).notify(NOTIFICATION, notice(context, sent, total, since, to))
     }
 
-    private fun notice(context: Context, sent: ULong, total: ULong, since: Long): android.app.Notification {
+    /**
+     * Who collects, when it can be said: the one other device this phone has,
+     * as a phone working with its computer has (decision 0073). With more,
+     * the bytes waiting may go to any of them -- a send to one, shared files
+     * to all -- and the notice says *your devices*.
+     */
+    fun collector(engine: uniffi.qurb_mobile.Qurb): String? =
+        runCatching { engine.peers().singleOrNull()?.name }.getOrNull()
+
+    private fun notice(context: Context, sent: ULong, total: ULong, since: Long, to: String?): android.app.Notification {
         channel(context)
         val shown = shown(sent, total)
         return NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_arrow_up_down)
+            .setSmallIcon(R.drawable.qurb_glyph)
             .setColor(ContextCompat.getColor(context, R.color.green))
-            .setContentTitle("Sending to your devices")
+            .setContentTitle(if (to != null) "Sending to $to" else "Sending to your devices")
             .setContentText(shown.text)
             .setProgress(100, shown.percent, shown.waiting)
             .setWhen(since)
@@ -120,11 +130,10 @@ object Transfers {
         ) return
         channel(context)
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_arrow_up_down)
+            .setSmallIcon(R.drawable.qurb_glyph)
             .setColor(ContextCompat.getColor(context, R.color.green))
             .setContentTitle("Tap to finish sending")
-            .setContentText("${Words.size(waiting)} is waiting. A large file keeps sending in the background once it starts with Qurb open.")
-            .setStyle(NotificationCompat.BigTextStyle())
+            .setContentText("${Words.size(waiting)} waiting")
             .setSilent(true)
             .setAutoCancel(true)
             .setContentIntent(

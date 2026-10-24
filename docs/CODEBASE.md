@@ -953,10 +953,11 @@ qurb/
 │       │                                      a long pass in the foreground
 │       │                  Transfers.kt        the notification a long transfer
 │       │                                      runs under, and its progress
-│       │                  Notices.kt          the desktop's three notifications:
-│       │                                      sent to you, collected, failed;
-│       │                                      and a computer asking to open
-│       │                                      this phone's folder
+│       │                  Notices.kt          the desktop's three notifications,
+│       │                                      in the redesign's words: sent to
+│       │                                      you (Open), delivered, failed (Try
+│       │                                      again); and a computer asking to
+│       │                                      open this phone's folder (Answer)
 │       │                  Previews.kt         an image or a text's start, for a
 │       │                                      conflict's two versions
 │       │                  SentCopies.kt       copies of sent files, let go of by name

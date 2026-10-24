@@ -82,7 +82,9 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                     .onFailure { Log.w(TAG, "backing up the chosen folders failed", it) }
             }
             val forOthers = runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
-            val long = forOthers >= LONG_PASS_BYTES && startLong(forOthers, started)
+            // Named on the notice when there is one device to name.
+            val to = if (forOthers >= LONG_PASS_BYTES) Transfers.collector(engine) else null
+            val long = forOthers >= LONG_PASS_BYTES && startLong(forOthers, started, to)
             // Another pass is the long one, and is already answering.
             val elsewhere = !long && LONG_PASS.get()
 
@@ -112,7 +114,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                         if (!moved && !stale) continue
                         shown = now
                         postedAt = SystemClock.elapsedRealtime()
-                        runCatching { Transfers.update(applicationContext, sent, forOthers, started) }
+                        runCatching { Transfers.update(applicationContext, sent, forOthers, started, to) }
                     }
                 } else null
                 try {
@@ -246,11 +248,11 @@ class SyncWorker(context: Context, params: WorkerParameters) :
      * every two seconds with its own figures, so it flicked between them.
      * The second has nothing to add -- the first is already answering.
      */
-    private suspend fun startLong(total: ULong, since: Long): Boolean {
+    private suspend fun startLong(total: ULong, since: Long, to: String?): Boolean {
         if (!LONG_PASS.compareAndSet(false, true)) return false
         holdsLongPass = true
         return try {
-            setForeground(Transfers.foreground(applicationContext, 0uL, total, since))
+            setForeground(Transfers.foreground(applicationContext, 0uL, total, since, to))
             true
         } catch (e: Exception) {
             Log.w(TAG, "could not run in the foreground; an ordinary pass instead", e)
