@@ -535,7 +535,9 @@ fn keeping_new_files_private_applies_from_the_next_file() {
     let root = dir.path().display().to_string();
     create(root.clone()).unwrap();
 
-    let private = qurb_mobile::Settings { own_files_private: true, ..Default::default() };
+    // In the shared area, as an engine standing in for a desktop is: a phone
+    // takes no part in it since decision 0073 (`a_phone_leaves_the_shared_area`).
+    let private = qurb_mobile::Settings { own_files_private: true, shared_area: true, ..Default::default() };
     let qurb = Qurb::open_with(root, None, private).unwrap();
     let add = |name: &str| {
         let source = staging.path().join(name);
@@ -644,7 +646,9 @@ fn each_area_lists_its_own_and_adds_into_itself() {
     let root = dir.path().display().to_string();
     create(root.clone()).unwrap();
     // A phone's setting: new files private. Adding into Files overrides it.
-    let private = qurb_mobile::Settings { own_files_private: true, ..Default::default() };
+    // In the shared area, as an engine standing in for a desktop is: a phone
+    // takes no part in it since decision 0073 (`a_phone_leaves_the_shared_area`).
+    let private = qurb_mobile::Settings { own_files_private: true, shared_area: true, ..Default::default() };
     let qurb = Qurb::open_with(root, None, private).unwrap();
 
     for (path, area_private) in [
@@ -689,7 +693,9 @@ fn a_file_added_during_a_scan_goes_where_it_was_added() {
     let staging = scratch();
     let root = dir.path().display().to_string();
     create(root.clone()).unwrap();
-    let private = qurb_mobile::Settings { own_files_private: true, ..Default::default() };
+    // In the shared area, as an engine standing in for a desktop is: a phone
+    // takes no part in it since decision 0073 (`a_phone_leaves_the_shared_area`).
+    let private = qurb_mobile::Settings { own_files_private: true, shared_area: true, ..Default::default() };
     let qurb = std::sync::Arc::new(Qurb::open_with(root, None, private).unwrap());
 
     let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

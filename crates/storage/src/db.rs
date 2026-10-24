@@ -2660,6 +2660,23 @@ impl Db {
             .map_err(Into::into)
     }
 
+    /// The deleted row for a path in `owner`'s vault, while it still lists
+    /// `content`: what a file deleted without its bytes here is put back from
+    /// ([`Store::restore_from_trash`](crate::Store::restore_from_trash)).
+    pub fn deleted_row_in(&self, path: &str, owner: &DeviceId, content: &blake3::Hash) -> Result<Option<FileRow>> {
+        self.conn
+            .query_row(
+                &format!(
+                    "SELECT {FILE_COLUMNS} FROM files
+                      WHERE path = ?1 AND scope = ?2 AND deleted_at IS NOT NULL AND content_hash = ?3"
+                ),
+                params![path, owner.as_bytes().as_slice(), content.as_bytes().as_slice()],
+                file_row,
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     /// A chunk's size in bytes, before compression, if the index knows it.
     pub fn chunk_size(&self, hash: &blake3::Hash) -> Result<Option<u64>> {
         self.conn
@@ -4026,6 +4043,48 @@ impl Db {
     /// This device's own kind, as it tells devices that ask.
     pub fn local_kind(&self) -> Result<Option<String>> {
         self.local_fact("kind")
+    }
+
+    /// Every row of the shared area, live or a tombstone, as `(id, path,
+    /// content, live, materialised)`: what a phone leaving it goes through
+    /// (decision 0073, item 2).
+    pub fn shared_rows(&self) -> Result<Vec<(i64, String, blake3::Hash, bool, bool)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, path, content_hash, deleted_at IS NULL, materialised FROM files WHERE scope IS NULL ORDER BY path",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let hash: Vec<u8> = r.get(2)?;
+            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, hash, r.get::<_, bool>(3)?, r.get::<_, bool>(4)?))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (id, path, hash, live, materialised) = row?;
+            let Ok(hash) = <[u8; 32]>::try_from(hash.as_slice()) else { continue };
+            out.push((id, path, blake3::Hash::from(hash), live, materialised));
+        }
+        Ok(out)
+    }
+
+    /// Whether the live file at `path` is still read from a folder outside
+    /// the vault (decision 0062): a backup whose original is still there.
+    pub fn read_from_outside(&self, path: &str) -> Result<bool> {
+        let found: bool = self.conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM outside_sources o JOIN files f ON f.id = o.file_id
+                             WHERE f.path = ?1 AND f.deleted_at IS NULL)",
+            params![path],
+            |r| r.get(0),
+        )?;
+        Ok(found)
+    }
+
+    /// Forget a row here and nowhere else: no tombstone is written, so no
+    /// other device is told anything, and what pointed at it goes with it
+    /// (its chunks' references, where it was read from). For a phone letting
+    /// go of the shared area, whose files the computers keep (decision 0073,
+    /// item 2): a file not listed is not a file deleted.
+    pub fn forget_row(&self, id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM files WHERE id = ?1", params![id])?;
+        Ok(())
     }
 
     /// Set by whatever opens the store for good: the phone app, the daemon, a

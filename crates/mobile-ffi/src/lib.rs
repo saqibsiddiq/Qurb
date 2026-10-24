@@ -577,6 +577,14 @@ pub struct Settings {
     /// is a choice the app makes once it can name a device to keep them.
     #[uniffi(default = false)]
     pub own_files_private: bool,
+    /// Whether this phone takes part in the shared area. Off since decision
+    /// 0073: the phone reaches a computer's shared folder live instead, and on
+    /// opening lets go of the shared files it held -- each one a computer
+    /// keeps dropped here, the rest moved into its own vault -- and files
+    /// everything added into its vault, whatever `own_files_private` says. On
+    /// only where this engine stands in for a desktop, in its own tests.
+    #[uniffi(default = false)]
+    pub shared_area: bool,
 }
 
 impl Default for Settings {
@@ -589,6 +597,7 @@ impl Default for Settings {
             discover: true,
             wake_token: None,
             own_files_private: false,
+            shared_area: false,
         }
     }
 }
@@ -1297,6 +1306,32 @@ impl Qurb {
         Ok(())
     }
 
+    /// Delete a file of this phone's folder on a computer (decision 0073,
+    /// item 3): this phone's own vault changes, and the computer follows at
+    /// the next sync. It goes into this phone's Recently deleted, its bytes
+    /// here or not: one freed to the computer is put back from the chunks
+    /// the computer keeps as long (`Store::delete_to_trash_by`). A backup -- of
+    /// WhatsApp, or of a folder -- only once its original is gone from this
+    /// phone: while it is here, the next backup would put the copy back, so
+    /// that is refused with why. Never a file kept for this phone before it
+    /// was set up again, which is another device's.
+    pub fn delete_kept(&self, path: String) -> Result<(), QurbError> {
+        let path = qurb_watcher::normalize(&path);
+        let mut engine = self.engine()?;
+        let me = engine.store().device_id()?;
+        match engine.store().db().folder_row(&path)? {
+            Some((_, Some(owner))) if owner == me => {}
+            _ => return Err(QurbError::Refused { detail: "only this phone's own files can be deleted from here".into() }),
+        }
+        if engine.store().db().read_from_outside(&path)? {
+            return Err(QurbError::Refused {
+                detail: "it is still on this phone, and the next backup would bring it back".into(),
+            });
+        }
+        engine.store_mut().delete_to_trash(&path, None)?;
+        Ok(())
+    }
+
     /// This device's own identity, in the short form a device's page shows
     /// for each of the others: what Settings shows, to compare with what
     /// another device says this phone is.
@@ -1580,8 +1615,13 @@ impl Qurb {
     /// remove their copies at their next sync, and only a device keeping this
     /// phone's vault holds it from then on. Refused for a file whose bytes
     /// are not on this phone. Returns whether it moved.
+    /// Out of it is refused on a phone out of the shared area (decision 0073).
     pub fn move_to_private(&self, path: String, private: bool) -> Result<bool, QurbError> {
-        Ok(self.engine()?.store_mut().move_area(&qurb_watcher::normalize(&path), private)?)
+        let mut engine = self.engine()?;
+        if !private && !engine.shared_area() {
+            return Err(QurbError::Refused { detail: "this phone keeps no shared files".into() });
+        }
+        Ok(engine.store_mut().move_area(&qurb_watcher::normalize(&path), private)?)
     }
 
     /// Ask for a freed file back. Acted on at the next sync with a device that
@@ -1596,7 +1636,10 @@ impl Qurb {
     /// already here stay where they are: an edit never moves a file between
     /// areas, and neither does this.
     pub fn set_own_files_private(&self, private: bool) -> Result<(), QurbError> {
-        self.engine()?.store_mut().set_new_files_private(private);
+        let mut engine = self.engine()?;
+        // A phone out of the shared area files everything privately.
+        let private = private || !engine.shared_area();
+        engine.store_mut().set_new_files_private(private);
         Ok(())
     }
 
@@ -2306,6 +2349,11 @@ impl Qurb {
     /// file onto itself, which truncates it to nothing — an easy call for an
     /// app to make, and a silent way to destroy the file it was trying to add.
     fn import(&self, source: String, path: String, private: Option<bool>) -> Result<(), QurbError> {
+        // Nothing goes into a shared area this phone takes no part in.
+        let private = match private {
+            Some(false) if !self.engine()?.shared_area() => Some(true),
+            other => other,
+        };
         let logical = qurb_watcher::normalize(&path);
         let destination = self.root.join(&logical);
 
@@ -2372,13 +2420,27 @@ impl Qurb {
         let master_chunk_key = chunk_key.clone();
         let root = PathBuf::from(&root);
         let mut store = Store::open(&store_dir, chunk_key)?;
-        store.set_new_files_private(settings.own_files_private);
+        store.set_new_files_private(settings.own_files_private || !settings.shared_area);
         // What this phone tells devices that ask (decision 0053).
         let _ = store.db().set_local_kind("phone");
         let ignore = IgnoreRules::new().with_store_dir(&store_dir);
+        let mut engine = Engine::new(&root, store, ignore);
+        engine.set_shared_area(settings.shared_area);
+        if !settings.shared_area {
+            // Out of the shared area (decision 0073, item 2). Each opening
+            // finds less to do: the first lets go of what the computers keep
+            // and moves the rest into the vault; the next, nothing.
+            match engine.store_mut().leave_shared_area() {
+                Ok(left) if left != qurb_storage::LeftShared::default() => {
+                    tracing::info!(dropped = left.dropped, moved = left.moved, kept = left.kept, "left the shared area");
+                }
+                Ok(_) => {}
+                Err(e) => tracing::warn!(error = %e, "could not leave the shared area yet"),
+            }
+        }
 
         Ok(Self {
-            inner: Mutex::new(Engine::new(&root, store, ignore)),
+            inner: Mutex::new(engine),
             root,
             store_dir,
             master,

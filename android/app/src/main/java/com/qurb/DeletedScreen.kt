@@ -1,6 +1,8 @@
 package com.qurb
 
+import android.view.Gravity
 import android.view.View
+import android.widget.LinearLayout
 import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,8 +28,6 @@ class DeletedScreen(app: MainActivity, fromSettings: Boolean = false) : Screen(a
         views.back.text = if (fromSettings) "Settings" else "Files"
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         views.title.text = "Recently deleted"
-        views.subtitle.text = "Files deleted on any of your devices are kept for 30 days. Restoring one puts it back where it was."
-        views.subtitle.visibility = View.VISIBLE
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
     }
@@ -40,19 +40,26 @@ class DeletedScreen(app: MainActivity, fromSettings: Boolean = false) : Screen(a
                 page.removeAllViews()
                 if (deleted.isEmpty()) kit.empty(page, R.drawable.ic_trash_2, "Nothing deleted recently.")
                 for (d in deleted) {
-                    val days = (RETENTION_DAYS - (System.currentTimeMillis() / 1000 - d.deletedAt) / 86400).coerceAtLeast(0)
+                    // The last day counts as one: a 0 would read as gone.
+                    val days = (RETENTION_DAYS - (System.currentTimeMillis() / 1000 - d.deletedAt) / 86400).coerceAtLeast(1)
                     val by = d.deletedBy?.let { " on $it" } ?: ""
-                    val vault = if (d.private) "Private Vault  ·  " else ""
-                    // Short enough for two lines beside Restore. "Deleted" is
-                    // what the screen is called, and the days left is the fact
-                    // a person came for -- it was the part cut off.
+                    // When and where it was deleted; the days it has left as
+                    // a clock and a number, and Restore as its mark (Files
+                    // draft 1). Every one is a Private Vault file on a phone
+                    // out of the shared area (decision 0073), so that goes
+                    // unsaid here and is said when one is opened.
+                    val trail = LinearLayout(app).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        addView(kit.pill(R.drawable.ic_clock, "$days").apply {
+                            contentDescription = "$days day${if (days == 1L) "" else "s"} left"
+                        })
+                        addView(kit.iconButton(R.drawable.ic_rotate_ccw, "Restore") { restore(d) })
+                    }
                     kit.row(
                         page, States.icon(d.path), d.path.substringAfterLast('/'),
-                        "$vault${Words.ago(d.deletedAt)}$by  ·  " +
-                            if (days == 0L) "last day" else "$days day${if (days == 1L) "" else "s"} left",
-                        trail = kit.button("Restore", Kit.Style.SECONDARY, R.drawable.ic_rotate_ccw, small = true) {
-                            restore(d)
-                        },
+                        "${Words.ago(d.deletedAt)}$by".replaceFirstChar(Char::uppercase),
+                        trail = trail,
                     ) { choose(d) }
                 }
             } catch (e: Exception) {
@@ -65,7 +72,8 @@ class DeletedScreen(app: MainActivity, fromSettings: Boolean = false) : Screen(a
 
     private fun choose(d: DeletedFile) {
         kit.sheet()
-            .header(States.icon(d.path), d.path.substringAfterLast('/'), "${Words.size(d.size)}  ·  deleted ${Words.ago(d.deletedAt)}")
+            // No size for one whose bytes are kept on a computer, not here.
+            .header(States.icon(d.path), d.path.substringAfterLast('/'), if (d.size > 0uL) Words.size(d.size) else "")
             .text((if (d.private) "Restoring puts it back in your Private Vault."
                 else "Restoring puts it back in Qurb, and it returns on your other devices at their next sync.") +
                 (d.why?.let { "\n\n${it.replaceFirstChar(Char::uppercase)}." } ?: ""))

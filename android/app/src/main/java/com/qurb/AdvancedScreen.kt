@@ -8,8 +8,6 @@ import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.qurb_mobile.ShareTarget
-import uniffi.qurb_mobile.SharedFolder
 
 /**
  * Settings → Advanced (docs/design/redesign.md, Settings draft 2: "hide
@@ -65,11 +63,6 @@ class AdvancedScreen(app: MainActivity) : Screen(app) {
             maxLines = 3
         }
 
-        kit.label(page, "Shared files")
-        card = kit.card(page)
-        kit.setting(card, R.drawable.ic_folder, "Who has each folder") { chooseFolder() }
-        kit.setting(card, R.drawable.ic_lock_keyhole, "Keep new files private",
-            on = Engine.ownFilesPrivate(app), onChange = { setPrivate(it) })
     }
 
     private fun field(start: String, hint: String): EditText = EditText(app).apply {
@@ -136,111 +129,5 @@ class AdvancedScreen(app: MainActivity) : Screen(app) {
                 refresh()
             }
             .show()
-    }
-
-    private fun setPrivate(on: Boolean) {
-        scope.launch {
-            try {
-                Engine.setOwnFilesPrivate(app, on)
-                app.say(if (on) "New files stay private" else "New files go to all your devices")
-            } catch (e: Exception) {
-                app.fail("Could not change that", e)
-            } finally {
-                refresh()
-            }
-        }
-    }
-
-    /**
-     * Which devices a folder is on (decision 0044), and whether this phone
-     * keeps it or downloads each file when opened (0045).
-     */
-    private fun chooseFolder() {
-        scope.launch {
-            val (folders, devices) = try {
-                withContext(Dispatchers.IO) { engine().sharing() to engine().shareTargets() }
-            } catch (e: Exception) {
-                app.fail("Could not read the folders", e)
-                return@launch
-            }
-            val sheet = kit.sheet().title("Who has each folder")
-            if (folders.isEmpty()) sheet.text("No folders yet")
-            for (f in folders) {
-                val who = if (f.everyone) "Every device" else f.members.joinToString(", ") { id ->
-                    devices.find { it.id == id }?.name ?: "a removed device"
-                }
-                sheet.action(R.drawable.ic_folder, f.folder,
-                    meta = if (f.remote) "$who, downloaded when opened" else who) { folderSheet(f, devices) }
-            }
-            sheet.show()
-        }
-    }
-
-    private fun folderSheet(folder: SharedFolder, devices: List<ShareTarget>) {
-        val sheet = kit.sheet().title(folder.folder)
-            .text("A device you leave out keeps what it has, and gets nothing new")
-        val chosen = devices.associate { it.id to (folder.everyone || it.id in folder.members) }.toMutableMap()
-        val box = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        val card = kit.card(box)
-        for (d in devices) {
-            kit.setting(card, if (d.here) R.drawable.ic_smartphone else R.drawable.ic_laptop, d.name,
-                if (d.here) "This phone" else "", on = chosen[d.id] == true, onChange = { chosen[d.id] = it })
-        }
-        sheet.view(box, top = 16)
-        sheet.action(
-            if (folder.remote) R.drawable.ic_download else R.drawable.ic_cloud_off,
-            if (folder.remote) "Keep this folder on this phone" else "Free local space: download files when opened",
-        ) { if (folder.remote) keepHere(folder.folder) else keepRemotely(folder.folder) }
-        sheet.buttons("Save") {
-            val members = chosen.filterValues { it }.keys.toList()
-            // All ticked is no rule at all, so a device paired later is in too.
-            setSharing(folder.folder, if (members.size == devices.size) emptyList() else members)
-        }
-        sheet.show()
-    }
-
-    /** Decision 0045: listed here, fetched when opened, never the only copy freed. */
-    private fun keepRemotely(folder: String) {
-        scope.launch {
-            try {
-                val r = withContext(Dispatchers.IO) { engine().keepRemotely(folder) }
-                val kept = if (r.kept.isEmpty()) "" else
-                    " ${Words.files(r.kept.size)} stayed: this phone has the only copy."
-                app.say("Freed ${Words.size(r.bytes)}. Nothing was deleted.$kept")
-            } catch (e: Exception) {
-                app.fail("Could not free that folder", e)
-            } finally {
-                app.changed()
-            }
-        }
-    }
-
-    private fun keepHere(folder: String) {
-        scope.launch {
-            try {
-                val asked = withContext(Dispatchers.IO) { engine().keepLocally(folder) }
-                app.say(if (asked > 0u) "${Words.files(asked.toInt())} on their way back" else "Kept here")
-                SyncWorker.runNow(app)
-            } catch (e: Exception) {
-                app.fail("Could not change that", e)
-            } finally {
-                app.changed()
-            }
-        }
-    }
-
-    private fun setSharing(folder: String, members: List<String>) {
-        scope.launch {
-            try {
-                withContext(Dispatchers.IO) { engine().setSharing(folder, members) }
-                app.say(
-                    if (members.isEmpty()) "$folder is on all your devices"
-                    else "Saved. A device left out keeps what it has, and gets nothing new."
-                )
-                SyncWorker.runNow(app)
-            } catch (e: Exception) {
-                app.fail("Could not change that", e)
-            }
-        }
     }
 }

@@ -1,10 +1,12 @@
 # 0073 — The phone works with one computer: no shared files on it, and it may change its own folder there
 
-**Status:** Accepted as the design, 2026-10-24. Being built: steps 1 to 3
-of the plan below -- the shared folder read and written, and searching --
-are done in the engine, and the app has the Shared page; the rest is not. The
-screens are in the Figma redesign ([design/redesign.md](../design/redesign.md),
-*Files, draft 2*); the engine does none of the new parts yet. Amends
+**Status:** Accepted as the design, 2026-10-24. Built on Android the same
+day: every step of the plan below -- the shared folder read, written and
+searched; the phone's own folder there changed from the phone; the phone out
+of the shared area; and Files, drafts 3 and 4 -- with the gaps under
+*Progress*. The desktop window is not changed yet, and the owner's own S23 and
+laptop do not run it yet. The screens are in the Figma redesign
+([design/redesign.md](../design/redesign.md), *Files, draft 2* onwards). Amends
 [0067](0067-a-folder-for-each-person.md), whose phone could only browse its
 folder on the computer, and makes one exception to the rule that a device
 serves read-only ([crates/peer](../../crates/peer/README.md), *The server is
@@ -92,11 +94,12 @@ and choosing one in Devices is for what it keeps and where Send goes.
 
 ## What it costs, and what is open
 
-- **Engine and protocol work**, none of it begun:
+- **Engine and protocol work**, first written as none of it begun; built
+  2026-10-24 (*Progress*, below) but for the last:
   - requests that change files, with their checks;
   - a search request answered by the computer;
   - the device chosen on Home, as a setting;
-  - a backup set for each device (item 4 of the redesign).
+  - a backup set for each device (item 4 of the redesign): not built.
 - **Guests reach more than what was sent to them, and can change it.** Under
   0060 a guest sees only its own sends and what the computer keeps for its
   person; the shared folder is a deliberate widening. Bounded by the owner the
@@ -202,6 +205,74 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   without it, and has no folder of its own person's to search; the phone finds
   its file kept from before it was set up again, and a computer of the same
   person finds none of it (`tests/shared_folder.rs`, `tests/holding.rs`).
+- **Step 4, a phone's own folder changed from the phone, built 2026-10-24.**
+  Each change is the phone's own vault changing, carried to the computer as
+  its other changes are, and the app syncs at once after each (for at most
+  15 seconds), so the computer follows while both are connected. Rename and
+  move are `rename_file`; a file whose bytes were freed to the computer, as
+  most there are, is renamed as a new version pointing at the same chunks and
+  the old path deleted (`Store::rename_freed`), so not a byte crosses either
+  way. Delete is `delete_kept`: this phone's own files only, into the
+  phone's own Recently deleted, and a backup only once its original is gone
+  from the phone -- refused with why while it is still there. Adding files is
+  the Vault's own import, into the folder on screen.
+  **A deletion without the bytes, fixed the same day.** The emulator check
+  below found that deleting a file whose bytes were freed to the computer put
+  nothing in Recently deleted -- only a file on the phone's disk went there --
+  though the app said it would, and the computer let go of its copy once its
+  seven-day window and the chunks' own had passed. Now such a file, or a
+  backup's read where it lay, goes into the phone's Recently deleted as an
+  entry of no bytes (`Store::delete_to_trash_by`), which emptying Recently
+  deleted to make room passes over. Restoring it puts the deleted row's chunk
+  list back at its path as a new version (`Store::restore_freed`; a backup's
+  into the Vault by its own name), which the computer holds again from the
+  chunks it kept. For that, every device keeps a vault's deletions at least
+  as long as Recently deleted keeps a file, 30 days (`gc::collect`); the
+  shared area's keep the seven days given, and a window of zero still
+  collects everything.
+  **This differs from item 3**, which puts the deletion in the computer's
+  Recently deleted so that it can be undone at the computer -- the case of a
+  lost phone in the wrong hands. As built it is in the phone's, and the
+  computer lists nothing: its `qurb deleted` shows no deletion of a phone's
+  vault, and nothing there puts one back. The bytes do stay on the computer
+  for the 30 days, so a file deleted from a lost phone is not gone, but
+  undoing it at the computer is **not built**.
+  Tested: a freed file renamed into a new folder, the same chunks, nothing
+  written, the old path gone (`tests/freed_rename.rs`); a freed file deleted,
+  listed in Recently deleted, its row outliving the seven days and gone after
+  30, restored on its own chunks, and a backup's restored into the vault by
+  its name (`tests/freed_deletion.rs`); through the engine as the app calls
+  it, the phone's folder on the computer following a rename into another
+  folder, the file freed and deleted, gone there, restored from the phone's
+  Recently deleted and listed there again, and a path not the phone's own
+  refused (`a_phone_changes_its_own_folder_on_the_computer`); and in the app
+  on the same emulator, the whole round trip, the restored file's bytes
+  downloaded from the computer afterwards. **Not tested:** a backup's
+  deletion refused while its original is on the phone.
+  **Not built: a new folder.** A folder with nothing in it is not a thing the
+  index can hold -- it lists files, and a folder is where they are -- so an
+  empty one made on the phone would exist nowhere but on that screen. Moving
+  a file into a new name's folder makes it.
+- **Step 5, the phone out of the shared area, built 2026-10-24.** An
+  engine switch, `shared_area`, on by default and off on a phone
+  (`Settings::shared_area`, false unless set): a sync takes none of another
+  device's shared files, nothing added goes into the shared area, and moving
+  a file out of the Vault is refused. On each opening with it off,
+  `Store::leave_shared_area` does what the owner chose: each shared file a
+  computer keeps is forgotten on the phone -- row and bytes, no tombstone, so
+  nothing is deleted anywhere else and it stays in that computer's Shared
+  folder; one only the phone has, or another phone, moves into its Vault (a
+  phone's copy is not a safe last one, decision 0053); one with neither its
+  bytes here nor a computer known to keep it is left, to be tried again at the
+  next opening. The area's deletions and sharing rules are forgotten, and
+  folders left empty removed -- any empty folder in the phone's folder, not
+  only those this emptied, which a phone could not make anyway. A file the
+  phone moved into its Vault that a computer had without the phone knowing
+  stays in that computer's Shared folder as well: two copies, neither lost.
+  Logged once, as *left the shared area* with the three counts. Tested
+  (`tests/leaving_shared.rs`, `crates/engine/tests/out_of_the_shared_area.rs`,
+  `a_phone_leaves_the_shared_area`). The engine's own tests that stand in for
+  a desktop with this engine set it on.
 - **Step 6, the app, begun 2026-10-24: the Shared page** (Files draft 4).
   The phone's engine reaches the shared folder through the connection it
   opens to a computer for the phone's own folder there (`KeptFolder::shared`,
@@ -216,6 +287,42 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   the folder deleted, and the computer's `qurb deleted` naming the phone; a
   file opened. On the S23 the same day, as a guest of a throwaway computer on
   the laptop: listed, a folder made, a picture added, renamed, found,
-  deleted, Recently deleted there naming the S23. Not done: Files itself,
-  drafts 3 and 4 around it; and the owner's laptop runs a Qurb from before
-  this, whose Shared the S23 cannot open until it is updated.
+  deleted, Recently deleted there naming the S23. The owner's laptop runs a
+  Qurb from before this, whose Shared the S23 cannot open until it is updated.
+- **Step 6, the rest of Files, built 2026-10-24** (drafts 3 and 4).
+  `FilesHome.kt`: *This phone* as three tiles -- Vault, Received, Deleted --
+  then a *Shared* card for each computer, then *Devices*, each of the
+  phone's own computers leading to its folder there (`KeptScreen.kt`),
+  where the Private Vault part has *Add*, and a file of it *Rename*, *Move
+  to folder* and *Delete*. *Received* (`ReceivedScreen.kt`) lists what was
+  sent to the phone, the newest first, with who sent it, read from the last
+  500 entries of the history. Settings lost *Who has each folder* and *Keep
+  new files private*, a file's sheet *Move to Files* and *Move to Private
+  Vault*, and Sharing into Qurb its choice of area: all of it the shared
+  area's. The Files pages lost their `·` joins: a file is its name and size,
+  where it is the icon before the size; Recently deleted has each file's
+  days left on a clock and Restore as its mark. Checked on the emulator
+  (`qurb-34g`, the debug build), set up from nothing, the command line built
+  for Android running on it as the phone's own computer and keeping its
+  Vault: Files home as drawn; *diary.txt* added to the Vault from the
+  picker; the phone's folder there listing it, renamed *journal.txt* from
+  that page and listed so, then deleted from it, the folder empty; the
+  phone's own Recently deleted listing it with 30 days, restored, back in
+  the Vault; a file sent by `qurb send` from the computer listed in Received
+  under the computer's name; Shared opened from its card. The phone's folder
+  page was given *Search* after that, item 4's search of the whole folder by
+  the computer (`KeptFolder::search`, step 3), and checked on the same
+  emulator with a second computer paired: *journal* found; moved into *Notes*
+  with *Move to folder* and found there; *soup.txt* added inside *Private
+  Vault › Notes* and there on the computer. Deleting it is where the fault
+  under step 4 showed.
+  **Not done or not checked:** a new folder in the phone's folder (step 4);
+  a backup deleted there; a phone that held shared files leaving the area, on
+  a device;
+  counts on the tiles and cards, which the design shows and nothing yet
+  provides; a page open when a sync brings something new keeps what it
+  showed until opened again or pulled, as every page in the app does;
+  Received misses a send older than the last 500 happenings; `FilesScreen.kt`
+  still carries the shared area's browsing, which nothing opens now; the
+  desktop window; and the S23 and the owner's laptop, which run builds from
+  before this.

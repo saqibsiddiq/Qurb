@@ -69,8 +69,7 @@ class ShareActivity : AppCompatActivity() {
      * Save to this phone's Vault, or send to one of the devices (brief §39):
      * the choice the share sheet exists to make fast. No Files: a phone keeps
      * no shared files (decision 0073). With no device to send to there is
-     * nothing to choose, and the file goes where *Keep new files private*
-     * says, as before.
+     * nothing to choose, and the file goes into the Vault.
      */
     private fun chooseWhere(uris: List<Uri>) {
         lifecycleScope.launch {
@@ -84,7 +83,7 @@ class ShareActivity : AppCompatActivity() {
             val list = LinearLayout(this@ShareActivity).apply { orientation = LinearLayout.VERTICAL }
             kit.label(list, "This phone", top = 0)
             kit.deviceCard(list, R.drawable.ic_lock_keyhole, "Vault", off = null, since = null) {
-                save(uris, private = true)
+                save(uris)
             }
             kit.label(list, "Send to", top = 14)
             for (peer in peers) {
@@ -251,16 +250,14 @@ class ShareActivity : AppCompatActivity() {
      * should get ten of them and be told about the one that did not work,
      * rather than losing all eleven to it.
      */
-    private fun save(uris: List<Uri>, private: Boolean? = null) {
-        val area = private ?: Engine.ownFilesPrivate(this)
-        val place = if (area) "Vault" else "Files"
-        going(uris, listOf(if (area) R.drawable.ic_lock_keyhole else R.drawable.ic_folder), place, hide = false)
+    private fun save(uris: List<Uri>) {
+        going(uris, listOf(R.drawable.ic_lock_keyhole), "Vault", hide = false)
         lifecycleScope.launch {
             var saved = 0
             var failed = 0
             for (uri in uris) {
                 try {
-                    Engine.importUri(this@ShareActivity, uri, private = area)
+                    Engine.importUri(this@ShareActivity, uri, private = true)
                     saved++
                 } catch (e: Exception) {
                     android.util.Log.w("qurb", "could not save a shared file", e)
@@ -278,7 +275,7 @@ class ShareActivity : AppCompatActivity() {
             SyncWorker.runNow(this@ShareActivity)
             outcome(
                 if (failed > 0) Outcome.ATTENTION else Outcome.DONE,
-                if (failed > 0) "Saved $saved of ${saved + failed}" else "Saved to $place",
+                if (failed > 0) "Saved $saved of ${saved + failed}" else "Saved to Vault",
             )
         }
     }

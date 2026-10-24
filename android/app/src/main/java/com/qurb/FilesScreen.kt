@@ -291,7 +291,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                 "device kept it, and that device no longer has it or is no longer paired. It stays listed so " +
                 "you know it existed; deleting it removes it from your devices' lists."
         })
-        kit.item(group, "${States.kind(entry.path)}  ·  ${Words.size(entry.size)}",
+        kit.item(group, Words.size(entry.size),
             "Changed ${Words.ago(entry.modifiedAt / 1_000_000_000)}")
         sheet.view(facts, top = 16)
 
@@ -313,12 +313,8 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             sheet.action(R.drawable.ic_save, "Save a copy to this phone") { app.saveCopy(entry) }
             sheet.action(R.drawable.ic_pencil, "Rename…") { rename(entry) }
             sheet.action(R.drawable.ic_folder_input, "Move to folder…") { move(entry) }
-            // Between the shared area and this phone's own (decision 0057).
-            if (entry.private) {
-                sheet.action(R.drawable.ic_folder, "Move to Files, on all your devices") { moveArea(entry, false) }
-            } else {
-                sheet.action(R.drawable.ic_lock_keyhole, "Move to Private Vault…") { moveArea(entry, true) }
-            }
+            // No moving between the shared area and the Vault (decision
+            // 0057) since a phone keeps no shared files (decision 0073).
         }
         sheet.action(R.drawable.ic_trash_2, "Delete", danger = true) { delete(entry) }
         sheet.show()
@@ -404,42 +400,6 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
      * 0057). Into it, the person is told first what happens to the copies on
      * their other devices, and whether anything still keeps one.
      */
-    private fun moveArea(entry: FileEntry, private: Boolean) {
-        val name = entry.path.substringAfterLast('/')
-        val move = {
-            scope.launch {
-                try {
-                    withContext(Dispatchers.IO) { engine().moveToPrivate(entry.path, private) }
-                    app.say(if (private) "$name is in Private Vault" else "$name goes to all your devices")
-                    app.madeChange()
-                } catch (e: Exception) {
-                    app.fail("Could not move that", e)
-                    app.changed()
-                }
-            }
-        }
-        if (!private) {
-            move()
-            return
-        }
-        scope.launch {
-            val keepers = runCatching { withContext(Dispatchers.IO) { engine().holders() } }.getOrDefault(emptyList())
-            val kept = if (keepers.isEmpty()) {
-                "No device keeps a backup of your Private Vault, so this phone will have the only copy. " +
-                    "Choose one in Devices to keep it."
-            } else {
-                if (keepers.size == 1) "${keepers[0].name} keeps a backup of your Private Vault, so it keeps this file too."
-                else "${Words.list(keepers.map { it.name })} keep a backup of your Private Vault, so they keep this file too."
-            }
-            kit.sheet()
-                .header(R.drawable.ic_lock_keyhole, "Move $name to Private Vault?")
-                .text("It stays on this phone, and your other devices remove their copies at their next sync " +
-                    "— each keeps it in Recently deleted for 30 days, as with any deletion. $kept")
-                .buttons("Move") { move() }
-                .show()
-        }
-    }
-
     /** Keep on this phone (§30): asked for now, fetched at the next sync with
      *  a device that has it. */
     private fun fetch(entry: FileEntry) {
@@ -532,8 +492,8 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             // The whole path when searching, where the folder is part of the
             // answer; just the name inside a folder.
             val name = if (query.isNotEmpty()) entry.path else entry.path.substringAfterLast('/')
-            val meta = "${Words.size(entry.size)}  ·  ${Words.ago(entry.modifiedAt / 1_000_000_000)}"
-            kit.bindRow(row, States.icon(entry.path), name, meta, States.of(entry, downloading, keptOn)) { choose(entry) }
+            kit.bindRow(row, States.icon(entry.path), name, Words.size(entry.size),
+                States.of(entry, downloading, keptOn)) { choose(entry) }
             row.tile.alpha = if (!States.here(entry) && !downloading) 0.7f else 1f
         }
 

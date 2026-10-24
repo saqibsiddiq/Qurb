@@ -129,6 +129,11 @@ pub struct Engine {
     /// privately, which is what a phone does. See
     /// [decision 0037](../../docs/decisions/0037-a-file-sent-to-a-desktop-is-an-ordinary-file.md).
     downloads: Option<PathBuf>,
+    /// Whether this device takes part in the shared area: takes other
+    /// devices' shared files and changes to them. Off on a phone since
+    /// [decision 0073](../../docs/decisions/0073-the-phone-works-with-its-computer.md),
+    /// which reaches a computer's shared folder live instead.
+    shared_area: bool,
 }
 
 impl Engine {
@@ -156,6 +161,7 @@ impl Engine {
             role: Role::Syncing,
             workers: default_workers(),
             downloads: None,
+            shared_area: true,
         }
     }
 
@@ -173,6 +179,7 @@ impl Engine {
             role: Role::Replica(pins),
             workers: default_workers(),
             downloads: None,
+            shared_area: true,
         }
     }
 
@@ -194,6 +201,16 @@ impl Engine {
     /// advertised to every device.
     pub fn set_downloads(&mut self, dir: Option<PathBuf>) {
         self.downloads = dir;
+    }
+
+    /// Take part in the shared area, or not: see the field. Off, a sync takes
+    /// nothing of another device's shared files.
+    pub fn set_shared_area(&mut self, on: bool) {
+        self.shared_area = on;
+    }
+
+    pub fn shared_area(&self) -> bool {
+        self.shared_area
     }
 
     pub fn downloads(&self) -> Option<&Path> {

@@ -1,9 +1,10 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
-Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb, Notifications, the QR scanner and Files' Shared page** ([below](#built-android-home-2026-10-24)); everything else here is
-still a design in Figma.
+Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 4, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
+2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb, Notifications, the QR scanner and Files** ([below](#built-android-home-2026-10-24)); everything else here is
+still a design in Figma: the desktop, and the folders-to-back-up tree of
+Backups.
 
 The owner, 2026-10-20:
 
@@ -432,11 +433,13 @@ Relay and Version. The engine's version line lost its `·` too.
 - **Name is not changeable.** A device learns this phone's name when they
   pair and keeps it, so a new name would reach no device already paired. The
   design's Name sheet waits on the engine telling devices a new name.
-- **Recently deleted stays in Storage** until Files has it.
+- **Recently deleted stays in Storage** until Files has it. (Files has it
+  since the same day, *Built: Android Files* below; it is in both for now.)
 - **The shared files' two settings** (*Who has each folder*, *Keep new files
   private*) **are under Advanced**, labelled *Shared files*. The design drops
   them with the shared files, but the phone holds shared files until 0073's
-  engine work, and until then they still do something.
+  engine work, and until then they still do something. (Gone with that work,
+  the same day: *Built: Android Files*, below.)
 - Identity needed a new engine call, `identityShort()`.
 
 Checked on the same emulator: the page, scrolled; Advanced; the Key, Theme and
@@ -648,7 +651,8 @@ shared from (`Theme.Qurb.Share`, translucent), where a dialog of its own stood.
   arrow. *Save to Files* is gone, as decision 0073 has it; so are *Save to my
   folder on …* and *Send to …'s Downloads*, which the Vault and the device's
   name now stand for. With no device paired, nothing is asked and the file is
-  saved where *Keep new files private* says, as before.
+  saved to the Vault (where *Keep new files private* said, until the phone
+  left the shared area the same day).
 - **Sending**: the file's kind in a quiet tile, its name, a bar, the send and
   device icons and the device's name, and Hide. The bar turns while the file is
   copied in, then fills with the bytes that device has collected.
@@ -873,3 +877,72 @@ this build. Saying *update Qurb on saqib* instead is not done.
 
 **Not checked:** a refusal shown; a large file's progress; a file opened on
 the S23.
+
+## Built: Android Files (2026-10-24)
+
+The rest of Files draft 4, around the Shared page, with decision 0073's steps
+4 and 5 under it:
+
+- **Files** (`FilesHome.kt`): *This phone* as three tiles, Vault, Received and
+  Deleted, each its icon on the soft green and its name; then *Shared*, a card
+  for each computer, the people icon and a pill naming the computer; then
+  *Devices*, each of the phone's own computers with its dot, when it was last
+  seen, and an arrow to the phone's folder there.
+- **Received** (`ReceivedScreen.kt`): what was sent to the phone, the newest
+  first, each with the name of the device that sent it.
+- **Deleted**: no sentence under the title; each file when and where it was
+  deleted, its days left as a clock and a number, and Restore as its icon.
+- **The phone's folder on a computer** (`KeptScreen.kt`): *Search*, which asks
+  the computer and searches the whole folder; inside the phone's Private Vault
+  there, *Add*, from the phone's picker into the folder on screen. A file of
+  the phone's own has *Rename*, *Move to folder* and *Delete* below Open,
+  Download and Restore; a backup's file only *Delete*. Deleting asks first, in
+  the centred form, *In Recently deleted for 30 days* -- the phone's own, which
+  puts it back from the copy the computer keeps as long.
+- **Files' rows lost their `·` joins**: a file is its name and its size; the
+  Vault's has the place icon before the size.
+- **Gone with the shared area** (0073, step 5): *Who has each folder* and *Keep
+  new files private* from Advanced, *Move to Files* and *Move to Private Vault*
+  from a file's sheet, and the choice of area from Sharing into Qurb, which
+  saves to the Vault.
+
+**Where it differs, and why:**
+
+- **No counts** on the tiles, the Shared cards or the folder tiles: nothing
+  gives them yet.
+- **No new folder in the phone's folder on a computer**: the index lists
+  files, so a folder with nothing in it exists nowhere but on the screen that
+  made it. *Move to folder* with a new name makes one.
+- **Received misses a send older than the last 500 happenings** in the
+  history, which is what it reads.
+- **A page open when a sync brings something new** keeps what it showed until
+  it is opened again or pulled down, as every page in the app does.
+- **Recently deleted is in Storage as well** as in Files.
+
+**Checked** on the emulator (`qurb-34g`, the debug build), set up from
+nothing, the command line built for Android running on it as the phone's own
+computer and keeping its Vault: Files as drawn; *diary.txt* added to the Vault
+from the picker; in the phone's folder there, renamed *journal.txt*, listed
+so, then deleted, the folder empty; Deleted listing it with 30 days, restored,
+back in the Vault; a file sent with `qurb send` listed in Received under the
+computer's name; Shared opened from its card. Then with a second computer
+paired the same way: *journal* typed into Search, found; moved into *Notes*
+and found there; Back clearing the search; *soup.txt* added inside *Private
+Vault › Notes*, there on the computer.
+
+That last check found a fault, fixed the same day: deleting a file from the
+phone's folder whose bytes were not on the phone -- freed to the computer, as
+most there are -- put nothing in Recently deleted, though the sheet promised
+it, and the computer let go of its copy within two weeks. Such a file now
+goes into the phone's Recently deleted costing nothing on the phone, and
+restoring it puts it back from the chunks the computer still holds; the
+computer keeps a vault's deletions 30 days (0073, *Progress*). Checked again
+on the same emulator with the fix: *journal.txt* freed on the phone
+(*Available elsewhere*), deleted from *Private Vault › Notes* on the
+computer, the folder empty; in Deleted with 30 days, its sheet with no size;
+restored, back in the Vault still freed, and after a sync back in *Notes* on
+the computer, where *Download* brought its 21 bytes to the phone from the
+computer.
+
+**Not checked:** a backup's file deleted from the phone's folder; any of this
+on the S23, which runs a build from before it.

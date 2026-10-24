@@ -185,7 +185,9 @@ object Engine {
                     port = 0u,
                     discover = true,
                     wakeToken = wake,
-                    ownFilesPrivate = ownFilesPrivate(context),
+                    // Out of the shared area (decision 0073): every file
+                    // added goes into this phone's own vault.
+                    sharedArea = false,
                 ),
             ).also {
                 // A file sent from the picker is read from where it is when
@@ -497,22 +499,6 @@ object Engine {
         System.currentTimeMillis() - context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
             .getLong("housekept_at", 0L) < 6L * 60 * 60 * 1000
 
-    /**
-     * Whether a file added on this phone stays private to it rather than going
-     * to every device (decision 0036). On unless the person turns it off: a
-     * phone's photographs are its owner's until they send them somewhere.
-     * Files already here stay where they are either way, and a file added
-     * with a choice of area -- Files or Private Vault -- goes where it was
-     * added (decision 0049).
-     */
-    fun ownFilesPrivate(context: Context): Boolean =
-        context.getSharedPreferences("qurb", Context.MODE_PRIVATE).getBoolean("own_private", true)
-
-    suspend fun setOwnFilesPrivate(context: Context, private: Boolean) {
-        context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
-            .edit().putBoolean("own_private", private).commit()
-        withContext(Dispatchers.IO) { open(context).setOwnFilesPrivate(private) }
-    }
 
     /** A copy of something lent only briefly, made so that it can be sent. */
     class Staged(val file: File, val name: String)

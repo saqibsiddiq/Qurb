@@ -4,7 +4,10 @@
 "everything added through the app or the share sheet" goes into the phone's own
 vault; built in the FFI and the Android app. The share sheet's *Save to
 Files* went in the redesign of 2026-10-24, the phone keeping no shared files
-([0073](0073-the-phone-works-with-its-computer.md)); *Vault* stays
+([0073](0073-the-phone-works-with-its-computer.md)); *Vault* stays. Since
+0073 was built, the same day, everything added on a phone goes into its
+vault, whatever area is asked for, and *Keep new files private* is gone from
+the app: a phone keeps no shared area to add to.
 **Date:** 2026-09-29, built with the designed Android app (commit `fad2d9b`);
 recorded 2026-10-03, from the code and its tests
 

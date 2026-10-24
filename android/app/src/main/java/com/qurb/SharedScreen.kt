@@ -3,8 +3,6 @@ package com.qurb
 import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Environment
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -136,39 +134,15 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
 
     /** *Search Shared*: the computer looks, as the words are typed. */
     private fun searchField(): View {
-        val field = LinearLayout(app).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = ContextCompat.getDrawable(app, R.drawable.search_field)
-            setPadding(kit.dp(16), 0, kit.dp(16), 0)
-        }
-        field.addView(ImageView(app).apply {
-            setImageResource(R.drawable.ic_search)
-            imageTintList = ColorStateList.valueOf(kit.color(R.color.text_2))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(kit.dp(20), kit.dp(20)).apply { marginEnd = kit.dp(10) })
-        search = EditText(app).apply {
-            hint = "Search Shared"
-            background = null
-            setTextAppearance(R.style.Text_Body)
-            setHintTextColor(kit.color(R.color.text_3))
-            setSingleLine()
-            setPadding(0, 0, 0, 0)
-            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
-        }
-        search.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(typed: Editable?) {
-                query = typed?.toString()?.trim().orEmpty()
-                searching?.cancel()
-                searching = scope.launch {
-                    delay(300)
-                    refresh()
-                }
+        val (field, box) = kit.searchField("Search Shared") { typed ->
+            query = typed
+            searching?.cancel()
+            searching = scope.launch {
+                delay(300)
+                refresh()
             }
-        })
-        field.addView(search, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        search = box
         return field
     }
 
@@ -319,36 +293,11 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
             .show()
     }
 
-    /** A name asked for in a sheet: the field, and Cancel and the action. */
-    private fun named(title: String, start: String, verb: String, then: (String) -> Unit) {
-        val input = EditText(app).apply {
-            setText(start)
-            setSingleLine()
-            setTextAppearance(R.style.Text_Body)
-            background = ContextCompat.getDrawable(app, R.drawable.search_field)
-            setPadding(kit.dp(16), 0, kit.dp(16), 0)
-            minHeight = kit.dp(48)
-        }
-        kit.sheet().title(title).view(input, top = 14).buttons(verb) {
-            val name = input.text.toString().trim()
-            if (name.isNotEmpty() && name != start) then(name)
-        }.show()
-        // The name without its extension chosen, once the field has focus --
-        // set before, the focus put the cursor at the end, and what was typed
-        // went after `.png` (on the emulator) -- and the keyboard up for it.
-        input.requestFocus()
-        input.post {
-            input.setSelection(0, start.substringBeforeLast('.', start).length)
-            app.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-                ?.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-        }
-    }
-
-    private fun newFolder() = named("New folder", "", "Make") { name ->
+    private fun newFolder() = kit.askName("New folder", "", "Make") { name ->
         change("Made $name") { it.makeFolder(place(name)) }
     }
 
-    private fun rename(path: String, name: String) = named("Rename", name, "Rename") { to ->
+    private fun rename(path: String, name: String) = kit.askName("Rename", name, "Rename") { to ->
         val parent = path.substringBeforeLast('/', "")
         change("Renamed") { it.rename(path, if (parent.isEmpty()) to else "$parent/$to") }
     }

@@ -314,6 +314,33 @@ pub struct OutsideEntry {
     pub mtime_ns: i64,
 }
 
+/// Folders under `dir` with nothing in them, removed from the deepest up,
+/// leaving `root` itself and anything hidden -- the store's own folder.
+fn remove_emptied(root: &Path, dir: &Path) {
+    let Ok(read) = std::fs::read_dir(dir) else { return };
+    for entry in read.flatten() {
+        let hidden = entry.file_name().to_str().is_some_and(|n| n.starts_with('.'));
+        if !hidden && entry.file_type().is_ok_and(|t| t.is_dir()) {
+            remove_emptied(root, &entry.path());
+        }
+    }
+    if dir != root {
+        let _ = std::fs::remove_dir(dir);
+    }
+}
+
+/// What a phone leaving the shared area did ([`Store::leave_shared_area`]).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct LeftShared {
+    /// Files a computer keeps, let go of here.
+    pub dropped: usize,
+    /// Files only this phone had, moved into its own vault.
+    pub moved: usize,
+    /// Files neither: their bytes not here, and no computer known to keep
+    /// them. Left as they were, to be tried again at the next opening.
+    pub kept: usize,
+}
+
 /// What became of a file kept outside the folder once it went from there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutsideGone {
@@ -1975,6 +2002,23 @@ impl Store {
             )?,
             None => None,
         };
+        // A file of this device's own vault with no bytes here -- freed to a
+        // device keeping the vault, or a backup read where it lay -- is kept
+        // in Recently deleted all the same, costing nothing here: the deleted
+        // row and the keeping device's copy both last as long (decision 0073).
+        let trashed = match trashed {
+            None if self.tree.is_some() && scope.is_some() && scope == Some(self.device_id()?) => {
+                Some(self.db.add_trash(&db::NewTrash {
+                    path: logical_path,
+                    scope: scope.as_ref(),
+                    content: &row.content_hash,
+                    size: 0,
+                    by: Some(&me),
+                    why,
+                })?)
+            }
+            kept => kept,
+        };
         self.delete_file(logical_path)?;
         Ok(trashed)
     }
@@ -2224,9 +2268,92 @@ impl Store {
             return Err(Error::Sharing { why: format!("something is already called {to}") });
         }
         if self.db.is_materialised(from)? != Some(true) || !root.join(from).is_file() {
+            // This device's own vault file, its bytes freed to a computer
+            // keeping them: renamed all the same (decision 0073, item 3).
+            let me = self.device_id()?;
+            if scope == Some(me) {
+                return self.rename_freed(from, to, &me);
+            }
             return Err(Error::NotHere { path: from.to_string() });
         }
         self.rename_in_folder(&root, from, to, scope)
+    }
+
+    /// Rename a file of this device's own vault whose bytes are not here, as
+    /// a change made here: the new path gets a version of its own pointing at
+    /// the same chunks, which the device keeping the vault already holds, and
+    /// the old path is deleted. A phone renaming or moving a file in its
+    /// folder on a computer, freed on the phone, moves the computer's copy
+    /// without a byte crossing (decision 0073, item 3).
+    fn rename_freed(&mut self, from: &str, to: &str, me: &DeviceId) -> Result<()> {
+        let Some(row) = self.db.in_folder(from)? else {
+            return Err(Error::NotFound { path: from.to_string() });
+        };
+        let manifest = self.listed_manifest(&row, from)?;
+        let placement = Placement::local().in_vault(Some(me)).by_reference();
+        self.put_manifest(to, &manifest, &[], row.mtime_ns, placement)?;
+        self.db.set_materialised(to, false)?;
+        self.delete_file(from)
+    }
+
+    /// A phone leaves the shared area (decision 0073, item 2), as the owner
+    /// chose: each shared file a computer keeps is let go of here -- its row
+    /// forgotten and its bytes removed, with no tombstone, so it is deleted
+    /// nowhere else and stays in that computer's Shared folder -- and one only
+    /// this phone has moves into its own vault, so nothing is lost. The
+    /// shared area's tombstones and sharing rules are forgotten. One with
+    /// neither its bytes here nor a computer known to keep it is left as it
+    /// is. Each time it is run finds less to do; the second, nothing.
+    pub fn leave_shared_area(&mut self) -> Result<LeftShared> {
+        let mut left = LeftShared::default();
+        let root = self.tree.clone();
+        for (id, path, content, live, materialised) in self.db.shared_rows()? {
+            let on_disk = root.as_ref().map(|r| r.join(&path));
+            let forget = |store: &mut Self| -> Result<()> {
+                if let Some(file) = &on_disk {
+                    match std::fs::remove_file(file) {
+                        Ok(()) => {}
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => return Err(Error::io(file, e)),
+                    }
+                }
+                store.db.forget_row(id)
+            };
+            if !live || qurb_sync::sharing::is_rule_path(&path) {
+                // A deletion, or a sharing rule: history of an area this phone
+                // no longer holds.
+                if live {
+                    forget(self)?;
+                } else {
+                    self.db.forget_row(id)?;
+                }
+                continue;
+            }
+            if self.db.safe_copies_elsewhere(&content)? > 0 {
+                forget(self)?;
+                left.dropped += 1;
+            } else if materialised && on_disk.as_ref().is_some_and(|f| f.is_file()) {
+                self.move_area(&path, true)?;
+                left.moved += 1;
+            } else {
+                left.kept += 1;
+            }
+        }
+        // Moving into the vault retires the shared row with a tombstone, to
+        // tell other devices to let go of their copies. Leaving tells nobody
+        // anything: a computer that had a file without this phone knowing
+        // keeps it in its Shared folder, and the phone's vault has its own.
+        for (id, _, _, live, _) in self.db.shared_rows()? {
+            if !live {
+                self.db.forget_row(id)?;
+            }
+        }
+        // Folders the files left empty, from the deepest up; never the
+        // store's own, nor one with anything left in it.
+        if let Some(root) = &root {
+            remove_emptied(root, root);
+        }
+        Ok(left)
     }
 
     /// Move a file between the shared area and this device's own Private
@@ -2478,16 +2605,21 @@ impl Store {
         if qurb_sync::sharing::is_rule_path(&entry.path) {
             return Err(Error::Sharing { why: "a sharing rule is not put back from Recently deleted".into() });
         }
-        let target = self.free_path_near(&root, &entry.path)?;
-        let to = root.join(&target);
-        if let Some(parent) = to.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
-        }
-        move_file(&self.trash_file(id), &to).map_err(|e| Error::io(&to, e))?;
-        // Back in the area it was deleted from.
         let me = self.device_id()?;
-        let area = entry.scope.filter(|owner| *owner == me);
-        self.put_file_in(&target, &to, area)?;
+        let target = if entry.scope == Some(me) && !self.trash_file(id).is_file() {
+            self.restore_freed(&root, &entry, &me)?
+        } else {
+            let target = self.free_path_near(&root, &entry.path)?;
+            let to = root.join(&target);
+            if let Some(parent) = to.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+            }
+            move_file(&self.trash_file(id), &to).map_err(|e| Error::io(&to, e))?;
+            // Back in the area it was deleted from.
+            let area = entry.scope.filter(|owner| *owner == me);
+            self.put_file_in(&target, &to, area)?;
+            target
+        };
         self.db.remove_trash(id)?;
         let _ = self.db.record(
             db::Event::Restored,
@@ -2497,6 +2629,45 @@ impl Store {
             Some("from Recently deleted"),
         );
         Ok(target)
+    }
+
+    /// Put back a file of this device's own vault that Recently deleted kept
+    /// no bytes of (decision 0073): its deleted row still lists its chunks,
+    /// and the device keeping the vault still holds them, for as long as the
+    /// entry lasts (`gc::collect`). It comes back as a new version pointing
+    /// at them, which that device holds again from its own copy, not a byte
+    /// crossing. A backup's file comes back into the vault by its own name:
+    /// its original is gone, and the next look at its folder would delete it
+    /// again where it was.
+    fn restore_freed(&mut self, root: &Path, entry: &db::Trashed, me: &DeviceId) -> Result<String> {
+        let Some(row) = self.db.deleted_row_in(&entry.path, me, &entry.content)? else {
+            return Err(Error::NotHere { path: entry.path.clone() });
+        };
+        let manifest = self.listed_manifest(&row, &entry.path)?;
+        let wanted = match entry.path.starts_with(&format!("{}/", db::OUTSIDE)) {
+            true => entry.path.rsplit('/').next().unwrap_or(&entry.path).to_string(),
+            false => entry.path.clone(),
+        };
+        let target = self.free_path_near(root, &wanted)?;
+        let placement = Placement::local().in_vault(Some(me)).by_reference();
+        self.put_manifest(&target, &manifest, &[], row.mtime_ns, placement)?;
+        self.db.set_materialised(&target, false)?;
+        Ok(target)
+    }
+
+    /// A row's content as its chunk list describes it, without reading a
+    /// byte: what a file whose bytes are not here is put somewhere else from.
+    fn listed_manifest(&self, row: &db::FileRow, path: &str) -> Result<Manifest> {
+        let mut chunks = Vec::new();
+        let mut offset = 0u64;
+        for hash in self.db.chunk_hashes_for(row.id)? {
+            let Some(chunk) = self.db.chunk(&hash)? else {
+                return Err(Error::NotHere { path: path.to_string() });
+            };
+            chunks.push(chunker::ChunkRef { hash, offset, len: chunk.size as u32 });
+            offset += chunk.size;
+        }
+        Ok(Manifest { file_hash: row.content_hash, size: row.size, chunks })
     }
 
     /// Delete a file in the trash for good, now.
@@ -2538,6 +2709,10 @@ impl Store {
         for entry in entries {
             if freed >= bytes {
                 break;
+            }
+            // Kept elsewhere, costing nothing here (`delete_to_trash_by`).
+            if entry.size == 0 {
+                continue;
             }
             self.forget_deleted(entry.id)?;
             freed += entry.size;

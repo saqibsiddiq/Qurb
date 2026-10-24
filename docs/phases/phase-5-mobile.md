@@ -2790,9 +2790,31 @@ and on the S23 as a guest of a throwaway computer on the laptop. The owner's
 laptop runs a Qurb from before this, so its own Shared is not reachable from
 the S23 until it is updated.
 
-Not built yet: the rest of Files, the folders to back up as a tree, the
-desktop; and the rest of the engine work of
-[0073](../decisions/0073-the-phone-works-with-its-computer.md).
+The rest of Files is built
+([details](../design/redesign.md#built-android-files-2026-10-24)), with the
+rest of 0073's engine work under it: *This phone* as Vault, Received and
+Deleted; a Shared card for each computer; and the phone's folder on each of
+its computers, searched whole by the computer, its Private Vault part changed
+from the phone -- *Add*, *Rename*, *Move to folder*, *Delete* -- the computer
+following at once while both are connected. The phone no longer takes part in
+the shared area: on opening it lets go of each shared file a computer keeps,
+deleting it nowhere, and moves one only it has into its Vault; the settings
+and actions that were the shared area's are gone. Checked on the emulator,
+set up from nothing, the command line built for Android as its computer.
+That check found a file deleted from the phone's folder, its bytes freed to
+the computer, kept nowhere to restore it from, though the app said it would
+be, and the computer letting go of its copy within two weeks: such a file now
+goes into the phone's Recently deleted, put back from the computer's chunks,
+which every device keeps 30 days for a vault's deletions; checked in the
+engine's tests and again in the app on the emulator. It is the phone's Recently deleted,
+where 0073 has the computer's, so a lost phone's deletions cannot yet be
+undone at the computer. **Not run on the S23**, which, like the owner's
+laptop, runs a build from before this; installing it there takes the S23 out
+of the shared area, so it waits on the owner.
+
+Not built yet: the folders to back up as a tree, the desktop, and a new
+folder in the phone's folder on a computer
+([0073](../decisions/0073-the-phone-works-with-its-computer.md), *Progress*).
 
 ## Deliberately left undone
 

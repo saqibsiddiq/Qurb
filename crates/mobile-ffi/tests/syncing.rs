@@ -100,7 +100,11 @@ fn settings(name: &str, signal: &str) -> Settings {
         // No push in tests: the devices here are both awake, and a test that
         // depended on Google would not be a test.
         wake_token: None,
-        // The shared area, as every test here expects.
+        // The shared area, as every test here expects: this engine stands in
+        // for a desktop here as often as for a phone. A phone leaves it
+        // (decision 0073), tested in `a_phone_leaves_the_shared_area`.
+        shared_area: true,
+        // And files added go into it.
         own_files_private: false,
     }
 }
@@ -1263,6 +1267,151 @@ fn a_phone_changes_the_computers_shared_folder() {
 
     folder.disconnect();
     drop(folder);
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    serving.join().unwrap();
+}
+
+/// A phone leaves the shared area when opened out of it (decision 0073, item
+/// 2), as the app opens it: what it held of it moves into its own vault when
+/// no computer is known to keep it -- here the desktop is this engine too,
+/// and says it is a phone, so nothing is dropped -- nothing is deleted on the
+/// desktop, and a shared file made there afterwards is not taken.
+#[test]
+fn a_phone_leaves_the_shared_area() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
+    logging();
+    let (_runtime, signal) = signalling();
+    let desktop_dir = tempfile::tempdir().unwrap();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let setup = create(desktop_dir.path().display().to_string()).unwrap();
+    restore(phone_dir.path().display().to_string(), setup.recovery_phrase.clone()).unwrap();
+    let desktop = Arc::new(
+        Qurb::open_with(desktop_dir.path().display().to_string(), None, settings("desktop", &signal)).unwrap(),
+    );
+    let phone = Qurb::open_with(phone_dir.path().display().to_string(), None, settings("phone", &signal)).unwrap();
+    let offer = desktop.offer_pairing().unwrap();
+    let code = offer.code();
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
+    phone.join_pairing(code).unwrap();
+    waiting.join().unwrap().unwrap();
+
+    // In the shared area still: the desktop's shared file arrives, and the
+    // phone adds one of its own there.
+    let source = desktop_dir.path().join("outside.txt");
+    std::fs::write(&source, b"the desktop's").unwrap();
+    desktop.import_into(source.display().to_string(), "Family/notes.txt".into(), false).unwrap();
+    let mine = phone_dir.path().join("mine-outside.txt");
+    std::fs::write(&mine, b"the phone's").unwrap();
+    phone.import_into(mine.display().to_string(), "mine.txt".into(), false).unwrap();
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let serving = keep_syncing(Arc::clone(&desktop), Arc::clone(&done));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    while !phone.list().unwrap().iter().any(|f| f.path == "Family/notes.txt") {
+        assert!(std::time::Instant::now() < deadline, "the shared file never arrived");
+        let _ = phone.sync_within(5);
+    }
+    drop(phone);
+
+    // Opened as the app opens it, out of the shared area.
+    let phone = Qurb::open_with(
+        phone_dir.path().display().to_string(),
+        None,
+        Settings { shared_area: false, ..settings("phone", &signal) },
+    )
+    .unwrap();
+    let listed = phone.list().unwrap();
+    for path in ["Family/notes.txt", "mine.txt"] {
+        let file = listed.iter().find(|f| f.path == path).unwrap_or_else(|| panic!("{path} lost: {listed:?}"));
+        assert!(file.private, "{path} not moved into the vault");
+    }
+    assert_eq!(std::fs::read(phone_dir.path().join("mine.txt")).unwrap(), b"the phone's");
+
+    // A shared file made on the desktop now is not taken, and nothing of the
+    // desktop's was deleted.
+    let later = desktop_dir.path().join("later.txt");
+    std::fs::write(&later, b"made after").unwrap();
+    desktop.import_into(later.display().to_string(), "later.txt".into(), false).unwrap();
+    for _ in 0..3 {
+        let _ = phone.sync_within(5);
+    }
+    assert!(!phone.list().unwrap().iter().any(|f| f.path == "later.txt"), "a shared file taken after leaving");
+    let theirs = desktop.list().unwrap();
+    assert!(theirs.iter().any(|f| f.path == "Family/notes.txt" && !f.private), "deleted on the desktop: {theirs:?}");
+
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    serving.join().unwrap();
+}
+
+/// This phone's own folder on the computer, changed from the phone (decision
+/// 0073, item 3): its vault changes and the computer follows at the next
+/// sync -- a file renamed into another folder there, freed on the phone,
+/// deleted, and put back from the phone's Recently deleted, the computer
+/// holding it again from the copy it kept.
+#[test]
+fn a_phone_changes_its_own_folder_on_the_computer() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
+    logging();
+    let (_runtime, signal) = signalling();
+    let desktop_dir = tempfile::tempdir().unwrap();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let setup = create(desktop_dir.path().display().to_string()).unwrap();
+    restore(phone_dir.path().display().to_string(), setup.recovery_phrase.clone()).unwrap();
+    let desktop = Arc::new(
+        Qurb::open_with(desktop_dir.path().display().to_string(), None, settings("desktop", &signal)).unwrap(),
+    );
+    let phone = Qurb::open_with(phone_dir.path().display().to_string(), None, settings("phone", &signal)).unwrap();
+    let offer = desktop.offer_pairing().unwrap();
+    let code = offer.code();
+    let waiting = std::thread::spawn(move || offer.wait(Arc::new(Yes)));
+    phone.join_pairing(code).unwrap();
+    waiting.join().unwrap().unwrap();
+    let laptop = phone.peers().unwrap().remove(0);
+    phone.add_holder(laptop.fingerprint.clone()).unwrap();
+    let source = phone_dir.path().join("outside.txt");
+    std::fs::write(&source, b"kept on the computer").unwrap();
+    phone.import_into(source.display().to_string(), "Notes/kept.txt".into(), true).unwrap();
+
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let serving = keep_syncing(Arc::clone(&desktop), Arc::clone(&done));
+    // Kept there, listed in the phone's folder: `dir` holds `name`.
+    let shows = |dir: &str, name: &str| -> bool {
+        let _ = phone.sync_within(5);
+        match phone.open_kept_folder(laptop.fingerprint.clone(), 5) {
+            Ok(folder) => {
+                let listed = folder.list(format!("phone/Private Vault/{dir}"));
+                folder.disconnect();
+                listed.is_ok_and(|l| l.files.iter().any(|f| f.name == name))
+            }
+            Err(_) => false,
+        }
+    };
+    let until = |what: &str, check: &dyn Fn() -> bool| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+        while !check() {
+            assert!(std::time::Instant::now() < deadline, "never {what}");
+        }
+    };
+    until("kept", &|| shows("Notes", "kept.txt"));
+
+    phone.rename("Notes/kept.txt".into(), "Archive/renamed.txt".into()).unwrap();
+    until("renamed there", &|| shows("Archive", "renamed.txt") && !shows("Notes", "kept.txt"));
+
+    // Its bytes not on the phone, as most there are not. The desktop here is
+    // this engine, which says it is a phone; told otherwise, as the real one
+    // would say, its copy is one the phone may count on.
+    as_a_computer(phone_dir.path());
+    phone.free_local("Archive/renamed.txt".into()).unwrap();
+    phone.delete_kept("Archive/renamed.txt".into()).unwrap();
+    until("deleted there", &|| !shows("Archive", "renamed.txt"));
+    let deleted = phone.recently_deleted().unwrap();
+    let entry = deleted.iter().find(|d| d.path == "Archive/renamed.txt").expect("not in Recently deleted");
+    assert_eq!(phone.restore_deleted(entry.id).unwrap(), "Archive/renamed.txt");
+    until("back there", &|| shows("Archive", "renamed.txt"));
+    match phone.delete_kept("nothing.txt".into()) {
+        Err(qurb_mobile::QurbError::Refused { .. }) => {}
+        other => panic!("a file not this phone's deleted: {other:?}"),
+    }
+
     done.store(true, std::sync::atomic::Ordering::Relaxed);
     serving.join().unwrap();
 }

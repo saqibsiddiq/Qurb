@@ -3,10 +3,13 @@ package com.qurb
 import android.animation.ValueAnimator
 import android.content.res.ColorStateList
 import android.os.Build
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -75,8 +78,12 @@ class Kit(private val app: AppCompatActivity) {
         row.icon.setImageResource(icon)
         row.icon.imageTintList = ColorStateList.valueOf(color(iconTint))
         row.name.text = name
-        val line = listOfNotNull(state?.words, meta.toString().ifEmpty { null }).joinToString("  ·  ")
+        // A state is its icon, its words read out rather than shown beside
+        // the meta (the owner, 2026-10-23: no "·" joins); shown only when
+        // there is nothing else to say.
+        val line = meta.toString().ifEmpty { state?.words ?: "" }
         row.meta.text = line
+        row.meta.contentDescription = if (state != null && meta.isNotEmpty()) "${state.words}, $meta" else null
         row.sub.visibility = if (line.isEmpty()) View.GONE else View.VISIBLE
         if (state != null) {
             row.stateIcon.visibility = View.VISIBLE
@@ -298,6 +305,39 @@ class Kit(private val app: AppCompatActivity) {
         background = ContextCompat.getDrawable(app, R.drawable.dot)
         backgroundTintList = ColorStateList.valueOf(color(if (off) R.color.text_3 else R.color.healthy))
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    /** A search field (the redesign's Search): its icon, then what is
+     *  typed, handed to `typed` trimmed as it changes. Returns the field,
+     *  and the box to clear. */
+    fun searchField(hint: String, typed: (String) -> Unit): Pair<View, EditText> {
+        val field = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.search_field)
+            setPadding(dp(16), 0, dp(16), 0)
+        }
+        field.addView(ImageView(app).apply {
+            setImageResource(R.drawable.ic_search)
+            imageTintList = ColorStateList.valueOf(color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(10) })
+        val box = EditText(app).apply {
+            this.hint = hint
+            background = null
+            setTextAppearance(R.style.Text_Body)
+            setHintTextColor(color(R.color.text_3))
+            setSingleLine()
+            setPadding(0, 0, 0, 0)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+        }
+        box.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(text: Editable?) = typed(text?.toString()?.trim().orEmpty())
+        })
+        field.addView(box, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return field to box
     }
 
     /** A count as a small pill (the redesign's Count badge). */
@@ -924,6 +964,34 @@ class Kit(private val app: AppCompatActivity) {
      */
     fun sheet(): Sheet = Sheet(app, this)
 
+    /**
+     * A name asked for in a sheet: the field, and Cancel and `verb`. The
+     * name without its extension is chosen once the field has focus -- set
+     * before, the focus put the cursor at the end, and what was typed went
+     * after `.png` (on the emulator) -- and the keyboard is up for it.
+     * `then` hears the name, trimmed, when it is something new.
+     */
+    fun askName(title: String, start: String, verb: String, then: (String) -> Unit) {
+        val input = android.widget.EditText(app).apply {
+            setText(start)
+            setSingleLine()
+            setTextAppearance(R.style.Text_Body)
+            background = ContextCompat.getDrawable(app, R.drawable.search_field)
+            setPadding(dp(16), 0, dp(16), 0)
+            minHeight = dp(48)
+        }
+        sheet().title(title).view(input, top = 14).buttons(verb) {
+            val name = input.text.toString().trim()
+            if (name.isNotEmpty() && name != start) then(name)
+        }.show()
+        input.requestFocus()
+        input.post {
+            input.setSelection(0, start.substringBeforeLast('.', start).length)
+            app.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                ?.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
     companion object {
         /** Whether the person asked for less motion (§42): animations off. */
         fun calm(): Boolean = !ValueAnimator.areAnimatorsEnabled()
@@ -964,16 +1032,6 @@ object States {
     fun icon(path: String): Int {
         val ext = path.substringAfterLast('/').substringAfterLast('.', "").lowercase()
         return kinds.entries.firstOrNull { ext in it.value }?.key ?: R.drawable.ic_file
-    }
-
-    fun kind(path: String): String = when (icon(path)) {
-        R.drawable.ic_file_image -> "Image"
-        R.drawable.ic_file_video -> "Video"
-        R.drawable.ic_file_audio -> "Audio"
-        R.drawable.ic_file_archive -> "Archive"
-        R.drawable.ic_file_code -> "Code"
-        R.drawable.ic_file_text -> "Document"
-        else -> "File"
     }
 
     /** A device's icon, from the kind it said it is (decision 0053): when

@@ -3,7 +3,10 @@
 **Status:** Accepted — built in the engine, on the desktop and in the phone app, and verified between a Galaxy S23 and the laptop.
 Amended by [0049](0049-adding-a-file-puts-it-where-you-are-looking.md): a file
 added with a choice of area — *Add files* in Files or Private Vault, or the
-share sheet's choice — goes into that area; the default below governs the rest
+share sheet's choice — goes into that area; the default below governs the rest.
+And by [0073](0073-the-phone-works-with-its-computer.md), 2026-10-24: a phone
+keeps no shared area, so everything it adds goes into its vault, and the app's
+*Keep new files private* is gone; the setting remains for desktops (`own-files`).
 **Date:** 2026-09-25
 
 ## Decision

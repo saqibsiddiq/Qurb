@@ -270,8 +270,12 @@ impl Engine {
         // Running it through the same machinery would have the recipient offer
         // the sender their own file back, and a deletion on either side argue
         // with the other.
-        let shared: Vec<FileVersion> =
-            remote.iter().filter(|v| v.area == Area::Shared).cloned().collect();
+        // None of it on a device out of the shared area -- a phone, since
+        // decision 0073 -- which reaches a computer's shared folder live.
+        let shared: Vec<FileVersion> = match self.shared_area() {
+            true => remote.iter().filter(|v| v.area == Area::Shared).cloned().collect(),
+            false => Vec::new(),
+        };
         // Held and hold entries are for holding a vault, decision 0036, and
         // are not acted on here: holding is a different operation from both
         // converging and collecting.

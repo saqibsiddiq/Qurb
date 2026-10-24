@@ -88,6 +88,7 @@ A phone's own files, and a device to keep them (decision 0036):
 
 ```kotlin
 Settings(..., ownFilesPrivate = true) // new files go into this phone's own vault
+                                      //   (always, while sharedArea is false)
 qurb.addHolder(peer.fingerprint)      // that device keeps a copy it never shows
 qurb.holders(); qurb.removeHolder(peer.fingerprint)
 qurb.freeLocal("IMG_0001.jpg")        // throws OnlyCopy if nobody else has it
@@ -229,6 +230,30 @@ folder.rename("Trips/a.jpg", "Trips/b.jpg")   // a folder too, file by file
 folder.delete("Trips")                // into the computer's Recently deleted
 folder.addFile(path, "Trips/a.jpg", progress)   // pieces of 4 MiB, checked
                                       //   whole there; returns where it went
+```
+
+A phone takes **no part in the shared area** since decision 0073:
+`Settings.sharedArea` is `false` unless set, and then a sync takes none of
+another device's shared files, everything added goes into the vault, and
+`moveToPrivate(path, false)` is refused. Opening the engine with it off lets
+go of shared files a computer keeps -- no tombstone, so nothing is deleted
+elsewhere -- and moves the rest into the vault, logging *left the shared area*
+the first time there was anything to do. Only this crate's own tests, which
+stand in for a desktop with a second engine, turn it on.
+
+The phone's own folder on a computer is changed by changing its own vault,
+which the computer follows at the next sync:
+
+```kotlin
+qurb.rename("Notes/a.txt", "Archive/a.txt")   // its bytes freed to the computer
+                                      //   or not: a freed one moves there with
+                                      //   no byte crossing
+qurb.deleteKept("Archive/a.txt")      // this phone's own only; a backup only once
+                                      //   its original is gone from the phone;
+                                      //   into this phone's Recently deleted,
+                                      //   freed or not, and restoreDeleted puts
+                                      //   a freed one back on the computer's chunks
+qurb.syncWithin(15u)                  // what the app does after each
 ```
 
 Each sync with a computer keeping the vault also asks it about up to 64 of

@@ -38,7 +38,7 @@ pub use format::ChunkKey;
 pub use gc::GcStats;
 pub use store::{
     CalledOff, ChunkAt, ChunkRead, ChunkReader, Conflict, ConflictVersion, Documents, Keep, KeptFile,
-    OutsideEntry, OutsideGone, OutsideReport,
+    LeftShared, OutsideEntry, OutsideGone, OutsideReport,
     PutStats, RemovalPlan, SentBefore, Store, Usage, VerifyReport,
     TRASH_RETENTION,
 };

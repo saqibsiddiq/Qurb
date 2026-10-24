@@ -369,7 +369,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun screenFor(tab: Int): Screen = screens.getOrPut(tab) {
         when (tab) {
-            R.id.tab_files -> FilesScreen(this, private = false)
+            R.id.tab_files -> FilesHome(this)
             R.id.tab_devices -> DevicesScreen(this)
             R.id.tab_settings -> SettingsScreen(this)
             else -> HomeScreen(this)

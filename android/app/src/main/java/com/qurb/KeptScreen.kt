@@ -2,9 +2,13 @@ package com.qurb
 
 import android.os.Environment
 import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.LinearLayout
 import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.KeptFile
@@ -17,7 +21,8 @@ import uniffi.qurb_mobile.PeerInfo
  * 4): what the computer keeps for it -- its WhatsApp, the folders it backs
  * up, its Private Vault, files deleted here included, and what it kept for
  * this phone before it was set up again -- browsed live while the computer
- * is on. Any file can be downloaded to this phone, or restored where it was.
+ * is on. Any file can be downloaded to this phone, or restored where it was,
+ * and the whole folder searched, by the computer (decision 0073, item 4).
  *
  * Reached from Files. The connection is made once and kept while the folder
  * is open, and closed when it is left.
@@ -30,6 +35,14 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
 
     private var folder: KeptFolder? = null
     private var dir = ""
+    /** This phone's own folder there, as the top lists it: not an earlier self's. */
+    private var thisPhone: String? = null
+    private var query = ""
+    private var searching: Job? = null
+    private lateinit var search: EditText
+
+    /** What the folder shows below the search field, redrawn on each listing. */
+    private val listed = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
 
     init {
         views.back.visibility = View.VISIBLE
@@ -40,9 +53,26 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
         scope.launch(Dispatchers.IO) { Opened.tidy(app) }
+
+        val (field, box) = kit.searchField("Search ${computer.name}") { typed ->
+            query = typed
+            searching?.cancel()
+            searching = scope.launch {
+                delay(300)
+                refresh()
+            }
+        }
+        search = box
+        views.sections.addView(field, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48)))
+        views.sections.addView(listed, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(14) })
     }
 
     override fun back(): Boolean {
+        if (query.isNotEmpty()) {
+            search.setText("")
+            return true
+        }
         if (dir.isEmpty()) return false
         dir = dir.substringBeforeLast('/', "")
         refresh()
@@ -60,25 +90,27 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         views.subtitle.text = if (dir.isEmpty()) "Your folder there: backups, WhatsApp and Private Vault, " +
             "deleted files included, while ${computer.name} is on." else dir.replace("/", "  ›  ")
         if (folder == null) {
-            views.sections.removeAllViews()
-            kit.empty(views.sections, R.drawable.ic_monitor_smartphone, "Reaching ${computer.name}…")
+            listed.removeAllViews()
+            kit.empty(listed, R.drawable.ic_monitor_smartphone, "Reaching ${computer.name}…")
         }
+        val asked = query
         scope.launch {
             try {
                 val listing = withContext(Dispatchers.IO) {
                     val open = folder ?: Engine.hearingTheNetwork(app) {
                         engine().openKeptFolder(computer.fingerprint, 20u)
                     }.also { folder = it }
-                    open.list(dir)
+                    if (asked.isEmpty()) open.list(dir) else KeptListing(emptyList(), open.search(false, asked))
                 }
-                show(listing)
+                // A listing for words since changed is not shown.
+                if (asked == query) show(listing)
             } catch (e: Exception) {
                 left()
-                views.sections.removeAllViews()
+                listed.removeAllViews()
                 // Both ends, since either may be the one: on 2026-10-19 the S23's
                 // mobile data stopped carrying anything while Android still
                 // called it connected, and this screen blamed the laptop.
-                kit.empty(views.sections, R.drawable.ic_cloud_off,
+                kit.empty(listed, R.drawable.ic_cloud_off,
                     "${computer.name} isn't reachable. It has to be on with Qurb running, and this phone " +
                         "online.", "Try again") { refresh() }
                 android.util.Log.w("qurb", "could not reach the kept folder", e)
@@ -89,11 +121,33 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
     }
 
     private fun show(listing: KeptListing) {
-        val page = views.sections
+        val page = listed
         page.removeAllViews()
+        if (dir.isEmpty() && query.isEmpty()) thisPhone = listing.folders.firstOrNull { !it.endsWith(", earlier") }
+        // Files added from here go into this phone's Private Vault, where it
+        // is looked at (decision 0073, item 3); the computer keeps them at
+        // the next sync.
+        val vault = thisPhone?.let { "$it/Private Vault" }
+        val inVault = vault != null && (dir == vault || dir.startsWith("$vault/"))
+        views.action.apply {
+            visibility = if (inVault && query.isEmpty()) View.VISIBLE else View.GONE
+            text = "Add"
+            setIconResource(R.drawable.ic_plus)
+            setOnClickListener {
+                val into = dir.removePrefix(vault.orEmpty()).trim('/')
+                app.pickFiles { uris ->
+                    change(if (uris.size == 1) "Added" else "Added ${uris.size} files") {
+                        for (uri in uris) Engine.importUri(app, uri, into, true)
+                    }
+                }
+            }
+        }
         if (listing.folders.isEmpty() && listing.files.isEmpty()) {
-            kit.empty(page, R.drawable.ic_folder_open,
-                if (dir.isEmpty()) "${computer.name} keeps nothing for this phone yet." else "This folder is empty.")
+            kit.empty(page, if (query.isEmpty()) R.drawable.ic_folder_open else R.drawable.ic_search, when {
+                query.isNotEmpty() -> "Nothing called “$query”."
+                dir.isEmpty() -> "${computer.name} keeps nothing for this phone yet."
+                else -> "This folder is empty."
+            })
             return
         }
         val rows = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
@@ -119,8 +173,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
     private fun showFiles(rows: LinearLayout, files: List<KeptFile>, from: Int) {
         val upTo = minOf(files.size, from + PAGE)
         for (file in files.subList(from, upTo)) {
-            kit.row(rows, States.icon(file.name), file.name,
-                facts(file)) { choose(file) }
+            kit.row(rows, States.icon(file.name), file.name, Words.size(file.size)) { choose(file) }
         }
         if (upTo < files.size) {
             var more: View? = null
@@ -132,16 +185,15 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         }
     }
 
-    /** A file's size and when it changed -- or its size alone, when the
-     *  file never said when: a time of 0 read "20742 days ago" on the S23
-     *  for a video a download manager left undated (2026-10-15). */
-    private fun facts(file: KeptFile): String =
-        if (file.modifiedAt <= 0) Words.size(file.size) else "${Words.size(file.size)}  ·  ${Words.ago(file.modifiedAt)}"
-
-    /** One file: opened here, or where it would go, either way. */
+    /** One file: opened here, or where it would go, either way. This
+     *  phone's own can be changed too (decision 0073, item 3): one of its
+     *  Private Vault renamed, moved or deleted; a backup deleted, which the
+     *  engine refuses while its original is still on this phone. */
     private fun choose(file: KeptFile) {
-        kit.sheet()
-            .header(States.icon(file.name), file.name, facts(file))
+        // Its own name: a search names each file by its whole place.
+        val name = file.path.substringAfterLast('/')
+        val sheet = kit.sheet()
+            .header(States.icon(name), name, Words.size(file.size))
             .action(R.drawable.ic_external_link, "Open", meta = "In an app on this phone, without saving a copy") {
                 open(file)
             }
@@ -149,14 +201,65 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
                 fetch(file, downloads(file), "Saved to Downloads")
             }
             .action(R.drawable.ic_rotate_ccw, "Restore", meta = restoredTo(file)) { restore(file) }
-            .show()
+        if (file.mine) {
+            if (!backup(file)) {
+                sheet.action(R.drawable.ic_pencil, "Rename") {
+                    kit.askName("Rename", name, "Rename") { to ->
+                        val parent = file.path.substringBeforeLast('/', "")
+                        change("Renamed") { it.rename(file.path, if (parent.isEmpty()) to else "$parent/$to") }
+                    }
+                }
+                sheet.action(R.drawable.ic_folder_input, "Move to folder") {
+                    kit.askName("Move to folder", file.path.substringBeforeLast('/', ""), "Move") { folder ->
+                        val to = folder.trim('/')
+                        change("Moved") { it.rename(file.path, if (to.isEmpty()) name else "$to/$name") }
+                    }
+                }
+            }
+            sheet.action(R.drawable.ic_trash_2, "Delete", danger = true) {
+                kit.sheet()
+                    .mark(R.drawable.ic_trash_2)
+                    .title("Delete $name?", centred = true)
+                    // In this phone's Recently deleted, whose restore puts it
+                    // back from the copy the computer keeps as long.
+                    .line("In Recently deleted for 30 days")
+                    .buttons("Delete", danger = true) { change("Deleted $name") { it.deleteKept(file.path) } }
+                    .show()
+            }
+        }
+        sheet.show()
+    }
+
+    private fun backup(file: KeptFile) = file.path.startsWith(WHATSAPP) || file.path.startsWith(STORAGE)
+
+    /**
+     * A change to this phone's own vault, then a sync, which takes it to the
+     * computer: said done, or why not, and the folder read again once the
+     * computer has it.
+     */
+    private fun change(done: String, work: suspend (uniffi.qurb_mobile.Qurb) -> Unit) {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val engine = engine()
+                    work(engine)
+                    Engine.hearingTheNetwork(app) { runCatching { engine.syncWithin(15u) } }
+                }
+                app.say(done)
+                app.changed()
+            } catch (e: Exception) {
+                app.fail("Not done", e)
+            }
+            refresh()
+        }
     }
 
     /** Shown or played here, as Files opens a file ([Opened]). */
     private fun open(file: KeptFile) = Opened.open(app, scope, folder, file)
 
     private fun downloads(file: KeptFile): String =
-        java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Qurb/${file.name}").path
+        java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "Qurb/${file.path.substringAfterLast('/')}").path
 
     /** Where a file goes back to: WhatsApp's folder, the folder it was backed
      *  up from, or the Private Vault. */
@@ -194,14 +297,14 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
                     app.say("Restored to your Private Vault")
                     app.changed()
                 } catch (e: Exception) {
-                    app.fail("Could not restore ${file.name}", e)
+                    app.fail("Could not restore ${file.path.substringAfterLast('/')}", e)
                 }
             }
         }
     }
 
     private fun fetch(file: KeptFile, to: String, done: String) {
-        app.say("Fetching ${file.name}…")
+        app.say("Fetching ${file.path.substringAfterLast('/')}…")
         scope.launch {
             try {
                 val went = withContext(Dispatchers.IO) {
@@ -210,7 +313,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
                 }
                 app.say("$done: ${went.substringAfterLast('/')}")
             } catch (e: Exception) {
-                app.fail("Could not fetch ${file.name}", e)
+                app.fail("Could not fetch ${file.path.substringAfterLast('/')}", e)
             }
         }
     }

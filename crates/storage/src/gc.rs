@@ -55,9 +55,20 @@ pub struct GcStats {
     pub bytes_reclaimed: u64,
 }
 
-/// Reclaim space, keeping anything deleted or superseded within `retention`.
+/// Reclaim space, keeping anything deleted or superseded within `retention`
+/// -- and a vault's deletions as long as Recently deleted keeps a file, unless
+/// `retention` is zero, which asks for everything as `empty_trash` does.
 pub fn collect(db: &mut Db, cas: &Cas, retention: Duration) -> Result<GcStats> {
     let cutoff = db::now() - retention.as_secs() as i64;
+    // A phone deleting a file its computer keeps for it, its bytes not on the
+    // phone, puts it back from the chunks both still list (decision 0073): the
+    // phone's row says which, and the computer's keeps them. At seven days
+    // the computer would let go of them three weeks before the phone's
+    // Recently deleted does.
+    let vault_cutoff = match retention.is_zero() {
+        true => cutoff,
+        false => db::now() - retention.max(crate::store::TRASH_RETENTION).as_secs() as i64,
+    };
     let mut stats = GcStats::default();
 
     let tx = db
@@ -67,8 +78,9 @@ pub fn collect(db: &mut Db, cas: &Cas, retention: Duration) -> Result<GcStats> {
     // Stage 1. The cascade on file_chunks fires the delete trigger, which
     // decrements each chunk's refcount and starts its retention clock.
     stats.tombstones_expired = tx.execute(
-        "DELETE FROM files WHERE deleted_at IS NOT NULL AND deleted_at <= ?1",
-        rusqlite::params![cutoff],
+        "DELETE FROM files WHERE deleted_at IS NOT NULL AND deleted_at <= ?1
+            AND (scope IS NULL OR deleted_at <= ?2)",
+        rusqlite::params![cutoff, vault_cutoff],
     )?;
 
     // Stage 2. Chunks released long enough ago to be past recovery.
