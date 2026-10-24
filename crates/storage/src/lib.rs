@@ -29,6 +29,7 @@ pub mod format;
 pub mod gc;
 pub mod person;
 pub mod sealed;
+pub mod shared_folder;
 pub mod store;
 
 pub use chunker::{ChunkRef, Manifest, AVG_CHUNK, MAX_CHUNK, MIN_CHUNK};

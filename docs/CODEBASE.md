@@ -718,6 +718,9 @@ qurb/
 │   │       ├── gc.rs        reclaim chunks nothing references
 │   │       ├── person.rs    a person's folder as it is shown, one tree for
 │   │       │                the window and the phone (0067)
+│   │       ├── shared_folder.rs
+│   │       │                one folder of the shared area, as a phone or a
+│   │       │                guest reaches it live (0073)
 │   │       └── store.rs     public API and the ordering rules
 │   │
 │   ├── watcher/           Turns filesystem events into settled changes.

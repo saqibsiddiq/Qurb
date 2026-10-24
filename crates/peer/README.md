@@ -332,7 +332,16 @@ Everything above was written for one person's devices, sharing a key. A
 It pairs with a guest code (`qurbg1-…`, `PairingHost::open_for_guest`,
 `visit`); the trust store records it as a guest, or the computer as its
 host. The server answers a guest from the `Guest` audience: what was sent to
-it, and the sealed folder kept for its person, nothing else. The two find
+it, and the sealed folder kept for its person, nothing else -- in the list
+it syncs. Since [decision
+0073](../../docs/decisions/0073-the-phone-works-with-its-computer.md) a
+guest may also reach the computer's **shared folder** live: `Shared { dir }`
+lists one folder of it, answered in `Kept`'s shape, and a guest may fetch the
+bytes of a file in it (`Db::shared_content_reachable`). Only a guest of this
+computer, never a computer this device visits; never a folder shared without
+the asker; never the list to sync. The computer's own person's phones are
+answered `Shared` too; its other computers sync the shared area instead
+(`tests/shared_folder.rs`). The two find
 each other at the rendezvous service under a meeting secret given at the
 welcome, since the service groups devices by their person's key.
 

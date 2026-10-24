@@ -3,7 +3,9 @@
 //! A guest holds its own key, so it pairs with a guest invite that gives it
 //! nothing of the computer's, and the two are given a secret to meet under.
 //! What matters most is what each is then shown: only what was sent to it --
-//! never the shared area, however it asks, and never a vault kept for anyone.
+//! never the shared area in the list it syncs, and never a vault kept for
+//! anyone. Since decision 0073 a guest may reach the computer's shared folder
+//! live, one folder at a time (`tests/shared_folder.rs`).
 
 use qurb_engine::Engine;
 use qurb_peer::{visit, Error, Fingerprint, Identity, Invite, Ours, PairingHost, PeerClient, PeerServer};
@@ -201,8 +203,10 @@ async fn a_guest_is_shown_only_what_was_sent_to_it() {
     assert_eq!(names, vec!["for-ammi.txt"], "shown more than was sent");
     assert!(tree.iter().all(|v| v.area == qurb_sync::Area::Sent));
 
+    // Its bytes, though, live: the shared folder is every guest's to open
+    // (decision 0073, item 6), as long as it is never put in the list.
     let shared = blake3::hash(b"the host's own, shared with the host's devices");
-    assert_eq!(client.manifest(*shared.as_bytes()).await.unwrap(), None, "a shared file's chunks offered");
+    assert!(client.manifest(*shared.as_bytes()).await.unwrap().is_some(), "the shared folder's file refused");
     let sent = blake3::hash(b"for Ammi");
     assert!(client.manifest(*sent.as_bytes()).await.unwrap().is_some(), "what was sent is refused");
     client.close();

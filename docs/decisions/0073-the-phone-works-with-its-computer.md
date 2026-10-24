@@ -1,6 +1,7 @@
 # 0073 — The phone works with one computer: no shared files on it, and it may change its own folder there
 
-**Status:** Accepted as the design, 2026-10-24. **Nothing is built.** The
+**Status:** Accepted as the design, 2026-10-24. Being built: step 1 of the
+plan below, the shared folder read, is done; the rest is not. The
 screens are in the Figma redesign ([design/redesign.md](../design/redesign.md),
 *Files, draft 2*); the engine does none of the new parts yet. Amends
 [0067](0067-a-folder-for-each-person.md), whose phone could only browse its
@@ -156,3 +157,20 @@ In this order, each built with its tests before the next:
 6. **The app**: Files, drafts 3 and 4.
 
 Item 5, the device chosen on Home, was built with Home (draft 3).
+
+## Progress
+
+- **Step 1, the shared folder read, built 2026-10-24.** `Request::Shared {
+  dir }`, answered to the computer's guests and its own person's phones in
+  `Kept`'s shape (`crates/storage/src/shared_folder.rs`); a guest may fetch
+  the bytes of a file in it, and is still never sent it to sync. Five tests in
+  `crates/peer/tests/shared_folder.rs`: a guest lists it and fetches a file,
+  and its list to sync stays empty; a folder shared without it is hidden, by
+  name and by hash; the owner's phone is answered and the owner's computer is
+  not; a computer visited is shown nothing of its visitor's; `..`, `.qurb` and
+  `/etc` list nothing. The last found the store's own folder listed from disk
+  when asked for by name, `.qurb`, in the first build; a hidden folder is
+  never read from disk now. `a_guest_is_shown_only_what_was_sent_to_it` in
+  `tests/guests.rs` changed with it: a shared file's bytes, refused to a guest
+  until now, are given. The protocol stays `qurb/2`: a computer from before
+  this answers `Shared` *not found*. Nothing in the app uses it yet.

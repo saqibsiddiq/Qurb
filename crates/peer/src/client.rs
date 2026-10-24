@@ -245,6 +245,18 @@ impl PeerClient {
         }
     }
 
+    /// One folder of the peer's shared folder, at `dir`, as this device may
+    /// see it (decision 0073, item 6), or `None` when it will not say: a
+    /// computer that is not this device's own person's, nor one it visits,
+    /// or one from before this.
+    pub async fn shared(&self, dir: &str) -> Result<Option<(Vec<String>, Vec<crate::wire::KeptEntry>)>> {
+        match self.request(Request::Shared { dir: dir.to_string() }).await? {
+            Response::Kept { folders, files } => Ok(Some((folders, files))),
+            Response::NotFound => Ok(None),
+            other => Err(unexpected("shared folder", &other)),
+        }
+    }
+
     /// A file's chunks, each with its size, or `None` if the peer does not
     /// have it or will not show it: what reading part of it needs
     /// ([`crate::Ranged`]).

@@ -441,6 +441,13 @@ impl Store {
         self.tree.is_some()
     }
 
+    /// One folder of the shared area as `device` may see it, live, with the
+    /// empty folders on disk (decision 0073, item 6). See
+    /// [`crate::shared_folder::listing`].
+    pub fn shared_listing(&self, device: &DeviceId, dir: &str) -> Result<(Vec<String>, Vec<crate::person::Shown>)> {
+        crate::shared_folder::listing(&self.db, self.tree.as_deref(), &self.device_id()?, device, dir)
+    }
+
     /// Whether the tree holds a readable file at this logical path.
     ///
     /// The question is not "is there a tree" but "will these bytes still be

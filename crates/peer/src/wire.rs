@@ -177,6 +177,15 @@ pub enum Request {
     /// before this does not know it, answers *not found* and drops that
     /// connection, and the join goes on as before on another.
     Who { token: [u8; 16] },
+
+    /// One folder of this computer's shared folder, at `dir` (`""` for the
+    /// top), live, to a phone of its own person or to a guest of it
+    /// (decision 0073, item 6): answered in [`Response::Kept`]'s shape, each
+    /// file's `owner` this computer and its `path` its place in the shared
+    /// area, which is what fetching it names. Folders shared without the
+    /// asker are left out. Never to another computer, which syncs the shared
+    /// area instead.
+    Shared { dir: String },
 }
 
 /// One file of a phone's folder on a computer, as listed to the phone.
@@ -300,6 +309,7 @@ const TAG_LAYOUT: u8 = 18;
 const TAG_TREE_DIGEST: u8 = 19;
 const TAG_TREE_SINCE: u8 = 20;
 const TAG_WHO: u8 = 21;
+const TAG_SHARED: u8 = 22;
 
 /// The most entries one listing of a phone's folder may hold: a folder of a
 /// hundred thousand photos is a phone's; more is not.
@@ -426,6 +436,10 @@ impl Request {
                 out.push(TAG_WHO);
                 out.extend_from_slice(token);
             }
+            Request::Shared { dir } => {
+                out.push(TAG_SHARED);
+                put_path(&mut out, dir);
+            }
         }
         out
     }
@@ -469,6 +483,7 @@ impl Request {
                 token.copy_from_slice(r.take(16)?);
                 Request::Who { token }
             }
+            TAG_SHARED => Request::Shared { dir: r.path()? },
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -1096,6 +1111,7 @@ mod tests {
             Request::Chunk { hash: [2; 32] },
             Request::Join { token: [3; 16], name: "Phone".into(), kind: "phone".into() },
             Request::Who { token: [4; 16] },
+            Request::Shared { dir: "Photos/2026".into() },
             Request::About,
             Request::Folders,
             Request::Chosen,

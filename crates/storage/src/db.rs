@@ -3027,6 +3027,85 @@ impl Db {
     }
 
     /// Whether a device may resolve this content hash to a chunk list.
+    /// Whether a live file of the shared area, outside every folder shared
+    /// without `device`, has this content: what a guest of this computer may
+    /// fetch of its shared folder, live, though it is never sent the list
+    /// (decision 0073, item 6). Its own person's phones see the shared area
+    /// by [`content_visible_to`](Self::content_visible_to) already.
+    pub fn shared_content_reachable(&self, content: &blake3::Hash, device: &DeviceId) -> Result<bool> {
+        let found: Option<i64> = self
+            .conn
+            .query_row(
+                &format!(
+                    "SELECT 1 FROM files
+                      WHERE content_hash = ?1 AND scope IS NULL AND deleted_at IS NULL AND {}
+                      LIMIT 1",
+                    shared_with("path", "?2")
+                ),
+                params![content.as_bytes().as_slice(), device.as_bytes().as_slice()],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(found.is_some())
+    }
+
+    /// [`shared_content_reachable`](Self::shared_content_reachable), for one
+    /// chunk of such a file.
+    pub fn shared_chunk_reachable(&self, hash: &blake3::Hash, device: &DeviceId) -> Result<bool> {
+        let found: Option<i64> = self
+            .conn
+            .query_row(
+                &format!(
+                    "SELECT 1 FROM file_chunks fc JOIN files f ON f.id = fc.file_id
+                      WHERE fc.chunk_hash = ?1 AND f.scope IS NULL AND f.deleted_at IS NULL AND {}
+                      LIMIT 1",
+                    shared_with("f.path", "?2")
+                ),
+                params![hash.as_bytes().as_slice(), device.as_bytes().as_slice()],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(found.is_some())
+    }
+
+    /// The live files of the shared area under `dir` (every one, at any
+    /// depth; `""` for all of it) that `device` may see -- outside every
+    /// folder shared without it -- as `(path, size, mtime_ns, content)`.
+    pub fn shared_entries_under(&self, dir: &str, device: &DeviceId) -> Result<Vec<(String, u64, i64, blake3::Hash)>> {
+        let dir = dir.trim_matches('/');
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT path, size, mtime_ns, content_hash FROM files
+              WHERE scope IS NULL AND deleted_at IS NULL
+                AND (?1 = '' OR substr(path, 1, length(?1) + 1) = ?1 || '/')
+                AND {}
+              ORDER BY path",
+            shared_with("path", "?2")
+        ))?;
+        let rows = stmt.query_map(params![dir, device.as_bytes().as_slice()], |r| {
+            let hash: Vec<u8> = r.get(3)?;
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)?, hash))
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let (path, size, mtime, hash) = row?;
+            let Ok(hash) = <[u8; 32]>::try_from(hash.as_slice()) else { continue };
+            out.push((path, size, mtime, blake3::Hash::from(hash)));
+        }
+        Ok(out)
+    }
+
+    /// Whether `path` in the shared area lies outside every folder shared
+    /// without `device`: whether that device may see it, or put something
+    /// there.
+    pub fn shared_path_reachable(&self, path: &str, device: &DeviceId) -> Result<bool> {
+        let reachable: bool = self.conn.query_row(
+            &format!("SELECT {}", shared_with("?1", "?2")),
+            params![path.trim_matches('/'), device.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(reachable)
+    }
+
     pub fn content_visible_to(
         &self,
         content: &blake3::Hash,

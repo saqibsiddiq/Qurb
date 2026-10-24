@@ -463,6 +463,18 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         None => qurb_storage::db::Audience::Unplaced,
     };
 
+    // Who may reach this computer's shared folder live (decision 0073, item
+    // 6): its guests -- not a computer this device visits, whose person is as
+    // much a stranger to the folder -- and its own person's phones. Its own
+    // computers sync the shared area instead. A guest is given the files'
+    // bytes, which it otherwise is not; it is still never sent the list.
+    let guest_here = known.as_ref().is_some_and(|peer| peer.relation == qurb_storage::db::Relation::Guest);
+    let reaches_shared = match &owner {
+        Some(_) if guest_here => true,
+        Some(device) if !other_person => store.db().peer_kind(device)?.as_deref() == Some("phone"),
+        _ => false,
+    };
+
     // Another person's computer this device keeps its own vault on: shown it
     // sealed, so that it keeps the files without being able to read them
     // (decision 0060).
@@ -520,7 +532,8 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
                     return Ok(Answer::Now(Response::Manifest(ids)));
                 }
             }
-            if !store.content_visible_to(&content, audience)? {
+            let reached = guest_here && owner.as_ref().map_or(Ok(false), |d| store.db().shared_content_reachable(&content, d))?;
+            if !reached && !store.content_visible_to(&content, audience)? {
                 // Indistinguishable from content this device does not hold,
                 // which is deliberate: "you may not have this" and "there is
                 // no such thing" should look the same from outside, or the
@@ -596,7 +609,8 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
         // folder, whose chunks are not the file's.
         Request::Layout { content } => {
             let content = blake3::Hash::from(*content);
-            if !store.content_visible_to(&content, audience)? {
+            let reached = guest_here && owner.as_ref().map_or(Ok(false), |d| store.db().shared_content_reachable(&content, d))?;
+            if !reached && !store.content_visible_to(&content, audience)? {
                 return Ok(Answer::Now(Response::NotFound));
             }
             match store.held_layout(&content)? {
@@ -604,6 +618,29 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
                 None => Response::NotFound,
             }
         }
+
+        // This computer's shared folder, one folder of it, live (decision
+        // 0073, item 6): to its guests and its own person's phones.
+        Request::Shared { dir } => match &owner {
+            Some(device) if reaches_shared => {
+                let (folders, files) = store.shared_listing(device, dir)?;
+                Response::Kept {
+                    folders,
+                    files: files
+                        .into_iter()
+                        .map(|f| crate::wire::KeptEntry {
+                            name: f.name,
+                            path: f.path,
+                            owner: *f.owner.as_bytes(),
+                            content: *f.content.as_bytes(),
+                            size: f.size,
+                            modified_at: f.modified_at,
+                        })
+                        .collect(),
+                }
+            }
+            _ => Response::NotFound,
+        },
 
         Request::Kept { dir } => match (&owner, other_person) {
             (Some(device), false) => {
@@ -734,7 +771,8 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
             // The bytes, checked the same way as the manifest above. Without
             // this a device could skip the tree entirely and fetch anything it
             // could name, which is exactly what a hash is.
-            if !store.chunk_visible_to(&hash, audience)? {
+            let reached = guest_here && owner.as_ref().map_or(Ok(false), |d| store.db().shared_chunk_reachable(&hash, d))?;
+            if !reached && !store.chunk_visible_to(&hash, audience)? {
                 return Ok(Answer::Now(Response::NotFound));
             }
 
