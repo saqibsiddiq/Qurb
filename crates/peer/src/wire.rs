@@ -186,6 +186,27 @@ pub enum Request {
     /// asker are left out. Never to another computer, which syncs the shared
     /// area instead.
     Shared { dir: String },
+
+    /// Changes to this computer's shared folder, made by the computer on its
+    /// own folder when one of its own person's phones or a guest asks
+    /// (decision 0073, item 6) -- the exception to serving read-only, and
+    /// only for these. Each is answered [`Response::Noted`] when made,
+    /// [`Response::Refused`] with a reason a person can read, or
+    /// [`Response::NotFound`] by a computer that takes no changes from the
+    /// asker. A folder, made empty:
+    SharedMkdir { path: String },
+    /// A file or folder renamed or moved.
+    SharedMove { from: String, to: String },
+    /// A file or folder deleted, into the computer's Recently deleted.
+    SharedDelete { path: String },
+    /// A piece of a file being added, at `offset`, in order: `id` is the
+    /// asker's own name for the upload, and the computer keeps the pieces
+    /// apart from the folder until [`Request::UploadDone`].
+    Upload { id: [u8; 16], offset: u64, bytes: Vec<u8> },
+    /// The pieces of upload `id` are all sent: put the file at `path` once
+    /// its bytes hash to `content`. Answered [`Response::Placed`], with where
+    /// -- numbered when the name was taken.
+    UploadDone { id: [u8; 16], path: String, content: [u8; 32] },
 }
 
 /// One file of a phone's folder on a computer, as listed to the phone.
@@ -286,6 +307,13 @@ pub enum Response {
     /// [`Request::Who`]. Claims, as a joining device's own name is: the
     /// number both screens show is what is checked.
     Who { name: String, kind: String },
+
+    /// A change asked of the shared folder, not made, and why, in words for
+    /// the person who asked (decision 0073).
+    Refused { why: String },
+
+    /// An added file, put in the shared folder at `path`.
+    Placed { path: String },
 }
 
 const TAG_TREE: u8 = 1;
@@ -310,6 +338,15 @@ const TAG_TREE_DIGEST: u8 = 19;
 const TAG_TREE_SINCE: u8 = 20;
 const TAG_WHO: u8 = 21;
 const TAG_SHARED: u8 = 22;
+const TAG_SHARED_MKDIR: u8 = 23;
+const TAG_SHARED_MOVE: u8 = 24;
+const TAG_SHARED_DELETE: u8 = 25;
+const TAG_UPLOAD: u8 = 26;
+const TAG_UPLOAD_DONE: u8 = 27;
+
+/// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
+/// small enough that a slow link sends one in seconds.
+pub const MAX_PIECE: usize = 4 << 20;
 
 /// The most entries one listing of a phone's folder may hold: a folder of a
 /// hundred thousand photos is a phone's; more is not.
@@ -353,6 +390,8 @@ const STATUS_LAYOUT: u8 = 20;
 const STATUS_DIGEST: u8 = 21;
 const STATUS_TREE_DELTA: u8 = 22;
 const STATUS_WHO: u8 = 23;
+const STATUS_REFUSED: u8 = 24;
+const STATUS_PLACED: u8 = 25;
 
 /// The most folders one answer may list: two levels of a phone's storage come
 /// to a few hundred. A peer claiming more is not describing a phone.
@@ -440,6 +479,33 @@ impl Request {
                 out.push(TAG_SHARED);
                 put_path(&mut out, dir);
             }
+            Request::SharedMkdir { path } => {
+                out.push(TAG_SHARED_MKDIR);
+                put_path(&mut out, path);
+            }
+            Request::SharedMove { from, to } => {
+                out.push(TAG_SHARED_MOVE);
+                put_path(&mut out, from);
+                put_path(&mut out, to);
+            }
+            Request::SharedDelete { path } => {
+                out.push(TAG_SHARED_DELETE);
+                put_path(&mut out, path);
+            }
+            Request::Upload { id, offset, bytes } => {
+                out.push(TAG_UPLOAD);
+                out.extend_from_slice(id);
+                out.extend_from_slice(&offset.to_le_bytes());
+                let bytes = &bytes[..bytes.len().min(MAX_PIECE)];
+                put_u32(&mut out, bytes.len());
+                out.extend_from_slice(bytes);
+            }
+            Request::UploadDone { id, path, content } => {
+                out.push(TAG_UPLOAD_DONE);
+                out.extend_from_slice(id);
+                put_path(&mut out, path);
+                out.extend_from_slice(content);
+            }
         }
         out
     }
@@ -484,6 +550,24 @@ impl Request {
                 Request::Who { token }
             }
             TAG_SHARED => Request::Shared { dir: r.path()? },
+            TAG_SHARED_MKDIR => Request::SharedMkdir { path: r.path()? },
+            TAG_SHARED_MOVE => Request::SharedMove { from: r.path()?, to: r.path()? },
+            TAG_SHARED_DELETE => Request::SharedDelete { path: r.path()? },
+            TAG_UPLOAD => {
+                let mut id = [0u8; 16];
+                id.copy_from_slice(r.take(16)?);
+                let offset = r.u64()?;
+                let len = r.count()?;
+                if len > MAX_PIECE {
+                    return Err(Error::Protocol { detail: format!("a piece of {len} bytes") });
+                }
+                Request::Upload { id, offset, bytes: r.take(len)?.to_vec() }
+            }
+            TAG_UPLOAD_DONE => {
+                let mut id = [0u8; 16];
+                id.copy_from_slice(r.take(16)?);
+                Request::UploadDone { id, path: r.path()?, content: r.hash()? }
+            }
             TAG_ASKS => Request::Asks,
             TAG_UNLOCK => {
                 let mut nonce = [0u8; 16];
@@ -599,6 +683,14 @@ impl Response {
                 put_name(&mut out, name);
                 put_name(&mut out, kind);
             }
+            Response::Refused { why } => {
+                out.push(STATUS_REFUSED);
+                put_path(&mut out, why);
+            }
+            Response::Placed { path } => {
+                out.push(STATUS_PLACED);
+                put_path(&mut out, path);
+            }
             Response::Asks { opening } => {
                 out.push(STATUS_ASKS);
                 match opening {
@@ -659,6 +751,8 @@ impl Response {
             },
             STATUS_ABOUT => Response::About { kind: r.name()? },
             STATUS_WHO => Response::Who { name: r.name()?, kind: r.name()? },
+            STATUS_REFUSED => Response::Refused { why: r.path()? },
+            STATUS_PLACED => Response::Placed { path: r.path()? },
             STATUS_ASKS => Response::Asks {
                 opening: match r.u8()? {
                     0 => None,
@@ -1112,6 +1206,11 @@ mod tests {
             Request::Join { token: [3; 16], name: "Phone".into(), kind: "phone".into() },
             Request::Who { token: [4; 16] },
             Request::Shared { dir: "Photos/2026".into() },
+            Request::SharedMkdir { path: "Photos/2027".into() },
+            Request::SharedMove { from: "a.txt".into(), to: "Notes/a.txt".into() },
+            Request::SharedDelete { path: "Old".into() },
+            Request::Upload { id: [5; 16], offset: 4 << 20, bytes: vec![1, 2, 3] },
+            Request::UploadDone { id: [5; 16], path: "Photos/beach.jpg".into(), content: [6; 32] },
             Request::About,
             Request::Folders,
             Request::Chosen,
@@ -1152,6 +1251,8 @@ mod tests {
             Response::Key { key: [4; 32] },
             Response::About { kind: "replica".into() },
             Response::Who { name: "saqib".into(), kind: "computer".into() },
+            Response::Refused { why: "something is already called Notes".into() },
+            Response::Placed { path: "Photos/beach (2).jpg".into() },
             Response::Mismatch,
             Response::Declined,
             Response::Paired { device_id: [1; 32], name: "Phone".into(), kind: "phone".into(), key_check: [2; 32] },

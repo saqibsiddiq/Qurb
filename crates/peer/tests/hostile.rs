@@ -72,7 +72,7 @@ fn start_hostile(
                             Some(Response::NotFound.encode())
                         }
                         // Pairing has its own listener; this one never serves it.
-                        (_, Request::Pair { .. } | Request::Join { .. } | Request::Visit { .. } | Request::Who { .. } | Request::Shared { .. } | Request::About | Request::Asks | Request::Unlock { .. }) => Some(Response::NotFound.encode()),
+                        (_, Request::Pair { .. } | Request::Join { .. } | Request::Visit { .. } | Request::Who { .. } | Request::Shared { .. } | Request::SharedMkdir { .. } | Request::SharedMove { .. } | Request::SharedDelete { .. } | Request::Upload { .. } | Request::UploadDone { .. } | Request::About | Request::Asks | Request::Unlock { .. }) => Some(Response::NotFound.encode()),
                         // A hostile peer's folders, or choices for us, are
                         // never asked for in a sync, and lists are bounded on
                         // the wire.

@@ -1,7 +1,8 @@
 # 0073 — The phone works with one computer: no shared files on it, and it may change its own folder there
 
-**Status:** Accepted as the design, 2026-10-24. Being built: step 1 of the
-plan below, the shared folder read, is done; the rest is not. The
+**Status:** Accepted as the design, 2026-10-24. Being built: steps 1 and 2
+of the plan below, the shared folder read and written, are done in the
+engine; the rest is not, nor anything in the app. The
 screens are in the Figma redesign ([design/redesign.md](../design/redesign.md),
 *Files, draft 2*); the engine does none of the new parts yet. Amends
 [0067](0067-a-folder-for-each-person.md), whose phone could only browse its
@@ -174,3 +175,22 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   `tests/guests.rs` changed with it: a shared file's bytes, refused to a guest
   until now, are given. The protocol stays `qurb/2`: a computer from before
   this answers `Shared` *not found*. Nothing in the app uses it yet.
+- **Step 2, the shared folder written, built 2026-10-24.** `SharedMkdir`,
+  `SharedMove`, `SharedDelete`, and `Upload` in pieces of at most 4 MiB then
+  `UploadDone` with the file's hash, answered `Noted`, `Placed { path }` or
+  `Refused { why }` (`qurb_storage::shared_folder`). A folder moves and is
+  deleted file by file; one with a sharing rule in it is refused, moved and
+  deleted at the computer only. Four storage tests
+  (`storage/tests/shared_changes.rs`): a damaged file is not put, a taken name
+  is numbered; nothing hidden, outside or shared without the asker, `/etc`
+  included, which the first build took as inside the folder; a taken name and a
+  folder into itself refused; a folder moved and deleted, Recently deleted
+  naming the phone. Three over a connection: a guest makes a folder, adds a 9
+  MiB file in three pieces, renames, moves and deletes; refusals say why; the
+  owner's computer and a computer visited may change nothing, the owner's phone
+  may. 924 tests in the workspace pass.
+  **Not done:** only a deletion is recorded as the asking device's; an added
+  or renamed file reads in the computer's Activity as a change made there. No
+  limit on how much a guest may add but the disk's own. Pieces of an upload
+  nobody finished wait in `.qurb/incoming` until the next upload starts a day
+  later. Nothing in the app uses it yet.

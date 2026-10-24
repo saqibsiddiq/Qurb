@@ -205,3 +205,93 @@ async fn a_path_out_of_the_folder_lists_nothing() {
     }
     client.close();
 }
+
+// ---------------------------------------------------------------- changes
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guest_adds_renames_moves_and_deletes_in_the_shared_folder() {
+    let host = Device::new(42);
+    let guest = Device::new(7);
+    welcome(&host, &guest).await;
+    let client = connect(&host, &guest).await;
+
+    assert_eq!(client.shared_mkdir("Trips").await.unwrap(), Ok(()));
+    assert!(host.root.join("Trips").is_dir());
+
+    // Three pieces: 9 MiB, at most 4 MiB each.
+    let bytes: Vec<u8> = (0..9 << 20).map(|i: u32| (i % 251) as u8).collect();
+    let file = host.root.parent().unwrap().join("from-the-phone.jpg");
+    fs::write(&file, &bytes).unwrap();
+    let mut heard = Vec::new();
+    let placed = client.shared_upload(&file, "Trips/beach.jpg", |n| heard.push(n)).await.unwrap();
+    assert_eq!(placed, Ok("Trips/beach.jpg".to_string()));
+    assert_eq!(heard, vec![4 << 20, 8 << 20, 9 << 20], "progress after each piece");
+    assert_eq!(fs::read(host.root.join("Trips/beach.jpg")).unwrap(), bytes);
+    let (_, listed) = client.shared("Trips").await.unwrap().unwrap();
+    assert_eq!(names(&listed), vec!["beach.jpg"], "an added file not listed");
+
+    // Again under the same name: numbered.
+    let placed = client.shared_upload(&file, "Trips/beach.jpg", |_| {}).await.unwrap();
+    assert_eq!(placed, Ok("Trips/beach (2).jpg".to_string()));
+
+    assert_eq!(client.shared_move("Trips/beach.jpg", "Trips/sea.jpg").await.unwrap(), Ok(()));
+    assert!(host.root.join("Trips/sea.jpg").is_file() && !host.root.join("Trips/beach.jpg").exists());
+    assert_eq!(client.shared_move("Trips", "Holidays/Trips").await.unwrap(), Ok(()));
+    assert!(host.root.join("Holidays/Trips/sea.jpg").is_file());
+
+    assert_eq!(client.shared_delete("Holidays").await.unwrap(), Ok(()));
+    assert!(!host.root.join("Holidays").exists());
+    let trash = host.engine.store().recently_deleted().unwrap();
+    assert_eq!(trash.len(), 2);
+    assert!(trash.iter().all(|t| t.deleted_by == Some(guest.id())), "Recently deleted does not name the guest");
+    client.close();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_change_refused_says_why() {
+    let mut host = Device::new(42);
+    let guest = Device::new(7);
+    welcome(&host, &guest).await;
+    host.write("notes.txt", b"shopping");
+    let client = connect(&host, &guest).await;
+
+    for path in [".qurb/x", "../out", "/etc"] {
+        assert!(client.shared_mkdir(path).await.unwrap().is_err(), "{path:?} made");
+    }
+    let taken = client.shared_mkdir("notes.txt").await.unwrap().unwrap_err();
+    assert!(taken.contains("already called notes.txt"), "{taken}");
+    let missing = client.shared_delete("nothing.txt").await.unwrap().unwrap_err();
+    assert!(missing.contains("nothing is called"), "{missing}");
+    assert!(host.root.join("notes.txt").is_file());
+    client.close();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn only_its_guests_and_its_owners_phones_may_change_it() {
+    let mut host = Device::new(42);
+    let computer = Device::new(42);
+    host.trust_own(&computer, "Desktop", "computer");
+    host.write("notes.txt", b"shopping");
+
+    let client = connect(&host, &computer).await;
+    let refused = client.shared_delete("notes.txt").await.unwrap().unwrap_err();
+    assert!(refused.contains("does not take changes"), "{refused}");
+    assert!(host.root.join("notes.txt").is_file(), "deleted for the owner's computer");
+    client.close();
+
+    let phone = Device::new(42);
+    host.trust_own(&phone, "Phone", "phone");
+    let client = connect(&host, &phone).await;
+    assert_eq!(client.shared_mkdir("From the phone").await.unwrap(), Ok(()));
+    client.close();
+
+    // And a computer visited takes nothing into its visitor's folder.
+    let visited = Device::new(42);
+    let mut visitor = Device::new(7);
+    welcome(&visited, &visitor).await;
+    visitor.write("mine.txt", b"the visitor's own");
+    let client = connect(&visitor, &visited).await;
+    assert!(client.shared_delete("mine.txt").await.unwrap().is_err());
+    assert!(visitor.root.join("mine.txt").is_file());
+    client.close();
+}

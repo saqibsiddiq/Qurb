@@ -257,6 +257,87 @@ impl PeerClient {
         }
     }
 
+    /// Make a folder in the peer's shared folder (decision 0073, item 6).
+    /// `Ok(Ok(()))` made; `Ok(Err(why))` not, in words for a person -- a
+    /// computer that takes no changes from this device says so too.
+    pub async fn shared_mkdir(&self, path: &str) -> Result<std::result::Result<(), String>> {
+        self.change(Request::SharedMkdir { path: path.to_string() }).await
+    }
+
+    /// Rename or move a file or folder in the peer's shared folder.
+    pub async fn shared_move(&self, from: &str, to: &str) -> Result<std::result::Result<(), String>> {
+        self.change(Request::SharedMove { from: from.to_string(), to: to.to_string() }).await
+    }
+
+    /// Delete a file or folder in the peer's shared folder, into its
+    /// Recently deleted.
+    pub async fn shared_delete(&self, path: &str) -> Result<std::result::Result<(), String>> {
+        self.change(Request::SharedDelete { path: path.to_string() }).await
+    }
+
+    async fn change(&self, request: Request) -> Result<std::result::Result<(), String>> {
+        match self.request(request).await? {
+            Response::Noted => Ok(Ok(())),
+            Response::Refused { why } => Ok(Err(why)),
+            Response::NotFound => Ok(Err(NOT_TAKEN.to_string())),
+            other => Err(unexpected("change", &other)),
+        }
+    }
+
+    /// Add `file` to the peer's shared folder at `path`, in pieces, and
+    /// checked whole against its hash there. `Ok(Ok(placed))` with where it
+    /// was put, numbered when the name was taken; `Ok(Err(why))` when not.
+    /// `sent` hears how many bytes have gone, after each piece.
+    pub async fn shared_upload(
+        &self,
+        file: &std::path::Path,
+        path: &str,
+        mut sent: impl FnMut(u64),
+    ) -> Result<std::result::Result<String, String>> {
+        use rand::RngCore;
+        use std::io::Read;
+        let mut id = [0u8; 16];
+        rand::rngs::OsRng.fill_bytes(&mut id);
+        let mut reader = std::fs::File::open(file).map_err(|e| Error::Io { path: file.to_path_buf(), source: e })?;
+        let mut hasher = blake3::Hasher::new();
+        let mut piece = vec![0u8; crate::wire::MAX_PIECE];
+        let mut offset = 0u64;
+        loop {
+            let mut filled = 0;
+            while filled < piece.len() {
+                let n = reader.read(&mut piece[filled..]).map_err(|e| Error::Io { path: file.to_path_buf(), source: e })?;
+                if n == 0 {
+                    break;
+                }
+                filled += n;
+            }
+            // An empty file still sends one piece, so that the computer has
+            // something to put.
+            if filled == 0 && offset > 0 {
+                break;
+            }
+            hasher.update(&piece[..filled]);
+            match self.request(Request::Upload { id, offset, bytes: piece[..filled].to_vec() }).await? {
+                Response::Noted => {}
+                Response::Refused { why } => return Ok(Err(why)),
+                Response::NotFound => return Ok(Err(NOT_TAKEN.to_string())),
+                other => return Err(unexpected("piece", &other)),
+            }
+            offset += filled as u64;
+            sent(offset);
+            if filled < piece.len() {
+                break;
+            }
+        }
+        let content = *hasher.finalize().as_bytes();
+        match self.request(Request::UploadDone { id, path: path.to_string(), content }).await? {
+            Response::Placed { path } => Ok(Ok(path)),
+            Response::Refused { why } => Ok(Err(why)),
+            Response::NotFound => Ok(Err(NOT_TAKEN.to_string())),
+            other => Err(unexpected("placed file", &other)),
+        }
+    }
+
     /// A file's chunks, each with its size, or `None` if the peer does not
     /// have it or will not show it: what reading part of it needs
     /// ([`crate::Ranged`]).
@@ -564,6 +645,11 @@ impl PeerClient {
     }
 }
 
+/// What a computer that takes no changes from this device is taken to say:
+/// one that is not its own person's nor one it visits, or one from before
+/// decision 0073.
+const NOT_TAKEN: &str = "that computer does not take changes from here";
+
 fn unexpected(wanted: &str, got: &Response) -> Error {
     let kind = match got {
         Response::Tree(_) => "tree",
@@ -577,6 +663,8 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Key { .. } => "key",
         Response::About { .. } => "description",
         Response::Who { .. } => "name of a device showing a code",
+        Response::Refused { .. } => "refusal of a change",
+        Response::Placed { .. } => "place of an added file",
         Response::Mismatch => "key mismatch",
         Response::Declined => "refusal",
         Response::Changed { .. } => "change notification",

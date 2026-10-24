@@ -352,9 +352,18 @@ async fn serve_request(
         Response::Changed { generation: generation.wait_past(since, CHANGES_TIMEOUT).await }
     } else {
         let answered = tokio::task::block_in_place(|| {
-            let store = store.lock().expect("store mutex poisoned");
-            answer(&store, &request, asker)
+            let mut store = store.lock().expect("store mutex poisoned");
+            answer(&mut store, &request, asker)
         })?;
+        // A change made to the shared folder for a phone: devices waiting
+        // to hear of one hear now (decision 0073).
+        let changed = matches!(
+            request,
+            Request::SharedMkdir { .. } | Request::SharedMove { .. } | Request::SharedDelete { .. } | Request::UploadDone { .. }
+        ) && matches!(answered, Answer::Now(Response::Noted | Response::Placed { .. }));
+        if changed {
+            generation.bump();
+        }
         match answered {
             Answer::Now(response) => response,
             // A chunk's bytes, read after the lock is let go, so that the
@@ -406,7 +415,9 @@ async fn serve_request(
         | Response::Kept { .. }
         | Response::Layout(_)
         | Response::Digest(_)
-        | Response::TreeDelta { .. } => 0,
+        | Response::TreeDelta { .. }
+        | Response::Refused { .. }
+        | Response::Placed { .. } => 0,
     };
 
     match (&request, &response) {
@@ -427,6 +438,77 @@ async fn serve_request(
 /// this, or past half of it, the list is sent whole instead.
 const DELTA_MOST: usize = 20_000;
 
+/// A change to the shared folder, made, or refused with the reason the
+/// asker shows its person.
+fn made(result: qurb_storage::Result<()>) -> Result<Response> {
+    match result {
+        Ok(()) => Ok(Response::Noted),
+        Err(e) => refused(e),
+    }
+}
+
+/// A storage error as a refusal a person can read, where it is one; any
+/// other is this device's failure, not the asker's, and is passed on.
+fn refused(e: qurb_storage::Error) -> Result<Response> {
+    match e {
+        qurb_storage::Error::Sharing { why } => Ok(Response::Refused { why }),
+        qurb_storage::Error::NotFound { path } => Ok(Response::Refused { why: format!("nothing is called {path}") }),
+        qurb_storage::Error::NotHere { path } => Ok(Response::Refused { why: format!("{path} is not on this computer yet") }),
+        other => Err(other.into()),
+    }
+}
+
+/// Where uploads wait, in the store's own folder and so never in the shared
+/// one, until the last piece arrives.
+const INCOMING: &str = "incoming";
+
+/// How long an upload nobody finished is kept before the next one clears it.
+const INCOMING_KEPT: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+
+/// Where the pieces of upload `id` from `device` wait.
+fn staging(store: &Store, device: &qurb_sync::DeviceId, id: &[u8; 16]) -> std::path::PathBuf {
+    let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    store.root().join(INCOMING).join(format!("{}-{}", hex(&device.as_bytes()[..8]), hex(id)))
+}
+
+/// One piece of an upload, written where it waits. In order only: a piece
+/// not at the end of what has arrived is refused, and the asker starts again.
+fn piece(store: &Store, device: &qurb_sync::DeviceId, id: &[u8; 16], offset: u64, bytes: &[u8]) -> Result<Response> {
+    use std::io::Write;
+    let staged = staging(store, device, id);
+    let dir = store.root().join(INCOMING);
+    std::fs::create_dir_all(&dir).map_err(|e| Error::Io { path: dir.clone(), source: e })?;
+    if offset == 0 {
+        // A new upload clears out ones abandoned a day ago and more.
+        if let Ok(read) = std::fs::read_dir(&dir) {
+            for entry in read.flatten() {
+                let old = entry
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .ok()
+                    .and_then(|t| t.elapsed().ok())
+                    .is_some_and(|age| age > INCOMING_KEPT);
+                if old {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
+    let have = std::fs::metadata(&staged).map(|m| m.len()).unwrap_or(0);
+    if offset != 0 && offset != have {
+        return Ok(Response::Refused { why: "a piece of the file went missing; send it again".into() });
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(offset != 0)
+        .truncate(offset == 0)
+        .open(&staged)
+        .map_err(|e| Error::Io { path: staged.clone(), source: e })?;
+    file.write_all(bytes).map_err(|e| Error::Io { path: staged.clone(), source: e })?;
+    Ok(Response::Noted)
+}
+
 /// What a request is answered with: at once, or, for a chunk, the bytes once
 /// they are read without the store (decision 0064).
 enum Answer {
@@ -434,7 +516,7 @@ enum Answer {
     Read { hash: blake3::Hash, places: Vec<qurb_storage::ChunkAt>, reader: qurb_storage::ChunkReader },
 }
 
-fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Result<Answer> {
+fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> Result<Answer> {
     // Which device is asking, as the connection proves rather than as anything
     // claims. Every answer below is scoped to it: the shared area plus that
     // device's own vault, never anybody else's.
@@ -637,6 +719,48 @@ fn answer(store: &Store, request: &Request, asker: Option<Fingerprint>) -> Resul
                             modified_at: f.modified_at,
                         })
                         .collect(),
+                }
+            }
+            _ => Response::NotFound,
+        },
+
+        // Changes to this computer's shared folder, made here when a phone of
+        // its own person or a guest asks (decision 0073, item 6): the one
+        // exception to serving read-only. Anyone else is told nothing is here.
+        Request::SharedMkdir { path } => match &owner {
+            Some(device) if reaches_shared => {
+                made(qurb_storage::shared_folder::make_folder(store, device, path))?
+            }
+            _ => Response::NotFound,
+        },
+        Request::SharedMove { from, to } => match &owner {
+            Some(device) if reaches_shared => {
+                made(qurb_storage::shared_folder::move_path(store, device, from, to))?
+            }
+            _ => Response::NotFound,
+        },
+        Request::SharedDelete { path } => match &owner {
+            Some(device) if reaches_shared => {
+                made(qurb_storage::shared_folder::delete_path(store, device, path))?
+            }
+            _ => Response::NotFound,
+        },
+        Request::Upload { id, offset, bytes } => match &owner {
+            Some(device) if reaches_shared => piece(store, device, id, *offset, bytes)?,
+            _ => Response::NotFound,
+        },
+        Request::UploadDone { id, path, content } => match &owner {
+            Some(device) if reaches_shared => {
+                let staged = staging(store, device, id);
+                if !staged.is_file() {
+                    Response::Refused { why: "nothing of that file arrived; send it again".into() }
+                } else {
+                    let placed = qurb_storage::shared_folder::place(store, device, &staged, path, &blake3::Hash::from(*content));
+                    let _ = std::fs::remove_file(&staged);
+                    match placed {
+                        Ok(path) => Response::Placed { path },
+                        Err(e) => refused(e)?,
+                    }
                 }
             }
             _ => Response::NotFound,

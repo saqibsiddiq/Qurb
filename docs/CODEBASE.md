@@ -720,7 +720,8 @@ qurb/
 │   │       │                the window and the phone (0067)
 │   │       ├── shared_folder.rs
 │   │       │                one folder of the shared area, as a phone or a
-│   │       │                guest reaches it live (0073)
+│   │       │                guest reaches it live, and the changes they may
+│   │       │                ask the computer to make there (0073)
 │   │       └── store.rs     public API and the ordering rules
 │   │
 │   ├── watcher/           Turns filesystem events into settled changes.

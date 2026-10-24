@@ -207,6 +207,22 @@ folder, with no key: the computer holds the same one, so the yes is all
 that is needed. A phone collects `Asks` at each sync and, during a long
 pass, every ten seconds.
 
+And one real exception, since [decision
+0073](../../docs/decisions/0073-the-phone-works-with-its-computer.md): a
+computer changes **its own shared folder** when one of its own person's
+phones or a guest asks. `SharedMkdir`, `SharedMove`, `SharedDelete`, and a
+file added in pieces of at most 4 MiB (`Upload`, then `UploadDone` with the
+whole file's hash). The computer makes each change itself, as one of its own
+(`qurb_storage::shared_folder`), so every other device takes it as it takes
+any; it checks every path -- relative, nothing hidden, so never the store's
+folder or a sharing rule, outside every folder shared without the asker --
+puts a file only once its bytes hash to what was said, numbers it rather than
+put it over another, and deletes into its Recently deleted, naming the device
+that asked. A reason a person can read comes back as `Refused { why }`.
+Nobody else may ask: its other computers, a computer it visits, and anyone
+unplaced are told *not found*. Pieces wait in `.qurb/incoming`, never in the
+folder (`tests/shared_folder.rs`, and `storage/tests/shared_changes.rs`).
+
 And a phone of the computer's own person asks for **its folder there**,
 `Kept { dir }`: the folders and files kept for that phone, and for it
 before it was set up again, at one place in the tree a person sees

@@ -441,6 +441,11 @@ impl Store {
         self.tree.is_some()
     }
 
+    /// The folder on disk this store materialises files in, if it has one.
+    pub fn tree_root(&self) -> Option<&Path> {
+        self.tree.as_deref()
+    }
+
     /// One folder of the shared area as `device` may see it, live, with the
     /// empty folders on disk (decision 0073, item 6). See
     /// [`crate::shared_folder::listing`].
@@ -1944,10 +1949,18 @@ impl Store {
     /// not the whole story. Returns the trash entry, if there was a file on
     /// disk to keep.
     pub fn delete_to_trash(&mut self, logical_path: &str, why: Option<&str>) -> Result<Option<i64>> {
+        let me = self.device_id()?;
+        self.delete_to_trash_by(logical_path, why, &me)
+    }
+
+    /// [`delete_to_trash`](Self::delete_to_trash), saying which device it was
+    /// done for: a phone deleting in this computer's shared folder (decision
+    /// 0073), which Recently deleted then names.
+    pub fn delete_to_trash_by(&mut self, logical_path: &str, why: Option<&str>, by: &DeviceId) -> Result<Option<i64>> {
         let Some((row, scope)) = self.db.folder_row(logical_path)? else {
             return Err(Error::NotFound { path: logical_path.to_string() });
         };
-        let me = self.device_id()?;
+        let me = *by;
         let trashed = match self.tree.clone() {
             Some(root) => self.move_to_trash(
                 &root.join(logical_path),
