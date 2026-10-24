@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup and Pairing** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing and Sharing into Qurb** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -628,3 +628,62 @@ lapses under it, five minutes on, which is from reading `Asker`; a computer
 really asking to open the folder; the desktop window showing a code to a phone, the usual case, since the
 desktop window is not redesigned yet. *Could not connect* is still the old
 dialog.
+
+## Built: Android Sharing into Qurb (2026-10-24)
+
+Sharing into Qurb draft 1 is in the app (`ShareActivity.kt`). The activity
+draws nothing of its own any more: its sheets rise over the app the person
+shared from (`Theme.Qurb.Share`, translucent), where a dialog of its own stood.
+
+- **Save to**: *This phone*, the Vault as a card with a lock; *Send to*, each
+  device as Devices shows it, with its dot, how long since it answered, and an
+  arrow. *Save to Files* is gone, as decision 0073 has it; so are *Save to my
+  folder on …* and *Send to …'s Downloads*, which the Vault and the device's
+  name now stand for. With no device paired, nothing is asked and the file is
+  saved where *Keep new files private* says, as before.
+- **Sending**: the file's kind in a quiet tile, its name, a bar, the send and
+  device icons and the device's name, and Hide. The bar turns while the file is
+  copied in, then fills with the bytes that device has collected.
+- **Sent to saqib**, a tick, once that device has collected every file, which is
+  when the engine no longer has them waiting for it. **Nothing to save** when
+  the share held no file.
+
+**Where it differs, and why:**
+
+- **Waiting for saqib**, a clock, not drawn in the design: after 30 seconds in
+  which nothing went out, the device off or out of reach. It collects the file
+  when it is next on; saying *Sent* then would not be true, and a bar standing
+  still says nothing.
+- **Saving shows the Sending sheet**, the lock and *Vault* where the device
+  would be, with no Hide, then *Saved to Vault*. The design draws no saving
+  step, and a long video takes a moment to copy in.
+- **Hide waits for the copy.** The share sheet's permission to read a file ends
+  with this screen, so the file is copied in first, and asked about if it went
+  to that device before (decision 0059). Hide, a swipe and back do nothing
+  until then, usually a second; after, they leave the rest to the sync worker.
+- **Its failures in the same sheet**: *Couldn't read that*, *Set up Qurb first*,
+  and *Saved 3 of 4*, with the attention mark. The old explanations under each
+  outcome are gone, as on every redesigned page.
+- **The bar is one bar.** Material 3 cuts a gap between what is done and what is
+  not and puts a dot at the end; both are turned off.
+- *Sent to … before*, the question of decision 0059, is still the old dialog.
+
+**Checked** on the emulator (`qurb-34g`), sharing a 9.5 MB picture from its
+Files app, with the command line built for Android running beside the app as
+*a device*. Shared from the shell instead, the app was refused the picture
+(`SecurityException`), and the sheet said *Couldn't read that*, which is how
+that path was seen.
+
+- *Save to*, light and dark; *a device* sent to and collected, *Sent to a
+  device*, the file in that device's Downloads, 9,494,019 bytes.
+- Emu-Laptop, off: *Waiting for Emu-Laptop* after the 30 seconds.
+- *Vault*: the bar turning, then *Saved to Vault*.
+- The same picture to *a device* again: *Sent to a device before* asked, *Send
+  it again*, then Hide; that device's log has the pass collecting it after the
+  sheet had gone.
+- *Nothing to save*, from text shared with no file.
+
+**Not checked:** anything on the S23; *Set up Qurb first*; a swipe or back
+while a file is copied in, which is from reading the code; a share of several
+files; a file large enough for the worker's notification (32 MB); a share
+while another sync is running.

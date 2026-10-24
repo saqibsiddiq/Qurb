@@ -9,7 +9,10 @@ seen; step 3 not yet seen. See *Progress*. Extends
 [0060](0060-a-computer-keeps-private-folders-for-several-people.md), which
 built most of this for guests, to every person a computer keeps files for,
 its owner included, and answers 0060's question 3 ("the owner's own files:
-an ordinary folder, or locked like a guest's?") the other way.
+an ordinary folder, or locked like a guest's?") the other way. Amended by
+[0073](0073-the-phone-works-with-its-computer.md); since the redesign of
+2026-10-24 the share sheet says *Vault* and the computer's name rather than
+*Save to my folder on …* and *Send to …'s Downloads*.
 
 ## What was asked
 

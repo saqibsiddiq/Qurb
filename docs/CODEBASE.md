@@ -944,9 +944,10 @@ qurb/
 │       │                                      the other device, named, approves
 │       │                  Backup.kt           the key, kept in Block Store
 │       │                  ScanActivity.kt     reading a pairing QR code
-│       │                  ShareActivity.kt    the share sheet's way in: save it,
-│       │                                      save it to my folder on a computer,
-│       │                                      or send it to one device
+│       │                  ShareActivity.kt    the share sheet's way in, as sheets
+│       │                                      over the app shared from: save it
+│       │                                      to the Vault, or send it to one
+│       │                                      device and watch it collected
 │       │                  AndroidKeyStore.kt  the platform half of decision 0021
 │       │                  SyncWorker.kt       background sync, on WorkManager;
 │       │                                      a long pass in the foreground

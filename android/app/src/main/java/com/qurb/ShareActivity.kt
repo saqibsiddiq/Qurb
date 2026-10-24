@@ -1,72 +1,78 @@
 package com.qurb
 
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updatePadding
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.qurb.databinding.ActivityShareBinding
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.PeerInfo
 
 /**
- * The share sheet's way in.
+ * The share sheet's way in, as Sharing into Qurb draft 1 draws it: sheets over
+ * the app the person was sharing from -- *Save to*, then the file going, then
+ * what happened -- and nothing of this activity's own behind them.
  *
- * The point of this screen is what it does *not* need: a network. Sharing a
- * photo writes it into the synced folder and indexes it, here and now, whether
- * or not any other device is switched on. Reaching them is a separate question,
- * answered whenever one is next awake — by the periodic worker if nothing else
- * happens first.
+ * Saving needs no network. A file saved writes into this phone's folder and
+ * is indexed here and now, whether or not any other device is on; reaching
+ * them is a separate question, answered whenever one is next awake. So there
+ * is no outbox and no retry queue: the file is in the folder like any other,
+ * and the index knows which devices hold it.
  *
- * So there is no outbox and no retry queue, because there is nothing queued: the
- * file is simply in the folder like any other, and the index already knows that
- * no other device holds it. "Waiting to be delivered" is a question the store
- * can answer at any time rather than a list this screen has to keep.
- *
- * It does ask for a sync immediately, which usually succeeds and makes the
- * whole thing feel instant. When it does not, nothing is lost and nothing needs
- * saying beyond when to expect it.
+ * A send is the engine's once handed to it, kept until that device collects
+ * it (decision 0060). The sheet watches for that, and says *Sent* only when it
+ * has happened, as Home does; Hide leaves it to the sync worker.
  */
 class ShareActivity : AppCompatActivity() {
 
-    private lateinit var views: ActivityShareBinding
+    private val kit by lazy { Kit(this) }
+
+    /** The sheet up now. Each step puts its own in its place; the last one
+     *  closed, by Done, a swipe or back, closes this. */
+    private var shown: Sheet? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        views = ActivityShareBinding.inflate(layoutInflater)
-        setContentView(views.root)
-        insetFor(views.root)
-
-        views.done.setOnClickListener { finish() }
-
         val incoming = incomingUris()
         when {
-            !Engine.isSetUp(this) -> refuse(
-                "Qurb isn't set up on this phone",
-                "Open Qurb first and either create a key or enter your 24 words.",
-            )
-            incoming.isEmpty() -> refuse(
-                "Nothing to save",
-                "That share did not contain a file Qurb can read.",
-            )
+            !Engine.isSetUp(this) -> outcome(Outcome.ATTENTION, "Set up Qurb first")
+            incoming.isEmpty() -> outcome(Outcome.ATTENTION, "Nothing to save")
             else -> chooseWhere(incoming)
         }
     }
 
+    /** Puts [sheet] up in place of the one before. */
+    private fun present(sheet: Sheet) {
+        val before = shown
+        shown = sheet
+        sheet.onDismiss { if (shown === sheet) finish() }
+        sheet.show()
+        before?.dismiss()
+    }
+
     /**
-     * Save to Private Vault, save to Files, or send straight to a device
-     * (brief §39): the choice the share sheet exists to make fast. Asked only
-     * when there is a device to send to; with none, the file is saved where
-     * *Keep new files private* says, and nothing is asked.
+     * Save to this phone's Vault, or send to one of the devices (brief §39):
+     * the choice the share sheet exists to make fast. No Files: a phone keeps
+     * no shared files (decision 0073). With no device to send to there is
+     * nothing to choose, and the file goes where *Keep new files private*
+     * says, as before.
      */
     private fun chooseWhere(uris: List<Uri>) {
-        views.headline.text = "Qurb"
         lifecycleScope.launch {
             val peers = runCatching {
                 withContext(Dispatchers.IO) { Engine.open(this@ShareActivity).peers() }
@@ -75,53 +81,36 @@ class ShareActivity : AppCompatActivity() {
                 save(uris)
                 return@launch
             }
-            val what = if (uris.size == 1) "it" else "${uris.size} files"
-            // Item 4 of the owner's list (decision 0060): into the folder a
-            // computer this phone visits keeps for it, or into that
-            // computer's Downloads, named as such.
-            val keepers = runCatching {
-                withContext(Dispatchers.IO) { Engine.open(this@ShareActivity).holders().map { it.fingerprint }.toSet() }
-            }.getOrDefault(emptySet())
-            // And the same two for one of this person's own computers that
-            // keeps this phone's folder (the owner's item 3, decision 0067):
-            // its folder there opens only with this phone's yes, its
-            // Downloads freely.
-            val keeper = peers.firstOrNull { it.relation == "host" && it.fingerprint in keepers }
-                ?: peers.firstOrNull { it.fingerprint in keepers }
-            val choices = listOf(
-                keeper?.let { "Save to my folder on ${it.name}" } ?: "Save to Private Vault",
-                "Save to Files, on all your devices",
-            ) + peers.map {
-                if (it.relation == "host" || it.fingerprint in keepers) "Send to ${it.name}'s Downloads" else "Send to ${it.name}"
+            val list = LinearLayout(this@ShareActivity).apply { orientation = LinearLayout.VERTICAL }
+            kit.label(list, "This phone", top = 0)
+            kit.deviceCard(list, R.drawable.ic_lock_keyhole, "Vault", off = null, since = null) {
+                save(uris, private = true)
             }
-            MaterialAlertDialogBuilder(this@ShareActivity)
-                .setTitle("Where should $what go?")
-                .setItems(choices.toTypedArray()) { _, which ->
-                    when (which) {
-                        0 -> save(uris, private = true)
-                        1 -> save(uris, private = false)
-                        else -> send(uris, peers[which - 2])
-                    }
-                }
-                .setNegativeButton("Cancel") { _, _ -> finish() }
-                .setOnCancelListener { finish() }
-                .show()
+            kit.label(list, "Send to", top = 14)
+            for (peer in peers) {
+                kit.deviceCard(
+                    list, States.device(peer.name, peer.kind), peer.name, Engine.isOff(this@ShareActivity, peer),
+                    peer.lastSeen?.let { Words.since(it) }, end = R.drawable.ic_chevron_right,
+                ) { send(uris, peer) }
+            }
+            present(kit.sheet().title("Save to").view(list, top = 10))
         }
     }
 
     /**
-     * Straight to one device, privately, and nowhere else (decision 0030). The
-     * engine keeps its copy until that device collects it, so this works while
-     * the device is off; it is not added to this phone's Vault.
+     * Straight to one device, privately, and nowhere else (decision 0030): the
+     * file, a bar, where it goes, and Hide. Each file is copied in first, as
+     * the share sheet's permission to read it ends with this screen; Hide
+     * waits for that, and for the question about files sent before, then
+     * leaves the rest to the sync worker.
      */
     private fun send(uris: List<Uri>, to: PeerInfo) {
-        views.headline.text = "Sending to ${to.name}"
-        views.detail.text = ""
+        val going = going(uris, listOf(R.drawable.ic_send, States.device(to.name, to.kind)), to.name, hide = true)
         lifecycleScope.launch {
-            var sent = 0
             var failed = 0
             val staged = mutableListOf<Engine.Staged>()
             val sending = mutableSetOf<Engine.Staged>()
+            val names = mutableListOf<String>()
             try {
                 for (uri in uris) {
                     try {
@@ -141,9 +130,8 @@ class ShareActivity : AppCompatActivity() {
                 }
                 for (file in staged.filter { it.file.absolutePath !in leaveOut }) {
                     try {
-                        Engine.send(this@ShareActivity, file, to.fingerprint)
+                        names += Engine.send(this@ShareActivity, file, to.fingerprint)
                         sending += file
-                        sent++
                     } catch (e: Exception) {
                         android.util.Log.w("qurb", "could not send a shared file", e)
                         failed++
@@ -154,18 +142,44 @@ class ShareActivity : AppCompatActivity() {
                 // (decision 0060). The rest were never sent.
                 staged.filter { it !in sending }.forEach { it.file.delete() }
             }
-            if (sent == 0) {
-                refuse("Could not send that", "Qurb could not read the file it was handed.")
+            if (names.isEmpty()) {
+                outcome(Outcome.ATTENTION, "Couldn't read that")
                 return@launch
             }
+            val engine = Engine.open(this@ShareActivity)
+            val from = withContext(Dispatchers.IO) { engine.serving().bytes }
             SyncWorker.runNow(this@ShareActivity)
-            views.progress.visibility = android.view.View.GONE
-            views.done.visibility = android.view.View.VISIBLE
-            views.headline.text = if (failed > 0) "Sent $sent of ${sent + failed}" else "Sent to ${to.name}"
-            views.detail.text = "${to.name} collects " + (if (sent == 1) "it" else "them") +
-                " the next time it is switched on and reachable. Your other devices never see " +
-                (if (sent == 1) "it." else "them.") +
-                if (failed > 0) "\n\n$failed could not be read and were not sent." else ""
+            going.hide?.isEnabled = true
+            going.sheet.dialog.setCancelable(true)
+            val total = sending.sumOf { it.file.length() }.coerceAtLeast(1L)
+            val of = if (failed > 0) " ${names.size} of ${names.size + failed}" else ""
+
+            // Collected when the engine no longer has them waiting for that
+            // device; going while bytes go out. Nothing moving for a while is
+            // a device off or out of reach: it collects them when it is next
+            // on, which the sheet says rather than wait with a still bar.
+            var last = from
+            var moved = System.currentTimeMillis()
+            while (true) {
+                delay(500)
+                val (served, left) = withContext(Dispatchers.IO) {
+                    engine.serving().bytes to runCatching { engine.waiting() }.getOrDefault(emptyList())
+                        .count { it.toFingerprint == to.fingerprint && it.path in names }
+                }
+                if (left == 0) {
+                    outcome(Outcome.DONE, if (of.isEmpty()) "Sent to ${to.name}" else "Sent$of to ${to.name}")
+                    return@launch
+                }
+                val done = (served - from).toDouble() / total.toDouble()
+                going.bar.setProgressCompat((done.coerceIn(0.0, 1.0) * 1000).toInt(), true)
+                if (served != last) {
+                    last = served
+                    moved = System.currentTimeMillis()
+                } else if (System.currentTimeMillis() - moved > STILL_FOR_MS) {
+                    outcome(Outcome.WAITING, "Waiting for ${to.name}")
+                    return@launch
+                }
+            }
         }
     }
 
@@ -231,7 +245,7 @@ class ShareActivity : AppCompatActivity() {
         }
 
     /**
-     * Save every shared file, then say what will happen to it.
+     * Save every shared file into this phone's folder, then say so.
      *
      * One failure does not abandon the rest: someone sharing eleven photos
      * should get ten of them and be told about the one that did not work,
@@ -239,10 +253,8 @@ class ShareActivity : AppCompatActivity() {
      */
     private fun save(uris: List<Uri>, private: Boolean? = null) {
         val area = private ?: Engine.ownFilesPrivate(this)
-        val place = if (area) "Private Vault" else "Qurb"
-        views.headline.text = if (uris.size == 1) "Saving to $place" else "Saving ${uris.size} files to $place"
-        views.detail.text = ""
-
+        val place = if (area) "Vault" else "Files"
+        going(uris, listOf(if (area) R.drawable.ic_lock_keyhole else R.drawable.ic_folder), place, hide = false)
         lifecycleScope.launch {
             var saved = 0
             var failed = 0
@@ -255,75 +267,114 @@ class ShareActivity : AppCompatActivity() {
                     failed++
                 }
             }
-
             if (saved == 0) {
-                refuse("Could not save that", "Qurb could not read the file it was handed.")
+                outcome(Outcome.ATTENTION, "Couldn't read that")
                 return@launch
             }
-
-            // Ask for a sync through the scheduler rather than syncing here.
-            // A share should not hold the screen open while a phone looks for a
-            // computer that may be switched off, and going through WorkManager
-            // means the attempt survives this screen closing and is retried on
-            // its own if nothing answers.
+            // Through the scheduler rather than syncing here: a share should
+            // not hold the screen open while the phone looks for a computer
+            // that may be off, and the worker outlives this screen and tries
+            // again on its own.
             SyncWorker.runNow(this@ShareActivity)
-
-            views.progress.visibility = android.view.View.GONE
-            views.done.visibility = android.view.View.VISIBLE
-            views.headline.text = when {
-                failed > 0 -> "Saved $saved of ${saved + failed}"
-                saved == 1 -> "Saved to $place"
-                else -> "Saved $saved files to $place"
-            }
-
-            // About what was just shared, not about the backlog. Someone who
-            // shared one photo and is told their devices will get "them" is
-            // being answered about something they did not ask.
-            //
-            // And about where it will actually go. Files added on the phone
-            // are private to it unless the person has said otherwise (decision
-            // 0036), so "your other devices will get it" is true only of the
-            // device chosen to keep them, if there is one.
-            val it = if (saved == 1) "it" else "them"
-            val keepers = runCatching {
-                withContext(Dispatchers.IO) { Engine.open(this@ShareActivity).holders() }
-            }.getOrDefault(emptyList())
-            views.detail.text = buildString {
-                append(
-                    when {
-                        !area ->
-                            "Your other devices will get $it the next time one is " +
-                                "online. You don't need to do anything."
-                        keepers.isNotEmpty() ->
-                            if (keepers.size == 1) "${keepers[0].name} keeps a backup " +
-                                "the next time it's online. Nobody else sees $it."
-                            else "${Words.list(keepers.map { k -> k.name })} keep a backup " +
-                                "the next time each is online. Nobody else sees $it."
-                        else ->
-                            (if (saved == 1) "It stays" else "They stay") +
-                                " on this phone and nowhere else. To keep a backup, choose a " +
-                                "device in Qurb's Devices."
-                    }
-                )
-                if (failed > 0) {
-                    append("\n\n$failed could not be read and was not saved.")
-                }
-            }
+            outcome(
+                if (failed > 0) Outcome.ATTENTION else Outcome.DONE,
+                if (failed > 0) "Saved $saved of ${saved + failed}" else "Saved to $place",
+            )
         }
     }
 
-    private fun refuse(headline: String, detail: String) {
-        views.progress.visibility = android.view.View.GONE
-        views.done.visibility = android.view.View.VISIBLE
-        views.headline.text = headline
-        views.detail.text = detail
+    /** The sheet while files go, and the parts of it that change. */
+    private class Going(val sheet: Sheet, val bar: LinearProgressIndicator, val hide: MaterialButton?)
+
+    /**
+     * The file going (Sharing into Qurb, *Sending*): its kind in a quiet tile,
+     * its name over a bar, and where it goes as icons and a name. The bar
+     * turns while files are copied in, then fills as the other device
+     * collects. Not closed by a swipe or back until it can carry on without
+     * this screen; [hide] is the way out from then.
+     */
+    private fun going(uris: List<Uri>, to: List<Int>, where: String, hide: Boolean): Going {
+        val first = runCatching { Engine.displayName(this, uris[0]) }.getOrDefault("")
+        val name = if (uris.size == 1) first else "${uris.size} files"
+
+        val file = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val tile = FrameLayout(this).apply {
+            background = ContextCompat.getDrawable(this@ShareActivity, R.drawable.tile_mark)
+            backgroundTintList = ColorStateList.valueOf(kit.color(R.color.surface_2))
+        }
+        tile.addView(ImageView(this).apply {
+            setImageResource(if (uris.size == 1) States.icon(first) else R.drawable.ic_file)
+            imageTintList = ColorStateList.valueOf(kit.color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(kit.dp(26), kit.dp(26), Gravity.CENTER))
+        file.addView(tile, LinearLayout.LayoutParams(kit.dp(52), kit.dp(52)).apply { marginEnd = kit.dp(14) })
+        val words = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(TextView(this).apply {
+            text = name
+            setTextAppearance(R.style.Text_Section)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+        })
+        val bar = LinearProgressIndicator(this).apply {
+            isIndeterminate = true
+            max = 1000
+            trackThickness = kit.dp(6)
+            trackCornerRadius = kit.dp(3)
+            setIndicatorColor(kit.color(R.color.green))
+            trackColor = kit.color(R.color.neutral_bg)
+            // One bar, as the design draws it: Material 3 cuts a gap between
+            // what is done and what is not, and puts a dot at the end.
+            indicatorTrackGapSize = 0
+            trackStopIndicatorSize = 0
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        words.addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = kit.dp(8) })
+        file.addView(words, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        val towards = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            contentDescription = if (hide) "To $where" else "Into $where"
+        }
+        for (icon in to) towards.addView(ImageView(this).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(kit.color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(kit.dp(16), kit.dp(16)).apply { marginEnd = kit.dp(6) })
+        towards.addView(TextView(this).apply {
+            text = where
+            setTextAppearance(R.style.Text_Name)
+            setTextColor(kit.color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        })
+
+        val sheet = kit.sheet().view(file, top = 6).view(towards, top = 14)
+        val button = if (hide) sheet.wide("Hide", Kit.Style.SECONDARY) { finish() }.apply { isEnabled = false } else null
+        sheet.dialog.setCancelable(false)
+        present(sheet)
+        return Going(sheet, bar, button)
     }
 
-    private fun insetFor(view: android.view.View) {
-        ViewCompat.setOnApplyWindowInsetsListener(view) { target, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            target.updatePadding(left = bars.left, top = bars.top, right = bars.right, bottom = bars.bottom)
-            insets
-        }
+    /** How it ended: a tick, something to look at, or a device not there yet. */
+    private enum class Outcome(@DrawableRes val icon: Int, val fill: Int, val tint: Int) {
+        DONE(R.drawable.ic_circle_check, R.color.healthy_bg, R.color.healthy),
+        WAITING(R.drawable.ic_clock, R.color.surface_2, R.color.text_2),
+        ATTENTION(R.drawable.ic_triangle_alert, R.color.attention_bg, R.color.attention),
+    }
+
+    /** What happened, in its mark and a few words, and Done. */
+    private fun outcome(kind: Outcome, title: String) {
+        val sheet = kit.sheet().mark(kind.icon, fill = kind.fill, tint = kind.tint).title(title, centred = true)
+        sheet.wide("Done") { sheet.dismiss() }
+        present(sheet)
+    }
+
+    private companion object {
+        /** How long nothing goes out before the sheet says it is waiting. */
+        const val STILL_FOR_MS = 30_000L
     }
 }

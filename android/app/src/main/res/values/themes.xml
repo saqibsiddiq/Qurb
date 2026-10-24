@@ -58,38 +58,18 @@
         <item name="snackbarStyle">@style/Widget.Qurb.Snackbar</item>
     </style>
 
-    <!-- The share sheet's screen is a dialog rather than a page. It reports one
-         short outcome and gets out of the way, and framing it as a dialog keeps
-         the app the person was actually using visible behind it. -->
-    <style name="Theme.Qurb.Share" parent="Theme.Material3.DayNight.Dialog">
-        <item name="colorPrimary">@color/green</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSurface">@color/glass_solid</item>
-        <item name="colorOnSurface">@color/text</item>
-        <item name="colorOnSurfaceVariant">@color/text_2</item>
-        <item name="colorSurfaceContainerHighest">@color/border</item>
-        <item name="android:windowBackground">@drawable/dialog_window</item>
-        <item name="android:fontFamily">@font/inter</item>
-        <item name="fontFamily">@font/inter</item>
-        <item name="viewInflaterClass">com.qurb.QurbViewInflater</item>
-        <item name="materialButtonStyle">@style/Widget.Qurb.Button</item>
-        <item name="textAppearanceLabelLarge">@style/Text.Button</item>
-        <!-- Its question (Private Vault, Files, or a device) is an alert
-             dialog. Without this it took Material's own colours, a lilac
-             surface, as the one screen left outside the design. -->
-        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Qurb.Dialog</item>
-        <!-- The activity's label is what the share sheet puts on its button;
-             as a window title it only repeats the screen's own heading in
-             smaller type. Both spellings: this is an AppCompat theme, which
-             reads the one without the prefix and ignored the other, so the
-             title showed anyway. -->
+    <!-- The share sheet's way in draws nothing of its own: its sheets rise
+         over the app the person was sharing from (Sharing into Qurb, draft 1),
+         with the app's colours, type and sheets. The activity's label is what
+         the share sheet puts on its button, never a window title here. -->
+    <style name="Theme.Qurb.Share" parent="Theme.Qurb">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
         <item name="android:windowNoTitle">true</item>
         <item name="windowNoTitle">true</item>
         <item name="windowActionBar">false</item>
-        <!-- Without these the dialog is sized to its text and comes out a
-             narrow column, breaking one short sentence across four lines. -->
-        <item name="android:windowMinWidthMajor">80%</item>
-        <item name="android:windowMinWidthMinor">90%</item>
     </style>
 
     <!-- Type (§9, mobile): page title 26, section 17, body 15.5, metadata

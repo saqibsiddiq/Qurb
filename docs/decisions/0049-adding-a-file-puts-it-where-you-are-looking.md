@@ -2,7 +2,9 @@
 
 **Status:** Accepted — amends [0036](0036-a-phone-keeps-its-own-files.md)'s
 "everything added through the app or the share sheet" goes into the phone's own
-vault; built in the FFI and the Android app
+vault; built in the FFI and the Android app. The share sheet's *Save to
+Files* went in the redesign of 2026-10-24, the phone keeping no shared files
+([0073](0073-the-phone-works-with-its-computer.md)); *Vault* stays
 **Date:** 2026-09-29, built with the designed Android app (commit `fad2d9b`);
 recorded 2026-10-03, from the code and its tests
 

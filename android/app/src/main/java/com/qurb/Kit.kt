@@ -1118,6 +1118,17 @@ class Sheet(private val app: AppCompatActivity, private val kit: Kit) {
         return view(row, top = 22)
     }
 
+    /**
+     * One way on, the width of the sheet, at its foot: Done after a share, or
+     * Hide while one goes (Sharing into Qurb draft 1). Returned, for a caller
+     * that enables it later; it does not close the sheet by itself.
+     */
+    fun wide(label: String, style: Kit.Style = Kit.Style.PRIMARY, onTap: () -> Unit): MaterialButton {
+        val button = kit.button(label, style) { onTap() }
+        view(button, top = 24)
+        return button
+    }
+
     /** A title with nothing beside it, at the start or in the middle. */
     fun title(words: String, centred: Boolean = false): Sheet {
         body.addView(TextView(app).apply {
