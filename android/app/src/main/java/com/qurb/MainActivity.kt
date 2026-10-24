@@ -678,25 +678,29 @@ class MainActivity : AppCompatActivity() {
                 // A computer asking to open this phone's folder there, and
                 // what one did with a yes sent it.
                 heard()
-                if (!quiet) say(
-                    when {
-                        outcome.reached == 0u && outcome.unreachable == 0u && outcome.timedOut ->
-                            "Ran out of time before reaching a device. Try again."
-                        outcome.reached == 0u && outcome.unreachable == 0u ->
-                            "No devices connected yet"
-                        outcome.reached == 0u ->
-                            "No device answered. It has to be on with Qurb running, and this phone online."
-                        outcome.adopted == 0u && outcome.conflicts == 0u ->
-                            "All synced"
-                        else -> buildString {
-                            append("${Words.files(outcome.adopted.toInt())} updated")
-                            if (outcome.conflicts > 0u) {
-                                append(", ${outcome.conflicts} with two versions")
-                            }
-                            if (outcome.timedOut) append(" — ran out of time, sync again")
+                // Home says *All synced* and *saqib is off* in the middle of
+                // the screen (the redesign), so they are not said again
+                // under it; elsewhere, and what Home does not say, still are.
+                val onHome = current is HomeScreen
+                val said = when {
+                    outcome.reached == 0u && outcome.unreachable == 0u && outcome.timedOut ->
+                        "Ran out of time before reaching a device. Try again."
+                    outcome.reached == 0u && outcome.unreachable == 0u ->
+                        "No devices connected yet"
+                    outcome.reached == 0u ->
+                        if (onHome) null
+                        else "No device answered. It has to be on with Qurb running, and this phone online."
+                    outcome.adopted == 0u && outcome.conflicts == 0u ->
+                        if (onHome) null else "All synced"
+                    else -> buildString {
+                        append("${Words.files(outcome.adopted.toInt())} updated")
+                        if (outcome.conflicts > 0u) {
+                            append(", ${outcome.conflicts} with two versions")
                         }
+                        if (outcome.timedOut) append(" — ran out of time, sync again")
                     }
-                )
+                }
+                if (!quiet && said != null) say(said)
             } catch (e: Exception) {
                 if (quiet) android.util.Log.w("qurb", "a sync after a change failed", e)
                 else fail("Sync failed", e)
@@ -823,23 +827,18 @@ class MainActivity : AppCompatActivity() {
     fun pair() {
         // Scanning first, because it is what anyone will actually do; showing
         // a code is how two phones connect with no computer; typing is the
-        // fallback nobody does twice.
+        // fallback nobody does twice. Four ways and no descriptions (the
+        // redesign's Add a device): each one's screen says the rest.
         kit.sheet()
-            .header(R.drawable.ic_monitor_smartphone, "Add a device",
-                "Your computer or another phone. It joins with a code, once.")
-            // Each choice says what it is for, as the desktop's do.
-            .action(R.drawable.ic_qr_code, "Scan the other device's code",
-                meta = "From a computer or phone that is showing one.") {
+            .title("Add a device")
+            .option(R.drawable.ic_qr_code, "Scan a code") {
                 scanner.launch(Intent(this, ScanActivity::class.java))
             }
-            .action(R.drawable.ic_smartphone, "Show a code on this phone",
-                meta = "Scan it with the other device, or type it there.") { ShowCode.show(this) }
-            .action(R.drawable.ic_keyboard, "Enter a code",
-                meta = "The six digits a device on this Wi-Fi is showing.") { typeCode() }
+            .option(R.drawable.ic_smartphone, "Show my code") { ShowCode.show(this) }
+            .option(R.drawable.ic_keyboard, "Type 6 digits") { typeCode() }
             // Another person's computer, as a guest (decision 0060). Its code
             // says so, so scanning it from here or above does the same.
-            .action(R.drawable.ic_laptop, "Visit someone's computer",
-                meta = "As their guest. This phone keeps its own key.") {
+            .option(R.drawable.ic_laptop, "Visit a computer") {
                 scanner.launch(Intent(this, ScanActivity::class.java))
             }
             .show()
@@ -866,10 +865,10 @@ class MainActivity : AppCompatActivity() {
             background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.glass_group)
         }
         val sheet = kit.sheet()
-            // The desktop's words: *Enter a code*, and *Join*.
-            .header(R.drawable.ic_keyboard, "Enter a code", "The six digits the other device shows")
+            // As the option that opens it says.
+            .title("Type 6 digits")
             .view(input, top = 16)
-            .text("Both on the same Wi-Fi. Otherwise, scan its QR code.")
+            .text("Both on the same Wi-Fi")
             .buttons("Join") {
                 val code = input.text.toString()
                 if (code.length == 6) joinWith(code)

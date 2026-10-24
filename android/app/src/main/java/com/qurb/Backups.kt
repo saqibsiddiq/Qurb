@@ -86,7 +86,7 @@ class Backups(private val app: MainActivity, private val refresh: () -> Unit) {
             .show()
     }
 
-    private fun stopWhatsApp(keeper: String?) {
+    fun stopWhatsApp(keeper: String?) {
         kit.sheet().header(R.drawable.ic_hard_drive, "Stop backing up WhatsApp?")
             .text("Nothing new goes to ${keeper ?: "the computer"}. What it keeps already stays there.")
             .buttons("Stop", danger = true) {

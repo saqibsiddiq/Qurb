@@ -20,6 +20,7 @@ import androidx.core.widget.NestedScrollView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.button.MaterialButton
+import com.qurb.databinding.RowCardBinding
 import com.qurb.databinding.RowItemBinding
 import com.qurb.databinding.RowSettingBinding
 import uniffi.qurb_mobile.Available
@@ -145,10 +146,10 @@ class Kit(private val app: MainActivity) {
             when (this) {
                 PRIMARY -> Unit
                 SECONDARY -> {
-                    b.backgroundTintList = ColorStateList.valueOf(kit.color(R.color.glass_frosted))
+                    b.backgroundTintList = ColorStateList.valueOf(kit.color(R.color.surface))
                     b.setTextColor(kit.color(R.color.text))
-                    b.iconTint = ColorStateList.valueOf(kit.color(R.color.text_2))
-                    b.strokeColor = ColorStateList.valueOf(kit.color(R.color.hairline))
+                    b.iconTint = ColorStateList.valueOf(kit.color(R.color.text))
+                    b.strokeColor = ColorStateList.valueOf(kit.color(R.color.border))
                     b.strokeWidth = kit.dp(1)
                 }
                 TEXT -> {
@@ -275,7 +276,7 @@ class Kit(private val app: MainActivity) {
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             .apply { marginStart = dp(8) })
         chip.addView(dot(off), LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginStart = dp(8) })
         if (onTap != null) {
@@ -323,41 +324,114 @@ class Kit(private val app: MainActivity) {
      * a tick on the one chosen.
      */
     fun deviceCard(parent: ViewGroup, peer: PeerInfo, off: Boolean, chosen: Boolean, onTap: () -> Unit): View {
-        val card = cardRow(if (chosen) R.drawable.card_chosen else R.drawable.card, States.device(peer.name, peer.kind))
-        val words = LinearLayout(app).apply {
+        val card = deviceCard(parent, States.device(peer.name, peer.kind), peer.name, off,
+            peer.lastSeen?.let { Words.since(it) }, end = if (chosen) R.drawable.ic_circle_check else null, onTap = onTap)
+        card.contentDescription = "${peer.name}, ${if (off) "off" else "on"}${if (chosen) ", chosen" else ""}"
+        if (chosen) card.background = ContextCompat.getDrawable(app, R.drawable.card_chosen)
+        return card
+    }
+
+    /** Something a device keeps, shown on its card: an icon, and a count beside it if there is one. */
+    class Keeps(@DrawableRes val icon: Int, val count: String? = null)
+
+    /**
+     * A device as a card, wherever devices are listed: its icon in a green
+     * tile, its name, a dot for whether it is on ([off] null for this phone,
+     * which always is), a few characters beside it ([since]), what it keeps
+     * as small pills under the name, and at the [end] a tick or an arrow.
+     */
+    fun deviceCard(
+        parent: ViewGroup,
+        @DrawableRes icon: Int,
+        name: String,
+        off: Boolean?,
+        since: String?,
+        keeps: List<Keeps> = emptyList(),
+        @DrawableRes end: Int? = null,
+        onTap: (() -> Unit)?,
+    ): View {
+        val card = cardShell(R.drawable.card, icon)
+        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        val line = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        words.addView(TextView(app).apply {
-            text = peer.name
+        // The name gives way when the line is too long, and the dot and the
+        // time stay beside it: weighted, in a line only as wide as it needs.
+        line.addView(TextView(app).apply {
+            text = name
             setTextAppearance(R.style.Text_Section)
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0f))
-        words.addView(dot(off), LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginStart = dp(8) })
-        peer.lastSeen?.let { seen ->
-            words.addView(TextView(app).apply {
-                text = Words.since(seen)
-                setTextAppearance(R.style.Text_Meta)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                .apply { marginStart = dp(8) })
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (off != null) line.addView(dot(off), LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginStart = dp(8) })
+        if (since != null) line.addView(TextView(app).apply {
+            text = since
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(color(R.color.text_2))
+            maxLines = 1
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { marginStart = dp(8) })
+        words.addView(line, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        if (keeps.isNotEmpty()) {
+            val pills = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
+            for (k in keeps) {
+                pills.addView(pill(k.icon, k.count), LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { if (pills.childCount > 0) marginStart = dp(6) })
+            }
+            words.addView(pills, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(6) })
         }
         card.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        if (chosen) card.addView(ImageView(app).apply {
-            setImageResource(R.drawable.ic_circle_check)
-            imageTintList = ColorStateList.valueOf(color(R.color.green))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(dp(20), dp(20)))
-        card.contentDescription = "${peer.name}, ${if (off) "off" else "on"}${if (chosen) ", chosen" else ""}"
-        card.setOnClickListener { onTap() }
+        if (end != null) {
+            val tick = end == R.drawable.ic_circle_check
+            card.addView(ImageView(app).apply {
+                setImageResource(end)
+                imageTintList = ColorStateList.valueOf(color(if (tick) R.color.green else R.color.text_3))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(if (tick) 20 else 18), dp(if (tick) 20 else 18)))
+        }
+        card.minimumHeight = dp(if (keeps.isEmpty()) 76 else 92)
+        card.contentDescription = listOfNotNull(name, off?.let { if (it) "off" else "on" }, since).joinToString(", ")
+        if (onTap != null) {
+            card.setOnClickListener { onTap() }
+        } else {
+            card.isClickable = false
+            card.foreground = null
+        }
         parent.addView(card, cardParams(parent))
         return card
+    }
+
+    /** A small quiet pill: an icon, and a count or a word beside it. */
+    fun pill(@DrawableRes icon: Int, words: String? = null): View {
+        val pill = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.tile_small)
+            setPadding(dp(7), dp(3), dp(8), dp(3))
+            minimumHeight = dp(22)
+        }
+        pill.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(14), dp(14)))
+        if (words != null) pill.addView(TextView(app).apply {
+            text = words
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(color(R.color.text_2))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { marginStart = dp(4) })
+        return pill
     }
 
     /** The card that adds one more, the same size as the cards above it, its
      *  edge dashed (the owner, 2026-10-24: the old one was "asymmetric"). */
     fun addCard(parent: ViewGroup, label: String, onTap: () -> Unit): View {
-        val card = cardRow(R.drawable.card_dashed, R.drawable.ic_plus)
+        val card = cardShell(R.drawable.card_dashed, R.drawable.ic_plus)
         card.addView(TextView(app).apply {
             text = label
             setTextAppearance(R.style.Text_Section)
@@ -367,7 +441,7 @@ class Kit(private val app: MainActivity) {
         return card
     }
 
-    private fun cardRow(@DrawableRes background: Int, @DrawableRes icon: Int): LinearLayout {
+    private fun cardShell(@DrawableRes background: Int, @DrawableRes icon: Int): LinearLayout {
         val card = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -389,6 +463,66 @@ class Kit(private val app: MainActivity) {
     private fun cardParams(parent: ViewGroup) = LinearLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
     ).apply { if (parent.childCount > 0) topMargin = dp(8) }
+
+    /** Rows on the surface, a hairline edge, rounded wide (the redesign's groups). */
+    fun card(parent: ViewGroup, top: Int = 0): LinearLayout {
+        val card = LinearLayout(app).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.card)
+            clipToOutline = true
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        parent.addView(card, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(top) })
+        return card
+    }
+
+    /** A label over a card, quiet and in capitals (the redesign's section labels). */
+    fun label(parent: ViewGroup, text: String, top: Int = 24) {
+        parent.addView(TextView(app).apply {
+            this.text = text
+            setTextAppearance(R.style.Text_Label)
+            ViewCompat.setAccessibilityHeading(this, true)
+            setPadding(0, dp(top), 0, dp(8))
+        })
+    }
+
+    /**
+     * A row in a card (the redesign's Setting row): an icon in a small tile,
+     * a name, a short value under it, and at the end a switch ([on] not
+     * null), an arrow ([onTap] and no switch), or nothing.
+     */
+    fun setting(
+        card: ViewGroup,
+        @DrawableRes icon: Int,
+        name: String,
+        value: String = "",
+        on: Boolean? = null,
+        onChange: ((Boolean) -> Unit)? = null,
+        onTap: (() -> Unit)? = null,
+    ): RowCardBinding {
+        val row = RowCardBinding.inflate(app.layoutInflater, card, false)
+        row.icon.setImageResource(icon)
+        row.name.text = name
+        row.value.text = value
+        row.value.visibility = if (value.isEmpty()) View.GONE else View.VISIBLE
+        if (on != null) {
+            row.toggle.visibility = View.VISIBLE
+            row.toggle.isChecked = on
+            row.toggle.contentDescription = name
+            row.toggle.setOnCheckedChangeListener { _, checked -> onChange?.invoke(checked) }
+            row.root.setOnClickListener { row.toggle.toggle() }
+        } else if (onTap != null) {
+            row.chevron.visibility = View.VISIBLE
+            row.root.setOnClickListener { onTap() }
+        } else {
+            row.root.isClickable = false
+            row.root.background = null
+        }
+        card.addView(row.root)
+        return row
+    }
 
     /**
      * Something on its way, in a queue (the redesign's Queue row): its icon,
@@ -726,7 +860,10 @@ class Sheet(private val app: MainActivity, private val kit: Kit) {
         return view(row, top = 22)
     }
 
-    /** The decision at the foot: a primary action, and a way out. */
+    /**
+     * The decision at the foot: a way out and a primary action, side by side
+     * and of one width (the redesign: "two equal buttons").
+     */
     fun buttons(
         primary: String,
         danger: Boolean = false,
@@ -734,21 +871,121 @@ class Sheet(private val app: MainActivity, private val kit: Kit) {
         onSecondary: (() -> Unit)? = null,
         onPrimary: () -> Unit,
     ): Sheet {
-        val row = LinearLayout(app).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
-        }
+        val row = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
         row.addView(kit.button(secondary, Kit.Style.SECONDARY) {
             dialog.dismiss()
             onSecondary?.invoke()
-        })
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         row.addView(kit.button(primary, if (danger) Kit.Style.DANGER else Kit.Style.PRIMARY) {
             dialog.dismiss()
             onPrimary()
-        }, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { marginStart = kit.dp(10) })
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = kit.dp(12) })
         return view(row, top = 22)
+    }
+
+    /** A title with nothing beside it, at the start or in the middle. */
+    fun title(words: String, centred: Boolean = false): Sheet {
+        body.addView(TextView(app).apply {
+            text = words
+            setTextAppearance(R.style.Text_Title)
+            gravity = if (centred) Gravity.CENTER else Gravity.START
+            ViewCompat.setAccessibilityHeading(this, true)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        return this
+    }
+
+    /** One line under a centred title. */
+    fun line(words: String): Sheet {
+        body.addView(TextView(app).apply {
+            text = words
+            setTextAppearance(R.style.Text_Quiet)
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = kit.dp(4) })
+        return this
+    }
+
+    /** A mark in the middle, over a centred title: what a grave choice is about. */
+    fun mark(@DrawableRes icon: Int, fill: Int = R.color.error_bg, tint: Int = R.color.error): Sheet {
+        val disc = FrameLayout(app).apply {
+            background = ContextCompat.getDrawable(app, R.drawable.round)
+            backgroundTintList = ColorStateList.valueOf(kit.color(fill))
+        }
+        disc.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(kit.color(tint))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(kit.dp(30), kit.dp(30), Gravity.CENTER))
+        body.addView(disc, LinearLayout.LayoutParams(kit.dp(64), kit.dp(64)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = kit.dp(10)
+            bottomMargin = kit.dp(14)
+        })
+        return this
+    }
+
+    /** The one warning a choice carries, as a chip the width of the sheet. */
+    fun warning(words: String, @DrawableRes icon: Int = R.drawable.ic_triangle_alert): Sheet {
+        val chip = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.warning)
+            setPadding(kit.dp(16), kit.dp(14), kit.dp(16), kit.dp(14))
+        }
+        chip.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(kit.color(R.color.attention))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(kit.dp(20), kit.dp(20)).apply { marginEnd = kit.dp(10) })
+        chip.addView(TextView(app).apply {
+            text = words
+            setTextAppearance(R.style.Text_Name)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return view(chip, top = 18)
+    }
+
+    /**
+     * One of a few ways to go on, as a row (the redesign's Option row): its
+     * icon in a soft green tile, its name, an arrow. Closes the sheet, then
+     * does it.
+     */
+    fun option(@DrawableRes icon: Int, label: String, onTap: () -> Unit): Sheet {
+        val row = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            minimumHeight = kit.dp(60)
+            setPadding(kit.dp(8), 0, kit.dp(8), 0)
+            setOnClickListener {
+                dialog.dismiss()
+                onTap()
+            }
+        }
+        val tile = FrameLayout(app).apply { background = ContextCompat.getDrawable(app, R.drawable.tile_soft) }
+        tile.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(kit.color(R.color.green))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(kit.dp(24), kit.dp(24), Gravity.CENTER))
+        row.addView(tile, LinearLayout.LayoutParams(kit.dp(40), kit.dp(40)).apply { marginEnd = kit.dp(14) })
+        row.addView(TextView(app).apply {
+            text = label
+            setTextAppearance(R.style.Text_Name)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(ImageView(app).apply {
+            setImageResource(R.drawable.ic_chevron_right)
+            imageTintList = ColorStateList.valueOf(kit.color(R.color.text_3))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(kit.dp(18), kit.dp(18)))
+        val first = body.getTag(R.id.sheet_actions) == null
+        body.setTag(R.id.sheet_actions, true)
+        body.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply {
+                topMargin = kit.dp(if (first) 12 else 4)
+                marginStart = -kit.dp(8)
+                marginEnd = -kit.dp(8)
+            })
+        return this
     }
 
     fun onDismiss(then: () -> Unit): Sheet {

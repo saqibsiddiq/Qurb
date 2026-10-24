@@ -876,22 +876,36 @@ qurb/
 │       │                                      refresh, Back
 │       │                  Kit.kt              the components every place is built
 │       │                                      from: rows, file states, groups,
-│       │                                      attention, empty states, sheets
+│       │                                      attention, empty states, sheets;
+│       │                                      and the redesign's: device chips
+│       │                                      and cards, badges, pills, queue
+│       │                                      rows, card rows, sheet options
+│       │                  StatusMark.kt       Home's large status mark: a disc, a
+│       │                                      ring in the state's colour, a light
+│       │                                      travelling round it while syncing
 │       │                  Qurb.kt             the one handle on the engine, off
 │       │                                      the main thread
 │       │                  Errors.kt           an engine error, said for a screen
-│       │                  HomeScreen.kt       is everything okay: the state, Sync
-│       │                                      now and Send, conflicts, what is
-│       │                                      waiting, the backups
+│       │                  HomeScreen.kt       is the device chosen here up to
+│       │                                      date: its state as a mark, the
+│       │                                      device as a chip that chooses
+│       │                                      another, Sync and Send, what is
+│       │                                      waiting while anything is (0073)
+│       │                  BackupsScreen.kt    Backups, from Home's top bar: an
+│       │                                      interim page of WhatsApp and the
+│       │                                      folders
 │       │                  FilesScreen.kt      Files and Private Vault: one browser,
 │       │                                      two areas, each file's state
-│       │                  DevicesScreen.kt    the devices as cards, who keeps this
-│       │                                      phone's files, removing a device
+│       │                  DevicesScreen.kt    the devices as cards: on or off, and
+│       │                                      what each keeps of this phone
+│       │                  DeviceScreen.kt     one device's page: Send, what it
+│       │                                      backs up, who it is, removing it
 │       │                  SettingsScreen.kt   grouped lists: storage, who has each
 │       │                                      folder, backups, privacy, recovery,
 │       │                                      advanced
 │       │                  Backups.kt          the backups' lines and WhatsApp's
-│       │                                      sheet, for Home and Settings alike
+│       │                                      sheets, for Backups, a device's
+│       │                                      page and Settings alike
 │       │                  FoldersScreen.kt    Your folders: which of the phone's
 │       │                                      folders back up, chosen here (0063)
 │       │                  KeptScreen.kt       Your folder on saqib: what the
@@ -905,7 +919,7 @@ qurb/
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
 │       │                                      change your mind
 │       │                  ShowCode.kt         this phone showing a pairing code,
-│       │                                      and its six digits
+│       │                                      its six digits, and Copy code
 │       │                  Approval.kt         a device asking to join, approved by
 │       │                                      the six digits both screens show
 │       │                  ScreenLock.kt       the fingerprint, face or screen lock,

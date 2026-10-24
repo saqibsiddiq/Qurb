@@ -206,6 +206,14 @@ before it was set up again, at one place in the tree a person sees
 (`qurb_storage::person`), each with its content hash, fetched through the
 ordinary manifest and chunks. Answered to that phone only.
 
+The device serving is told who asked, never the other way round: a
+`Served` watcher hears each chunk served (`served`) and, once per connection,
+the trusted device that opened it and asked something (`asked_by`, since
+2026-10-24) -- after the trust check, so a device removed before its first
+request is not heard. A phone notes those devices as seen, so a computer that
+reached it is not called off for the phone failing to reach the computer
+(`tests/served.rs`).
+
 ## Trying it
 
 ```bash

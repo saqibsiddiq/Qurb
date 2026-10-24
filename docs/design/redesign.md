@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home and Devices** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -359,8 +359,60 @@ The shared parts went into `Kit`: `deviceChip`, `dot`, `badge`, `deviceCard`,
 **Checked** on an emulator shaped like the S23 (`qurb-34g`, Android 34 with
 Google APIs, 1080 by 2340 at 480 dpi), paired with a throwaway daemon run from
 a scratch folder with its own config: the first Home, light and dark; Backups;
-pairing; *All synced* with the device on. Pairing it needed a temporary,
-uncommitted patch to setup, because the emulator's camera could not get the
-barcode model from Google services. **Not yet checked:** the device list, *off*,
-Waiting and Two versions on screen, and anything on the S23. The old snackbar
-still says *All synced* under the title after a Sync.
+pairing; *All synced*; *Syncing*; *saqib is off* with the daemon stopped;
+Waiting, with two files made while it was off; *Two versions*, from one file
+changed on both sides apart, and its Review; the list of devices. Pairing it
+needed a temporary, uncommitted patch to setup, because the emulator's camera
+could not get the barcode model from Google services. **Not checked:**
+*Backing up*, and anything on the S23.
+
+Two things the checking found, both fixed:
+
+- A device just paired was called off before any pass had tried it. Now a
+  device is called off only once a pass has tried it.
+- A computer that reached the phone through the relay, and collected from it,
+  was called off, because only the phone's own pass marked a device seen. The
+  engine now tells the phone who reached it (`Served::asked_by` in
+  `crates/peer`, tested in `tests/served.rs`), and the phone marks them seen
+  when the pass ends. On the emulator the next pass said *All synced*, but
+  that pass may have reached the computer itself, so the emulator does not
+  show which of the two did it; the tests do.
+
+After a Sync, *All synced* and *no device answered* are no longer said again
+in a snackbar under Home, which says them itself.
+
+## Built: Android Devices (2026-10-24)
+
+Devices draft 4 is in the app (`DevicesScreen.kt`, `DeviceScreen.kt`):
+
+- **Devices**: the title and a round Add; each device a card (icon, name, dot,
+  how long since it answered, an arrow), with pills for what it keeps when it
+  keeps this phone's Private Vault: WhatsApp, the folders with how many, a lock;
+  *Visiting* for computers this phone visits as a guest; *This phone* apart.
+- **A device's page**: its icon, name, *On* or *Off*, an info button for its
+  identity and when it was paired; Send; *Backs up* with WhatsApp, Folders and
+  Private Vault; Remove (*Stop visiting* for another person's computer).
+- **Add a device**: four options, no descriptions. **Show my code**: the QR
+  code on a white card, the six digits large, a clock with the time left,
+  *Copy code* and *Stop*. Copying leaves the sheet open: closing it cancels the
+  code, so a copy taken by closing would already be dead. The long code moved
+  behind *Copy code*.
+- **Remove**: centred, the device's mark on pale red, one line, one warning
+  (files only there; else the vault kept there; and sends cancelled), *Delete
+  its copies here* when it has any, Cancel and Remove of one width.
+- **Every sheet's two buttons are of one width now**, and every button is a
+  pill; secondary buttons are the surface with a hairline edge.
+
+**What the engine does not do, and the page says no more than it does:** a
+backup set for each device. WhatsApp and the folders travel inside the Private
+Vault, to every device keeping it, so their rows show only on a device that
+keeps the vault, and WhatsApp's switch there turns WhatsApp's backup on or
+off for all of them. *Folders on saqib* is still the old folder list: the
+redesign replaced it with the folder tree, which needs engine work (folders at
+any depth). Show my code is a sheet, where the design drew a page. The Private
+Vault row has no size: the engine does not report one.
+
+Checked on the same emulator: the list, a device's page, its details, Add a
+device, Show my code, Remove (cancelled), keeping the vault (the rows and the
+lock pill appear), Home's list of devices.
+

@@ -33,6 +33,16 @@ const SEALING_BUDGET: u64 = 256 << 20;
 /// receiver's `Got` is the evidence of that.
 pub trait Served: Send + Sync {
     fn served(&self, to: &Fingerprint, chunk: &blake3::Hash, bytes: u64);
+
+    /// A trusted device asked this one something, on a connection it opened:
+    /// it is on, and reached this device itself. Told once per connection,
+    /// after the trust check its first request passed.
+    ///
+    /// What lets a phone whose own pass could not reach a computer still know
+    /// the computer is there, when the computer reached the phone -- through a
+    /// relay, say. Without it the phone called a computer off that had just
+    /// collected from it (2026-10-24, on an emulator).
+    fn asked_by(&self, _from: &Fingerprint) {}
 }
 
 pub struct PeerServer {
@@ -289,6 +299,7 @@ async fn serve_connection_inner(
     // attributed to whoever the TLS handshake proved them to be, never to
     // whatever the message claims.
     let asker = fingerprint_of(&connection);
+    let mut told = false;
 
     while let Ok((send, recv)) = connection.accept_bi().await {
         // Trust is asked again for every request, not only at the handshake.
@@ -301,6 +312,12 @@ async fn serve_connection_inner(
             if !trust.contains(&asker) {
                 connection.close(0u32.into(), b"no longer trusted");
                 break;
+            }
+            if !told {
+                told = true;
+                if let Some(watcher) = &watcher {
+                    watcher.asked_by(&asker);
+                }
             }
         }
         let store = Arc::clone(&store);

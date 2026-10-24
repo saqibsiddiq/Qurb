@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A small quiet tile or pill: a row's icon in a card (the redesign's
+     Setting row), and what a device keeps, on its card. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/surface_2" />
+    <corners android:radius="10dp" />
+</shape>

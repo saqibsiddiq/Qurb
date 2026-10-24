@@ -717,6 +717,9 @@ struct ServingStats {
     bytes: std::sync::atomic::AtomicU64,
     /// Milliseconds since the Unix epoch; zero before anything has gone.
     last: std::sync::atomic::AtomicU64,
+    /// Devices that reached this one and asked it something since a pass
+    /// last looked: marked seen when it ends, as if the pass had reached them.
+    asked_by: std::sync::Mutex<std::collections::HashSet<[u8; 32]>>,
 }
 
 impl ServingStats {
@@ -738,6 +741,12 @@ impl qurb_peer::Served for ServingStats {
     fn served(&self, _to: &qurb_peer::Fingerprint, _chunk: &blake3::Hash, bytes: u64) {
         self.bytes.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
         self.last.store(Self::now_millis(), std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn asked_by(&self, from: &qurb_peer::Fingerprint) {
+        if let Ok(mut heard) = self.asked_by.lock() {
+            heard.insert(*from.as_bytes());
+        }
     }
 }
 
@@ -2761,6 +2770,20 @@ impl Qurb {
 
         for task in accepting {
             task.abort();
+        }
+        // A device that reached this one is on, as much as one this pass
+        // reached: Home says a device is off by when it was last seen, and
+        // a computer that collected through a relay while this phone could not
+        // reach it was not off (`Served::asked_by`). Best effort, as is the
+        // note for a device reached.
+        let heard: Vec<[u8; 32]> =
+            self.serving.asked_by.lock().map(|mut h| h.drain().collect()).unwrap_or_default();
+        if !heard.is_empty() {
+            if let Ok(engine) = self.engine() {
+                for fingerprint in &heard {
+                    let _ = engine.store().db().mark_peer_seen(fingerprint);
+                }
+            }
         }
         Ok(outcome)
     }

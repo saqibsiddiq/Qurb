@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Facts in a sheet, on the second surface: a device's identity and when it
+     was paired. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/surface_2" />
+    <corners android:radius="@dimen/radius_l" />
+</shape>

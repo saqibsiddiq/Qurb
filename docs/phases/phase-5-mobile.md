@@ -2694,16 +2694,31 @@ Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
   too: such a clash is refused on every pass until one of the names changes.
 - **Not done:** nothing has been run on a hotspot or on mobile data.
 
-## The redesign, built: Home, 2026-10-24
+## The redesign, built: Home and Devices, 2026-10-24
 
 The Figma redesign ([design/redesign.md](../design/redesign.md)) is being
 built, Android first. Home is done to draft 3: one device chosen on Home, its
 state as a large mark, Sync and Send, Waiting only while something is queued
-([details](../design/redesign.md#built-android-home-2026-10-24)). Checked on an
-emulator paired with a throwaway daemon; **not yet run on the S23**. Backups is
-an interim page. Devices, Files, Settings, Activity, setup, pairing and the
-desktop are not built yet, nor the engine work of
-[0073](../decisions/0073-the-phone-works-with-its-computer.md).
+([details](../design/redesign.md#built-android-home-2026-10-24)). Devices is
+done to draft 4: cards with what each device keeps, a page for each device,
+Add a device, Show my code and Remove
+([details](../design/redesign.md#built-android-devices-2026-10-24)).
+
+Checked on an emulator shaped like the S23 (Android 34 with Google APIs,
+1080 by 2340 at 480 dpi), paired with a throwaway `qurb run` in a scratch
+folder with its own config; every Home state but *Backing up* seen there.
+**Not yet run on the S23.**
+
+One engine change came of it: a phone now marks a device seen when that device
+reached it during a pass and asked it something (`Served::asked_by`), not only
+when the phone's own pass reached it. Without it, a computer that collected
+through the relay was called off. Three tests in `crates/peer/tests/served.rs`;
+the first fails without the change. `cargo test -p qurb-peer -p qurb-mobile`:
+250 passed, none failed.
+
+Not built yet: Files, Settings, Activity, the full Backups page, setup,
+pairing approval, sharing into Qurb, notifications, the desktop; and the
+engine work of [0073](../decisions/0073-the-phone-works-with-its-computer.md).
 
 ## Deliberately left undone
 

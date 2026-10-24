@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- WhatsApp, in the app's line style: a speech bubble, and a solid handset
+     in it. Drawn for qurb in the redesign (docs/design/redesign.md, Devices
+     draft 2), not WhatsApp's logo; before a release shows it, WhatsApp's
+     brand guidelines on showing their mark are to be checked. Not written by
+     scripts/android-icons.py: Lucide has no such icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group android:translateX="2" android:translateY="2.992">
+        <path
+            android:pathData="M5.9,17.008 C7.809,17.987 10.004,18.252 12.091,17.756 C14.178,17.259 16.019,16.034 17.282,14.3 C18.545,12.566 19.147,10.439 18.981,8.3 C18.814,6.161 17.889,4.153 16.372,2.636 C14.855,1.119 12.846,0.194 10.708,0.027 C8.569,-0.14 6.441,0.463 4.708,1.726 C2.974,2.989 1.749,4.83 1.252,6.917 C0.756,9.004 1.021,11.199 2,13.108 L0,19.008 L5.9,17.008 Z"
+            android:strokeColor="@color/text_2"
+            android:strokeWidth="1.75"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+    <group android:translateX="8.1" android:translateY="7.9">
+        <path
+            android:pathData="M4.733,5.827 C4.815,5.865 4.908,5.874 4.997,5.852 C5.085,5.83 5.163,5.778 5.218,5.706 L5.36,5.52 C5.435,5.421 5.531,5.34 5.642,5.284 C5.753,5.229 5.876,5.2 6,5.2 L7.2,5.2 C7.412,5.2 7.616,5.284 7.766,5.434 C7.916,5.584 8,5.788 8,6 L8,7.2 C8,7.412 7.916,7.616 7.766,7.766 C7.616,7.916 7.412,8 7.2,8 C5.29,8 3.459,7.241 2.109,5.891 C0.759,4.541 0,2.71 0,0.8 C0,0.588 0.084,0.384 0.234,0.234 C0.384,0.084 0.588,0 0.8,0 L2,0 C2.212,0 2.416,0.084 2.566,0.234 C2.716,0.384 2.8,0.588 2.8,0.8 L2.8,2 C2.8,2.124 2.771,2.247 2.716,2.358 C2.66,2.469 2.579,2.565 2.48,2.64 L2.293,2.78 C2.219,2.836 2.168,2.916 2.146,3.006 C2.125,3.096 2.136,3.191 2.176,3.274 C2.723,4.384 3.622,5.282 4.733,5.827 Z"
+            android:fillColor="@color/text_2" />
+    </group>
+</vector>

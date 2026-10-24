@@ -172,6 +172,13 @@ qurb.serving()                        // bytes handed over so far; no lock, so a
                                       //   notification can ask while a pass runs
 ```
 
+Each `PeerInfo` carries `lastSeen`: when a pass last reached that device, or
+since 2026-10-24 when that device reached this one during a pass and asked it
+something (`qurb_peer::Served::asked_by`, noted when the pass ends). A computer
+that collects through a relay while the phone cannot reach it is on, and Home
+says so: a device last seen before the last pass that tried it is called off
+(`Engine.isOff` in the app).
+
 A typed code is read the same way everywhere (`joinNew` and `pairingNumber`
 too): the long code as it is; six digits found by multicast on the network,
 fetched by SPAKE2, and then used as the long code. Hold Android's multicast

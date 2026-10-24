@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A round button or mark, filled by whoever uses it (backgroundTint): the
+     soft green of an Add button, the pale red of a removal. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/green_soft" />
+</shape>

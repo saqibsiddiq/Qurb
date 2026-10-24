@@ -2,7 +2,6 @@ package com.qurb
 
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.view.Gravity
 import android.view.WindowManager
@@ -43,73 +42,76 @@ object ShowCode {
 
             val kit = app.kit
             // Six digits a device on the same Wi-Fi types instead (decision
-            // 0066), in the number's own style (Approval).
-            val digitsSay = TextView(app).apply {
-                gravity = Gravity.CENTER
-                setTextAppearance(R.style.Text_Meta)
-            }
+            // 0066), large, in the number's own style (Approval).
             val digits = TextView(app).apply {
                 gravity = Gravity.CENTER
-                textSize = 36f
+                textSize = 40f
                 typeface = androidx.core.content.res.ResourcesCompat.getFont(app, R.font.inter_semibold)
                 fontFeatureSettings = "tnum"
-                letterSpacing = 0.08f
                 setTextColor(kit.color(R.color.text))
                 setTextIsSelectable(true)
+            }
+            // How long it works for, by a clock: no sentence.
+            val left = TextView(app).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setTextAppearance(R.style.Text_Meta)
+                setTextColor(kit.color(R.color.text_2))
+                compoundDrawablePadding = kit.dp(6)
+                setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    androidx.core.content.ContextCompat.getDrawable(app, R.drawable.ic_clock)?.mutate()?.apply {
+                        setBounds(0, 0, kit.dp(16), kit.dp(16))
+                        setTint(kit.color(R.color.text_2))
+                    }, null, null, null)
             }
             val status = TextView(app).apply {
                 gravity = Gravity.CENTER
                 setTextAppearance(R.style.Text_Quiet)
+                visibility = android.view.View.GONE
             }
             val body = LinearLayout(app).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 if (qr != null) {
-                    // On a white tile whatever surrounds it: a scanner finds a
-                    // code by its finder patterns against a light ground.
-                    val size = kit.dp(232)
+                    // On white whatever surrounds it, in a card: a scanner
+                    // finds a code by its finder patterns against a light
+                    // ground.
                     addView(ImageView(app).apply {
                         setImageDrawable(BitmapDrawable(app.resources, draw(qr)).apply { isFilterBitmap = false })
                         scaleType = ImageView.ScaleType.FIT_CENTER
-                        setBackgroundColor(Color.WHITE)
-                        setPadding(kit.dp(12), kit.dp(12), kit.dp(12), kit.dp(12))
-                        clipToOutline = true
-                        outlineProvider = object : android.view.ViewOutlineProvider() {
-                            override fun getOutline(view: android.view.View, outline: android.graphics.Outline) {
-                                outline.setRoundRect(0, 0, view.width, view.height, kit.dp(18).toFloat())
-                            }
-                        }
-                    }, LinearLayout.LayoutParams(size, size))
+                        background = androidx.core.content.ContextCompat.getDrawable(app, R.drawable.qr_card)
+                        setPadding(kit.dp(20), kit.dp(20), kit.dp(20), kit.dp(20))
+                        contentDescription = "Pairing code"
+                    }, LinearLayout.LayoutParams(kit.dp(250), kit.dp(250)))
                 }
-                addView(digitsSay, LinearLayout.LayoutParams(
+                addView(digits, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = kit.dp(16) })
-                addView(digits)
+                ).apply { topMargin = kit.dp(24) })
+                addView(left, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = kit.dp(8) })
                 addView(status, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { topMargin = kit.dp(10) })
-                addView(TextView(app).apply {
-                    text = "Or read the whole code out, or type it:"
-                    setTextAppearance(R.style.Text_Meta)
-                    setPadding(0, kit.dp(18), 0, kit.dp(4))
-                })
-                addView(TextView(app).apply {
-                    text = offer.spoken()
-                    typeface = Typeface.MONOSPACE
-                    textSize = 13f
-                    setTextIsSelectable(true)
-                    setTextColor(kit.color(R.color.text))
-                })
             }
 
+            // However it closes -- Stop, back, a swipe down -- the code
+            // stops working with it.
             val sheet = kit.sheet()
-                .header(R.drawable.ic_qr_code, "Scan this on the other device", "It works once, for five minutes")
-                .view(body, top = 18)
-                // However it closes -- the button, back, a swipe down -- the
-                // code stops working with it.
+                .view(body, top = 6)
                 .onDismiss { offer.cancel() }
-            // One button, as on the desktop: *Done* beside it did the same.
-            sheet.closing("Stop showing it")
+            // The long code, for reading out or typing on a computer, is
+            // behind *Copy code*: the redesign took it off the screen. Copying
+            // leaves the sheet open, or the code copied would already be dead.
+            val buttons = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
+            buttons.addView(kit.button("Copy code", Kit.Style.SECONDARY) {
+                val clip = app.getSystemService(android.content.ClipboardManager::class.java)
+                clip?.setPrimaryClip(android.content.ClipData.newPlainText("Qurb code", offer.spoken()))
+                // Android 13 and later show their own note of a copy.
+                if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) app.say("Copied")
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            buttons.addView(kit.button("Stop", Kit.Style.SECONDARY) { sheet.dismiss() },
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = kit.dp(12) })
+            sheet.view(buttons, top = 28)
             sheet.show()
             val dialog = sheet.dialog
             // A code that goes dark while somebody fetches the other device is
@@ -121,14 +123,15 @@ object ShowCode {
                     val typed = offer.digits()
                     digits.text = typed ?: "——— ———"
                     digits.alpha = if (typed == null) 0.35f else 1f
-                    digitsSay.text = if (typed != null) "Or type these on a device on this Wi-Fi"
-                        else "These were typed wrongly too often. Scan the code instead."
-                    val left = offer.expiresAt() - System.currentTimeMillis() / 1000
-                    status.text = if (left > 0) {
-                        "Waiting — this code works for ${left / 60}:${"%02d".format(left % 60)}"
-                    } else {
-                        "That code has expired. Close this and show a new one."
+                    val secs = offer.expiresAt() - System.currentTimeMillis() / 1000
+                    left.text = if (secs > 0) "${secs / 60}:${"%02d".format(secs % 60)}" else "0:00"
+                    // Said in words only when it stops working, and why.
+                    status.text = when {
+                        secs <= 0 -> "Expired. Show a new one."
+                        typed == null -> "Typed wrongly too often. Scan it instead."
+                        else -> ""
                     }
+                    status.visibility = if (status.text.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
                     delay(1000)
                 }
             }
@@ -144,7 +147,10 @@ object ShowCode {
                 app.changed()
             }.onFailure { e ->
                 // Closed by the person: nothing to say. Otherwise, say why.
-                if (dialog.isShowing) status.text = "Not connected: ${e.message ?: "it did not work"}"
+                if (dialog.isShowing) {
+                    status.text = "Not connected: ${e.message ?: "it did not work"}"
+                    status.visibility = android.view.View.VISIBLE
+                }
             }
         }
     }

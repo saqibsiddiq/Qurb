@@ -164,14 +164,15 @@
     <!-- The old names, for the screens that still say them. -->
     <style name="Text.Heading" parent="Text.Label" />
 
-    <!-- Buttons (§44): primary is Qurb green; secondary a translucent neutral
-         glass with a subtle edge; tertiary is words; destructive is muted red.
-         Freeing space is never the destructive one. -->
+    <!-- Buttons (§44): primary is Qurb green; secondary the surface with a
+         hairline edge; tertiary is words; destructive is muted red. Freeing
+         space is never the destructive one. Pills, since the redesign
+         (docs/design/redesign.md, the Button set). -->
     <style name="Widget.Qurb.Button" parent="Widget.Material3.Button">
         <item name="android:minHeight">@dimen/touch</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="cornerRadius">@dimen/radius_m</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.Material3.Corner.Full</item>
         <item name="android:textAppearance">@style/Text.Button</item>
         <item name="backgroundTint">@color/button_primary</item>
         <item name="android:textColor">#FFFFFF</item>
@@ -181,10 +182,10 @@
         <item name="android:stateListAnimator">@animator/press</item>
     </style>
     <style name="Widget.Qurb.Button.Secondary">
-        <item name="backgroundTint">@color/glass_frosted</item>
+        <item name="backgroundTint">@color/surface</item>
         <item name="android:textColor">@color/text</item>
-        <item name="iconTint">@color/text_2</item>
-        <item name="strokeColor">@color/hairline</item>
+        <item name="iconTint">@color/text</item>
+        <item name="strokeColor">@color/border</item>
         <item name="strokeWidth">1dp</item>
     </style>
     <style name="Widget.Qurb.Button.Text" parent="Widget.Material3.Button.TextButton">

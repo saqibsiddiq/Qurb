@@ -31,7 +31,7 @@ ICONS = """
     x chevron-right laptop smartphone upload external-link key-round qr-code
     keyboard refresh-cw pencil copy circle-check info plus file file-text
     file-image file-video file-audio file-archive file-code hard-drive history
-    save bell palette sliders-horizontal shield-check link chevron-down
+    save bell palette sliders-horizontal shield-check link chevron-down wifi
 """.split()
 
 # Drawn at 60 dp in Home's status mark (the redesign's Status mark component).
