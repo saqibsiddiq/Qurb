@@ -298,13 +298,25 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   folder; one only the phone has, or another phone, moves into its Vault (a
   phone's copy is not a safe last one, decision 0053); one with neither its
   bytes here nor a computer known to keep it is left, to be tried again at the
-  next opening. The area's deletions and sharing rules are forgotten, and
+  next opening. **Bytes on the phone go only on the computer's word,
+  asked**, changed before it reached the S23: the owner's laptop, about to be
+  updated, turned out to hold none of its 17 shared files -- freed on
+  2026-09-29, before decision 0053, on the strength of the S23's copies
+  before the S23 was set up again -- and a phone re-checks a computer's copy
+  only of a file it freed itself, so the S23's record of the laptop keeping
+  a file may be stale and its own copy the last. So a file whose bytes are on
+  the phone is let go of only once the computer, asked at a sync, has said it
+  holds it (`Db::confirmed_safe_elsewhere`); until then it is left as it is,
+  and a phone's sync asks about such files (`unconfirmed_holdings`, 16 a
+  pass), a no moving it into the Vault at the next opening. A row whose bytes
+  are not on the phone still goes on the record alone: forgetting it loses
+  nothing. The area's deletions and sharing rules are forgotten, and
   folders left empty removed -- any empty folder in the phone's folder, not
   only those this emptied, which a phone could not make anyway. A file the
   phone moved into its Vault that a computer had without the phone knowing
   stays in that computer's Shared folder as well: two copies, neither lost.
   Logged once, as *left the shared area* with the three counts. Tested
-  (`tests/leaving_shared.rs`, `crates/engine/tests/out_of_the_shared_area.rs`,
+  (`tests/leaving_shared.rs`, the stale record included, `crates/engine/tests/out_of_the_shared_area.rs`,
   `a_phone_leaves_the_shared_area`). The engine's own tests that stand in for
   a desktop with this engine set it on.
 - **Step 6, the app, begun 2026-10-24: the Shared page** (Files draft 4).

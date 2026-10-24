@@ -2431,7 +2431,9 @@ impl Qurb {
         if !settings.shared_area {
             // Out of the shared area (decision 0073, item 2). Each opening
             // finds less to do: the first lets go of what the computers keep
-            // and moves the rest into the vault; the next, nothing.
+            // and moves the rest into the vault, leaving what is here and a
+            // computer has not yet confirmed keeping, which the next sync
+            // asks (`check_holders`); a later one finishes.
             match engine.store_mut().leave_shared_area() {
                 Ok(left) if left != qurb_storage::LeftShared::default() => {
                     tracing::info!(dropped = left.dropped, moved = left.moved, kept = left.kept, "left the shared area");

@@ -2798,7 +2798,10 @@ its computers, searched whole by the computer, its Private Vault part changed
 from the phone -- *Add*, *Rename*, *Move to folder*, *Delete* -- the computer
 following at once while both are connected. The phone no longer takes part in
 the shared area: on opening it lets go of each shared file a computer keeps,
-deleting it nowhere, and moves one only it has into its Vault; the settings
+deleting it nowhere -- its bytes on the phone only once the computer, asked,
+has said it holds them, since the owner's laptop turned out to hold none of
+its shared files and the S23 might still record it as keeping them -- and
+moves one only it has into its Vault; the settings
 and actions that were the shared area's are gone. Checked on the emulator,
 set up from nothing, the command line built for Android as its computer.
 That check found a file deleted from the phone's folder, its bytes freed to

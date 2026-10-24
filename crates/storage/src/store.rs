@@ -337,7 +337,9 @@ pub struct LeftShared {
     /// Files only this phone had, moved into its own vault.
     pub moved: usize,
     /// Files neither: their bytes not here, and no computer known to keep
-    /// them. Left as they were, to be tried again at the next opening.
+    /// them; or their bytes here, and a computer recorded as keeping them
+    /// that has not said so when asked, which the next sync asks. Left as
+    /// they were, to be tried again at the next opening.
     pub kept: usize,
 }
 
@@ -2325,10 +2327,13 @@ impl Store {
     /// chose: each shared file a computer keeps is let go of here -- its row
     /// forgotten and its bytes removed, with no tombstone, so it is deleted
     /// nowhere else and stays in that computer's Shared folder -- and one only
-    /// this phone has moves into its own vault, so nothing is lost. The
-    /// shared area's tombstones and sharing rules are forgotten. One with
-    /// neither its bytes here nor a computer known to keep it is left as it
-    /// is. Each time it is run finds less to do; the second, nothing.
+    /// this phone has moves into its own vault, so nothing is lost. Its bytes
+    /// here go only once that computer, asked, has said it holds them
+    /// ([`Db::confirmed_safe_elsewhere`](crate::db::Db::confirmed_safe_elsewhere));
+    /// until then the file is left, and the next sync asks. The shared
+    /// area's tombstones and sharing rules are forgotten. One with neither
+    /// its bytes here nor a computer known to keep it is left as it is. Each
+    /// time it is run finds less to do.
     pub fn leave_shared_area(&mut self) -> Result<LeftShared> {
         let mut left = LeftShared::default();
         let root = self.tree.clone();
@@ -2354,10 +2359,24 @@ impl Store {
                 }
                 continue;
             }
-            if self.db.safe_copies_elsewhere(&content)? > 0 {
+            let here = materialised && on_disk.as_ref().is_some_and(|f| f.is_file());
+            // Bytes here are let go of only on a computer's own word, asked:
+            // a record may be stale, and these may be the last copy. The
+            // owner's laptop had freed every one of its shared files before
+            // decision 0053, on the strength of the S23's copies, and the
+            // S23 may still record it as keeping them (2026-10-24). No bytes
+            // here, nothing is lost by forgetting the row.
+            let elsewhere = match here {
+                true => self.db.confirmed_safe_elsewhere(&content)?,
+                false => self.db.safe_copies_elsewhere(&content)? > 0,
+            };
+            if elsewhere {
                 forget(self)?;
                 left.dropped += 1;
-            } else if materialised && on_disk.as_ref().is_some_and(|f| f.is_file()) {
+            } else if here && self.db.safe_copies_elsewhere(&content)? > 0 {
+                // Recorded, not confirmed: asked at the next sync.
+                left.kept += 1;
+            } else if here {
                 self.move_area(&path, true)?;
                 left.moved += 1;
             } else {

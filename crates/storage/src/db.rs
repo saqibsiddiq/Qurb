@@ -1534,6 +1534,26 @@ impl Db {
         Ok(n as usize)
     }
 
+    /// Whether a device a phone may free its copy for (as
+    /// [`safe_copies_elsewhere`](Self::safe_copies_elsewhere)) said, asked,
+    /// that it holds these bytes ([`note_held`](Self::note_held)). A record
+    /// on any other word may be stale: a laptop that freed shared files
+    /// before decision 0053, on the strength of a phone's copy, is still
+    /// recorded by that phone as keeping them. What a phone deletes its last
+    /// copy on the strength of (decision 0073, item 2).
+    pub fn confirmed_safe_elsewhere(&self, content: &blake3::Hash) -> Result<bool> {
+        let found: bool = self.conn.query_row(
+            &format!(
+                "SELECT EXISTS (SELECT 1 FROM replicas r
+                                  JOIN confirmed c ON c.device_id = r.device_id AND c.content_hash = r.content_hash
+                                 WHERE r.content_hash = ?1 AND r.private = 0 AND {SAFE_ELSEWHERE})"
+            ),
+            params![content.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        Ok(found)
+    }
+
     /// Other devices holding these bytes that this device could ask for them:
     /// paired, and not known to be out of reach ([`ASKABLE`]).
     pub fn replica_count(&self, content: &blake3::Hash) -> Result<usize> {
@@ -1560,11 +1580,19 @@ impl Db {
     ///   with the maker gone nobody reports them: the same day a phone set up
     ///   again called three of its old photos the only copy, which the laptop
     ///   also had.
+    ///
+    /// And on a phone, shared files it still has the bytes of that `device`
+    /// is recorded as holding: leaving the shared area deletes those only
+    /// once a computer has said so (decision 0073, item 2).
     pub fn unconfirmed_holdings(&self, device: &DeviceId, limit: usize) -> Result<Vec<blake3::Hash>> {
+        let leaving = match self.local_kind()?.as_deref() == Some("phone") {
+            true => "OR (f.scope IS NULL AND f.materialised = 1 AND r.private = 0)",
+            false => "",
+        };
         // Not another person's device: what it holds is in its own vault,
         // which its server rightly shows nobody, and is never a copy this
         // device could ask for (decision 0060). Asking would only learn no.
-        let mut stmt = self.conn.prepare(
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT DISTINCT f.content_hash
                FROM files f
               WHERE f.deleted_at IS NULL
@@ -1578,7 +1606,7 @@ impl Db {
                       EXISTS (
                         SELECT 1 FROM replicas r
                          WHERE r.content_hash = f.content_hash AND r.device_id = ?1
-                           AND ((f.materialised = 0 AND r.private = 0) OR r.private = 1)
+                           AND ((f.materialised = 0 AND r.private = 0) OR r.private = 1 {leaving})
                       )
                    OR (f.scope IS NULL
                        AND f.modified_by != (SELECT device_id FROM local WHERE id = 1)
@@ -1588,8 +1616,8 @@ impl Db {
                               WHERE r.content_hash = f.content_hash AND r.device_id = ?1
                            ))
                     )
-              LIMIT ?2",
-        )?;
+              LIMIT ?2"
+        ))?;
         let rows = stmt.query_map(params![device.as_bytes().as_slice(), limit as i64], |r| {
             let raw: Vec<u8> = r.get(0)?;
             Ok(to_hash(&raw))

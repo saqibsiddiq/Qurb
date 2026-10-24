@@ -237,8 +237,9 @@ A phone takes **no part in the shared area** since decision 0073:
 another device's shared files, everything added goes into the vault, and
 `moveToPrivate(path, false)` is refused. Opening the engine with it off lets
 go of shared files a computer keeps -- no tombstone, so nothing is deleted
-elsewhere -- and moves the rest into the vault, logging *left the shared area*
-the first time there was anything to do. Only this crate's own tests, which
+elsewhere; bytes on the phone only once that computer, asked at a sync, has
+said it holds them -- and moves the rest into the vault, logging *left the
+shared area* each time there was anything to do. Only this crate's own tests, which
 stand in for a desktop with a second engine, turn it on.
 
 The phone's own folder on a computer is changed by changing its own vault,
