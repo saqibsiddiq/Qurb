@@ -37,6 +37,15 @@ impl qurb_mobile::PairingApprover for Yes {
     }
 }
 
+/// The person at the device showing the code says no.
+struct No;
+
+impl qurb_mobile::PairingApprover for No {
+    fn approve(&self, _: qurb_mobile::PairingRequest) -> bool {
+        false
+    }
+}
+
 /// Keeps the memory measurement away from everything else in this file.
 ///
 /// `receiving_a_large_file_does_not_hold_it_in_memory` reads the *process's*
@@ -218,6 +227,39 @@ fn a_new_phone_joins_with_the_code_and_needs_no_words() {
     assert_eq!(phone.recovery_phrase(), desktop.recovery_phrase(), "one key, on both");
     assert_eq!(phone.peers().unwrap().len(), 1);
     assert_eq!(desktop.peers().unwrap().len(), 1);
+}
+
+/// A phone joining that the desktop declines is told so, as a refusal: until
+/// 2026-10-24 setting up a phone filed it under the network, and the phone
+/// said "Network problem." in front of it. Nothing is set up.
+#[test]
+fn a_phone_the_desktop_declines_is_told_so_and_not_set_up() {
+    let _sharing = ALONE.read().unwrap_or_else(|e| e.into_inner());
+    logging();
+    let (_runtime, signal) = signalling();
+
+    let desktop_dir = tempfile::tempdir().unwrap();
+    let phone_dir = tempfile::tempdir().unwrap();
+    let desktop_root = desktop_dir.path().display().to_string();
+    let phone_root = phone_dir.path().display().to_string();
+
+    create(desktop_root.clone()).unwrap();
+    let desktop = Qurb::open_with(desktop_root, None, settings("desktop", &signal)).unwrap();
+
+    let offer = desktop.offer_pairing().unwrap();
+    let code = offer.code();
+    let asking = Arc::clone(&offer);
+    let waiting = std::thread::spawn(move || asking.wait(Arc::new(No)));
+    match join_new(phone_root.clone(), code, "phone".into(), None) {
+        Err(qurb_mobile::QurbError::Other { detail }) => assert_eq!(detail, "The other device said no."),
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+    // Having said no, the desktop waits on for another device until the code
+    // lapses, five minutes; the person there closes it.
+    offer.cancel();
+    let _ = waiting.join().unwrap();
+    assert!(!qurb_mobile::is_set_up(phone_root), "a declined phone was left set up");
+    assert!(desktop.peers().unwrap().is_empty());
 }
 
 /// Receiving a large file over the network must not hold it in memory.

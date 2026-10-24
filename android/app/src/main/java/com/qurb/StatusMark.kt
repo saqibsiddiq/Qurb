@@ -20,6 +20,9 @@ import androidx.core.content.ContextCompat
  * While syncing, part of the ring is lit in green and travels round it (§32):
  * a light moving, not a spinner, and still when the system asks for no
  * motion. The pulse when everything becomes synced (§33) is the screen's.
+ *
+ * Setup's *Approve on* page draws it smaller, travelling the same way while
+ * the other device decides; the ring keeps Home's proportion, 8 dp at 168.
  */
 class StatusMark @JvmOverloads constructor(
     context: Context,
@@ -41,7 +44,7 @@ class StatusMark @JvmOverloads constructor(
     private var look = Look.SYNCED
     private var icon = ContextCompat.getDrawable(context, R.drawable.mark_check)!!.mutate()
 
-    private val ringWidth = resources.displayMetrics.density * 8
+    private var ringWidth = resources.displayMetrics.density * 8
     private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -87,6 +90,13 @@ class StatusMark @JvmOverloads constructor(
         turning?.cancel()
         turning = null
         super.onDetachedFromWindow()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        ringWidth = w * 8f / 168f
+        ring.strokeWidth = ringWidth
+        light.strokeWidth = ringWidth
     }
 
     override fun onDraw(canvas: Canvas) {

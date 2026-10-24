@@ -940,17 +940,13 @@ pub fn join_new(
             let store = Store::open(&store_dir, chunk_key).map_err(|e| e.to_string())?;
             Ok(Arc::new(std::sync::Mutex::new(store)))
         }))
+        // A refusal as what it was (pairing_failed): setting up a phone, these
+        // still read "Network problem." until 2026-10-24.
         .map_err(|e| match e {
-            qurb_peer::Error::InviteExpired => QurbError::Network {
-                detail: "that code has expired; ask the other device for a new one".into(),
+            qurb_peer::Error::InviteExpired => QurbError::Other {
+                detail: "That code has expired: ask the other device for a new one.".into(),
             },
-            qurb_peer::Error::NoKeyGiven => QurbError::Network {
-                detail: "the other device did not give its key: the code may already have been used, or that device needs updating".into(),
-            },
-            qurb_peer::Error::Declined => QurbError::Network {
-                detail: "the other device said no".into(),
-            },
-            other => QurbError::Network { detail: other.to_string() },
+            other => pairing_failed(other),
         })?;
 
     Ok(PeerInfo {

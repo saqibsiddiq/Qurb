@@ -882,7 +882,9 @@ qurb/
 │       │                                      rows, card rows, sheet options
 │       │                  StatusMark.kt       Home's large status mark: a disc, a
 │       │                                      ring in the state's colour, a light
-│       │                                      travelling round it while syncing
+│       │                                      travelling round it while syncing;
+│       │                                      smaller, while setup waits for the
+│       │                                      other device to approve
 │       │                  Qurb.kt             the one handle on the engine, off
 │       │                                      the main thread
 │       │                  Errors.kt           an engine error, said for a screen
@@ -931,8 +933,12 @@ qurb/
 │       │                                      before a computer may open this
 │       │                                      phone's folder there (0060)
 │       │                  Words.kt            how the app says things, in one place
-│       │                  SetupActivity.kt    set up, or join by scanning a code
-│       │                                      or typing its six digits
+│       │                  SetupActivity.kt    set up, use the key in the Google
+│       │                                      backup, or join by scanning a code
+│       │                                      or typing its six digits (six
+│       │                                      boxes), or the 24 words (24 boxes);
+│       │                                      then the number to compare while
+│       │                                      the other device approves
 │       │                  Backup.kt           the key, kept in Block Store
 │       │                  ScanActivity.kt     reading a pairing QR code
 │       │                  ShareActivity.kt    the share sheet's way in: save it,
@@ -960,6 +966,9 @@ qurb/
 │       │                                      (decision 0063)
 │       │                  Appearance.kt       light, dark, or as the system is set;
 │       │                                      the background, drawn once
+│       │                  QurbViewInflater.kt a layout's views as Material makes
+│       │                                      them, with their text's weight kept,
+│       │                                      which AppCompat otherwise loses
 │       │                  ManageSpaceActivity.kt
 │       │                                      what Android's Clear data opens: what
 │       │                                      only this phone has, before it goes

@@ -120,6 +120,7 @@ class Kit(private val app: MainActivity) {
         onTap: () -> Unit,
     ): MaterialButton {
         val button = MaterialButton(app, null, style.attr)
+        keepWeight(button, null, style.attr)
         button.text = label
         if (icon != null) {
             button.setIconResource(icon)

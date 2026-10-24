@@ -8,3 +8,7 @@
 # has no AWT and never takes that path, but R8 sees the references and refuses
 # to finish. Nothing here is kept; this only says the absence is expected.
 -dontwarn java.awt.**
+
+# The theme names the view inflater (viewInflaterClass) and AppCompat loads it
+# by that name, which R8 cannot see.
+-keep class com.qurb.QurbViewInflater { <init>(); }

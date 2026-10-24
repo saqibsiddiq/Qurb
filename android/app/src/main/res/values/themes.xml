@@ -34,9 +34,12 @@
         <item name="android:windowLightNavigationBar" tools:targetApi="27">@bool/light_bars</item>
         <item name="android:windowBackground">@drawable/environment</item>
 
-        <!-- Inter, everywhere a component would otherwise pick its own. -->
+        <!-- Inter, everywhere a component would otherwise pick its own; and
+             the weights layouts give it kept, which this family here would
+             otherwise undo (QurbViewInflater). -->
         <item name="android:fontFamily">@font/inter</item>
         <item name="fontFamily">@font/inter</item>
+        <item name="viewInflaterClass">com.qurb.QurbViewInflater</item>
         <item name="textAppearanceHeadlineSmall">@style/Text.Display</item>
         <item name="textAppearanceTitleLarge">@style/Text.Title</item>
         <item name="textAppearanceTitleMedium">@style/Text.Section</item>
@@ -68,6 +71,7 @@
         <item name="android:windowBackground">@drawable/dialog_window</item>
         <item name="android:fontFamily">@font/inter</item>
         <item name="fontFamily">@font/inter</item>
+        <item name="viewInflaterClass">com.qurb.QurbViewInflater</item>
         <item name="materialButtonStyle">@style/Widget.Qurb.Button</item>
         <item name="textAppearanceLabelLarge">@style/Text.Button</item>
         <!-- Its question (Private Vault, Files, or a device) is an alert
@@ -285,5 +289,63 @@
         <item name="contentPadding">@dimen/gap_m</item>
         <item name="strokeColor">@color/glass_edge</item>
         <item name="strokeWidth">1dp</item>
+    </style>
+
+    <!-- The way back above a step's title (the redesign's Back link). -->
+    <style name="Qurb.Back" parent="">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">-4dp</item>
+        <item name="android:minHeight">40dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:drawablePadding">6dp</item>
+        <item name="android:background">@drawable/row_bg</item>
+        <item name="android:textAppearance">@style/Text.Name</item>
+        <item name="drawableStartCompat">@drawable/ic_arrow_left</item>
+        <item name="drawableTint">@color/text</item>
+    </style>
+
+    <!-- One of two or three large ways on, as a card: its icon in a soft
+         green tile, its name, an arrow (setup's Scan a code). -->
+    <style name="Qurb.BigOption" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">82dp</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:background">@drawable/card</item>
+        <item name="android:foreground">@drawable/row_bg</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+    <style name="Qurb.BigOption.Tile" parent="">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_marginEnd">14dp</item>
+        <item name="android:background">@drawable/tile_green</item>
+    </style>
+    <style name="Qurb.BigOption.Icon" parent="">
+        <item name="android:layout_width">24dp</item>
+        <item name="android:layout_height">24dp</item>
+        <item name="android:layout_gravity">center</item>
+        <item name="android:importantForAccessibility">no</item>
+        <item name="tint">@color/green</item>
+    </style>
+    <style name="Qurb.BigOption.Label" parent="">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:textAppearance">@style/Text.Section</item>
+    </style>
+    <style name="Qurb.BigOption.Chevron" parent="">
+        <item name="android:layout_width">18dp</item>
+        <item name="android:layout_height">18dp</item>
+        <item name="android:src">@drawable/ic_chevron_right</item>
+        <item name="android:importantForAccessibility">no</item>
+        <item name="tint">@color/text_3</item>
     </style>
 </resources>

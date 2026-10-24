@@ -2694,7 +2694,7 @@ Built as [decision 0072](../decisions/0072-only-what-changed-in-a-list.md):
   too: such a clash is refused on every pass until one of the names changes.
 - **Not done:** nothing has been run on a hotspot or on mobile data.
 
-## The redesign, built: Home, Devices, Settings, Backups and Activity, 2026-10-24
+## The redesign, built: Home, Devices, Settings, Backups, Activity and Setup, 2026-10-24
 
 The Figma redesign ([design/redesign.md](../design/redesign.md)) is being
 built, Android first. Home is done to draft 3: one device chosen on Home, its
@@ -2724,9 +2724,25 @@ has it; the shared files' settings wait under Advanced
 Backups and Activity are done to draft 1
 ([details](../design/redesign.md#built-android-backups-and-activity-2026-10-24)).
 
-Not built yet: Files, setup,
-pairing approval, sharing into Qurb, notifications, the desktop; and the
-engine work of [0073](../decisions/0073-the-phone-works-with-its-computer.md).
+Setup is done to draft 1, with the page that waits while the other device
+approves ([details](../design/redesign.md#built-android-setup-2026-10-24)).
+It says *your other device* rather than its name, which the phone does not
+know until the join is done, and has no Cancel, since a join cannot be called
+off midway. Two things it turned up were wrong across the app and are fixed:
+from Android 9, text weights named in layouts and every button's came out
+regular (AppCompat loses them; `QurbViewInflater` puts them back), and a
+refused join read *Network problem.* (one engine test added;
+`cargo test -p qurb-mobile`: 59 passed, none failed). Welcome's buttons now
+wait for Block Store's answer, since they change meaning with it. Joining was
+checked against a throwaway `qurb pair`, the long code handed to setup by a
+temporary, uncommitted patch: the emulator's camera cannot load the barcode
+model, and the six digits cannot be heard behind its NAT. *Use my key* was not
+checked: the emulator's Block Store kept no key across a reinstall. **Not yet
+run on the S23.**
+
+Not built yet: Files, the pairing approval on the device showing the code,
+sharing into Qurb, notifications, the desktop; and the engine work of
+[0073](../decisions/0073-the-phone-works-with-its-computer.md).
 
 ## Deliberately left undone
 

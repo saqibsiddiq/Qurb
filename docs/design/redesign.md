@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices, Settings, Backups and Activity** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home, Devices, Settings, Backups, Activity and Setup** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -473,3 +473,82 @@ Checked on the same emulator: Backups for a device keeping the vault, the
 WhatsApp setup sheet, Activity with real entries from the tests above. Not
 checked: WhatsApp's details while it backs up (the emulator has no WhatsApp),
 *Nothing yet*, dark.
+
+## Built: Android Setup (2026-10-24)
+
+Setup draft 1 is in the app (`SetupActivity.kt`, `activity_setup.xml`), with
+*Waiting for saqib* from Pairing draft 1:
+
+- **Welcome**: the mark, *Qurb* and one line in the middle; *Start here* and
+  *I already use Qurb* at the foot. With a key in the Google backup, *Your key
+  is in your Google backup* over *Use my key* and *Start again here*.
+- **Join**: where the other device shows its code, as Qurb, Devices and the
+  plus; *Scan a code* and *Type 6 digits*; *Use 24 words* at the foot.
+- **Six digits** as six boxes in two threes, the next one edged green, over a
+  field nobody sees that brings up the number pad. The sixth digit joins, as
+  WhatsApp's linking code does; *Join* is there for trying again.
+- **24 words** as 24 numbered boxes, three to a row, the one being typed in
+  edged green; a phrase pasted into any box fills it and the boxes after it.
+- **Waiting**: *Approve on your other device*, the number large, *It shows
+  this number too*, and Home's status mark at 96 dp with its ring travelling
+  round a devices icon. A join that fails goes back to the step it came from.
+- *Join* and *Restore* are enabled only once six digits or 24 words are in.
+  Before, tapped short, they did nothing and said nothing.
+
+**Where it differs, and why:**
+
+- **"Your other device", not its name.** The phone learns the other device's
+  name only once the join is done: the code carries no name. Saying *Approve
+  on saqib* needs the engine to say the name earlier.
+- **No Cancel while waiting, and back does nothing there.** The engine cannot
+  call a join off midway, so a Cancel would leave it running behind a page
+  saying it had stopped. It ends when the other device answers, or when the
+  code lapses after five minutes.
+- **Start again here replaces the key in the Google backup** with the new one,
+  without asking, as *Set up Qurb here* did beside the old text link. The
+  redesign gives it a full button, so it is easier to reach than it was. Whether
+  it should ask first is open.
+- The first Home was built with Home.
+
+**Found on the way, and fixed:**
+
+- **Text weights set in layouts were lost.** From Android 9, every semibold or
+  medium text style named in a layout file came out regular, and so did every
+  button, Kit's too. AppCompat 1.7.0 reads a view's text appearance, then the
+  view's own attributes, and the second reading sets the weight back to
+  unspecified, having already cleared bold, then finds Inter again in the
+  theme. Text styled from code was right, which is how it was found: setup's
+  *Qurb*, read regular beside the design's semibold. `QurbViewInflater`, named
+  in the theme, puts the weight back for layouts' text views and buttons, and
+  Kit's buttons get it too. Home's state, its buttons and every sheet's buttons
+  are now semibold, as the design draws them. Android 8 was not affected.
+- **A refused join read "Network problem."** *The other device said no*, an
+  expired code and a code already used were filed under the network when
+  setting up a phone, though pairing had been fixed on 2026-10-11. `join_new`
+  now says them as refusals (`a_phone_the_desktop_declines_is_told_so_and_not_set_up`
+  in `crates/mobile-ffi/tests/syncing.rs`).
+- **Setup's progress bar never showed**: it sat in the layout's padding, which
+  clipped it.
+- **Welcome's buttons could change under a finger.** They showed at once and
+  became *Use my key* and *Start again here* only when Block Store answered,
+  so a tap meant for the kept key could make a new one in its place. It did,
+  on the emulator. They now appear once Block Store has answered, which it must
+  within ten seconds; on the emulator they were there within the first second.
+
+**Checked** on the same emulator: Welcome, and Welcome with a key found;
+Join; six digits, typed, the sixth looking them up and failing, since the
+emulator is behind its own NAT and cannot hear a device offering them; 24
+words typed with the keyboard's Next; waiting, against a throwaway `qurb
+pair` in a scratch folder with its own config, the number matching the one the
+terminal asked about; approved there, then Home; declined there, then Join
+with *The other device said no.*; back while waiting; light and dark. The
+long code was handed to setup by a temporary, uncommitted patch, since the
+emulator's camera cannot load the barcode model. The weights were checked in
+the debug build and in the R8-shrunk one, which keeps `QurbViewInflater` by
+name (`proguard-rules.pro`).
+
+**Not checked:** *Use my key* and *Start again here* acting. The emulator's
+Block Store kept no key across a reinstall, though the S23's did on 2026-10-08.
+Also not checked: restoring from 24 real words, scanning a code, a phrase
+pasted into the boxes, and anything on the S23.
+

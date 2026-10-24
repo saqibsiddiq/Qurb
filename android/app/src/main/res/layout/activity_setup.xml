@@ -1,329 +1,368 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Setting up, in the app's own design and the desktop's words: the mark and
-     Qurb, then two choices as the desktop draws them, each a card that says
-     what it does. A step has its own title and a way back, as the desktop's
-     steps do. Measured against the app's pages: the same 20dp gutter. -->
+<!-- Setting up, as redesigned (docs/design/redesign.md, Setup draft 1): the
+     mark and one line in the middle, the two ways in at the foot; a step has
+     its title, a way back, and its one action at the foot. Few words: where
+     the code is shown is three icons, the digits are six boxes, the words 24
+     numbered boxes. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
 
-    <LinearLayout
+    <!-- Not clipped to its padding: the bar for a way in under way sits in
+         the foot's padding, under the step's action. -->
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="vertical"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
         android:paddingHorizontal="@dimen/gutter"
-        android:paddingVertical="32dp">
+        android:paddingVertical="24dp">
 
+        <!-- Welcome: start here, or join the devices you have; or, with a key
+             in the Google backup, use it. -->
         <LinearLayout
-            android:id="@+id/intro"
+            android:id="@+id/welcome"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
             android:orientation="vertical">
 
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
             <ImageView
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:layout_marginBottom="18dp"
+                android:layout_width="88dp"
+                android:layout_height="88dp"
                 android:importantForAccessibility="no"
                 android:src="@drawable/qurb_mark" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
+                android:layout_marginTop="22dp"
                 android:accessibilityHeading="true"
                 android:text="Qurb"
-                android:textAppearance="@style/Text.Display" />
+                android:textAppearance="@style/Text.Hero" />
 
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="28dp"
-                android:text="Your files stay on your own devices. They move directly between them, encrypted end to end, and are never stored on anyone else's server."
-                android:textAppearance="@style/Text.Body"
-                android:textColor="@color/text_2" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/chooser"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <LinearLayout
-                android:id="@+id/create"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@drawable/glass_group"
-                android:foreground="@drawable/row_bg"
-                android:gravity="center_vertical"
-                android:minHeight="@dimen/row"
-                android:orientation="horizontal"
-                android:padding="14dp">
-
-                <FrameLayout
-                    android:layout_width="@dimen/tile"
-                    android:layout_height="@dimen/tile"
-                    android:background="@drawable/tile">
-
-                    <ImageView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_gravity="center"
-                        android:importantForAccessibility="no"
-                        android:src="@drawable/ic_plus"
-                        app:tint="@color/text_2" />
-                </FrameLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="14dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Set up Qurb here"
-                        android:textAppearance="@style/Text.Name" />
-
-                    <TextView
-                        android:id="@+id/createSays"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:text="This phone becomes your first device. There is nothing to write down."
-                        android:textAppearance="@style/Text.Meta" />
-                </LinearLayout>
-
-                <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginStart="8dp"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_chevron_right"
-                    app:tint="@color/text_3" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/restore"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/glass_group"
-                android:foreground="@drawable/row_bg"
-                android:gravity="center_vertical"
-                android:minHeight="@dimen/row"
-                android:orientation="horizontal"
-                android:padding="14dp">
-
-                <FrameLayout
-                    android:layout_width="@dimen/tile"
-                    android:layout_height="@dimen/tile"
-                    android:background="@drawable/tile">
-
-                    <ImageView
-                        android:layout_width="22dp"
-                        android:layout_height="22dp"
-                        android:layout_gravity="center"
-                        android:importantForAccessibility="no"
-                        android:src="@drawable/ic_key_round"
-                        app:tint="@color/text_2" />
-                </FrameLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="14dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="I already use Qurb"
-                        android:textAppearance="@style/Text.Name" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:text="Join the devices you already have, with the code one of them shows."
-                        android:textAppearance="@style/Text.Meta" />
-                </LinearLayout>
-
-                <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_marginStart="8dp"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/ic_chevron_right"
-                    app:tint="@color/text_3" />
-            </LinearLayout>
-
-            <!-- Shown only when Block Store holds a key from before. Pulled
-                 out by a text button's padding, so its words start at the
-                 gutter (consistency.md, rule 1). -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/fromBackup"
-                style="@style/Widget.Qurb.Button.Text"
-                android:gravity="start|center_vertical"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="-12dp"
-                android:layout_marginTop="16dp"
-                android:text="Use the key from your Google backup"
-                android:visibility="gone" />
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="Your files, on your own devices"
+                android:textAppearance="@style/Text.Body"
+                android:textColor="@color/text_2" />
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1.3" />
+
+            <TextView
+                android:id="@+id/found"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical"
+                android:text="Your key is in your Google backup"
+                android:textAppearance="@style/Text.Meta"
+                android:textColor="@color/text_2"
+                android:visibility="gone"
+                app:drawableStartCompat="@drawable/ic_cloud"
+                app:drawableTint="@color/text_2" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/start"
+                style="@style/Widget.Qurb.Button"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Start here"
+                android:visibility="invisible" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/other"
+                style="@style/Widget.Qurb.Button.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="12dp"
+                android:text="I already use Qurb"
+                android:visibility="invisible" />
         </LinearLayout>
 
-        <!-- Joining with a code from another device (decision 0052). -->
+        <!-- Join: where the other device shows its code, as icons; scan it,
+             or type its six digits; the 24 words for somebody who has them. -->
         <LinearLayout
             android:id="@+id/joinPanel"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:orientation="vertical"
             android:visibility="gone">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:accessibilityHeading="true"
-                android:text="Scan the code from your other device"
-                android:textAppearance="@style/Text.Display" />
+                android:id="@+id/joinBack"
+                style="@style/Qurb.Back"
+                android:text="Back" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
-                android:text="On your computer, open Qurb, go to Devices and choose Add a device. Scan the code it shows, or type its six digits on the same Wi-Fi. It brings your key with it, so there is nothing else to type."
-                android:textAppearance="@style/Text.Body"
-                android:textColor="@color/text_2" />
+                android:layout_marginTop="10dp"
+                android:accessibilityHeading="true"
+                android:text="Join your devices"
+                android:textAppearance="@style/Text.Hero" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/scan"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Scan the code"
-                app:icon="@drawable/ic_qr_code"
-                app:iconGravity="textStart" />
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:hint="Or type its six digits">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/code"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:importantForAutofill="no"
-                    android:inputType="number"
-                    android:maxLength="6"
-                    android:fontFeatureSettings="tnum"
-                    android:letterSpacing="0.3"
-                    android:textSize="24sp" />
-            </com.google.android.material.textfield.TextInputLayout>
-
-            <!-- The step's ending, on the right (rule 11). -->
+            <!-- Where the code is: Qurb, then Devices, then the plus. -->
             <LinearLayout
-                android:layout_width="match_parent"
+                android:id="@+id/where"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:gravity="end"
-                android:orientation="horizontal">
+                android:background="@drawable/group_quiet"
+                android:contentDescription="On your computer: Qurb, then Devices, then the plus"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="14dp" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/joinBack"
-                    style="@style/Widget.Qurb.Button.Secondary"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Back" />
+            <LinearLayout
+                android:id="@+id/scan"
+                style="@style/Qurb.BigOption"
+                android:layout_marginTop="16dp">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/joinConfirm"
-                    style="@style/Widget.Qurb.Button.Secondary"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:text="Join" />
+                <FrameLayout style="@style/Qurb.BigOption.Tile">
+
+                    <ImageView
+                        style="@style/Qurb.BigOption.Icon"
+                        android:src="@drawable/ic_qr_code" />
+                </FrameLayout>
+
+                <TextView
+                    style="@style/Qurb.BigOption.Label"
+                    android:text="Scan a code" />
+
+                <ImageView style="@style/Qurb.BigOption.Chevron" />
             </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/typeDigits"
+                style="@style/Qurb.BigOption"
+                android:layout_marginTop="12dp">
+
+                <FrameLayout style="@style/Qurb.BigOption.Tile">
+
+                    <ImageView
+                        style="@style/Qurb.BigOption.Icon"
+                        android:src="@drawable/ic_keyboard" />
+                </FrameLayout>
+
+                <TextView
+                    style="@style/Qurb.BigOption.Label"
+                    android:text="Type 6 digits" />
+
+                <ImageView style="@style/Qurb.BigOption.Chevron" />
+            </LinearLayout>
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/useWords"
                 style="@style/Widget.Qurb.Button.Text"
-                android:gravity="start|center_vertical"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="-12dp"
-                android:layout_marginTop="12dp"
-                android:text="Use my 24 words instead" />
+                android:layout_gravity="center_horizontal"
+                android:text="Use 24 words" />
         </LinearLayout>
 
+        <!-- Six digits, as six boxes. Typed into one field nobody sees, which
+             brings up the number pad and takes a paste; the boxes show it. -->
         <LinearLayout
-            android:id="@+id/restorePanel"
+            android:id="@+id/digitsPanel"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:orientation="vertical"
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/digitsBack"
+                style="@style/Qurb.Back"
+                android:text="Join" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:accessibilityHeading="true"
+                android:text="Type 6 digits"
+                android:textAppearance="@style/Text.Hero" />
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp">
+
+                <EditText
+                    android:id="@+id/code"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:background="@null"
+                    android:cursorVisible="false"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="6"
+                    android:textColor="@android:color/transparent"
+                    android:contentDescription="Six digits" />
+
+                <LinearLayout
+                    android:id="@+id/boxes"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:gravity="center"
+                    android:importantForAccessibility="noHideDescendants"
+                    android:orientation="horizontal" />
+            </FrameLayout>
+
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp"
-                android:accessibilityHeading="true"
-                android:text="Enter your 24 words"
-                android:textAppearance="@style/Text.Display" />
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="16dp"
+                android:drawablePadding="6dp"
+                android:gravity="center_vertical"
+                android:text="Same Wi-Fi"
+                android:textAppearance="@style/Text.Meta"
+                app:drawableStartCompat="@drawable/ic_wifi"
+                app:drawableTint="@color/text_3" />
 
-            <com.google.android.material.textfield.TextInputLayout
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/joinConfirm"
+                style="@style/Widget.Qurb.Button"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Join" />
+        </LinearLayout>
+
+        <!-- The 24 words, as 24 numbered boxes, three to a row. -->
+        <LinearLayout
+            android:id="@+id/restorePanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/restoreBack"
+                style="@style/Qurb.Back"
+                android:text="Join" />
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="The 24 words, separated by spaces">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/phrase"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:imeOptions="flagNoPersonalizedLearning"
-                    android:importantForAutofill="no"
-                    android:inputType="textMultiLine|textNoSuggestions"
-                    android:minLines="4" />
-            </com.google.android.material.textfield.TextInputLayout>
+                android:layout_marginTop="10dp"
+                android:accessibilityHeading="true"
+                android:text="24 words"
+                android:textAppearance="@style/Text.Hero" />
 
             <LinearLayout
+                android:id="@+id/words"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:gravity="end"
-                android:orientation="horizontal">
+                android:layout_marginTop="18dp"
+                android:orientation="vertical" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/restoreBack"
-                    style="@style/Widget.Qurb.Button.Secondary"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Back" />
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:minHeight="18dp" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/restoreConfirm"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:text="Restore" />
-            </LinearLayout>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/restoreConfirm"
+                style="@style/Widget.Qurb.Button"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="18dp"
+                android:text="Restore" />
+        </LinearLayout>
+
+        <!-- Joining: the number this phone shows while the other device asks
+             whether to let it in (decision 0053), large, for the person to
+             compare. The engine learns that device's name only once the join
+             is done, so it is "your other device" here, not its name; and a
+             join cannot be called off midway, so there is no Cancel. -->
+        <LinearLayout
+            android:id="@+id/waitPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="0.7" />
+
+            <com.qurb.StatusMark
+                android:id="@+id/waitMark"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:importantForAccessibility="no" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:accessibilityHeading="true"
+                android:gravity="center"
+                android:text="Approve on your other device"
+                android:textAppearance="@style/Text.Hero" />
+
+            <TextView
+                android:id="@+id/waitNumber"
+                android:layout_width="match_parent"
+                android:layout_height="82dp"
+                android:layout_marginTop="24dp"
+                android:background="@drawable/group_quiet"
+                app:fontFamily="@font/inter_semibold"
+                android:fontFeatureSettings="tnum"
+                android:gravity="center"
+                android:letterSpacing="0.08"
+                android:textColor="@color/text"
+                android:textSize="40sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center"
+                android:text="It shows this number too"
+                android:textAppearance="@style/Text.Meta" />
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
         </LinearLayout>
 
         <com.google.android.material.progressindicator.LinearProgressIndicator
             android:id="@+id/progress"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
+            android:layout_gravity="bottom"
+            android:layout_marginBottom="-16dp"
             android:indeterminate="true"
             android:visibility="gone" />
-    </LinearLayout>
+    </FrameLayout>
 </ScrollView>
