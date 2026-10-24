@@ -943,7 +943,11 @@ qurb/
 │       │                                      then the number to compare while
 │       │                                      the other device, named, approves
 │       │                  Backup.kt           the key, kept in Block Store
-│       │                  ScanActivity.kt     reading a pairing QR code
+│       │                  ScanActivity.kt     reading a pairing QR code, a
+│       │                                      device's or a guest's, and naming
+│       │                                      the device found (0074)
+│       │                  ScanFrame.kt        its veil and frame: white, green
+│       │                                      when found, red for another code
 │       │                  ShareActivity.kt    the share sheet's way in, as sheets
 │       │                                      over the app shared from: save it
 │       │                                      to the Vault, or send it to one

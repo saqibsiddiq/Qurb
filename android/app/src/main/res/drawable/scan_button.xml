@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A round button over the camera: white at 14%, as the QR scanner draws
+     Close and the torch. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#24FFFFFF" />
+</shape>

@@ -139,6 +139,8 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         result.data?.getStringExtra(ScanActivity.EXTRA_CODE)?.let { joinWith(it) }
+        // Type 6 digits, from under the camera.
+        if (result.data?.getBooleanExtra(ScanActivity.EXTRA_TYPE, false) == true) typeCode()
     }
 
     /** WhatsApp's folder, picked once for its backup (decision 0062). */

@@ -34,7 +34,14 @@ class SetupActivity : AppCompatActivity() {
 
     private val scanner = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result -> result.data?.getStringExtra(ScanActivity.EXTRA_CODE)?.let { join(it) } }
+    ) { result ->
+        result.data?.getStringExtra(ScanActivity.EXTRA_CODE)?.let { join(it) }
+        // Type 6 digits, from under the camera.
+        if (result.data?.getBooleanExtra(ScanActivity.EXTRA_TYPE, false) == true) {
+            show(views.digitsPanel)
+            askForDigits()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

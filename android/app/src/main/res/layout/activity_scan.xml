@@ -1,24 +1,177 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The QR scanner, as redesigned (docs/design/redesign.md, QR scanner): the
+     camera filling the screen, a frame in the middle and the rest dimmed;
+     Close and the torch at the top; under the frame, Point at the code, or
+     what was found, and Type 6 digits. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="#1F211F">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/preview"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <TextView
-        android:id="@+id/hint"
+    <com.qurb.ScanFrame
+        android:id="@+id/frame"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:padding="32dp"
-        android:gravity="center"
-        android:textColor="#FFFFFF"
-        android:shadowColor="#000000"
-        android:shadowRadius="8"
-        android:textSize="16sp"
-        android:text="Point the camera at the code shown by `qurb pair`" />
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
+
+    <LinearLayout
+        android:id="@+id/overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingHorizontal="@dimen/gutter">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/close"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/scan_button"
+                android:contentDescription="Close"
+                android:padding="11dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_x"
+                android:tint="#FFFFFF" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="8dp"
+                android:layout_weight="1"
+                android:accessibilityHeading="true"
+                android:gravity="center"
+                android:text="Scan a code"
+                android:textAppearance="@style/Text.Section"
+                android:textColor="#FFFFFF" />
+
+            <ImageButton
+                android:id="@+id/torch"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/scan_button"
+                android:contentDescription="Torch"
+                android:padding="11dp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_flashlight"
+                android:tint="#FFFFFF"
+                android:visibility="invisible" />
+        </LinearLayout>
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Where the frame is drawn: ScanFrame leaves this square clear. -->
+        <View
+            android:id="@+id/viewfinder"
+            android:layout_width="248dp"
+            android:layout_height="248dp" />
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="90dp" />
+
+        <!-- A fixed height, so the frame above stays where it is whichever of
+             these shows. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="112dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/hint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:gravity="center"
+                android:text="Point at the code"
+                android:textAppearance="@style/Text.Body"
+                android:textColor="#FFFFFF" />
+
+            <!-- What was found: the device, or that it is not a Qurb code. -->
+            <LinearLayout
+                android:id="@+id/result"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/scan_result"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="18dp"
+                android:paddingVertical="12dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/resultMark"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:importantForAccessibility="no" />
+
+                <ImageView
+                    android:id="@+id/resultDevice"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_marginStart="8dp"
+                    android:importantForAccessibility="no"
+                    android:tint="@color/text_2" />
+
+                <TextView
+                    android:id="@+id/resultWords"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textAppearance="@style/Text.Name"
+                    android:textColor="@color/text" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/typeDigits"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/scan_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="18dp"
+                android:paddingVertical="12dp">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_keyboard"
+                    android:tint="#FFFFFF" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Type 6 digits"
+                    android:textAppearance="@style/Text.Button"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
 </FrameLayout>

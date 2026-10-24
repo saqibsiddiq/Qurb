@@ -125,7 +125,7 @@ themselves, the row says so.
 | | | |
 |---|---|---|
 | A new key | made and kept in Block Store, backed up end-to-end encrypted when the phone has a screen lock; nothing to write down ([0052](decisions/0052-the-key-travels-with-the-code.md)) | ✅ on the S23, 2026-10-08: read back from Block Store; kept across a reinstall, not across *Clear data* — on a second copy of the app |
-| Joining | scan the code another device shows, or type its six digits on a number pad, joining as the sixth is typed ([0066](decisions/0066-six-digits-to-pair.md)); the key comes with it | 🧪 in the FFI's tests; the number pad on the emulator |
+| Joining | scan the code another device shows, or type its six digits on a number pad, joining as the sixth is typed ([0066](decisions/0066-six-digits-to-pair.md)); the key comes with it. The scanner names the device it found ([0074](decisions/0074-who-shows-the-code.md)), says *Not a Qurb code* for any other, and reads guest codes too since 2026-10-24 | 🧪 in the FFI's tests; the number pad on the emulator; the scanner's states on the emulator, its reading not (its camera cannot load the barcode model) |
 | The key from a backup, or the 24 words | the fallbacks | 🧪 |
 
 The S23 was set up before the three-word check existed; the flow as it is now

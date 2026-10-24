@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the scanner found, as a solid pill tinted to the surface or the
+     error's own: tinting scan_pill would keep its 14%. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFFFFF" />
+    <corners android:radius="22dp" />
+</shape>

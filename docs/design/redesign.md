@@ -2,7 +2,7 @@
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
 Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 3, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb and Notifications** ([below](#built-android-home-2026-10-24)); everything else here is
+2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb, Notifications and the QR scanner** ([below](#built-android-home-2026-10-24)); everything else here is
 still a design in Figma.
 
 The owner, 2026-10-20:
@@ -743,3 +743,55 @@ question; which history entries are written is, and that was not looked into.
 **Not checked:** anything on the S23; a failure of either kind; *Try again*;
 a computer's ask and *Answer*; *Tap to finish sending*, which needs Android to
 refuse the worker the foreground.
+
+## Built: Android QR scanner (2026-10-24)
+
+The QR scanner from the owner's list of 2026-10-24 is in the app
+(`ScanActivity.kt`, `ScanFrame.kt`, `activity_scan.xml`), for *Scan a code* in
+setup and in Devices, and for *Visit a computer*:
+
+- **Looking**: the camera filling the screen, black at 45% over all of it but
+  a square, and four rounded corners round the square, white. Close and the
+  torch at the top, round, white at 14%, with *Scan a code* between them;
+  *Point at the code* and *Type 6 digits* under the frame. The torch shows only
+  on a camera with a light.
+- **Found *saqib***: the corners green, and in a white pill a tick, the
+  device's icon and its name, which the scanner asks the device showing the
+  code (`pairingWith`, decision 0074) -- a few seconds at most, *Found* until
+  it answers. Then back to setup or Devices, which join.
+- **Not a Qurb code**: the corners red, the words in a pill of the error's own
+  colour over *Type 6 digits*, until the code has been out of sight a moment
+  and a half; then looking again.
+- ***Type 6 digits*** goes to the six boxes in setup, or the number pad in
+  Devices.
+
+**Where it differs, and why:**
+
+- **Found asks who it is, and joining asks again.** Setup and Devices each ask
+  the device's name and number before joining (`pairingWith`); the scanner
+  asks too, to name it, rather than hand both back. One more round trip, a few
+  milliseconds on a home network; three seconds more for a device that is not
+  there.
+- **Camera refused**: *Camera not allowed* where *Point at the code* stood, and
+  *Type 6 digits* under it. *No camera* when it cannot start. The design draws
+  neither.
+- The words under the frame keep one height whichever show, so the frame does
+  not move when a code is found; it did, on the first build.
+
+**Found on the way, and fixed:** the scanner took only codes beginning
+`qurb1-`, so a guest code, `qurbg1-`, was looked past without a word, and
+*Visit a computer* by scanning could never work. It takes both now. Typing or
+pasting a guest code was not affected.
+
+**Checked** on the emulator (`qurb-34g`, its emulated back camera): looking,
+with the veil over the camera's picture and the torch; found, the corners
+green and *Office PC* named by a throwaway `qurb pair` of the command line
+built for Android, and the frame not moving; not a Qurb code, then looking
+again; *Type 6 digits* to the number pad from Devices and to the six boxes in
+setup; Close. Found and not a Qurb code were brought on by a temporary,
+uncommitted patch: the emulator's camera cannot load the barcode model, so it
+reads nothing.
+
+**Not checked:** reading a code at all, which needs the S23; the torch
+lighting; *Camera not allowed* and *No camera*; dark mode, which this page
+mostly does not have, being the camera.

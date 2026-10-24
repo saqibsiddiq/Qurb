@@ -2767,7 +2767,18 @@ the redesign's words, the mark's glyph as their icon, and buttons, *Open*,
 file sent to the phone and opened from its notification, a delivery, and a
 190 MB send's bar, named for the one device. **Not yet run on the S23.**
 
-Not built yet: Files, the QR scanner, the desktop; and the engine work of
+The QR scanner is done as designed
+([details](../design/redesign.md#built-android-qr-scanner-2026-10-24)): the
+camera behind a veil and a frame, Close and the torch, the device found named
+by `Who`, *Not a Qurb code* for any other, *Type 6 digits* at hand. Building it
+found that scanning a guest code did nothing: the scanner took only `qurb1-`
+codes, and a guest code is `qurbg1-`. It takes both now. Its states were seen
+on the emulator, two of them through a temporary patch; reading a code was
+not, as the emulator's camera cannot load the barcode model. **Not yet run on
+the S23.**
+
+Not built yet: Files, the folders to back up as a tree, the desktop; and the
+engine work of
 [0073](../decisions/0073-the-phone-works-with-its-computer.md).
 
 ## Deliberately left undone
