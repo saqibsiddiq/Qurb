@@ -319,8 +319,9 @@ phone with a phone; it had shown a laptop for every device.
    *Shared* between *This phone* and *Devices*, a card naming the computer it is
    on, whether that is on, and how many people can reach it; inside, search,
    folders, files, a new folder and a plus. Decision 0073 is amended: item 6,
-   and the widening of what a guest can reach, still to be bounded (which
-   guests; read only or not).
+   and the widening of what a guest can reach, bounded later the same day:
+   "shared folder can be accessed by all the users of the desktop and its
+   read-write" -- every guest, and each may change it.
 2. "we forgot to redesign the qr code scanner". **QR scanner**: the camera
    filling the screen with a frame in the middle and the rest dimmed; close and
    the torch at the top; *Point at the code*; found turns the frame green and

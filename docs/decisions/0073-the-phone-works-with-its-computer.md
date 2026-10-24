@@ -7,7 +7,8 @@ screens are in the Figma redesign ([design/redesign.md](../design/redesign.md),
 folder on the computer, and makes one exception to the rule that a device
 serves read-only ([crates/peer](../../crates/peer/README.md), *The server is
 read-only*). Amended the same day by the owner's next list: Files lists
-every computer, and the device is chosen on Home (points 1 and 5 below).
+every computer, and the device is chosen on Home (points 1 and 5 below); and
+the shared folder bounded: every guest of the computer, read-write (point 6).
 **Date:** 2026-10-24
 
 ## What was asked
@@ -69,6 +70,13 @@ and choosing one in Devices is for what it keeps and where Send goes.
    the same day: "we forgot to include shared folder in phone ui, which can be
    accessed by all the phone users", and, asked back, opened on the computer,
    for the owner's phones and his guests'.
+   - **Every guest of the computer, and read-write.** Asked which guests and
+     whether they may change it, the owner, 2026-10-24: "shared folder can be
+     accessed by all the users of the desktop and its read-write". So every
+     person the computer keeps a folder for (0060, 0067), not a list set on
+     the computer; and each may open, add, rename, move and delete there, as
+     the computer's own person may. A deletion goes to the computer's Recently
+     deleted for 30 days, as item 3 has it for a phone's own folder.
 ## Why
 
 - **The owner's use is a phone working with its computer**: backups of
@@ -87,11 +95,13 @@ and choosing one in Devices is for what it keeps and where Send goes.
   - a search request answered by the computer;
   - the device chosen on Home, as a setting;
   - a backup set for each device (item 4 of the redesign).
-- **Guests reach more than what was sent to them.** Under 0060 a guest sees
-  only its own sends and what the computer keeps for its person; the shared
-  folder is a deliberate widening, to be bounded when built: which guests,
-  set on the computer, and whether a guest may change it or only read it.
-  Neither is decided yet.
+- **Guests reach more than what was sent to them, and can change it.** Under
+  0060 a guest sees only its own sends and what the computer keeps for its
+  person; the shared folder is a deliberate widening. Bounded by the owner the
+  same day (item 6): every guest, read-write. A guest's phone in the wrong
+  hands can delete what is in the shared folder, though not for good: the
+  computer's Recently deleted holds it for 30 days. Removing a guest from the
+  computer is what takes the reach away.
 - **The rule that a device serves read-only gets an exception.** It is to be
   written into `crates/peer/README.md` when built, with the tests a hostile
   peer would need to fail (`tests/hostile.rs`).
