@@ -397,8 +397,9 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   (101) both directly and through Funnel's two public addresses, the phone
   pinged the laptop on the Wi-Fi in 6 to 18 ms, and the laptop's window sent
   its beacons every 20 seconds. Not caused by the network code, which this
-  work did not change; not yet explained. Two guesses, neither tested:
-  Android dropping multicast for an app in the background without a
-  multicast lock, and something in the phone's path to Funnel's edge.
+  work did not change; not yet explained. Two guesses, neither tested: the
+  background pass not hearing the beacons although it holds a multicast
+  lock (`SyncWorker.kt`, `Engine.hearingTheNetwork`) -- a phone dozing can
+  still filter them -- and something in the phone's path to Funnel's edge.
   **Not yet seen:** a sync from the S23 with its screen on, and Files on the
   S23 as it now is.
