@@ -2188,7 +2188,7 @@ pub fn activity(
             let view = View::new(store, 0);
             let rows = match &path {
                 Some(path) => view.history_of(path, limit.min(200))?,
-                None => view.activity(limit.min(200), before)?,
+                None => view.activity_told(limit.min(200), before)?,
             };
             Ok((rows, store.db().device_names()?))
         })

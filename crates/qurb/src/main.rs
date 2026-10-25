@@ -1468,7 +1468,7 @@ fn activity(root: &Path, about: Option<&str>) -> Result<()> {
 
     let rows = match about {
         Some(path) => store.db().activity_for(path.trim_start_matches("./"), SHOWN)?,
-        None => store.db().activity(SHOWN, None)?,
+        None => store.db().activity_told(SHOWN, None)?,
     };
 
     if rows.is_empty() {

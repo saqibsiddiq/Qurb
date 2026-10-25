@@ -399,6 +399,9 @@ impl Engine {
         // 0060).
         self.store.free_kept_by_hosts()?;
         let collected = self.store.gc(retention)?;
+        // History kept 30 days, here as on every device (the owner's list
+        // of 2026-10-26, item 8).
+        let _ = self.store.db().forget_old_activity();
         let reclaimed = self.store.reclaim()?;
         let expired = self.store.empty_trash(qurb_storage::TRASH_RETENTION)?;
         Ok(Housekeeping { collected, reclaimed, expired, called_off, sends_done })

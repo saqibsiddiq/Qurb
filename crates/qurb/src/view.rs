@@ -311,6 +311,16 @@ impl<'a> View<'a> {
         self.store.db().activity(limit, before)
     }
 
+    /// The same, one line for each thing that happened to a file, as a
+    /// person reads it ([`qurb_storage::db::told_once`]).
+    pub fn activity_told(
+        &self,
+        limit: usize,
+        before: Option<i64>,
+    ) -> qurb_storage::Result<Vec<Activity>> {
+        self.store.db().activity_told(limit, before)
+    }
+
     /// What happened to one path. The answer to "why is this file not here?".
     pub fn history_of(&self, path: &str, limit: usize) -> qurb_storage::Result<Vec<Activity>> {
         self.store.db().activity_for(path, limit)

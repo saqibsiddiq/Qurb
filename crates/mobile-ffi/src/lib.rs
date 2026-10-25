@@ -2374,7 +2374,7 @@ impl Qurb {
     /// What happened, newest first. `before` pages backwards by id.
     pub fn history(&self, limit: u32, before: Option<i64>) -> Result<Vec<Happening>, QurbError> {
         let names = self.look()?.store().db().device_names()?;
-        let rows = self.look()?.store().db().activity(limit as usize, before)?;
+        let rows = self.look()?.store().db().activity_told(limit as usize, before)?;
         Ok(rows
             .into_iter()
             .map(|r| Happening {

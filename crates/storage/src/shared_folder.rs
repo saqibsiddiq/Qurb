@@ -1,7 +1,9 @@
 //! A computer's shared folder as a phone reaches it, live (decision 0073,
-//! item 6): one folder of it at a time -- what the index has there, and the
-//! empty folders on disk, which the index cannot know -- leaving out every
-//! folder shared without the asking device (decision 0044).
+//! item 6): one folder of it at a time -- the files the index has there with
+//! their bytes on this disk, and the empty folders on disk, which the index
+//! cannot know -- leaving out every folder shared without the asking device
+//! (decision 0044). A file listed with no bytes here is not in the folder,
+//! and not shown (the owner's list of 2026-10-26, item 14).
 
 use crate::db::Db;
 use crate::error::{Error, Result};
@@ -27,7 +29,7 @@ pub fn listing(
     }
     let mut folders = BTreeSet::new();
     let mut files = Vec::new();
-    for (path, size, mtime, content) in db.shared_entries_under(dir, device)? {
+    for (path, size, mtime, content) in db.shared_entries_here(dir, device)? {
         if qurb_sync::sharing::is_rule_path(&path) {
             continue;
         }
@@ -78,7 +80,7 @@ pub fn search(db: &Db, here: &DeviceId, device: &DeviceId, text: &str, limit: us
         return Ok(Vec::new());
     }
     let mut found: Vec<Shown> = db
-        .shared_entries_under("", device)?
+        .shared_entries_here("", device)?
         .into_iter()
         .filter(|(path, ..)| !qurb_sync::sharing::is_rule_path(path) && path.to_lowercase().contains(&text))
         .map(|(path, size, mtime, content)| Shown {

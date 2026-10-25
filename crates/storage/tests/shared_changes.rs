@@ -124,3 +124,28 @@ fn a_folder_moves_and_is_deleted_file_by_file_into_recently_deleted() {
     assert_eq!(paths, vec!["Holidays/Trips/2025/hills.jpg", "Holidays/Trips/beach.jpg"]);
     assert!(trash.iter().all(|t| t.deleted_by == Some(phone())), "not recorded as the phone's deletion");
 }
+
+/// The shared folder as a phone sees it is the folder on the computer's disk
+/// (the owner's list of 2026-10-26, item 14): a file the index lists with no
+/// bytes here -- freed, or on no device since -- is neither listed nor found,
+/// and a folder holding only such files is not shown either.
+#[test]
+fn a_phone_sees_only_what_is_in_the_folder() {
+    let mut computer = Computer::new();
+    computer.add("Recipes/pasta.txt", b"boil water");
+    computer.add("Old/lost.jpg", b"a photo no device has now");
+    computer.add("gone.pdf", b"freed long ago");
+    for path in ["Old/lost.jpg", "gone.pdf"] {
+        computer.store.db().set_materialised(path, false).unwrap();
+        std::fs::remove_file(computer.root.join(path)).unwrap();
+    }
+    std::fs::remove_dir(computer.root.join("Old")).unwrap();
+
+    let here = computer.store.device_id().unwrap();
+    let (folders, files) =
+        qurb_storage::shared_folder::listing(computer.store.db(), Some(&computer.root), &here, &phone(), "").unwrap();
+    assert_eq!(folders, vec!["Recipes".to_string()]);
+    assert!(files.is_empty(), "{files:?}");
+    let found = qurb_storage::shared_folder::search(computer.store.db(), &here, &phone(), "o", 10).unwrap();
+    assert!(found.iter().all(|f| f.path == "Recipes/pasta.txt"), "{found:?}");
+}

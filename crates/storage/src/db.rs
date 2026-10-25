@@ -2515,6 +2515,23 @@ impl Db {
     }
 
     /// One entry, by its id.
+    /// What happened, newest first, told once each (the owner's list of
+    /// 2026-10-26, item 8: "it shows 1file 3 times"): `limit` entries of
+    /// [`activity`](Self::activity) after [`told_once`] has gone through it.
+    /// More are read than are shown, so that a page is not short for what
+    /// was folded together.
+    pub fn activity_told(&self, limit: usize, before: Option<i64>) -> Result<Vec<Activity>> {
+        let mut told = told_once(self.activity(limit.saturating_mul(4).max(limit), before)?);
+        told.truncate(limit);
+        Ok(told)
+    }
+
+    /// Forget what happened more than [`ACTIVITY_KEPT`] ago: history is kept
+    /// for 30 days (the owner's list of 2026-10-26, item 8).
+    pub fn forget_old_activity(&self) -> Result<usize> {
+        Ok(self.conn.execute("DELETE FROM activity WHERE at < ?1", params![now() - ACTIVITY_KEPT])?)
+    }
+
     pub fn activity_entry(&self, id: i64) -> Result<Option<Activity>> {
         self.conn
             .query_row(
@@ -3143,10 +3160,29 @@ impl Db {
     /// depth; `""` for all of it) that `device` may see -- outside every
     /// folder shared without it -- as `(path, size, mtime_ns, content)`.
     pub fn shared_entries_under(&self, dir: &str, device: &DeviceId) -> Result<Vec<(String, u64, i64, blake3::Hash)>> {
+        self.shared_entries_where(dir, device, "1")
+    }
+
+    /// The same, only the files whose bytes are in this device's folder: the
+    /// shared folder as it is on disk, which a phone reaching it is shown
+    /// (the owner's list of 2026-10-26, item 14). A file listed with no bytes
+    /// here -- freed, or on no device since -- is not in the folder; the
+    /// owner's laptop listed 17 such, its folder empty, and the S23 showed
+    /// them all.
+    pub fn shared_entries_here(&self, dir: &str, device: &DeviceId) -> Result<Vec<(String, u64, i64, blake3::Hash)>> {
+        self.shared_entries_where(dir, device, "materialised = 1")
+    }
+
+    fn shared_entries_where(
+        &self,
+        dir: &str,
+        device: &DeviceId,
+        condition: &str,
+    ) -> Result<Vec<(String, u64, i64, blake3::Hash)>> {
         let dir = dir.trim_matches('/');
         let mut stmt = self.conn.prepare(&format!(
             "SELECT path, size, mtime_ns, content_hash FROM files
-              WHERE scope IS NULL AND deleted_at IS NULL
+              WHERE scope IS NULL AND deleted_at IS NULL AND {condition}
                 AND (?1 = '' OR substr(path, 1, length(?1) + 1) = ?1 || '/')
                 AND {}
               ORDER BY path",
@@ -4990,6 +5026,49 @@ fn _assert_error_conversion(e: rusqlite::Error) -> Error {
     e.into()
 }
 
+/// How long history is kept: 30 days (the owner's list of 2026-10-26, item 8).
+pub const ACTIVITY_KEPT: i64 = 30 * 24 * 3600;
+
+/// One line for each thing that happened to a file, newest first (item 8 of
+/// the owner's list of 2026-10-26). A file sent is recorded as it is put in
+/// the other device's vault and again when that device collects it, and,
+/// copied in from elsewhere first, as stored as well: three lines for one
+/// send, which is what the S23 showed. Told once here:
+///
+/// - a send collected is one line, the collection, which says it arrived;
+/// - a file stored here shortly before it was sent is the send's, not a line
+///   of its own;
+/// - the same thing to the same file, with the same device, again within a
+///   minute is one line, the latest.
+pub fn told_once(rows: Vec<Activity>) -> Vec<Activity> {
+    const SAME_SEND: i64 = 10 * 60;
+    const AGAIN: i64 = 60;
+    let mut out: Vec<Activity> = Vec::with_capacity(rows.len());
+    for row in rows {
+        let Some(path) = row.path.as_deref() else {
+            out.push(row);
+            continue;
+        };
+        let later = |kinds: &[&str], within: i64, same_device: bool| {
+            out.iter().any(|newer| {
+                newer.path.as_deref() == Some(path)
+                    && kinds.contains(&newer.kind.as_str())
+                    && newer.at - row.at <= within
+                    && (!same_device || newer.device == row.device)
+            })
+        };
+        let folded = match row.kind {
+            Event::Sent => later(&["collected"], i64::MAX, true),
+            Event::Stored => later(&["sent", "collected"], SAME_SEND, false),
+            _ => false,
+        } || later(&[row.kind.as_str()], AGAIN, true);
+        if !folded {
+            out.push(row);
+        }
+    }
+    out
+}
+
 /// One thing that happened, in a form an interface can render directly.
 ///
 /// Deliberately flat. An enum with a payload per variant reads better in Rust
@@ -5169,6 +5248,49 @@ mod tests {
         computer.choose_folder(&device, "DCIM/Camera", true).unwrap();
         phone.merge_choices_here(&computer.choices_for(&device).unwrap()).unwrap();
         assert!(phone.chosen_here().unwrap().contains(&"DCIM/Camera".to_string()));
+    }
+
+    /// One line for each thing that happened to a file (the owner's list of
+    /// 2026-10-26, item 8): a send copied in, put in the laptop's vault and
+    /// collected was three lines, and is one; the same thing again within a
+    /// minute is one; anything else stays as it was.
+    #[test]
+    fn a_file_sent_is_told_once() {
+        let laptop = DeviceId::from_bytes([4; 32]);
+        let row = |id: i64, at: i64, kind: Event, path: &str, device: Option<DeviceId>| Activity {
+            id,
+            at,
+            kind,
+            path: Some(path.to_string()),
+            size: Some(10),
+            device,
+            detail: None,
+        };
+        // Newest first, as the history is read.
+        let told = told_once(vec![
+            row(9, 1_000, Event::Collected, "IMG_1.jpg", Some(laptop)),
+            row(8, 990, Event::Sent, "IMG_1.jpg", Some(laptop)),
+            row(7, 985, Event::Stored, "IMG_1.jpg", None),
+            row(6, 900, Event::Received, "notes.txt", Some(laptop)),
+            row(5, 880, Event::Received, "notes.txt", Some(laptop)),
+            row(4, 500, Event::Sent, "big.mkv", Some(laptop)),
+            row(3, 100, Event::Stored, "diary.txt", None),
+            row(2, 50, Event::Deleted, "diary.txt", None),
+        ]);
+        let kept: Vec<i64> = told.iter().map(|a| a.id).collect();
+        assert_eq!(kept, vec![9, 6, 4, 3, 2], "{told:?}");
+    }
+
+    /// History older than 30 days is forgotten, and nothing newer.
+    #[test]
+    fn history_is_kept_thirty_days() {
+        let db = Db::open_in_memory().unwrap();
+        db.record(Event::Stored, Some("new.txt"), Some(1), None, None).unwrap();
+        db.record(Event::Stored, Some("old.txt"), Some(1), None, None).unwrap();
+        db.conn.execute("UPDATE activity SET at = at - ?1 WHERE path = 'old.txt'", params![ACTIVITY_KEPT + 60]).unwrap();
+        assert_eq!(db.forget_old_activity().unwrap(), 1);
+        let left: Vec<String> = db.activity(10, None).unwrap().into_iter().filter_map(|a| a.path).collect();
+        assert_eq!(left, vec!["new.txt".to_string()]);
     }
 
     /// Ticking or unticking a folder sets every choice inside it the same
