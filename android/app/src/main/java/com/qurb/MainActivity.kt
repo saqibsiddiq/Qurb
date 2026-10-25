@@ -382,6 +382,13 @@ class MainActivity : AppCompatActivity() {
         (screen.view.parent as? android.view.ViewGroup)?.removeView(screen.view)
         views.screen.addView(screen.view)
         current = screen
+        // Its own bar above the tabs, or none: the last place's goes with it.
+        views.dockBar.removeAllViews()
+        screen.dockBar?.let { bar ->
+            (bar.parent as? android.view.ViewGroup)?.removeView(bar)
+            views.dockBar.addView(bar)
+        }
+        views.dockBar.visibility = if (screen.dockBar != null) View.VISIBLE else View.GONE
         // §35: the next place comes forward a little; nothing flies.
         if (!Kit.calm()) {
             screen.view.alpha = 0f

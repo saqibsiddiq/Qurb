@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What is chosen in the folder tree, kept above the tab bar (the
+     redesign's Chosen). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/green_soft" />
+    <corners android:radius="18dp" />
+</shape>

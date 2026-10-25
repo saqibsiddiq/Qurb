@@ -1,10 +1,9 @@
 # The redesign of 2026-10
 
 **Status:** started 2026-10-20. Home is at draft 3; Devices is at draft 4;
-Settings is at draft 2; Backups and Activity are at draft 1; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 4, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
-2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb, Notifications, the QR scanner and Files** ([below](#built-android-home-2026-10-24)); everything else here is
-still a design in Figma: the desktop, and the folders-to-back-up tree of
-Backups.
+Settings is at draft 2; Backups and Activity are at draft 1; Folders to back up is a tree; Setup, Sharing into Qurb, Pairing and Notifications are at draft 1; the desktop is at draft 1; Files is at draft 4, on a simpler model ([0073](../decisions/0073-the-phone-works-with-its-computer.md)). **Building began
+2026-10-24 with Android's Home, Devices, Settings, Backups, Activity, Setup, Pairing, Sharing into Qurb, Notifications, the QR scanner, Files and, the next day, the folders to back up as a tree** ([below](#built-android-home-2026-10-24)); the desktop is
+still a design in Figma.
 
 The owner, 2026-10-20:
 
@@ -283,7 +282,8 @@ Activity:
    takes everything inside it, folders added later too; what is chosen and
    *Wi-Fi only* stay above the tab bar. Today's chooser goes two levels deep and
    fixes the inner switch of a chosen folder; choosing folders at any depth is
-   engine work.
+   engine work. (Built 2026-10-25: *Built: Android, folders to back up as a
+   tree*, below.)
 2. "dark mode". **Dark**: ten of the key screens again, in the app's own night
    colours (`values-night/colors.xml`). The free Figma plan allows a colour
    collection one mode only, so the night colours are a second collection,
@@ -948,3 +948,43 @@ computer.
 
 **Not checked:** a backup's file deleted from the phone's folder; any of this
 on the S23, which runs it since 2026-10-25 but has not been looked at.
+
+## Built: Android, folders to back up as a tree (2026-10-25)
+
+Item 1 of the owner's list of 2026-10-24, as drawn in *Folders to back up, a
+tree* (`FoldersScreen.kt`), with the engine work under it in decision 0063's
+amendment of 2026-10-25:
+
+- **The page**: the way back, *Folders* with the computer's chip beside it,
+  then the tree on one card. Each row an arrow that opens it when there are
+  folders inside, its checkbox, the folder's icon -- green at the top,
+  quiet inside -- its name and size; each level 26dp further in.
+- **The checkbox**, the redesign's own: ticked for all of a folder, a dash
+  for some of what is inside, empty for none (`checkbox_on`, `checkbox_off`,
+  and its two marks exactly as exported). Ticking takes everything inside,
+  folders added later too; unticking a folder inside a ticked one sets it
+  apart, and its folder takes a dash.
+- **What is chosen** -- its size, the Wi-Fi mark, *Wi-Fi only* -- kept above
+  the tab bar, in a slot the shell keeps for a page's own bar
+  (`Screen.dockBar`), the tree scrolling under it.
+
+**Where it differs, and why:**
+
+- **Folders with something chosen come first**, then the rest, each by name.
+  The design's order is an example and says no rule.
+- **A folder with a dash opens by itself** the first time the page is shown,
+  so that what is chosen deep down shows; opening and closing is the
+  person's after that, kept while the page is.
+- **The page lost** *On saqib* (how much the computer has), *Deleted on this
+  phone*, and *Back up now*, which the design does not have: Backups' card
+  shows the progress, and ticking a folder starts a run at once.
+- **Nothing chosen** shows an empty box and *Nothing chosen* in the bar,
+  which the design does not draw.
+
+**Checked** on the emulator (`qurb-34g`, the debug build) with a folder tree
+made on its storage after the design's second screen: the tree as drawn,
+light and dark; *Download* ticked, *ADM* unticked inside it, *2025* ticked
+again inside that, *DCIM* ticked -- the marks as drawn, *3.6 MB chosen*; the
+run on the phone queuing five files for the computer, *old*'s left out; the
+bar gone back on Backups. **Not checked:** on the S23; *Nothing chosen* and
+the empty states; many folders.

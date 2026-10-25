@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The shell: the environment (the window's background), whichever place is
      showing, and over it a glass tab bar that floats above the gesture bar,
-     with the Transfers bar above it while something moves or waits. -->
+     with the Transfers bar above it while something moves or waits, and a
+     bar of the place's own above that when it has one (`Screen.dockBar`). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
@@ -53,6 +54,12 @@
                 android:textAppearance="@style/Text.Name"
                 android:textSize="14sp" />
         </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/dock_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
 
         <com.google.android.material.bottomnavigation.BottomNavigationView
             android:id="@+id/tabs"

@@ -22,6 +22,7 @@
 //! See ../../docs/CODEBASE.md for how this fits into the wider system.
 
 pub mod cas;
+pub mod chosen;
 pub mod chunker;
 pub mod db;
 pub mod error;

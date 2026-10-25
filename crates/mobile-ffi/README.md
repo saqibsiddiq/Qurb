@@ -195,8 +195,13 @@ Backups, kept by a computer of this person's that keeps the phone's vault
 ```kotlin
 qurb.setUnmetered(true)               // offered only on Wi-Fi
 qurb.backUpWhatsapp(listing, 15)      // WhatsApp's folder, as the app lists it
-qurb.chosenFolders(); qurb.chooseFolder("DCIM/Camera", true)
-qurb.backUpChosen(storageRoot, 15)    // the folders chosen, here or on the computer
+qurb.ownFolders()                     // at any depth, each its tick -- ALL, SOME,
+                                      //   NONE -- and how much of it is chosen
+qurb.chooseFolder("Download", true)   // and everything inside it the same way;
+qurb.chooseFolder("Download/ADM", false)  // one inside set apart again
+qurb.chosenFolders()                  // each ticked folder not inside another
+qurb.backUpChosen(storageRoot, 15)    // the folders chosen, here or on the computer,
+                                      //   the deepest choice deciding each
 qurb.whatsappBackup(); qurb.foldersBackup()   // how many files, how many kept there
 ```
 

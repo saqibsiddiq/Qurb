@@ -2819,8 +2819,17 @@ above; the S23 has synced with the laptop since, and what it did leaving
 the shared area is **not yet read** from its log
 ([0073](../decisions/0073-the-phone-works-with-its-computer.md), *Progress*).
 
-Not built yet: the folders to back up as a tree, the desktop, and a new
-folder in the phone's folder on a computer
+The folders to back up are a tree since 2026-10-25
+([details](../design/redesign.md#built-android-folders-to-back-up-as-a-tree-2026-10-25)):
+listed at any depth, a checkbox each for all, some or none, a folder inside a
+ticked one unticked apart, what is chosen kept above the tab bar. Under it,
+the deepest choice decides a folder and a choice sets every choice inside it
+([0063](../decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md),
+amended), in the choice rows the phone and the computer already kept in
+step. Checked on the emulator; not on the S23.
+
+Not built yet: the desktop, and a new folder in the phone's folder on a
+computer
 ([0073](../decisions/0073-the-phone-works-with-its-computer.md), *Progress*).
 
 ## Deliberately left undone

@@ -42,6 +42,11 @@ abstract class Screen(protected val app: MainActivity) {
      *  or left behind by a change of tab. What it holds open, it closes. */
     open fun left() {}
 
+    /** A bar of this place's own, kept above the tab bar while it shows
+     *  rather than scrolled away: the folder tree's *chosen* (the owner's
+     *  list of 2026-10-24, item 1). */
+    open val dockBar: View? = null
+
     protected val kit get() = app.kit
 
     protected val scope get() = app.lifecycleScope

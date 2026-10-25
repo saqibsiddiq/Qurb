@@ -228,16 +228,37 @@ pub struct OutsideFile {
     pub modified_ms: i64,
 }
 
-/// One of this phone's folders, for choosing on the phone (item 10).
+/// One of this phone's folders, at any depth, for choosing on the phone as a
+/// tree (item 10 of 2026-10-14; item 1 of the owner's list of 2026-10-24).
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct OwnFolder {
     /// From the root of shared storage: `DCIM`, `DCIM/Camera`.
     pub path: String,
+    /// Beneath it, at any depth.
     pub files: u64,
     pub bytes: u64,
-    pub chosen: bool,
-    /// How many of its files the computer keeps.
-    pub kept_files: u64,
+    /// All of it backed up, some of it, or none ([`qurb_storage::chosen`]).
+    pub tick: FolderTick,
+    /// Of `bytes`, how many are backed up.
+    pub chosen_bytes: u64,
+}
+
+/// A folder's mark in the tree of folders to back up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum FolderTick {
+    All,
+    Some,
+    None,
+}
+
+impl From<qurb_storage::chosen::Tick> for FolderTick {
+    fn from(tick: qurb_storage::chosen::Tick) -> Self {
+        match tick {
+            qurb_storage::chosen::Tick::All => FolderTick::All,
+            qurb_storage::chosen::Tick::Some => FolderTick::Some,
+            qurb_storage::chosen::Tick::None => FolderTick::None,
+        }
+    }
 }
 
 /// What one run of the WhatsApp backup did (decision 0062).
@@ -289,17 +310,10 @@ fn choosable(folder: &str) -> bool {
         && !folder.starts_with("Android/obb")
 }
 
-/// The chosen folders with any inside another chosen one left out: its files
-/// are backed up with the outer one already.
-fn outermost(mut folders: Vec<String>) -> Vec<String> {
-    folders.sort();
-    let mut kept: Vec<String> = Vec::new();
-    for folder in folders {
-        if !kept.iter().any(|outer| folder.starts_with(&format!("{outer}/"))) {
-            kept.push(folder);
-        }
-    }
-    kept
+/// The choices made for this phone that can be backed up from
+/// ([`choosable`]): what [`qurb_storage::chosen`] reads the tree from.
+fn usable_choices(db: &qurb_storage::db::Db) -> Result<Vec<qurb_storage::db::Choice>, QurbError> {
+    Ok(db.choices_here()?.into_iter().filter(|c| choosable(&c.folder)).collect())
 }
 
 /// Every file beneath `dir`, as entries of a folder kept where it lies: named
@@ -332,9 +346,11 @@ fn walk_files(dir: &Path, under: &str, into: &mut Vec<qurb_storage::OutsideEntry
     }
 }
 
-/// The folders of `root` and of each folder in it, with the files and bytes
-/// beneath each, from one walk (decision 0063). Hidden folders, and the two
-/// Android keeps from every app, are left out.
+/// The folders of `root` at any depth, with the files and bytes beneath
+/// each, from one walk (decision 0063; at every depth since the owner's list
+/// of 2026-10-24, for choosing as a tree). Hidden folders, and the two Android
+/// keeps from every app, are left out, and so is a folder with no file
+/// beneath it.
 fn folder_summaries(root: &Path) -> Vec<qurb_storage::db::FolderSummary> {
     let mut files = Vec::new();
     walk_files(root, "", &mut files);
@@ -342,8 +358,8 @@ fn folder_summaries(root: &Path) -> Vec<qurb_storage::db::FolderSummary> {
     for file in &files {
         let parts: Vec<&str> = file.path.split('/').collect();
         // A file at the top belongs to no folder; one in a folder counts for
-        // it, and one deeper counts for its second-level folder as well.
-        for depth in 1..=2.min(parts.len().saturating_sub(1)) {
+        // it and for each folder it is in.
+        for depth in 1..parts.len() {
             let folder = parts[..depth].join("/");
             if !choosable(&folder) {
                 break;
@@ -2085,7 +2101,7 @@ impl Qurb {
     }
 
 
-    /// This phone's folders, two levels deep from `root`, its shared storage,
+    /// This phone's folders, at any depth from `root`, its shared storage,
     /// with what is beneath each: what a computer keeping its vault is shown
     /// to choose from (decision 0063). Needs "All files access"; without it
     /// nothing can be listed, and the computer is told there is nothing.
@@ -2099,17 +2115,29 @@ impl Qurb {
     /// vault (decision 0063), each kept where it lies under `root`, as
     /// WhatsApp's is. A file deleted here stays on the computer. A run that
     /// runs out of time says how many it left, and the next carries on.
+    ///
+    /// Each ticked folder not inside another is walked once, taking the files
+    /// whose folder is backed up: a folder unticked inside it is left out,
+    /// and one ticked again deeper still is taken ([`qurb_storage::chosen`]).
+    /// What was kept of a folder since unticked stays on the computer.
     pub fn back_up_chosen(&self, root: String, seconds: u32) -> Result<BackupRun, QurbError> {
-        let chosen = outermost(self.engine()?.store().db().chosen_here()?.into_iter().filter(|f| choosable(f)).collect());
+        let choices = usable_choices(self.engine()?.store().db())?;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds.into());
         let mut run = BackupRun::default();
-        for folder in chosen {
+        for folder in qurb_storage::chosen::roots(&choices) {
             if std::time::Instant::now() >= deadline {
                 break;
             }
             let base = Path::new(&root).join(&folder);
             let mut listing = Vec::new();
             walk_files(&base, "", &mut listing);
+            listing.retain(|file| {
+                let inside = match file.path.rsplit_once('/') {
+                    Some((dir, _)) => format!("{folder}/{dir}"),
+                    None => folder.clone(),
+                };
+                qurb_storage::chosen::backed_up(&choices, &inside)
+            });
             let prefix = format!("{}/storage/{folder}", qurb_storage::db::OUTSIDE);
             self.keep_folder(&prefix, &listing, &|_| true, deadline, &mut run)?;
         }
@@ -2135,33 +2163,62 @@ impl Qurb {
             .collect()
     }
 
-    /// The folders chosen for this phone on a computer keeping its vault, as
-    /// it last said (decision 0063), the ones that can be backed up.
+    /// The folders backed up from, chosen here or on a computer keeping this
+    /// phone's vault (decision 0063): each ticked one not inside another.
     pub fn chosen_folders(&self) -> Result<Vec<String>, QurbError> {
-        let chosen = self.look()?.store().db().chosen_here()?;
-        Ok(outermost(chosen.into_iter().filter(|f| choosable(f)).collect()))
+        Ok(qurb_storage::chosen::roots(&usable_choices(self.look()?.store().db())?))
     }
 
-    /// This phone's folders as last listed, each with whether it is chosen to
-    /// back up and how much of it the computer keeps: for choosing on the
-    /// phone (the owner's item 10, 2026-10-14).
+    /// This phone's folders as last listed, at any depth, each with its mark
+    /// in the tree and how much of it is backed up: for choosing on the phone
+    /// as a tree (the owner's list of 2026-10-24, item 1).
     pub fn own_folders(&self) -> Result<Vec<OwnFolder>, QurbError> {
         let engine = self.look()?;
         let db = engine.store().db();
-        let chosen = db.chosen_here()?;
-        Ok(db
-            .own_folders()?
-            .into_iter()
-            .map(|f| {
-                let prefix = format!("{}/storage/{}", qurb_storage::db::OUTSIDE, f.path);
-                let summary = db.outside_summary(&prefix).unwrap_or_default();
-                OwnFolder {
-                    chosen: chosen.contains(&f.path),
-                    path: f.path,
-                    files: f.files,
-                    bytes: f.bytes,
-                    kept_files: summary.held_files,
+        let folders = db.own_folders()?;
+        let listed: std::collections::HashSet<&str> = folders.iter().map(|f| f.path.as_str()).collect();
+        // A choice of a folder no longer listed -- gone, or emptied -- would
+        // mark the folder around it as partly chosen for good.
+        let choices: Vec<_> = usable_choices(db)?.into_iter().filter(|c| listed.contains(c.folder.as_str())).collect();
+        // What is directly in each folder, and of that what is backed up;
+        // then each folder's share added to the folders around it, deepest
+        // first, so that the sum is one pass however deep the tree.
+        let mut direct: std::collections::HashMap<&str, u64> = folders.iter().map(|f| (f.path.as_str(), f.bytes)).collect();
+        for folder in &folders {
+            if let Some((parent, _)) = folder.path.rsplit_once('/') {
+                if let Some(bytes) = direct.get_mut(parent) {
+                    *bytes = bytes.saturating_sub(folder.bytes);
                 }
+            }
+        }
+        let mut chosen: std::collections::HashMap<&str, u64> = folders
+            .iter()
+            .map(|f| {
+                let here = match qurb_storage::chosen::backed_up(&choices, &f.path) {
+                    true => direct[f.path.as_str()],
+                    false => 0,
+                };
+                (f.path.as_str(), here)
+            })
+            .collect();
+        let mut deepest: Vec<&str> = folders.iter().map(|f| f.path.as_str()).collect();
+        deepest.sort_by_key(|p| std::cmp::Reverse(p.matches('/').count()));
+        for path in deepest {
+            if let Some((parent, _)) = path.rsplit_once('/') {
+                let share = chosen[path];
+                if let Some(total) = chosen.get_mut(parent) {
+                    *total += share;
+                }
+            }
+        }
+        Ok(folders
+            .iter()
+            .map(|f| OwnFolder {
+                tick: qurb_storage::chosen::tick(&choices, &f.path).into(),
+                chosen_bytes: chosen[f.path.as_str()],
+                path: f.path.clone(),
+                files: f.files,
+                bytes: f.bytes,
             })
             .collect())
     }
@@ -4190,13 +4247,6 @@ mod tests {
         for bad in ["", "/data/data/com.qurb", "../secrets", "DCIM/../..", "DCIM//Camera", ".thumbnails", "DCIM/.trash", "Android/data/com.whatsapp", "Android/obb"] {
             assert!(!choosable(bad), "{bad} accepted");
         }
-    }
-
-    /// A folder inside another chosen one is backed up with it, once.
-    #[test]
-    fn a_folder_inside_a_chosen_one_is_not_backed_up_twice() {
-        let chosen = vec!["DCIM/Camera".to_string(), "DCIM".to_string(), "DCIMX".to_string(), "Documents".to_string()];
-        assert_eq!(outermost(chosen), vec!["DCIM", "DCIMX", "Documents"]);
     }
 
     /// Collected from, a pass stays whether or not it reached anybody itself;

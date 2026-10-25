@@ -735,6 +735,9 @@ qurb/
 │   │   └── src/
 │   │       ├── sealed.rs    a guest's files as the computer keeping them sees
 │   │       │                them: sealed names, sealed chunks (0060)
+│   │       ├── chosen.rs    which of a phone's folders are backed up, read
+│   │       │                as a tree from its choices: the deepest
+│   │       │                choice decides (0063, amended)
 │   │       ├── chunker.rs   split at content-defined boundaries, hash
 │   │       ├── format.rs    compress, then encrypt (the on-disk format)
 │   │       ├── cas.rs       payloads to and from chunks/<2 hex>/<full hex>
@@ -947,8 +950,10 @@ qurb/
 │       │                  AdvancedScreen.kt   rendezvous, relay, version
 │       │                  Backups.kt          a backup's state for its card, and
 │       │                                      WhatsApp's details and setting up
-│       │                  FoldersScreen.kt    Your folders: which of the phone's
-│       │                                      folders back up, chosen here (0063)
+│       │                  FoldersScreen.kt    Folders: which of the phone's
+│       │                                      folders back up, chosen here as a
+│       │                                      tree, what is chosen kept above
+│       │                                      the tab bar (0063)
 │       │                  KeptScreen.kt       Your folder on saqib: what the
 │       │                                      computer keeps for this phone, a
 │       │                                      hundred files at a time, opened,
@@ -1224,7 +1229,7 @@ for the workspace as it stands.
 | Requests answered in parallel | the index is asked under the store's lock, the bytes read after it is let go (`Store::locate`, `ChunkReader`), so requests made at once are read at once — [0064](decisions/0064-many-small-files-quickly.md) |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
-| A phone's folders, chosen on a computer | `Folders`: a computer keeping a phone's vault asks what folders it has, answered to that computer only; `Chosen`: the phone asks which were ticked for it, about itself only. Backed up under `.qurb-outside/storage/<folder>/`, kept when deleted on the phone — [0063](decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md) |
+| A phone's folders, chosen on a computer | `Folders`: a computer keeping a phone's vault asks what folders it has, at any depth, answered to that computer only; `Chosen`: the phone asks which were ticked for it, about itself only. Chosen as a tree: the deepest choice decides a folder, and a choice sets every choice inside it (`qurb_storage::chosen`, `tests/lifecycle.rs` `folders_are_chosen_as_a_tree`). Backed up under `.qurb-outside/storage/<folder>/`, kept when deleted on the phone — [0063](decisions/0063-backing-up-a-phones-folders-chosen-on-the-desktop.md) |
 | Every reachable address offered | LAN, overlay network and public, raced in parallel; the local ones offered again within seconds of changing |
 | Signalling that reconnects | a rendezvous restart costs seconds, not a daemon restart |
 | Local discovery | encrypted beacons; two devices on one network need no server at all |

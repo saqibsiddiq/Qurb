@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A checkbox ticked, or partly: the folder tree's (the redesign's Checkbox,
+     Checked and Partial). The mark goes over it. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/green" />
+    <corners android:radius="7dp" />
+</shape>

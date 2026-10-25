@@ -1460,7 +1460,11 @@ pub struct PhoneFolder {
     path: String,
     files: u64,
     size: String,
+    /// Its own files backed up: the deepest choice at or above it
+    /// (`qurb_storage::chosen`).
     chosen: bool,
+    /// Some of what is inside it chosen otherwise than it is.
+    partial: bool,
     kept_files: u64,
     kept: String,
 }
@@ -1506,13 +1510,20 @@ pub fn phone_folders(hosted: Host<'_>, phone: String) -> Answer<PhoneFolders> {
         .with_store(|store| {
             let db = store.db();
             let (folders, seen_at) = db.known_folders(&device.id)?;
-            let chosen = db.chosen_for(&device.id)?;
+            // A phone says its folders at any depth since the tree of the
+            // owner's list of 2026-10-24; this window still shows two levels
+            // until the desktop's redesign is built.
+            let listed: std::collections::HashSet<String> = folders.iter().map(|f| f.path.clone()).collect();
+            let choices: Vec<_> =
+                db.choices_for(&device.id)?.into_iter().filter(|c| listed.contains(&c.folder)).collect();
             let folders = folders
                 .into_iter()
+                .filter(|f| f.path.matches('/').count() < 2)
                 .map(|f| {
                     let (kept_files, kept) = db.held_outside_for(&device.id, &kept_prefix(&f.path)).unwrap_or((0, 0));
                     PhoneFolder {
-                        chosen: chosen.contains(&f.path),
+                        chosen: qurb_storage::chosen::backed_up(&choices, &f.path),
+                        partial: qurb_storage::chosen::tick(&choices, &f.path) == qurb_storage::chosen::Tick::Some,
                         size: big(f.bytes),
                         kept: big(kept),
                         path: f.path,

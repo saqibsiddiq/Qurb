@@ -6,7 +6,7 @@
 //! do test is everything on this side of the boundary: that the sequence an app
 //! actually performs works, and that the memory promise holds.
 
-use qurb_mobile::{create, is_set_up, restore, Available, Qurb, QurbError};
+use qurb_mobile::{create, is_set_up, restore, Available, FolderTick, Qurb, QurbError};
 use qurb_storage::{ChunkKey, Store};
 
 fn scratch() -> tempfile::TempDir {
@@ -843,7 +843,7 @@ fn folders_chosen_on_the_computer_are_backed_up_where_they_lie() {
     put("top.txt", 1 << 20);
     let shared = storage.path().display().to_string();
 
-    // What the computer is shown: folders two deep, hidden ones left out.
+    // What the computer is shown: folders at any depth, hidden ones left out.
     qurb.list_folders(shared.clone()).unwrap();
     let store = Store::open(&dir.path().join(".qurb"), chunk_key_of(dir.path())).unwrap();
     let shown: Vec<(String, u64, u64)> =
@@ -874,4 +874,65 @@ fn folders_chosen_on_the_computer_are_backed_up_where_they_lie() {
     // Not among the person's own files.
     assert!(qurb.browse_in(String::new(), true).unwrap().folders.is_empty());
     assert_eq!(qurb.usage().unwrap().logical, 0);
+}
+
+/// The folders as a tree (the owner's list of 2026-10-24, item 1): listed at
+/// any depth; a folder unticked inside a ticked one left out of the backup,
+/// and one ticked again inside that taken; each folder's mark and how much
+/// of it is chosen, as the tree draws them.
+#[test]
+fn folders_are_chosen_as_a_tree() {
+    let dir = scratch();
+    let storage = scratch();
+    let root = dir.path().display().to_string();
+    create(root.clone()).unwrap();
+    let laptop = pair_with_somebody(dir.path(), "laptop", 0x3D);
+    let qurb = Qurb::open(root, None).unwrap();
+    qurb.add_holder(laptop).unwrap();
+    let put = |relative: &str, size: usize| {
+        let path = storage.path().join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        write_incompressible(&path, size);
+        let earlier = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        std::fs::File::options().write(true).open(&path).unwrap().set_modified(earlier).unwrap();
+    };
+    put("Download/setup.zip", 1 << 20);
+    put("Download/ADM/2025/a.mkv", 3 << 20);
+    put("Download/ADM/old/b.mkv", 2 << 20);
+    put("Download/Telegram/c.pdf", 1 << 20);
+    put("Music/song.mp3", 1 << 20);
+    let shared = storage.path().display().to_string();
+    qurb.list_folders(shared.clone()).unwrap();
+    let paths: Vec<String> = qurb.own_folders().unwrap().into_iter().map(|f| f.path).collect();
+    assert_eq!(paths, ["Download", "Download/ADM", "Download/ADM/2025", "Download/ADM/old", "Download/Telegram", "Music"]);
+
+    // All of Download, then ADM unticked, then ADM/2025 ticked again: the
+    // tree of the redesign's second screen.
+    qurb.choose_folder("Download".into(), true).unwrap();
+    qurb.choose_folder("Download/ADM".into(), false).unwrap();
+    qurb.choose_folder("Download/ADM/2025".into(), true).unwrap();
+    let marks: Vec<(String, FolderTick, u64)> =
+        qurb.own_folders().unwrap().into_iter().map(|f| (f.path, f.tick, f.chosen_bytes)).collect();
+    assert_eq!(
+        marks,
+        vec![
+            ("Download".into(), FolderTick::Some, 5 << 20),
+            ("Download/ADM".into(), FolderTick::Some, 3 << 20),
+            ("Download/ADM/2025".into(), FolderTick::All, 3 << 20),
+            ("Download/ADM/old".into(), FolderTick::None, 0),
+            ("Download/Telegram".into(), FolderTick::All, 1 << 20),
+            ("Music".into(), FolderTick::None, 0),
+        ]
+    );
+    assert_eq!(qurb.chosen_folders().unwrap(), vec!["Download".to_string()]);
+
+    let run = qurb.back_up_chosen(shared.clone(), 60).unwrap();
+    assert_eq!((run.added, run.failed, run.remaining), (3, 0, 0), "{run:?}");
+    assert_eq!(run.bytes_read, 5 << 20, "old's file read, or another left out");
+
+    // Ticked again, the whole of it: everything inside, old included.
+    qurb.choose_folder("Download".into(), true).unwrap();
+    assert!(qurb.own_folders().unwrap().iter().filter(|f| f.path.starts_with("Download")).all(|f| f.tick == FolderTick::All));
+    let run = qurb.back_up_chosen(shared, 60).unwrap();
+    assert_eq!((run.added, run.unchanged), (1, 3), "{run:?}");
 }

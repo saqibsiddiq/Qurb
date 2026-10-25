@@ -1197,13 +1197,22 @@ impl Db {
     }
 
     /// Choose, or stop choosing, one of this device's folders to back up,
-    /// here (item 10): the later choice wins wherever it was made.
+    /// here (item 10): the later choice wins wherever it was made. Every
+    /// choice inside it is set the same way, so that the folder is all
+    /// backed up, or none of it ([`crate::chosen`]).
     pub fn choose_here(&self, folder: &str, chosen: bool, at_ms: i64) -> Result<()> {
-        self.conn.execute(
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
             "INSERT INTO own_choices (folder, chosen, changed_at) VALUES (?1, ?2, ?3)
              ON CONFLICT (folder) DO UPDATE SET chosen = excluded.chosen, changed_at = excluded.changed_at",
             params![folder, chosen as i64, at_ms],
         )?;
+        tx.execute(
+            "UPDATE own_choices SET chosen = ?2, changed_at = ?3
+              WHERE substr(folder, 1, length(?1) + 1) = ?1 || '/'",
+            params![folder, chosen as i64, at_ms],
+        )?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -1272,13 +1281,22 @@ impl Db {
         Ok((folders, seen))
     }
 
-    /// Tick, or untick, a phone's folder to back up, here, now.
+    /// Tick, or untick, a phone's folder to back up, here, now, and every
+    /// choice inside it the same way, as on the phone ([`choose_here`](Self::choose_here)).
     pub fn choose_folder(&self, device: &DeviceId, folder: &str, chosen: bool) -> Result<()> {
-        self.conn.execute(
+        let at = now_ms();
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute(
             "INSERT INTO phone_choices (device_id, folder, chosen, changed_at) VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT (device_id, folder) DO UPDATE SET chosen = excluded.chosen, changed_at = excluded.changed_at",
-            params![device.as_bytes().as_slice(), folder, chosen as i64, now_ms()],
+            params![device.as_bytes().as_slice(), folder, chosen as i64, at],
         )?;
+        tx.execute(
+            "UPDATE phone_choices SET chosen = ?3, changed_at = ?4
+              WHERE device_id = ?1 AND substr(folder, 1, length(?2) + 1) = ?2 || '/'",
+            params![device.as_bytes().as_slice(), folder, chosen as i64, at],
+        )?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -5106,6 +5124,36 @@ mod tests {
         computer.choose_folder(&device, "DCIM/Camera", true).unwrap();
         phone.merge_choices_here(&computer.choices_for(&device).unwrap()).unwrap();
         assert!(phone.chosen_here().unwrap().contains(&"DCIM/Camera".to_string()));
+    }
+
+    /// Ticking or unticking a folder sets every choice inside it the same
+    /// way, on the phone and on the computer, so that it is all of it or none
+    /// ([`crate::chosen`]); a folder whose name only starts the same is not
+    /// inside it.
+    #[test]
+    fn a_choice_takes_everything_inside_it() {
+        let phone = Db::open_in_memory().unwrap();
+        phone.choose_here("Download/ADM", false, 1_000).unwrap();
+        phone.choose_here("Download/ADM/2025", true, 1_000).unwrap();
+        phone.choose_here("Downloads", false, 1_000).unwrap();
+        phone.choose_here("Download", true, 2_000).unwrap();
+        let mut rows = phone.choices_here().unwrap();
+        rows.sort_by(|a, b| a.folder.cmp(&b.folder));
+        assert_eq!(
+            rows.iter().map(|c| (c.folder.as_str(), c.chosen, c.changed_at)).collect::<Vec<_>>(),
+            vec![("Download", true, 2_000), ("Download/ADM", true, 2_000), ("Download/ADM/2025", true, 2_000), ("Downloads", false, 1_000)]
+        );
+
+        let computer = Db::open_in_memory().unwrap();
+        let device = DeviceId::from_bytes([3; 32]);
+        computer.merge_choices_for(&device, &rows).unwrap();
+        computer.choose_folder(&device, "Download", false).unwrap();
+        let theirs = computer.choices_for(&device).unwrap();
+        assert!(theirs.iter().filter(|c| c.folder.starts_with("Download/") || c.folder == "Download").all(|c| !c.chosen));
+        assert!(theirs.iter().any(|c| c.folder == "Downloads" && !c.chosen));
+        // Taken back to the phone: the later word, everything inside included.
+        phone.merge_choices_here(&theirs).unwrap();
+        assert!(phone.chosen_here().unwrap().is_empty());
     }
 
     /// The questions asked for every file a device serves find their rows

@@ -1426,7 +1426,10 @@ fn a_phone_changes_its_own_folder_on_the_computer() {
     });
     assert!(phone.recently_deleted().unwrap().iter().all(|d| d.path != "Archive/renamed.txt"));
     assert!(on_the_computer().is_none());
-    assert!(shows("Archive", "renamed.txt"), "deleted there again");
+    // Looked at again until seen: a look that cannot connect in time says
+    // "not there" too, and under a loaded machine one did (2026-10-25). A
+    // deletion taken again would stay, and this would time out on it.
+    until("still there, not deleted again", &|| shows("Archive", "renamed.txt"));
 
     match phone.delete_kept("nothing.txt".into()) {
         Err(qurb_mobile::QurbError::Refused { .. }) => {}

@@ -1,6 +1,7 @@
 # 0063 — Backing up a phone's folders, chosen on the desktop
 
-**Status:** Accepted, 2026-10-14, with the owner's answers below. Built the
+**Status:** Accepted, 2026-10-14, with the owner's answers below. Amended
+2026-10-25: chosen as a tree, at any depth (below). Built the
 same day, all four steps, and seen on the S23 and the laptop: "All files
 access" measured on the S23 first
 ([experiments/file-access-speed](../../experiments/file-access-speed/README.md)),
@@ -203,6 +204,50 @@ through the real requests, `a_choice_made_on_either_side_reaches_the_other`.
 The clocks are the devices' own; two choices of the same folder within a
 clock's error of each other could go either way, which for a choice a person
 makes by hand is accepted.
+
+## Amended 2026-10-25: chosen as a tree
+
+Item 1 of the owner's list of 2026-10-24: "in previous version, there was no
+proper folder hierarchy while selecting folders to backup". The redesign
+drew it as a tree ([design/redesign.md](../design/redesign.md), *Folders to
+back up, a tree*): every folder opens, to any depth; a tick for all of it, a
+dash for some of what is inside, empty for none; ticking a folder takes
+everything inside it, folders added later too.
+
+- **The phone lists its folders at every depth**, each with what is beneath
+  it, from the same one walk; a folder with no file beneath it is not listed.
+  The `Folders` answer carries them all; the message cap is 64 MiB.
+- **The deepest choice decides** (`qurb_storage::chosen`). A folder is backed
+  up by the nearest choice at or above it, so a folder inside a ticked one
+  can be unticked, and one inside that ticked again. Before, a choice inside
+  a ticked folder meant nothing and the desktop showed it fixed.
+- **Ticking or unticking a folder sets every choice inside it the same way**,
+  at the same moment (`Db::choose_here` on the phone, `Db::choose_folder` on
+  the computer), so that it is all of it or none. The choices are still
+  rows of a folder, ticked or not, and when, the later winning wherever it
+  was made: nothing changed in what the two asks carry, and a build from
+  before reads the rows as it always did, though it would back up an
+  unticked folder inside a ticked one.
+- **A backup walks each ticked folder not inside another once**, taking the
+  files whose folder the deepest choice says is backed up. What was kept of
+  a folder since unticked stays on the computer while the computer has it,
+  as with a folder unticked at the top.
+- **The tree's marks** come from the same rows: a dash where a choice inside
+  a folder says otherwise than the folder does, counting only folders still
+  listed, so that one deleted or emptied does not leave a dash for good.
+
+The phone's *Folders* page is the tree; the desktop's sheet follows the same
+rule two levels deep, each switch a folder's own, until the desktop's
+redesign gives it the tree. Tested: the rule itself (`chosen.rs`), a choice
+taking everything inside it on both sides and across a merge
+(`a_choice_takes_everything_inside_it`), and the phone's side end to end with
+a folder unticked inside a ticked one and one ticked again deeper, the marks
+and the chosen sizes as the redesign's second screen draws them, and the
+backup leaving out exactly that folder's file (`folders_are_chosen_as_a_tree`).
+Checked on the emulator: the tree as drawn, at three levels, light and dark;
+the run on the phone queuing five files for the computer, the unticked
+folder's left out. **Not checked:** on the S23, or with the desktop's sheet;
+a phone with thousands of folders (the S23 listed 28 at two levels).
 
 ## Reversing it
 

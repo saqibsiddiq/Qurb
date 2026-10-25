@@ -251,72 +251,64 @@ async function openPhoneFolders(d) {
     `The folders you choose are kept here, in ${d.name}'s Private Vault: over Wi-Fi, and files ` +
     "deleted on the phone stay here."));
   box.append(el("div", "list-label", `On ${d.name}, as it said ${when(answer.seen_at)}`));
+  const says = el("p", "says warn hidden");
   const picks = el("div", "group glass-frosted");
-  const inputs = [];
-  for (const f of answer.folders) {
-    const item = el("label", "item");
-    const label = el("div", "label");
-    const depth = f.path.split("/").length;
-    if (depth > 1) label.style.paddingLeft = "24px";
-    label.append(el("strong", null, depth > 1 ? base(f.path) : f.path));
-    const facts = `${count(f.files, "file")}, ${size(f.size)}` + (f.kept_files ? ` · ${count(f.kept_files, "file")} kept here` : "");
-    const meta = el("p", "meta", facts);
-    label.append(meta);
-    const sw = el("span", "switch");
-    const input = el("input");
-    input.type = "checkbox";
-    input.value = f.path;
-    input.checked = f.chosen;
-    sw.append(input, el("span"));
-    item.append(icon("folder"), label);
-    // Before the switch, so that the switches stay in one column.
-    if (f.chosen && f.kept_files) {
-      const look = button("Open", "btn small ghost");
-      look.addEventListener("click", (event) => {
-        event.preventDefault();
-        // In the owner's folder in Files, which opens with a yes on the
-        // phone (decision 0067).
-        box.close();
-        showScreen("files");
-        filesBrowser.openPerson("owner", `${d.name}/${f.path}`);
+  // Each switch is the folder's own: ticking or unticking it takes every
+  // folder inside it the same way, and a folder inside can be set apart
+  // again, as on the phone's tree. Drawn again after each change, so that
+  // what a change did inside is what shows.
+  const draw = (folders) => {
+    picks.replaceChildren();
+    for (const f of folders) {
+      const item = el("label", "item");
+      const label = el("div", "label");
+      const depth = f.path.split("/").length;
+      if (depth > 1) label.style.paddingLeft = "24px";
+      label.append(el("strong", null, depth > 1 ? base(f.path) : f.path));
+      const facts = `${count(f.files, "file")}, ${size(f.size)}` + (f.kept_files ? ` · ${count(f.kept_files, "file")} kept here` : "");
+      label.append(el("p", "meta", f.partial ? `${facts} · some of it chosen` : facts));
+      const sw = el("span", "switch");
+      const input = el("input");
+      input.type = "checkbox";
+      input.value = f.path;
+      input.checked = f.chosen;
+      sw.append(input, el("span"));
+      item.append(icon("folder"), label);
+      // Before the switch, so that the switches stay in one column.
+      if ((f.chosen || f.partial) && f.kept_files) {
+        const look = button("Open", "btn small ghost");
+        look.addEventListener("click", (event) => {
+          event.preventDefault();
+          // In the owner's folder in Files, which opens with a yes on the
+          // phone (decision 0067).
+          box.close();
+          showScreen("files");
+          filesBrowser.openPerson("owner", `${d.name}/${f.path}`);
+        });
+        item.append(look);
+      }
+      item.append(sw);
+      picks.append(item);
+      // At once, as every switch in Qurb is: there is no Save to miss. On
+      // the owner's first try (2026-10-14) Save sat below a long list's edge,
+      // and the folder he ticked was never chosen.
+      input.addEventListener("change", async () => {
+        says.classList.add("hidden");
+        try {
+          await invoke("choose_phone_folder", { phone: d.fingerprint, folder: input.value, chosen: input.checked });
+          toast(input.checked
+            ? `${input.value} is backed up from the next time ${d.name} syncs`
+            : `${input.value} backs up nothing new`);
+          draw((await invoke("phone_folders", { phone: d.fingerprint })).folders);
+        } catch (e) {
+          input.checked = !input.checked;
+          says.textContent = String(e);
+          says.classList.remove("hidden");
+        }
       });
-      item.append(look);
-    }
-    item.append(sw);
-    picks.append(item);
-    inputs.push({ input, meta, facts });
-  }
-  // A folder inside a chosen one is backed up with it: shown ticked, fixed,
-  // and saying so, so that the two cannot disagree.
-  const cover = () => {
-    for (const one of inputs) {
-      const outer = inputs.find((o) => o !== one && o.input.checked && !o.input.disabled
-        && one.input.value.startsWith(`${o.input.value}/`));
-      one.input.disabled = Boolean(outer);
-      if (outer) one.input.checked = true;
-      one.meta.textContent = outer ? `Backed up with ${outer.input.value}` : one.facts;
     }
   };
-  // At once, as every switch in Qurb is: there is no Save to miss. On the
-  // owner's first try (2026-10-14) Save sat below a long list's edge, and the
-  // folder he ticked was never chosen.
-  const says = el("p", "says warn hidden");
-  inputs.forEach(({ input }) => input.addEventListener("change", async () => {
-    cover();
-    says.classList.add("hidden");
-    try {
-      await invoke("choose_phone_folder", { phone: d.fingerprint, folder: input.value, chosen: input.checked });
-      toast(input.checked
-        ? `${input.value} is backed up from the next time ${d.name} syncs`
-        : `${input.value} backs up nothing new`);
-    } catch (e) {
-      input.checked = !input.checked;
-      cover();
-      says.textContent = String(e);
-      says.classList.remove("hidden");
-    }
-  }));
-  cover();
+  draw(answer.folders);
   box.append(says, picks);
   box.append(el("p", "note", "Unticked, a folder backs up nothing new. What is kept here already stays."));
 }
