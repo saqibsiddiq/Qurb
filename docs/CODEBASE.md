@@ -936,10 +936,10 @@ qurb/
 │       │                  Keeping.kt          keeping the Private Vault on a
 │       │                                      device, and stopping, asked alike
 │       │                                      from Backups and a device's page
-│       │                  FilesHome.kt        Files: This phone (Vault, Received,
-│       │                                      Deleted as tiles), each computer's
-│       │                                      Shared, then Devices, this phone's
-│       │                                      folder on each computer (0073)
+│       │                  FilesHome.kt        Files: This phone (Vault, Received
+│       │                                      as tiles), then Remote access, each
+│       │                                      computer opening to its Shared or
+│       │                                      this phone's Private folder there
 │       │                  FilesScreen.kt      the Private Vault: each file's
 │       │                                      state as an icon, its size; still
 │       │                                      carries the shared area's browsing,
@@ -965,9 +965,10 @@ qurb/
 │       │                                      computer keeps for this phone, a
 │       │                                      hundred files at a time, opened,
 │       │                                      downloaded or restored (0067); its
-│       │                                      Private Vault part renamed, moved,
-│       │                                      deleted, added to, and a backup
-│       │                                      deleted once gone here (0073)
+│       │                                      Private Vault part's files and
+│       │                                      folders renamed, copied, pasted,
+│       │                                      moved, deleted, added to, and a
+│       │                                      backup deleted once gone here
 │       │                  SharedScreen.kt     a computer's shared folder, live:
 │       │                                      search, folder tiles, files; a new
 │       │                                      folder, files added, renamed,
@@ -1226,7 +1227,7 @@ for the workspace as it stands.
 | A phone knows what its computer keeps | `confirm_kept`: each sync, a phone asks the computer keeping its vault about up to 64 of its files with no record of it keeping them, at random, and records each yes; a `Got` lost with a connection had left 130 of the S23's WhatsApp files "still to go" for good — [0062](decisions/0062-backing-up-whatsapp.md) |
 | A computer's shared folder, from phones | `Shared { dir }`, `Search { within }`, and `SharedMkdir`, `SharedMove`, `SharedDelete`, `Upload`/`UploadDone` (pieces of at most 4 MiB, checked against the hash before placing): the owner's phones and every guest's open, search and change the computer's shared folder live, nothing copied to the phone; each change made by the computer on its own folder, a deletion to its Recently deleted naming the device, refused with a reason a person can read (`Response::Refused`); `crates/storage/src/shared_folder.rs`, `tests/hostile.rs` — [0073](decisions/0073-the-phone-works-with-its-computer.md) |
 | A phone out of the shared area | the engine's `shared_area` switch, off on a phone (`Settings::shared_area`): a sync takes nothing of others' shared files, everything added goes into the phone's vault, and opening runs `Store::leave_shared_area` -- a shared file a computer keeps forgotten here with no tombstone, so deleted nowhere else, its bytes here only once the computer, asked at a sync, has said it holds them; one only the phone has moved into its vault; the area's tombstones and rules forgotten; each run finds less (`tests/leaving_shared.rs`, `out_of_the_shared_area.rs`, `a_phone_leaves_the_shared_area`) — [0073](decisions/0073-the-phone-works-with-its-computer.md) |
-| A phone changes its own folder there | by changing its own vault, which the computer follows at the next sync: rename and move (`Store::rename_file`, and `rename_freed` for a file freed to the computer -- a new version on the same chunks, no byte crossing), delete (`delete_kept`, to the phone's own Recently deleted, bytes or none, and a Private Vault file to the computer's as well, restored from either; a backup only once its original is gone from the phone), add files, search the whole folder (`Search { within: Kept }`); the app syncs at once after each (`tests/freed_rename.rs`, `tests/freed_deletion.rs`, `tests/held_deletion.rs`, `a_phone_changes_its_own_folder_on_the_computer`) — [0073](decisions/0073-the-phone-works-with-its-computer.md) |
+| A phone changes its own folder there | by changing its own vault, which the computer follows at the next sync, files and whole folders alike: copy and paste (`Store::copy_in_vault`, a freed file's copy on the same chunks), rename and move (`Store::move_in_vault` over`Store::rename_file`, and `rename_freed` for a file freed to the computer -- a new version on the same chunks, no byte crossing), delete (`delete_kept`, to the phone's own Recently deleted, bytes or none, and a Private Vault file to the computer's as well, restored from either; a backup only once its original is gone from the phone), add files, search the whole folder (`Search { within: Kept }`); the app syncs at once after each (`tests/freed_rename.rs`, `tests/freed_deletion.rs`, `tests/held_deletion.rs`, `a_phone_changes_its_own_folder_on_the_computer`) — [0073](decisions/0073-the-phone-works-with-its-computer.md) |
 | The relay carries meetings | one relay connection, several names: a device's own and one per meeting with another person's device, so a computer reaches a guest it cannot dial — [0061](decisions/0061-the-relay-carries-meetings.md) |
 | Staying on the relay | the connection dialled again when it goes, from one second doubling to a minute, every name registered again; a relay down at start kept, known down, and not dialled through until up — tested by restarting a relay under a socket ([0068](decisions/0068-the-rendezvous-service-relays.md), amended 2026-10-18) |
 | A list fetched only when it changed | `TreeDigest`: the fingerprint of the list a device would send; the asker keeps each device's last list (`trees`) and fetches only a changed one, so a pass with nothing changed received 24 KiB rather than 9.8 MB on the S23 — [0071](decisions/0071-a-file-list-fetched-only-when-it-changed.md) |

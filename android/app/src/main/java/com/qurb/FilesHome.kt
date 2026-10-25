@@ -16,10 +16,12 @@ import kotlinx.coroutines.withContext
 import uniffi.qurb_mobile.PeerInfo
 
 /**
- * Files, as Files draft 4 has it (decision 0073): *This phone* -- its Vault,
- * what was sent to it, what was deleted -- then each computer's *Shared*
- * folder, reached live, then *Devices*, this phone's folder on each of its
- * computers. A phone keeps no shared files since 0073, so nothing here is a
+ * Files (the owner's list of 2026-10-26, items 9 to 12): *This phone* -- its
+ * Vault and what was sent to it; Recently deleted is in Settings -- then
+ * *Remote access*: each computer, its circle's dot blue when it is on and red
+ * when it is off, which opens to its *Shared* folder, reached live, or to
+ * *Private*, this phone's own folder there, which only this phone opens. A
+ * phone keeps no shared files since decision 0073, so nothing here is a
  * folder of the phone's own but its Vault.
  */
 class FilesHome(app: MainActivity) : Screen(app) {
@@ -52,35 +54,41 @@ class FilesHome(app: MainActivity) : Screen(app) {
             LinearLayout.LayoutParams(0, kit.dp(92), 1f))
         places.addView(place(R.drawable.ic_download, "Received") { app.push(ReceivedScreen(app)) },
             LinearLayout.LayoutParams(0, kit.dp(92), 1f).apply { marginStart = kit.dp(10) })
-        places.addView(place(R.drawable.ic_trash_2, "Deleted") { app.push(DeletedScreen(app)) },
-            LinearLayout.LayoutParams(0, kit.dp(92), 1f).apply { marginStart = kit.dp(10) })
         page.addView(places)
 
-        // Each computer's shared folder: the owner's computers, and any this
-        // phone visits.
+        // Each computer: the owner's, and any this phone visits as a guest.
         val computers = peers.filter { it.relation == "host" || (it.relation == "own" && it.kind == "computer") }
         if (computers.isNotEmpty()) {
-            kit.label(page, "Shared", top = 20)
+            kit.label(page, "Remote access", top = 20)
+            // Rectangular cards, the device's icon in its tile and the dot by
+            // its name, blue on and red off: not circles here (the owner,
+            // 2026-10-26: "list the devices as it is listing right").
             for (computer in computers) {
-                kit.deviceCard(page, R.drawable.ic_users, "Shared", Engine.isOff(app, computer), null,
-                    keeps = listOf(Kit.Keeps(States.device(computer.name, computer.kind), computer.name)),
-                    end = R.drawable.ic_chevron_right) { app.push(SharedScreen(app, computer)) }
-                    .contentDescription = "Shared, on ${computer.name}"
-            }
-        }
-
-        // This phone's folder on each of its own computers.
-        val own = computers.filter { it.relation == "own" }
-        if (own.isNotEmpty()) {
-            kit.label(page, "Devices", top = 20)
-            for (computer in own) {
                 val off = Engine.isOff(app, computer)
                 kit.deviceCard(page, States.device(computer.name, computer.kind), computer.name, off,
                     computer.lastSeen?.let { Words.since(it) }, end = R.drawable.ic_chevron_right) {
-                    app.push(KeptScreen(app, computer))
+                    open(computer)
                 }.contentDescription = "${computer.name}, ${if (off) "off" else "on"}"
             }
         }
+    }
+
+    /**
+     * A computer's two folders, to choose between (item 11): its Shared
+     * folder, and this phone's own private one there -- which a computer this
+     * phone only visits as a guest keeps none of, so it opens Shared alone.
+     */
+    private fun open(computer: PeerInfo) {
+        if (computer.relation == "host") return app.push(SharedScreen(app, computer))
+        kit.sheet()
+            .header(States.device(computer.name, computer.kind), computer.name, "")
+            .action(R.drawable.ic_users, "Shared") {
+                app.push(SharedScreen(app, computer))
+            }
+            .action(R.drawable.ic_lock_keyhole, "Private") {
+                app.push(KeptScreen(app, computer))
+            }
+            .show()
     }
 
     /** One of this phone's places, as a tile (the redesign's Place tile):

@@ -1127,6 +1127,22 @@ every other; and **build directly**, not Figma first. Item by item:
 - **8, Activity.** In Settings, under App; each file told once and 30 days
   kept (`db::told_once`, `forget_old_activity`), on the desktop and the
   command line as well.
+- **9-12, Files.** *This phone* is Vault and Received; Deleted is in
+  Settings, and the Shared section is gone. *Remote access* lists each
+  computer as the rectangular card it was -- not a circle, which the owner
+  asked for when he saw the first build -- its dot blue on and red off;
+  tapped, a sheet of two, *Shared* and *Private*, Private being this phone's
+  own folder there. A computer this phone only visits opens to Shared.
+- **13, Private.** In the Private Vault part, a file's sheet has *Copy* as
+  well as Rename, Move to folder and Delete; a folder, held, has Rename,
+  Copy, Move to folder and Delete, each for everything in it; anything
+  copied gives every folder a *Paste* row at the top, with a cross to forget
+  it. Each is this phone's own vault changing, the computer following
+  (`Store::copy_in_vault`, `Store::move_in_vault`, `delete_kept` on a folder;
+  a backup's files are not copied or moved, decision 0073). A copy of a file
+  freed to the computer points at the same chunks: no byte crosses. **Not
+  built: a new empty folder**, which the index cannot hold; moving or pasting
+  into a new name makes one.
 - **14, Shared.** A phone sees the files in the computer's folder on disk,
   not every row its index has (`Db::shared_entries_here`).
 - **15, the Devices tab, gone.** Three tabs. What it held is the circle's:
@@ -1140,6 +1156,10 @@ every other; and **build directly**, not Figma first. Item by item:
   for the open tab.
 
 **Checked** on the emulator: Home, the list on holding the circle, a
-device's page on tapping it, each with the circle and its red dot.
-**Not yet:** items 7 (pictures and names between devices), 9-13 (Files),
-16, 17 and 19, and item 20's animations.
+device's page on tapping it, each with the circle and its red dot; Files
+with Remote access and its sheet; against the command line built for
+Android as the computer, in Private: *notes2.txt* moved into a new *Work*,
+*notes1.txt* copied and pasted into it, *Work* renamed *Projects* with both
+inside, and *Projects* deleted, both in the phone's Recently deleted.
+**Not yet:** items 7 (pictures and names between devices), 16, 17 and 19,
+and item 20's animations.

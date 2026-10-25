@@ -2163,6 +2163,25 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
+    /// The live files of this device's own vault at `prefix`: the file of
+    /// that name, or every file in the folder of that name, by path; `""`
+    /// for all of them. What a
+    /// folder of the phone's folder on a computer is, changed from the phone
+    /// (the owner's list of 2026-10-26, item 13).
+    pub fn own_vault_paths_under(&self, prefix: &str) -> Result<Vec<String>> {
+        let me = self.local_device()?;
+        let prefix = prefix.trim_matches('/');
+        let pattern = format!("{prefix}/%");
+        let mut stmt = self.conn.prepare(
+            "SELECT path FROM files
+              WHERE deleted_at IS NULL AND scope = ?3
+                AND (?1 = '' OR path = ?1 OR path LIKE ?2 ESCAPE '\\')
+              ORDER BY path",
+        )?;
+        let rows = stmt.query_map(params![prefix, escape_like(&pattern), me.as_bytes().as_slice()], |r| r.get(0))?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
     // -- local identity and version vectors ----------------------------------
 
     /// Create this device's identity if it does not already have one.

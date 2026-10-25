@@ -259,7 +259,7 @@ pub fn place(store: &mut Store, device: &DeviceId, staged: &Path, path: &str, co
 }
 
 /// `Photos/beach.jpg` as `Photos/beach (n).jpg`.
-fn numbered(path: &str, n: u32) -> String {
+pub(crate) fn numbered(path: &str, n: u32) -> String {
     let (dir, name) = match path.rsplit_once('/') {
         Some((dir, name)) => (format!("{dir}/"), name),
         None => (String::new(), path),

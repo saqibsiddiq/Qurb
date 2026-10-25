@@ -318,6 +318,17 @@ fn whatsapp_prefix() -> String {
     format!("{}/whatsapp", qurb_storage::db::OUTSIDE)
 }
 
+/// A backup's files are not copied or moved from the phone's folder on a
+/// computer, nor anything into the backups' place: a backup follows its
+/// original on the phone (decision 0073, *Backups in a phone's folder there*).
+fn refuse_backup(from: &str, to: &str) -> Result<(), QurbError> {
+    let outside = format!("{}/", qurb_storage::db::OUTSIDE);
+    if from.starts_with(&outside) || to.starts_with(&outside) || to.is_empty() {
+        return Err(QurbError::Refused { detail: "a backup follows the phone's own files, and is not moved or copied here".into() });
+    }
+    Ok(())
+}
+
 /// Whether a folder a computer chose can be backed up: a plain folder of the
 /// phone's shared storage, named from its root. Nothing absolute, nothing
 /// climbing out with `..`, nothing hidden, and not the two folders Android
@@ -1359,21 +1370,49 @@ impl Qurb {
     /// phone: while it is here, the next backup would put the copy back, so
     /// that is refused with why. Never a file kept for this phone before it
     /// was set up again, which is another device's.
+    ///
+    /// A folder is each file in it, deleted the same way (the owner's list
+    /// of 2026-10-26, item 13); one still read from outside refuses the lot,
+    /// before any goes.
     pub fn delete_kept(&self, path: String) -> Result<(), QurbError> {
-        let path = qurb_watcher::normalize(&path);
+        let path = qurb_watcher::normalize(path.trim_matches('/'));
         let mut engine = self.engine()?;
-        let me = engine.store().device_id()?;
-        match engine.store().db().folder_row(&path)? {
-            Some((_, Some(owner))) if owner == me => {}
-            _ => return Err(QurbError::Refused { detail: "only this phone's own files can be deleted from here".into() }),
+        let files = engine.store().db().own_vault_paths_under(&path)?;
+        if files.is_empty() {
+            return Err(QurbError::Refused { detail: "only this phone's own files can be deleted from here".into() });
         }
-        if engine.store().db().read_from_outside(&path)? {
-            return Err(QurbError::Refused {
-                detail: "it is still on this phone, and the next backup would bring it back".into(),
-            });
+        for file in &files {
+            if engine.store().db().read_from_outside(file)? {
+                return Err(QurbError::Refused {
+                    detail: "it is still on this phone, and the next backup would bring it back".into(),
+                });
+            }
         }
-        engine.store_mut().delete_to_trash(&path, None)?;
+        for file in files {
+            engine.store_mut().delete_to_trash(&file, None)?;
+        }
         Ok(())
+    }
+
+    /// Copy a file or folder of this phone's own Private Vault, in its folder
+    /// on a computer (the owner's list of 2026-10-26, item 13): this phone's
+    /// vault changes, and the computer follows at the next sync, a copy of a
+    /// freed file costing no transfer (`Store::copy_in_vault`). Not a
+    /// backup's, which follows its original on the phone. Returns where it
+    /// went, numbered when `to` was taken.
+    pub fn copy_kept(&self, from: String, to: String) -> Result<String, QurbError> {
+        let (from, to) = (qurb_watcher::normalize(from.trim_matches('/')), qurb_watcher::normalize(to.trim_matches('/')));
+        refuse_backup(&from, &to)?;
+        Ok(self.engine()?.store_mut().copy_in_vault(&from, &to)?)
+    }
+
+    /// Move or rename a file or folder of this phone's own Private Vault, in
+    /// its folder on a computer (item 13), each file as `rename` moves it.
+    /// Returns how many files moved.
+    pub fn move_kept(&self, from: String, to: String) -> Result<u32, QurbError> {
+        let (from, to) = (qurb_watcher::normalize(from.trim_matches('/')), qurb_watcher::normalize(to.trim_matches('/')));
+        refuse_backup(&from, &to)?;
+        Ok(self.engine()?.store_mut().move_in_vault(&from, &to)? as u32)
     }
 
     /// This device's own identity, in the short form a device's page shows

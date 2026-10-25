@@ -2306,6 +2306,80 @@ impl Store {
         self.rename_in_folder(&root, from, to, scope)
     }
 
+    /// Copy a file or folder of this device's own vault to `to` -- each file
+    /// to the same place under it -- as a change made here (the owner's list
+    /// of 2026-10-26, item 13: a phone copying and pasting in its folder on a
+    /// computer). A file whose bytes are here is copied on disk; one freed to
+    /// the computer becomes a version pointing at the same chunks, which that
+    /// computer already holds, so not a byte crosses. `to` taken, the copy is
+    /// numbered, `notes (2).txt`. Returns where it went.
+    pub fn copy_in_vault(&mut self, from: &str, to: &str) -> Result<String> {
+        let (from, to) = (from.trim_matches('/'), to.trim_matches('/'));
+        let Some(root) = self.tree.clone() else {
+            return Err(Error::NotFound { path: from.to_string() });
+        };
+        let me = self.device_id()?;
+        let files = self.db.own_vault_paths_under(from)?;
+        if files.is_empty() {
+            return Err(Error::NotFound { path: from.to_string() });
+        }
+        let taken = |store: &Self, path: &str| -> Result<bool> {
+            Ok(store.db.own_vault_paths_under(path)?.iter().any(|p| p == path || p.starts_with(&format!("{path}/")))
+                || store.db.folder_row(path)?.is_some()
+                || root.join(path).exists())
+        };
+        let mut target = to.to_string();
+        let mut n = 2;
+        while taken(self, &target)? {
+            target = crate::shared_folder::numbered(to, n);
+            n += 1;
+        }
+        if !qurb_sync::is_safe_path(&target) || qurb_sync::sharing::is_rule_path(&target) {
+            return Err(Error::Sharing { why: format!("{target:?} is not a name a file can have here") });
+        }
+        for file in files {
+            let rest = &file[from.len()..];
+            let into = format!("{target}{rest}");
+            let Some(row) = self.db.own_vault_row(&file)? else { continue };
+            if self.db.is_materialised(&file)? == Some(true) && root.join(&file).is_file() {
+                let disk = root.join(&into);
+                if let Some(parent) = disk.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+                }
+                std::fs::copy(root.join(&file), &disk).map_err(|e| Error::io(&disk, e))?;
+                self.put_file_in(&into, &disk, Some(me))?;
+            } else {
+                let manifest = self.listed_manifest(&row, &file)?;
+                let placement = Placement::local().in_vault(Some(&me)).by_reference();
+                self.put_manifest(&into, &manifest, &[], row.mtime_ns, placement)?;
+                self.db.set_materialised(&into, false)?;
+            }
+        }
+        Ok(target)
+    }
+
+    /// Move or rename a file or folder of this device's own vault: each file
+    /// to the same place under `to` ([`rename_file`](Self::rename_file)).
+    /// Refused when anything is already at `to`. Returns how many moved.
+    pub fn move_in_vault(&mut self, from: &str, to: &str) -> Result<usize> {
+        let (from, to) = (from.trim_matches('/'), to.trim_matches('/'));
+        if to == from || to.starts_with(&format!("{from}/")) {
+            return Err(Error::Sharing { why: format!("{from} cannot go inside itself") });
+        }
+        let files = self.db.own_vault_paths_under(from)?;
+        if files.is_empty() {
+            return Err(Error::NotFound { path: from.to_string() });
+        }
+        if !self.db.own_vault_paths_under(to)?.is_empty() || self.db.folder_row(to)?.is_some() {
+            return Err(Error::Sharing { why: format!("something is already called {to}") });
+        }
+        for file in &files {
+            let rest = &file[from.len()..];
+            self.rename_file(file, &format!("{to}{rest}"))?;
+        }
+        Ok(files.len())
+    }
+
     /// Rename a file of this device's own vault whose bytes are not here, as
     /// a change made here: the new path gets a version of its own pointing at
     /// the same chunks, which the device keeping the vault already holds, and
