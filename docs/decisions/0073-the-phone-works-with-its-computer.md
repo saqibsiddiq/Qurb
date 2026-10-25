@@ -408,6 +408,10 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   A sync the owner started on the S23 at 10:23:09, screen on, began five
   seconds before the laptop woke: the relay was still out, and the laptop's
   beacon was heard at 10:23:20, eleven seconds before the pass's window
-  closed, too late to finish. **Not yet seen:** a sync from the S23 with the
-  laptop awake, what becomes of the six files, and Files on the S23 as it
-  now is.
+  closed, too late to finish. Tapped again at 10:26 with the laptop awake:
+  on the relay at once, the laptop heard on the Wi-Fi a second later and
+  reached there (`192.168.1.4:57757`), its list of 38,141 files unchanged,
+  no error. The owner keeps the laptop's automatic suspend, so a phone's
+  pass while it sleeps fails this way by design. **Not yet seen:** what
+  becomes of the six files, settled at the engine's next opening now that a
+  pass has asked the laptop about them; and Files on the S23 as it now is.
