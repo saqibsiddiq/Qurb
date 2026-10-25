@@ -383,6 +383,22 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   S23 over its data at 00:07, over wireless debugging, while it was in use,
   without touching its screen. The S23 reached the laptop after that, so
   the new app has opened, and the laptop recorded no deletion from it.
-  **Not yet read:** the S23's log line *left the shared area* and its three
-  counts -- wireless debugging went off before it was looked for -- and Files
-  on the S23 as it now is.
+  Read from the S23's log at 04:50, over wireless debugging: *left the shared
+  area* at each opening from 02:29 on (the log held nothing older), each
+  time *dropped 0, moved 0, kept 6*. Nothing was deleted at those openings;
+  the first opening's counts, from before 02:29, are lost. The six are left
+  as they were, most likely files whose bytes are on the phone awaiting the
+  laptop's answer, which needs a sync. **And no sync has reached the laptop
+  since 00:08**, the rendezvous's last sight of the S23: every background
+  pass since (02:30, 03:34 on mobile data, 04:39) failed to open the relay
+  and rendezvous at `wss://saqib.tail86283c.ts.net` (*tls handshake eof*)
+  and found no beacon from the laptop, ending *reached 0, unreachable 1*.
+  From the laptop at the same hour the relay answered a WebSocket upgrade
+  (101) both directly and through Funnel's two public addresses, the phone
+  pinged the laptop on the Wi-Fi in 6 to 18 ms, and the laptop's window sent
+  its beacons every 20 seconds. Not caused by the network code, which this
+  work did not change; not yet explained. Two guesses, neither tested:
+  Android dropping multicast for an app in the background without a
+  multicast lock, and something in the phone's path to Funnel's edge.
+  **Not yet seen:** a sync from the S23 with its screen on, and Files on the
+  S23 as it now is.
