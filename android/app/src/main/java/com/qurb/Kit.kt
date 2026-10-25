@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.EditText
+import android.graphics.drawable.GradientDrawable
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -300,11 +301,62 @@ class Kit(private val app: AppCompatActivity) {
         return chip
     }
 
-    /** Whether a device answered the last pass: green if it did, grey if not. */
+    /** Whether a device answered the last pass: blue if it did, red if not
+     *  (the owner's list of 2026-10-26, items 6 and 12). */
     fun dot(off: Boolean): View = View(app).apply {
         background = ContextCompat.getDrawable(app, R.drawable.dot)
-        backgroundTintList = ColorStateList.valueOf(color(if (off) R.color.text_3 else R.color.healthy))
+        backgroundTintList = ColorStateList.valueOf(color(if (off) R.color.offline else R.color.online))
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    /**
+     * A device as a circle (the owner's list of 2026-10-26, items 5 to 7):
+     * its picture, or the first letter of its name on the soft green, and a
+     * dot on its edge, blue when it is on and red when it is off. With no
+     * device, a plus.
+     */
+    fun avatar(name: String?, off: Boolean, picture: android.graphics.Bitmap?, size: Int = 40): FrameLayout {
+        val box = FrameLayout(app).apply { clipChildren = false; clipToPadding = false }
+        val face = FrameLayout(app).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(color(R.color.green_soft))
+            }
+            clipToOutline = true
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+        }
+        when {
+            picture != null -> face.addView(ImageView(app).apply {
+                setImageBitmap(picture)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            name != null -> face.addView(TextView(app).apply {
+                text = name.trim().take(1).uppercase()
+                gravity = Gravity.CENTER
+                setTextAppearance(R.style.Text_Title)
+                textSize = size * 0.42f
+                setTextColor(color(R.color.green))
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            else -> face.addView(ImageView(app).apply {
+                setImageResource(R.drawable.ic_plus)
+                imageTintList = ColorStateList.valueOf(color(R.color.green))
+            }, FrameLayout.LayoutParams(dp(size / 2), dp(size / 2), Gravity.CENTER))
+        }
+        box.addView(face, FrameLayout.LayoutParams(dp(size), dp(size), Gravity.CENTER))
+        if (name != null) {
+            // On the circle's edge, ringed in the page's colour so that it
+            // reads apart from a picture.
+            box.addView(View(app).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(color(if (off) R.color.offline else R.color.online))
+                    setStroke(dp(2), color(R.color.bg))
+                }
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.BOTTOM or Gravity.END))
+        }
+        box.contentDescription = name?.let { "$it, ${if (off) "off" else "on"}" } ?: "Add a device"
+        return box
     }
 
     /** A search field (the redesign's Search): its icon, then what is
@@ -366,8 +418,11 @@ class Kit(private val app: AppCompatActivity) {
      * a tick on the one chosen.
      */
     fun deviceCard(parent: ViewGroup, peer: PeerInfo, off: Boolean, chosen: Boolean, onTap: () -> Unit): View {
-        val card = deviceCard(parent, States.device(peer.name, peer.kind), peer.name, off,
-            peer.lastSeen?.let { Words.since(it) }, end = if (chosen) R.drawable.ic_circle_check else null, onTap = onTap)
+        // Its circle, as Home shows the chosen one, whose dot says whether
+        // it is on (the owner's list of 2026-10-26, items 6 and 7).
+        val card = deviceCard(parent, States.device(peer.name, peer.kind), peer.name, null,
+            peer.lastSeen?.let { Words.since(it) }, end = if (chosen) R.drawable.ic_circle_check else null,
+            lead = avatar(peer.name, off, Devices.picture(app, peer), 48), onTap = onTap)
         card.contentDescription = "${peer.name}, ${if (off) "off" else "on"}${if (chosen) ", chosen" else ""}"
         if (chosen) card.background = ContextCompat.getDrawable(app, R.drawable.card_chosen)
         return card
@@ -390,9 +445,11 @@ class Kit(private val app: AppCompatActivity) {
         since: String?,
         keeps: List<Keeps> = emptyList(),
         @DrawableRes end: Int? = null,
+        /** In the icon's place: a device's circle. */
+        lead: View? = null,
         onTap: (() -> Unit)?,
     ): View {
-        val card = cardShell(R.drawable.card, icon)
+        val card = cardShell(R.drawable.card, icon, lead)
         val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
         val line = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -483,7 +540,7 @@ class Kit(private val app: AppCompatActivity) {
         return card
     }
 
-    private fun cardShell(@DrawableRes background: Int, @DrawableRes icon: Int): LinearLayout {
+    private fun cardShell(@DrawableRes background: Int, @DrawableRes icon: Int, lead: View? = null): LinearLayout {
         val card = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -491,6 +548,10 @@ class Kit(private val app: AppCompatActivity) {
             foreground = ContextCompat.getDrawable(app, R.drawable.row_bg)
             minimumHeight = dp(76)
             setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        if (lead != null) {
+            card.addView(lead, LinearLayout.LayoutParams(dp(52), dp(52)).apply { marginEnd = dp(14) })
+            return card
         }
         val tile = FrameLayout(app).apply { this.background = ContextCompat.getDrawable(app, R.drawable.tile_green) }
         tile.addView(ImageView(app).apply {

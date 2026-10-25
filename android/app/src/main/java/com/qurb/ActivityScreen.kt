@@ -30,14 +30,14 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
     override val view: View get() = views.root
-    override val tab = R.id.tab_home
+    override val tab = R.id.tab_settings
 
     /** How far back the history goes on screen. Grows with "Show older". */
     private var shown = PAGE
 
     init {
         views.back.visibility = View.VISIBLE
-        views.back.text = "Home"
+        views.back.text = "Settings"
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         views.title.text = "Activity"
         views.refresh.setColorSchemeResources(R.color.green)

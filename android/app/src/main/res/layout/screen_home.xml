@@ -30,41 +30,22 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <ImageView
-                    android:layout_width="28dp"
-                    android:layout_height="28dp"
-                    android:importantForAccessibility="no"
-                    android:src="@drawable/qurb_mark" />
-
+                <!-- The app's name alone: no mark, no buttons beside it (the
+                     owner's list of 2026-10-26, items 2 and 3). -->
                 <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
                     android:layout_weight="1"
-                    android:text="Qurb"
+                    android:text="QurbSpace"
                     android:textAppearance="@style/Text.Title" />
 
-                <ImageView
-                    android:id="@+id/backups"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginEnd="2dp"
-                    android:background="@drawable/row_bg"
-                    android:contentDescription="Backups"
-                    android:padding="10dp"
-                    android:src="@drawable/ic_hard_drive"
-                    app:tint="@color/text" />
-
-                <ImageView
-                    android:id="@+id/activity"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:layout_marginEnd="-10dp"
-                    android:background="@drawable/row_bg"
-                    android:contentDescription="Activity"
-                    android:padding="10dp"
-                    android:src="@drawable/ic_clock"
-                    app:tint="@color/text" />
+                <!-- The chosen device as a circle (items 5 to 7): tapped, its
+                     page; held, the list to choose another. -->
+                <FrameLayout
+                    android:id="@+id/avatar"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
             </LinearLayout>
 
             <!-- Above and below the state: equal, so that it sits in the
@@ -124,14 +105,6 @@
                 android:textColor="@color/green"
                 android:visibility="gone" />
 
-            <!-- The device chosen here; tapping it chooses another. -->
-            <FrameLayout
-                android:id="@+id/device"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="12dp" />
-
             <LinearLayout
                 android:id="@+id/actions"
                 android:layout_width="match_parent"
@@ -139,32 +112,19 @@
                 android:layout_marginTop="28dp"
                 android:orientation="horizontal">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/sync"
-                    style="@style/Widget.Qurb.Button.Secondary"
-                    android:layout_width="0dp"
-                    android:layout_height="52dp"
-                    android:layout_marginEnd="16dp"
-                    android:layout_weight="1"
-                    android:text="Sync"
-                    android:textColor="@color/text"
-                    app:backgroundTint="@color/surface"
-                    app:cornerRadius="26dp"
-                    app:icon="@drawable/ic_refresh_cw"
-                    app:iconGravity="textStart"
-                    app:iconTint="@color/text"
-                    app:strokeColor="@color/border" />
-
+                <!-- One big Send (item 1); the mark above syncs. -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/send"
                     style="@style/Widget.Qurb.Button"
                     android:layout_width="0dp"
-                    android:layout_height="52dp"
+                    android:layout_height="60dp"
                     android:layout_weight="1"
                     android:text="Send"
-                    app:cornerRadius="26dp"
+                    android:textSize="17sp"
+                    app:cornerRadius="30dp"
                     app:icon="@drawable/ic_send"
-                    app:iconGravity="textStart" />
+                    app:iconGravity="textStart"
+                    app:iconSize="22dp" />
             </LinearLayout>
 
             <!-- No device yet: the one thing to do. -->

@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""Write the Android app's icons, as vector drawables, from Lucide.
+"""Write the Android app's icons, as vector drawables, from Phosphor.
 
-The same icons the desktop window uses (docs/design/direction.md §10), drawn
-the same way -- a 1.75 stroke, round caps and joins, no fill -- so the two apps
-match. Only the icons named below are written; the app carries nothing else.
+Phosphor since the owner's list of 2026-10-26 (item 20, "different icon
+pack"; chosen from four when asked): rounded and even, with the weights the
+app uses -- regular for icons, light for the marks drawn large on Home, fill
+for the tab that is open. The app's icons keep the names they had under
+Lucide, so that no screen changes for the swap; NAMES says which Phosphor
+icon each one is now. Only the icons named below are written.
 
-    npm pack lucide-static && tar -xzf lucide-static-*.tgz
-    ./scripts/android-icons.py package
+    mkdir phosphor && cd phosphor && npm pack @phosphor-icons/core && tar -xzf *.tgz
+    ./scripts/android-icons.py phosphor/package
 
 Each icon is android/app/src/main/res/drawable/ic_<name>.xml, dashes as
-underscores, drawn in the app's secondary text colour; a view that wants
-another colour tints it. The few drawn large inside Home's status mark are
-written again as mark_<name>.xml, 60 dp across with the stroke thinned to
-match: a vector's stroke grows with it, and at 60 dp the 1.75 stroke would be
-4.4 dp, heavier than the redesign draws it (docs/design/redesign.md). Lucide draws with circles, rectangles, lines and
-polylines as well as paths, and a vector drawable knows only paths, so those
-are turned into path data here. Lucide is ISC-licensed; its notice is in each
-file.
+underscores, filled in the app's secondary text colour; a view that wants
+another colour tints it. The marks are mark_<name>.xml, 60 dp across, from
+Phosphor's light weight: its regular weight at that size reads heavier than
+the redesign draws them. The tabs' are ic_<name>_fill.xml as well, for the
+open tab. Phosphor is MIT-licensed; its notice is in each file. The desktop
+window still draws Lucide's (docs/design/direction.md section 10), until its
+redesign is built.
 """
 
 import re
@@ -24,16 +26,73 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-ICONS = """
-    house folder folder-open folder-plus folder-input monitor-smartphone settings
-    send arrow-up-down lock-keyhole search arrow-left ellipsis download cloud-off
-    cloud check git-compare trash-2 clock rotate-ccw triangle-alert circle-alert
-    x chevron-right laptop smartphone upload external-link key-round qr-code
-    keyboard refresh-cw pencil copy circle-check info plus file file-text
-    file-image file-video file-audio file-archive file-code hard-drive history
-    save bell palette sliders-horizontal shield-check link chevron-down wifi
-    arrow-down arrow-up flashlight users
-""".split()
+# The app's name for each icon, and the Phosphor icon it is.
+NAMES = {
+    "house": "house",
+    "folder": "folder",
+    "folder-open": "folder-open",
+    "folder-plus": "folder-plus",
+    "folder-input": "arrow-square-in",
+    "monitor-smartphone": "devices",
+    "settings": "gear-six",
+    "send": "paper-plane-tilt",
+    "arrow-up-down": "arrows-down-up",
+    "lock-keyhole": "lock-key",
+    "search": "magnifying-glass",
+    "arrow-left": "arrow-left",
+    "ellipsis": "dots-three",
+    "download": "download-simple",
+    "cloud-off": "cloud-slash",
+    "cloud": "cloud",
+    "check": "check",
+    "git-compare": "git-diff",
+    "trash-2": "trash",
+    "clock": "clock",
+    "rotate-ccw": "arrow-counter-clockwise",
+    "triangle-alert": "warning",
+    "circle-alert": "warning-circle",
+    "x": "x",
+    "chevron-right": "caret-right",
+    "chevron-down": "caret-down",
+    "laptop": "laptop",
+    "smartphone": "device-mobile",
+    "upload": "upload-simple",
+    "external-link": "arrow-square-out",
+    "key-round": "key",
+    "qr-code": "qr-code",
+    "keyboard": "keyboard",
+    "refresh-cw": "arrows-clockwise",
+    "pencil": "pencil-simple",
+    "copy": "copy",
+    "clipboard": "clipboard-text",
+    "circle-check": "check-circle",
+    "info": "info",
+    "plus": "plus",
+    "file": "file",
+    "file-text": "file-text",
+    "file-image": "file-image",
+    "file-video": "file-video",
+    "file-audio": "file-audio",
+    "file-archive": "file-zip",
+    "file-code": "file-code",
+    "hard-drive": "hard-drive",
+    "history": "clock-counter-clockwise",
+    "save": "floppy-disk",
+    "bell": "bell",
+    "palette": "palette",
+    "sliders-horizontal": "sliders-horizontal",
+    "shield-check": "shield-check",
+    "link": "link",
+    "wifi": "wifi-high",
+    "arrow-down": "arrow-down",
+    "arrow-up": "arrow-up",
+    "flashlight": "flashlight",
+    "users": "users",
+    "whatsapp": "whatsapp-logo",
+    "user-circle": "user-circle",
+    "camera": "camera",
+    "image": "image",
+}
 
 # Drawn at 60 dp in Home's status mark (the redesign's Status mark component).
 MARKS = """
@@ -42,74 +101,39 @@ MARKS = """
 """.split()
 MARK_SIZE = 60
 
+# The tabs', filled for the open one.
+FILLED = "house folder settings".split()
+
 OUT = Path(__file__).resolve().parent.parent / "android/app/src/main/res/drawable"
 
 NOTICE = (
-    "<!-- Generated by scripts/android-icons.py from lucide-static {version}. Do not edit.\n"
-    "     Lucide, ISC License, Copyright (c) Lucide Icons and Contributors. -->\n"
+    "<!-- Generated by scripts/android-icons.py from @phosphor-icons/core {version} ({icon}, {weight}).\n"
+    "     Do not edit. Phosphor Icons, MIT License, Copyright (c) 2023 Phosphor Icons. -->\n"
 )
 
 
-def num(x: float) -> str:
-    return f"{x:g}"
-
-
-def shape_to_path(tag: str, a: dict) -> str | None:
-    """The path data for one SVG shape, or None for one this cannot draw."""
-    f = lambda k, d=0.0: float(a.get(k, d))
-    if tag == "path":
-        return a["d"]
-    if tag in ("circle", "ellipse"):
-        cx, cy = f("cx"), f("cy")
-        rx = f("r") if tag == "circle" else f("rx")
-        ry = f("r") if tag == "circle" else f("ry")
-        return (f"M{num(cx - rx)},{num(cy)} a{num(rx)},{num(ry)} 0 1,0 {num(2 * rx)},0 "
-                f"a{num(rx)},{num(ry)} 0 1,0 {num(-2 * rx)},0")
-    if tag == "rect":
-        x, y, w, h = f("x"), f("y"), f("width"), f("height")
-        rx = f("rx", f("ry"))
-        ry = f("ry", rx)
-        if rx == 0:
-            return f"M{num(x)},{num(y)} h{num(w)} v{num(h)} h{num(-w)} Z"
-        return (f"M{num(x + rx)},{num(y)} H{num(x + w - rx)} A{num(rx)},{num(ry)} 0 0 1 {num(x + w)},{num(y + ry)} "
-                f"V{num(y + h - ry)} A{num(rx)},{num(ry)} 0 0 1 {num(x + w - rx)},{num(y + h)} "
-                f"H{num(x + rx)} A{num(rx)},{num(ry)} 0 0 1 {num(x)},{num(y + h - ry)} "
-                f"V{num(y + ry)} A{num(rx)},{num(ry)} 0 0 1 {num(x + rx)},{num(y)} Z")
-    if tag == "line":
-        return f"M{num(f('x1'))},{num(f('y1'))} L{num(f('x2'))},{num(f('y2'))}"
-    if tag in ("polyline", "polygon"):
-        points = re.findall(r"-?[\d.]+", a["points"])
-        pairs = [f"{points[i]},{points[i + 1]}" for i in range(0, len(points), 2)]
-        return "M" + " L".join(pairs) + (" Z" if tag == "polygon" else "")
-    return None
-
-
-def drawable(svg: str, version: str, size: int = 24) -> str:
-    root = ET.fromstring(re.sub(r"<!--.*?-->", "", svg, flags=re.S))
+def drawable(svg: str, version: str, icon: str, weight: str, size: int = 24) -> str:
+    root = ET.fromstring(svg)
     paths = []
     for el in root.iter():
         tag = el.tag.split("}")[-1]
         if tag == "svg":
             continue
-        d = shape_to_path(tag, el.attrib)
-        if d is None:
-            raise SystemExit(f"cannot draw a <{tag}>")
+        if tag != "path":
+            raise SystemExit(f"{icon}: cannot draw a <{tag}>")
         paths.append(
             "    <path\n"
-            f'        android:pathData="{d}"\n'
-            '        android:strokeColor="@color/text_2"\n'
-            f'        android:strokeWidth="{num(round(1.75 * 24 / size, 3))}"\n'
-            '        android:strokeLineCap="round"\n'
-            '        android:strokeLineJoin="round" />'
+            f'        android:pathData="{el.attrib["d"]}"\n'
+            '        android:fillColor="@color/text_2" />'
         )
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'
-        + NOTICE.format(version=version)
+        + NOTICE.format(version=version, icon=icon, weight=weight)
         + '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
         f'    android:width="{size}dp"\n'
         f'    android:height="{size}dp"\n'
-        '    android:viewportWidth="24"\n'
-        '    android:viewportHeight="24">\n'
+        '    android:viewportWidth="256"\n'
+        '    android:viewportHeight="256">\n'
         + "\n".join(paths)
         + "\n</vector>\n"
     )
@@ -120,13 +144,20 @@ def main() -> None:
         sys.exit(__doc__)
     package = Path(sys.argv[1])
     version = re.search(r'"version":\s*"([^"]+)"', (package / "package.json").read_text()).group(1)
-    for name in ICONS:
-        svg = (package / "icons" / f"{name}.svg").read_text()
-        (OUT / f"ic_{name.replace('-', '_')}.xml").write_text(drawable(svg, version))
+
+    def write(name: str, weight: str, file: str, size: int = 24) -> None:
+        icon = NAMES[name]
+        suffix = "" if weight == "regular" else f"-{weight}"
+        svg = (package / "assets" / weight / f"{icon}{suffix}.svg").read_text()
+        (OUT / file).write_text(drawable(svg, version, icon, weight, size))
+
+    for name in NAMES:
+        write(name, "regular", f"ic_{name.replace('-', '_')}.xml")
     for name in MARKS:
-        svg = (package / "icons" / f"{name}.svg").read_text()
-        (OUT / f"mark_{name.replace('-', '_')}.xml").write_text(drawable(svg, version, MARK_SIZE))
-    print(f"wrote {len(ICONS)} icons and {len(MARKS)} large ones to {OUT}")
+        write(name, "light", f"mark_{name.replace('-', '_')}.xml", MARK_SIZE)
+    for name in FILLED:
+        write(name, "fill", f"ic_{name.replace('-', '_')}_fill.xml")
+    print(f"wrote {len(NAMES)} icons, {len(MARKS)} large ones and {len(FILLED)} filled to {OUT}")
 
 
 if __name__ == "__main__":

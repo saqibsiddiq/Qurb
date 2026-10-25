@@ -27,8 +27,9 @@ longer, because link-time optimisation does; the debug build stays quick.
 Designed from the owner's direction
 ([docs/design/direction.md](../docs/design/direction.md), decision
 [0048](../docs/decisions/0048-the-design-direction.md)), in the same language
-as the desktop window: Qurb green on a quiet environment, Inter, Lucide icons,
-glass surfaces. Four places under a floating tab bar, the places reached from
+as the desktop window: Qurb green on a quiet environment, Inter, glass
+surfaces; Phosphor icons since 2026-10-26, where the window still has Lucide's.
+Three places under a floating tab bar, the places reached from
 them, and the sheets that rise over them:
 
 | place | what it is for |

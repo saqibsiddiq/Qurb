@@ -922,13 +922,17 @@ qurb/
 │       │                                      the main thread
 │       │                  Errors.kt           an engine error, said for a screen
 │       │                  HomeScreen.kt       is the device chosen here up to
-│       │                                      date: its state as a mark, the
-│       │                                      device as a chip that chooses
-│       │                                      another, Sync and Send, what is
-│       │                                      waiting while anything is (0073)
-│       │                  BackupsScreen.kt    Backups, from Home's top bar: the
-│       │                                      device chosen on Home, and what goes
-│       │                                      to it, a card each
+│       │                                      date: QurbSpace, the device as a
+│       │                                      circle (tapped, its page; held,
+│       │                                      choose another), its state as a
+│       │                                      mark that syncs, one big Send,
+│       │                                      what is waiting while anything is
+│       │                  Devices.kt          devices' pictures, for their
+│       │                                      circles
+│       │                  BackupsScreen.kt    Backups: the device chosen on Home,
+│       │                                      and what goes to it, a card each;
+│       │                                      reached from no tab since Home's
+│       │                                      top bar went (2026-10-26)
 │       │                  Keeping.kt          keeping the Private Vault on a
 │       │                                      device, and stopping, asked alike
 │       │                                      from Backups and a device's page
@@ -942,10 +946,11 @@ qurb/
 │       │                                      no longer reached since 0073
 │       │                  ReceivedScreen.kt   what other devices sent to this
 │       │                                      phone, from the history, by sender
-│       │                  DevicesScreen.kt    the devices as cards: on or off, and
-│       │                                      what each keeps of this phone
-│       │                  DeviceScreen.kt     one device's page: Send, what it
-│       │                                      backs up, who it is, removing it
+│       │                  DeviceScreen.kt     one device's page, from Home's
+│       │                                      circle: what it backs up, who it
+│       │                                      is, removing it, behind the
+│       │                                      phone's lock (the Devices tab went,
+│       │                                      2026-10-26)
 │       │                  SettingsScreen.kt   four short groups: this phone (name,
 │       │                                      identity, key), storage, the app,
 │       │                                      connection
@@ -973,7 +978,8 @@ qurb/
 │       │                                      app as it arrives, seekable, read
 │       │                                      a chunk at a time
 │       │                  ActivityScreen.kt   everything this phone did, by day,
-│       │                                      from the clock on Home
+│       │                                      from Settings, each file told once,
+│       │                                      30 days
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
 │       │                                      change your mind, the days left on
 │       │                                      a clock
@@ -1042,7 +1048,7 @@ qurb/
 │       │                                      from the index; freed ones download
 │       │                                      when opened
 │       ├── main/res/      the design as resources: colours and glass by role,
-│       │                  Inter, Lucide icons (generated), the layouts
+│       │                  Inter, Phosphor icons (generated), the layouts
 │       ├── push/java/     being woken by Firebase — compiled only when a
 │       │                  google-services.json is present
 │       └── nopush/java/   the same surface, doing nothing, when it is not
@@ -1066,7 +1072,7 @@ qurb/
 ├── scripts/
 │   ├── android-app.sh     build the app: libraries, bindings, then Gradle
 │   ├── android-build.sh   cross-compile the engine for all four Android ABIs
-│   ├── android-icons.py   the Lucide icons the app uses, as vector drawables
+│   ├── android-icons.py   the Phosphor icons the app uses, as vector drawables
 │   ├── android-test.sh    run the test suite on a device, over adb: arm64,
 │   │                      x86_64, or 32-bit x86 on an x86_64 emulator
 │   ├── desktop-icons.py   the Lucide icons the window uses, as a sprite

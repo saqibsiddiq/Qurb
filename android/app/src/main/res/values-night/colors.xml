@@ -20,6 +20,8 @@
     <color name="green_soft">#1C2A24</color>
 
     <color name="healthy">#74C29B</color>
+    <color name="online">#5B9BF0</color>
+    <color name="offline">#EC6B6B</color>
     <color name="healthy_bg">#19291F</color>
     <color name="attention">#DCB064</color>
     <color name="attention_bg">#2D2617</color>

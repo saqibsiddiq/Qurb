@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Four places (direction §25). Private Vault is reached from Files, Activity
-     from Home, Transfers from a bar that appears only while something moves;
-     none of them takes a permanent slot. -->
+<!-- Three places since the owner's list of 2026-10-26 (item 15): devices are
+     reached from Home's circle, Activity from Settings, Transfers from a bar
+     that appears only while something moves; none takes a permanent slot. -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:id="@+id/tab_home" android:icon="@drawable/ic_house" android:title="Home" />
-    <item android:id="@+id/tab_files" android:icon="@drawable/ic_folder" android:title="Files" />
-    <item android:id="@+id/tab_devices" android:icon="@drawable/ic_monitor_smartphone" android:title="Devices" />
-    <item android:id="@+id/tab_settings" android:icon="@drawable/ic_settings" android:title="Settings" />
+    <item android:id="@+id/tab_home" android:icon="@drawable/tab_house" android:title="Home" />
+    <item android:id="@+id/tab_files" android:icon="@drawable/tab_folder" android:title="Files" />
+    <item android:id="@+id/tab_settings" android:icon="@drawable/tab_settings" android:title="Settings" />
 </menu>

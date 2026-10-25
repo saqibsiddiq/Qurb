@@ -118,8 +118,8 @@ class FoldersScreen(app: MainActivity, private val from: String, override val ta
 
         if (keeper == null) {
             kit.empty(page, R.drawable.ic_hard_drive,
-                "No computer keeps this phone's Private Vault yet. Choose one in Devices, and its folders back up to it.",
-                "Devices") { app.go(R.id.tab_devices) }
+                "No computer keeps this phone's Private Vault yet. Its folders back up to the one that does.",
+                "Choose") { app.openDevice() }
             return
         }
         if (!Folders.allowed(app)) {

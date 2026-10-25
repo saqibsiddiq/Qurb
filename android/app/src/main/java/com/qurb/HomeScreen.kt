@@ -58,11 +58,8 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             views.refresh.isRefreshing = false
             app.sync()
         }
-        views.sync.setOnClickListener { app.sync() }
         views.mark.setOnClickListener { app.sync() }
         views.add.setOnClickListener { app.pair() }
-        views.backups.setOnClickListener { app.push(BackupsScreen(app)) }
-        views.activity.setOnClickListener { app.push(ActivityScreen(app)) }
     }
 
     /** Everything the screen draws, read in one go off the main thread. */
@@ -162,12 +159,20 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             else -> hero(StatusMark.Look.SYNCED, R.drawable.mark_check, SYNCED)
         }
 
-        views.device.removeAllViews()
-        if (chosen != null) views.device.addView(kit.deviceChip(chosen, off) { kit.chooseDevice(state.peers, chosen) { refresh() } })
-        views.device.visibility = if (chosen == null) View.GONE else View.VISIBLE
+        // The chosen device, as a circle at the top (the owner's list of
+        // 2026-10-26, items 4 to 7): tapped, its page; held, the list to
+        // choose another, as the chip under the mark was.
+        views.avatar.removeAllViews()
+        views.avatar.addView(kit.avatar(chosen?.name, off, Devices.picture(app, chosen)),
+            android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        views.avatar.contentDescription = views.avatar.getChildAt(0).contentDescription
+        views.avatar.setOnClickListener { if (chosen != null) app.push(DeviceScreen(app, chosen)) else app.pair() }
+        views.avatar.setOnLongClickListener {
+            if (chosen != null) kit.chooseDevice(state.peers, chosen) { refresh() } else app.pair()
+            true
+        }
         views.actions.visibility = if (chosen == null) View.GONE else View.VISIBLE
         views.add.visibility = if (chosen == null) View.VISIBLE else View.GONE
-        views.sync.isEnabled = !app.syncing
         views.send.setOnClickListener { if (chosen != null) app.pickFilesToSend(chosen) }
         views.send.contentDescription = chosen?.let { "Send to ${it.name}" }
 

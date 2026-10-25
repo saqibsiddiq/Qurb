@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A tab's icon: filled while its tab is open, outlined otherwise
+     (Phosphor's fill and regular weights; the owner's list of 2026-10-26,
+     item 20). -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_house_fill" android:state_checked="true" />
+    <item android:drawable="@drawable/ic_house" />
+</selector>

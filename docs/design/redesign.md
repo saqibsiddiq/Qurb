@@ -1105,3 +1105,41 @@ His words, numbered as he gave them; the second 19 is counted as 20 here.
 20. "make sure to add some beautiful animations, different icon pack and
     maintain our symmetric and beautiful design langauge throughout all the
     changes"
+
+## Built: Android, the owner's list of 2026-10-26 (in progress)
+
+Built straight into the app, as he chose when asked; three questions answered
+first: **Phosphor** for item 20's icon pack, from four offered; **each
+device's own** name and picture for item 7, set on that device and shown on
+every other; and **build directly**, not Figma first. Item by item:
+
+- **1-4, Home.** *QurbSpace* on its own at the top left; no mark beside it,
+  no Backups or Activity at the right; the chip under the status mark gone;
+  one Send the width of the page, 60 dp tall. The mark still syncs when
+  tapped, and pulling down still syncs.
+- **5-7, the circle.** The chosen device at the top right as a circle: its
+  picture (none can be set yet: item 7's engine work is to come) or the first
+  letter of its name, and a dot on its edge, blue when it is on and red when
+  it is off -- the dot app-wide is blue and red now, as item 12 asks of
+  Files. Tapped, the device's page, without Send, its Remove in red; held,
+  the list of devices to choose from, with *Add a device*. The list and the
+  page show each device as its circle too.
+- **8, Activity.** In Settings, under App; each file told once and 30 days
+  kept (`db::told_once`, `forget_old_activity`), on the desktop and the
+  command line as well.
+- **14, Shared.** A phone sees the files in the computer's folder on disk,
+  not every row its index has (`Db::shared_entries_here`).
+- **15, the Devices tab, gone.** Three tabs. What it held is the circle's:
+  the list and *Add a device* on holding it, a device's page on tapping it;
+  where the app sent someone to Devices it opens the chosen device's page.
+- **18, Remove** asks for the phone's fingerprint, face or screen lock
+  (`ScreenLock`) after its sheet; a phone with no screen lock has the sheet
+  alone.
+- **20, Phosphor.** Every icon the app draws, by the names it had
+  (`scripts/android-icons.py`): regular, light for the large marks, filled
+  for the open tab.
+
+**Checked** on the emulator: Home, the list on holding the circle, a
+device's page on tapping it, each with the circle and its red dot.
+**Not yet:** items 7 (pictures and names between devices), 9-13 (Files),
+16, 17 and 19, and item 20's animations.

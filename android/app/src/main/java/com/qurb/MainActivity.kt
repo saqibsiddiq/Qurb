@@ -370,7 +370,6 @@ class MainActivity : AppCompatActivity() {
     private fun screenFor(tab: Int): Screen = screens.getOrPut(tab) {
         when (tab) {
             R.id.tab_files -> FilesHome(this)
-            R.id.tab_devices -> DevicesScreen(this)
             R.id.tab_settings -> SettingsScreen(this)
             else -> HomeScreen(this)
         }
@@ -885,6 +884,24 @@ class MainActivity : AppCompatActivity() {
      * The code carries the other device's whole identity, which is why it
      * travels across the room by camera rather than over the network.
      */
+    /**
+     * The chosen device's page, as Home's circle opens it, from wherever a
+     * device is to be chosen or set up -- the Devices tab, which did this,
+     * went (the owner's list of 2026-10-26, item 15). With none paired, the
+     * way to pair one.
+     */
+    fun openDevice() {
+        lifecycleScope.launch {
+            val chosen = runCatching {
+                withContext(Dispatchers.IO) {
+                    val engine = Engine.open(this@MainActivity)
+                    Engine.chosen(this@MainActivity, engine.peers(), engine.holders())
+                }
+            }.getOrNull()
+            if (chosen != null) push(DeviceScreen(this@MainActivity, chosen)) else pair()
+        }
+    }
+
     fun pair() {
         // Scanning first, because it is what anyone will actually do; showing
         // a code is how two phones connect with no computer; typing is the
@@ -1260,7 +1277,7 @@ class MainActivity : AppCompatActivity() {
 
     private companion object {
         const val TAB = "tab"
-        val TABS = setOf(R.id.tab_home, R.id.tab_files, R.id.tab_devices, R.id.tab_settings)
+        val TABS = setOf(R.id.tab_home, R.id.tab_files, R.id.tab_settings)
 
         /** The folder is scanned again on coming back only after this long. */
         const val SCAN_AGAIN_MS = 30_000L

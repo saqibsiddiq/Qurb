@@ -41,7 +41,7 @@ class Backups(private val app: MainActivity, private val refresh: () -> Unit) {
                 .title("Back up WhatsApp", centred = true)
             if (keeper == null) {
                 sheet.line("No device keeps this phone's Private Vault yet: the backup goes to it")
-                    .buttons("Devices", secondary = "Not now") { app.go(R.id.tab_devices) }
+                    .buttons("Choose", secondary = "Not now") { app.openDevice() }
                     .show()
                 return
             }

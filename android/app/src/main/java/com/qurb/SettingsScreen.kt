@@ -131,6 +131,9 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         card = kit.card(page)
         // One switch, and no words under it (the owner, 2026-10-24: "lets
         // keep notification one switch only"). On means asked of Android too.
+        // What happened, moved here from Home's top bar (the owner's list of
+        // 2026-10-26, item 8): 30 days of it, each file told once.
+        kit.setting(card, R.drawable.ic_clock, "Activity") { app.push(ActivityScreen(app)) }
         kit.setting(card, R.drawable.ic_bell, "Notifications",
             on = Notices.enabled(app) && Notices.permitted(app), onChange = { on ->
                 Notices.setEnabled(app, on)

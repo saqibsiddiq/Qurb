@@ -34,14 +34,16 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
     override val view: View get() = views.root
-    override val tab = R.id.tab_devices
+    // Reached from Home's circle since the Devices tab went (the owner's
+    // list of 2026-10-26, item 15).
+    override val tab = R.id.tab_home
 
     private val backups = Backups(app) { refresh() }
     private val keeping = Keeping(app) { refresh() }
 
     init {
         views.back.visibility = View.VISIBLE
-        views.back.text = "Devices"
+        views.back.text = "Home"
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         views.title.visibility = View.GONE
         views.refresh.setColorSchemeResources(R.color.green)
@@ -95,15 +97,9 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val tile = FrameLayout(app).apply {
-            background = ContextCompat.getDrawable(app, R.drawable.tile_green)
-        }
-        tile.addView(ImageView(app).apply {
-            setImageResource(States.device(peer.name, peer.kind))
-            imageTintList = ColorStateList.valueOf(kit.color(R.color.green))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, FrameLayout.LayoutParams(kit.dp(34), kit.dp(34), Gravity.CENTER))
-        head.addView(tile, LinearLayout.LayoutParams(kit.dp(64), kit.dp(64)).apply { marginEnd = kit.dp(16) })
+        // Its circle, as Home's: its picture or first letter, and its dot.
+        head.addView(kit.avatar(peer.name, off, Devices.picture(app, peer), 64),
+            LinearLayout.LayoutParams(kit.dp(72), kit.dp(72)).apply { marginEnd = kit.dp(14) })
         val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
         words.addView(TextView(app).apply {
             text = peer.name
@@ -116,7 +112,6 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        state0.addView(kit.dot(off), LinearLayout.LayoutParams(kit.dp(8), kit.dp(8)).apply { marginEnd = kit.dp(6) })
         state0.addView(TextView(app).apply {
             text = if (off) "Off" else "On"
             setTextAppearance(R.style.Text_Meta)
@@ -141,8 +136,7 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = kit.dp(12) })
 
-        page.addView(kit.button("Send", icon = R.drawable.ic_send) { app.pickFilesToSend(peer) },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48)).apply { topMargin = kit.dp(20) })
+        // No Send here: Home's is the one (the owner's list of 2026-10-26, item 5).
 
         kit.label(page, "Backs up")
         val card = kit.card(page)
@@ -159,14 +153,15 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
             })
             kit.setting(card, R.drawable.ic_folder, "Folders",
                 if (state.folders > 0) state.folders.toString() else "") {
-                app.push(FoldersScreen(app, peer.name, R.id.tab_devices))
+                app.push(FoldersScreen(app, peer.name, R.id.tab_home))
             }
         }
         kit.setting(card, R.drawable.ic_lock_keyhole, "Private Vault", on = state.keeps, onChange = { on ->
             if (on) keeping.keep(peer) else keeping.stop(peer)
         })
 
-        page.addView(kit.button(if (host) "Stop visiting" else "Remove", Kit.Style.SECONDARY) { askToRemove() },
+        // In red, and behind the phone's own lock (items 5 and 18).
+        page.addView(kit.button(if (host) "Stop visiting" else "Remove", Kit.Style.DANGER) { askToRemove() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48)).apply { topMargin = kit.dp(20) })
     }
 
@@ -220,9 +215,21 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
                     Words.size(plan.keptBytes), on = false, onChange = { deleteKept = it })
                 sheet.view(card, top = 10)
             }
-            sheet.buttons(if (host) "Stop" else "Remove", danger = true) { remove(deleteKept) }
+            sheet.buttons(if (host) "Stop" else "Remove", danger = true) { confirmed { remove(deleteKept) } }
             sheet.show()
         }
+    }
+
+    /**
+     * The person confirming it is them before a device is removed: the
+     * phone's fingerprint, face or screen lock (the owner's list of
+     * 2026-10-26, item 18). A phone with no screen lock has nothing to ask
+     * with, and the sheet's own *Remove* is the answer.
+     */
+    private fun confirmed(then: () -> Unit) {
+        if (!ScreenLock.available(app)) return then()
+        ScreenLock.confirm(app, if (peer.relation == "host") "Stop visiting ${peer.name}" else "Remove ${peer.name}",
+            "Confirm it's you") { yes -> if (yes) then() }
     }
 
     private fun remove(deleteKept: Boolean) {

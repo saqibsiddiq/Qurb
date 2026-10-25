@@ -24,6 +24,10 @@
     <color name="glow_faint">#296FAF98</color>
 
     <color name="healthy">#287052</color>
+    <!-- Whether a device is on, as its dot says it (the owner's list of
+         2026-10-26, items 6 and 12): blue on, red off. -->
+    <color name="online">#2F7DE1</color>
+    <color name="offline">#D64545</color>
     <color name="healthy_bg">#E8F3EC</color>
     <color name="attention">#946A24</color>
     <color name="attention_bg">#F7F0DD</color>
