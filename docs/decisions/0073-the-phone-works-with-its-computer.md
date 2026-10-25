@@ -420,5 +420,9 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   pass while it sleeps fails this way by design. Reopened at 10:30: *dropped
   0, moved 0, kept 6* again, which is what changed the rule above for rows
   with no bytes on the phone, and put what leaving waits on first in the
-  asking. **Not yet seen:** the six settled by that build; and Files on the
-  S23 as it now is.
+  asking. That build (`9538f06`) installed on the S23 at 10:41, its first
+  opening logged *dropped 6, moved 0, kept 0*: six rows forgotten and no
+  file, since a confirmed drop of bytes needs the laptop to hold them and it
+  holds none of its shared files. The laptop stays on `bacf491`, whose
+  computer side is the same. **Not yet seen:** Files on the S23 as it now
+  is.
