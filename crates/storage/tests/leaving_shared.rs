@@ -108,3 +108,47 @@ fn bytes_here_go_only_on_the_computers_word() {
     assert!(matches!(phone.store.db().folder_row("freed-there.jpg").unwrap(), Some((_, Some(owner))) if owner == me));
     assert!(phone.root.join("freed-there.jpg").is_file(), "the last copy lost");
 }
+
+/// A row with no bytes on the phone goes whoever keeps it -- the S23 kept six
+/// such at every opening, listings of files no device had (2026-10-25) --
+/// and goes alone: a file at its path the index does not call its own stays,
+/// for the scan to take into the vault.
+#[test]
+fn a_row_with_no_bytes_here_goes_and_takes_nothing_with_it() {
+    let mut phone = Phone::new();
+    phone.add("nowhere.jpg", b"on no device now");
+    phone.store.db().set_materialised("nowhere.jpg", false).unwrap();
+    std::fs::remove_file(phone.root.join("nowhere.jpg")).unwrap();
+    phone.add("stray.txt", b"listed as freed");
+    phone.store.db().set_materialised("stray.txt", false).unwrap();
+    std::fs::write(phone.root.join("stray.txt"), b"something else put here").unwrap();
+
+    let left = phone.store.leave_shared_area().unwrap();
+    assert_eq!(left, LeftShared { dropped: 2, moved: 0, kept: 0 });
+    assert!(phone.store.db().shared_rows().unwrap().is_empty());
+    assert_eq!(std::fs::read(phone.root.join("stray.txt")).unwrap(), b"something else put here");
+    assert_eq!(phone.store.leave_shared_area().unwrap(), LeftShared::default());
+}
+
+/// What leaving waits on is asked before anything else a phone asks about:
+/// its freed files, WhatsApp's tens of thousands among them, would keep it
+/// waiting for weeks at sixteen a pass.
+#[test]
+fn what_leaving_waits_on_is_asked_first() {
+    let mut phone = Phone::new();
+    phone.store.set_new_files_private(true);
+    let computer = qurb_sync::DeviceId::from_bytes([8; 32]);
+    phone.store.db().set_peer_kind(&computer, "computer").unwrap();
+    for n in 0..40 {
+        let content = phone.add(&format!("freed-{n:02}.txt"), format!("freed {n}").as_bytes());
+        phone.store.db().note_replica(&content, &computer).unwrap();
+        phone.store.db().set_materialised(&format!("freed-{n:02}.txt"), false).unwrap();
+    }
+    phone.store.set_new_files_private(false);
+    let waiting = phone.add("zz-shared.jpg", b"a shared file with its bytes here");
+    phone.store.db().note_replica(&waiting, &computer).unwrap();
+
+    let asked = phone.store.db().unconfirmed_holdings(&computer, 16).unwrap();
+    assert_eq!(asked.len(), 16);
+    assert_eq!(asked[0], waiting, "{asked:?}");
+}

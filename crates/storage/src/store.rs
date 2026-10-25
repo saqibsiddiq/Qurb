@@ -332,14 +332,14 @@ fn remove_emptied(root: &Path, dir: &Path) {
 /// What a phone leaving the shared area did ([`Store::leave_shared_area`]).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct LeftShared {
-    /// Files a computer keeps, let go of here.
+    /// Files let go of here: their bytes not here, or kept by a computer
+    /// that said so when asked.
     pub dropped: usize,
     /// Files only this phone had, moved into its own vault.
     pub moved: usize,
-    /// Files neither: their bytes not here, and no computer known to keep
-    /// them; or their bytes here, and a computer recorded as keeping them
-    /// that has not said so when asked, which the next sync asks. Left as
-    /// they were, to be tried again at the next opening.
+    /// Files whose bytes are here and a computer is recorded as keeping,
+    /// that has not said so when asked: the next sync asks, and the next
+    /// opening lets go of them or moves them. Left as they were till then.
     pub kept: usize,
 }
 
@@ -2330,10 +2330,10 @@ impl Store {
     /// this phone has moves into its own vault, so nothing is lost. Its bytes
     /// here go only once that computer, asked, has said it holds them
     /// ([`Db::confirmed_safe_elsewhere`](crate::db::Db::confirmed_safe_elsewhere));
-    /// until then the file is left, and the next sync asks. The shared
-    /// area's tombstones and sharing rules are forgotten. One with neither
-    /// its bytes here nor a computer known to keep it is left as it is. Each
-    /// time it is run finds less to do.
+    /// until then the file is left, and the next sync asks. One whose bytes
+    /// are not here is forgotten whoever keeps it: that loses nothing. The
+    /// shared area's tombstones and sharing rules are forgotten. Each time it
+    /// is run finds less to do.
     pub fn leave_shared_area(&mut self) -> Result<LeftShared> {
         let mut left = LeftShared::default();
         let root = self.tree.clone();
@@ -2360,27 +2360,31 @@ impl Store {
                 continue;
             }
             let here = materialised && on_disk.as_ref().is_some_and(|f| f.is_file());
-            // Bytes here are let go of only on a computer's own word, asked:
-            // a record may be stale, and these may be the last copy. The
-            // owner's laptop had freed every one of its shared files before
-            // decision 0053, on the strength of the S23's copies, and the
-            // S23 may still record it as keeping them (2026-10-24). No bytes
-            // here, nothing is lost by forgetting the row.
-            let elsewhere = match here {
-                true => self.db.confirmed_safe_elsewhere(&content)?,
-                false => self.db.safe_copies_elsewhere(&content)? > 0,
-            };
-            if elsewhere {
+            if !here {
+                // No bytes of it here -- freed, or never fetched -- so
+                // forgetting the row loses nothing, whoever keeps it, and a
+                // phone out of the area would never fetch them now. Only the
+                // row: a file at its path the index does not call its own is
+                // left for the scan, which takes it into the vault. Left as
+                // they were, six such rows stayed on the S23 at every opening
+                // (2026-10-25).
+                self.db.forget_row(id)?;
+                left.dropped += 1;
+            } else if self.db.confirmed_safe_elsewhere(&content)? {
+                // Bytes here are let go of only on a computer's own word,
+                // asked: a record may be stale, and these may be the last
+                // copy. The owner's laptop had freed every one of its shared
+                // files before decision 0053, on the strength of the S23's
+                // copies, and the S23 may still record it as keeping them
+                // (2026-10-24).
                 forget(self)?;
                 left.dropped += 1;
-            } else if here && self.db.safe_copies_elsewhere(&content)? > 0 {
+            } else if self.db.safe_copies_elsewhere(&content)? > 0 {
                 // Recorded, not confirmed: asked at the next sync.
                 left.kept += 1;
-            } else if here {
+            } else {
                 self.move_area(&path, true)?;
                 left.moved += 1;
-            } else {
-                left.kept += 1;
             }
         }
         // Moving into the vault retires the shared row with a tombstone, to

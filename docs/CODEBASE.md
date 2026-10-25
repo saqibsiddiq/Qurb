@@ -425,8 +425,8 @@ sync takes nothing of other devices' shared files, and everything added goes
 into the phone's vault. On opening, `Store::leave_shared_area` lets go of
 each shared file a computer keeps -- row and bytes, with no tombstone, so it
 is deleted nowhere else; bytes only once that computer, asked, has said it
-holds them (`Db::confirmed_safe_elsewhere`) -- and moves one only the phone
-has into its vault.
+holds them (`Db::confirmed_safe_elsewhere`), and a row with no bytes on the
+phone whoever keeps it -- and moves one only the phone has into its vault.
 The phone reaches a computer's shared folder live instead (`Request::Shared`
 and the requests after it, `crates/storage/src/shared_folder.rs`), and
 changes its own folder on a computer by changing its own vault, which the

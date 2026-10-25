@@ -1585,15 +1585,22 @@ impl Db {
     /// is recorded as holding: leaving the shared area deletes those only
     /// once a computer has said so (decision 0073, item 2).
     pub fn unconfirmed_holdings(&self, device: &DeviceId, limit: usize) -> Result<Vec<blake3::Hash>> {
-        let leaving = match self.local_kind()?.as_deref() == Some("phone") {
-            true => "OR (f.scope IS NULL AND f.materialised = 1 AND r.private = 0)",
-            false => "",
+        // Asked first: a phone holds them back from leaving the shared area
+        // until answered, and the rest of what it asks about -- its freed
+        // files, WhatsApp's tens of thousands among them -- would keep them
+        // waiting for weeks at a few a pass.
+        let (leaving, first) = match self.local_kind()?.as_deref() == Some("phone") {
+            true => (
+                "OR (f.scope IS NULL AND f.materialised = 1 AND r.private = 0)",
+                "ORDER BY max(f.scope IS NULL AND f.materialised = 1) DESC",
+            ),
+            false => ("", ""),
         };
         // Not another person's device: what it holds is in its own vault,
         // which its server rightly shows nobody, and is never a copy this
         // device could ask for (decision 0060). Asking would only learn no.
         let mut stmt = self.conn.prepare(&format!(
-            "SELECT DISTINCT f.content_hash
+            "SELECT f.content_hash
                FROM files f
               WHERE f.deleted_at IS NULL
                 AND NOT EXISTS (SELECT 1 FROM peer_relations pr WHERE pr.device_id = ?1)
@@ -1616,6 +1623,7 @@ impl Db {
                               WHERE r.content_hash = f.content_hash AND r.device_id = ?1
                            ))
                     )
+              GROUP BY f.content_hash {first}
               LIMIT ?2"
         ))?;
         let rows = stmt.query_map(params![device.as_bytes().as_slice(), limit as i64], |r| {

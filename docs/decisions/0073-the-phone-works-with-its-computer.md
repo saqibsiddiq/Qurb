@@ -308,10 +308,15 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   a file may be stale and its own copy the last. So a file whose bytes are on
   the phone is let go of only once the computer, asked at a sync, has said it
   holds it (`Db::confirmed_safe_elsewhere`); until then it is left as it is,
-  and a phone's sync asks about such files (`unconfirmed_holdings`, 16 a
-  pass), a no moving it into the Vault at the next opening. A row whose bytes
-  are not on the phone still goes on the record alone: forgetting it loses
-  nothing. The area's deletions and sharing rules are forgotten, and
+  and a phone's sync asks about such files before anything else it asks
+  about (`unconfirmed_holdings`, 16 a pass), a no moving it into the Vault
+  at the next opening. A row whose bytes are not on the phone is forgotten,
+  whoever keeps it -- the row alone, never a file at its path the index does
+  not call its own: forgetting it loses nothing, and a phone out of the area
+  would never fetch it. (First built to forget such a row only when a
+  computer was recorded as keeping it; on the S23 six rows with neither
+  stayed at every opening, and its asking queue held its thousands of freed
+  WhatsApp files ahead of them. Both changed 2026-10-25.) The area's deletions and sharing rules are forgotten, and
   folders left empty removed -- any empty folder in the phone's folder, not
   only those this emptied, which a phone could not make anyway. A file the
   phone moved into its Vault that a computer had without the phone knowing
@@ -412,6 +417,8 @@ Item 5, the device chosen on Home, was built with Home (draft 3).
   on the relay at once, the laptop heard on the Wi-Fi a second later and
   reached there (`192.168.1.4:57757`), its list of 38,141 files unchanged,
   no error. The owner keeps the laptop's automatic suspend, so a phone's
-  pass while it sleeps fails this way by design. **Not yet seen:** what
-  becomes of the six files, settled at the engine's next opening now that a
-  pass has asked the laptop about them; and Files on the S23 as it now is.
+  pass while it sleeps fails this way by design. Reopened at 10:30: *dropped
+  0, moved 0, kept 6* again, which is what changed the rule above for rows
+  with no bytes on the phone, and put what leaving waits on first in the
+  asking. **Not yet seen:** the six settled by that build; and Files on the
+  S23 as it now is.
