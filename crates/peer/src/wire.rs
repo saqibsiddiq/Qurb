@@ -414,7 +414,8 @@ const STATUS_REFUSED: u8 = 24;
 const STATUS_PLACED: u8 = 25;
 
 /// The most folders one answer may list: two levels of a phone's storage come
-/// to a few hundred. A peer claiming more is not describing a phone.
+/// to a few hundred. A peer claiming more is not describing a phone. Every
+/// level of one can come to more, and is cut to this, the deepest first.
 const MAX_FOLDERS: usize = 4096;
 
 impl Request {
@@ -690,7 +691,13 @@ impl Response {
             }
             Response::Folders { folders, choices } => {
                 out.push(STATUS_FOLDERS);
-                let folders = &folders[..folders.len().min(MAX_FOLDERS)];
+                // A phone lists its folders at every depth since the tree of
+                // the owner's list of 2026-10-24, and can have more than a
+                // decoder takes: the shallowest go first, so that what is cut
+                // is the deepest, never a folder at the top.
+                let mut folders: Vec<&FolderSummary> = folders.iter().collect();
+                folders.sort_by(|a, b| a.path.matches('/').count().cmp(&b.path.matches('/').count()).then(a.path.cmp(&b.path)));
+                folders.truncate(MAX_FOLDERS);
                 put_u32(&mut out, folders.len());
                 for folder in folders {
                     put_name(&mut out, &folder.path);
@@ -1314,6 +1321,26 @@ mod tests {
         ];
         for r in responses {
             assert_eq!(Response::decode(&r.encode()).unwrap(), r);
+        }
+    }
+
+    /// A phone with more folders than an answer may carry -- every level of
+    /// its storage, since the tree -- has the deepest cut, never one at the
+    /// top: on 2026-10-26 its Android folders could have filled the answer
+    /// before DCIM, by path, and the computer would have shown no DCIM.
+    #[test]
+    fn too_many_folders_lose_the_deepest() {
+        let mut folders: Vec<FolderSummary> = (0..5000)
+            .map(|n| FolderSummary { path: format!("Android/media/f{n:04}"), files: 1, bytes: 1 })
+            .collect();
+        folders.push(FolderSummary { path: "Android".into(), files: 5000, bytes: 5000 });
+        folders.push(FolderSummary { path: "DCIM".into(), files: 1, bytes: 1 });
+        folders.push(FolderSummary { path: "Pictures/Screenshots".into(), files: 1, bytes: 1 });
+        let sent = Response::Folders { folders, choices: vec![] };
+        let Response::Folders { folders, .. } = Response::decode(&sent.encode()).unwrap() else { panic!() };
+        assert_eq!(folders.len(), MAX_FOLDERS);
+        for kept in ["Android", "DCIM", "Pictures/Screenshots"] {
+            assert!(folders.iter().any(|f| f.path == kept), "{kept} cut");
         }
     }
 

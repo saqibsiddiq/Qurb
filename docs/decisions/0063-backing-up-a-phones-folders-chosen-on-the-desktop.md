@@ -216,7 +216,11 @@ everything inside it, folders added later too.
 
 - **The phone lists its folders at every depth**, each with what is beneath
   it, from the same one walk; a folder with no file beneath it is not listed.
-  The `Folders` answer carries them all; the message cap is 64 MiB.
+  The `Folders` answer carries up to 4,096, which a decoder takes no more
+  than, the shallowest first, so that what a phone with more loses there is
+  its deepest folders, never one at the top (found 2026-10-26: sorted by path
+  alone, *Android/…*'s could have filled it before *DCIM*). The phone's own
+  tree reads its own list, uncut.
 - **The deepest choice decides** (`qurb_storage::chosen`). A folder is backed
   up by the nearest choice at or above it, so a folder inside a ticked one
   can be unticked, and one inside that ticked again. Before, a choice inside
