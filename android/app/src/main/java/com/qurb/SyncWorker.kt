@@ -324,6 +324,26 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         private const val LAST_AT = "last-sync-at"
         private const val LAST_WOKEN = "last-woken-at"
         private const val PERIOD = "sync-period-minutes"
+        /** How often the person chose: [AUTO], [OFF], or minutes. */
+        private const val EVERY = "sync-every-minutes"
+        const val AUTO = -1L
+        const val OFF = 0L
+
+        /** What can be chosen in Settings (the owner's list of 2026-10-26,
+         *  item 16), as minutes and the words for them. */
+        val CHOICES = listOf(AUTO to "Auto", 15L to "15 min", 30L to "30 min", 60L to "1 hour", 360L to "6 hours", OFF to "Off")
+
+        fun every(context: Context): Long =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(EVERY, AUTO)
+
+        /** Whether background sync is switched off: no schedule, and a push
+         *  that would wake a pass is let go. What the person starts runs. */
+        fun off(context: Context): Boolean = every(context) == OFF
+
+        fun choose(context: Context, minutes: Long) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong(EVERY, minutes).apply()
+            schedule(context)
+        }
 
         /** How recently a push must have arrived for the hourly schedule. */
         private const val PUSH_TRUSTED_FOR_MS = 7L * 24 * 3600 * 1000
@@ -384,6 +404,8 @@ class SyncWorker(context: Context, params: WorkerParameters) :
          * would sync hourly for nothing.
          */
         fun periodMinutes(context: Context): Long {
+            val chosen = every(context)
+            if (chosen > 0L) return chosen
             val woken = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(LAST_WOKEN, 0)
             val pushWorks = Push.AVAILABLE && System.currentTimeMillis() - woken < PUSH_TRUSTED_FOR_MS
             return if (pushWorks) 60 else 15
@@ -404,6 +426,11 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         fun schedule(context: Context) {
             for (old in RETIRED) {
                 WorkManager.getInstance(context).cancelUniqueWork(old)
+            }
+            if (off(context)) {
+                WorkManager.getInstance(context).cancelUniqueWork(NAME)
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(PERIOD).apply()
+                return
             }
 
             val constraints = Constraints.Builder()

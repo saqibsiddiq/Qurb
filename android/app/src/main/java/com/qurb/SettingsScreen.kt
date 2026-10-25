@@ -147,7 +147,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.label(page, "Connection")
         card = kit.card(page)
         kit.setting(card, R.drawable.ic_history, "Background sync",
-            SyncWorker.lastAt(app)?.let { Words.since(it / 1000) } ?: "") { background() }
+            SyncWorker.CHOICES.firstOrNull { it.first == SyncWorker.every(app) }?.second ?: "") { background() }
         kit.setting(card, R.drawable.ic_link, "Advanced") { app.push(AdvancedScreen(app)) }
     }
 
@@ -237,9 +237,15 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         scope.launch {
             try {
                 val words = withContext(Dispatchers.IO) { engine().recoveryPhrase() }
-                kit.sheet()
+                val sheet = kit.sheet()
                     .title("Your 24 words")
                     .view(Words.phraseView(app, words), top = 16)
+                // As a text file, wherever the person picks (the owner's list
+                // of 2026-10-26, item 17): numbered, one a line.
+                sheet.view(kit.button("Save as text file", Kit.Style.SECONDARY, R.drawable.ic_download) {
+                    app.saveText("QurbSpace 24 words.txt",
+                        words.trim().split(Regex("\\s+")).mapIndexed { i, w -> "${i + 1}. $w" }.joinToString("\n", postfix = "\n"))
+                }, top = 16)
                     .closing("Hide")
                     .secure()
                     .show()
@@ -281,12 +287,29 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         val result = SyncWorker.lastResult(app)
         kit.setting(facts, R.drawable.ic_circle_check, "Last",
             if (at == null) "Not yet" else listOfNotNull(Words.ago(at / 1000), result).joinToString(", "))
-        kit.setting(facts, R.drawable.ic_history, "Every",
-            if (SyncWorker.periodMinutes(app) == 60L) "Hour, or when woken" else "15 minutes, when Android allows")
         val sheet = kit.sheet()
             .mark(R.drawable.ic_history, R.color.green_soft, R.color.green)
             .title("Background sync", centred = true)
             .view(facts, top = 16)
+        // How often, or not at all (the owner's list of 2026-10-26, item
+        // 16): three of one width a row, the chosen one filled. Auto is
+        // every 15 minutes, or hourly once another device's push wakes this
+        // phone; Android's own batching makes any of them a floor.
+        val chosen = SyncWorker.every(app)
+        for (row in SyncWorker.CHOICES.chunked(3)) {
+            val line = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
+            for ((minutes, words) in row) {
+                line.addView(kit.button(words, if (minutes == chosen) Kit.Style.PRIMARY else Kit.Style.SECONDARY) {
+                    sheet.dismiss()
+                    SyncWorker.choose(app, minutes)
+                    app.say(if (minutes == SyncWorker.OFF) "Background sync off" else "Background sync: $words")
+                    refresh()
+                }, LinearLayout.LayoutParams(0, kit.dp(44), 1f).apply {
+                    if (line.childCount > 0) marginStart = kit.dp(8)
+                })
+            }
+            sheet.view(line, top = 10)
+        }
         sheet.view(kit.button("Run now") {
             sheet.dismiss()
             // Through the scheduler rather than directly, so this exercises

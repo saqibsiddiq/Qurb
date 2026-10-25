@@ -54,7 +54,8 @@ class Wakeup : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
         Log.i("qurb", "woken by another device")
         SyncWorker.noteWoken(applicationContext)
-        SyncWorker.runNow(applicationContext)
+        // Background sync switched off in Settings: woken, and left asleep.
+        if (!SyncWorker.off(applicationContext)) SyncWorker.runNow(applicationContext)
     }
 
     /**

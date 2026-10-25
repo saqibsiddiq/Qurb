@@ -1145,6 +1145,14 @@ every other; and **build directly**, not Figma first. Item by item:
   into a new name makes one.
 - **14, Shared.** A phone sees the files in the computer's folder on disk,
   not every row its index has (`Db::shared_entries_here`).
+- **16, Background sync.** Its sheet in Settings chooses *Auto* (as before:
+  15 minutes, hourly once another device's push wakes the phone), *15 min*,
+  *30 min*, *1 hour*, *6 hours* or *Off*, three to a row; Settings says the
+  choice. Off cancels the schedule and lets a push go unanswered; what the
+  person starts still runs. WorkManager's 15 minutes is the shortest, and
+  Android's own batching makes any choice a floor.
+- **17, the 24 words** have *Save as text file* under them: the system's own
+  save dialog, *QurbSpace 24 words.txt*, numbered one a line.
 - **15, the Devices tab, gone.** Three tabs. What it held is the circle's:
   the list and *Add a device* on holding it, a device's page on tapping it;
   where the app sent someone to Devices it opens the chosen device's page.
@@ -1161,5 +1169,7 @@ with Remote access and its sheet; against the command line built for
 Android as the computer, in Private: *notes2.txt* moved into a new *Work*,
 *notes1.txt* copied and pasted into it, *Work* renamed *Projects* with both
 inside, and *Projects* deleted, both in the phone's Recently deleted.
-**Not yet:** items 7 (pictures and names between devices), 16, 17 and 19,
-and item 20's animations.
+Settings' *Background sync* at *30 min* (WorkManager's own record: 30), *Off*
+(the schedule cancelled), *Auto* (15); the 24 words saved to Downloads, 24
+numbered lines, and the file deleted afterwards. **Not yet:** items 7
+(pictures and names between devices) and 19, and item 20's animations.

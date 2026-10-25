@@ -191,6 +191,31 @@ class MainActivity : AppCompatActivity() {
         if (destination != null && entry != null) writeCopy(entry, destination)
     }
 
+    /** Text waiting for a place, while the save dialog is open. */
+    private var pendingText: String? = null
+
+    private val textSaver = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { destination ->
+        val text = pendingText
+        pendingText = null
+        if (destination == null || text == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val written = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openOutputStream(destination, "wt")!!.use { it.write(text.toByteArray()) }
+                }
+            }
+            written.onSuccess { say("Saved") }.onFailure { fail("Could not save it", it) }
+        }
+    }
+
+    /** Save `text` as a file where the person picks, named `name` to start. */
+    fun saveText(name: String, text: String) {
+        pendingText = text
+        textSaver.launch(name)
+    }
+
     /** Files waiting for a folder to be saved into, while the picker is open. */
     private var pendingSaveAll: List<FileEntry> = emptyList()
 
