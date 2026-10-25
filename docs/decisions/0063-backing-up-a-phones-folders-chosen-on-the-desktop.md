@@ -249,6 +249,19 @@ the run on the phone queuing five files for the computer, the unticked
 folder's left out. **Not checked:** on the S23, or with the desktop's sheet;
 a phone with thousands of folders (the S23 listed 28 at two levels).
 
+**On the S23 and the laptop, 2026-10-25.** The fast build of `f53f7e7` went
+onto the S23 at 11:34, and the laptop's copies were replaced with a release
+build of the same commit at 11:46 at the owner's word, the window started
+again with its log kept in `~/.local/state/qurb/desktop.log`. The S23 then
+showed *Backing up*, 18 folder files waiting for the laptop; one sync over
+the Wi-Fi at 11:47 took them, and Home said *All synced*. The laptop's index,
+read afterwards: chosen for the S23, *Android/media*, *DCIM/Camera*,
+*DCIM/Screenshots*, *Download*, *Movies* and *Pictures*; held of them, 38,075
+files, 26.3 GB -- *Android* 36,166 files and 11.4 GB of it, since
+*Android/media* holds WhatsApp's folder, which the WhatsApp backup keeps as
+well: the same bytes stored once, the files listed twice. Not seen: the
+S23's *Folders* page itself, by anyone but the owner.
+
 ## Reversing it
 
 Cheap before step 2. After it, each folder is rows like WhatsApp's: no longer

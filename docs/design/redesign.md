@@ -986,5 +986,8 @@ made on its storage after the design's second screen: the tree as drawn,
 light and dark; *Download* ticked, *ADM* unticked inside it, *2025* ticked
 again inside that, *DCIM* ticked -- the marks as drawn, *3.6 MB chosen*; the
 run on the phone queuing five files for the computer, *old*'s left out; the
-bar gone back on Backups. **Not checked:** on the S23; *Nothing chosen* and
-the empty states; many folders.
+bar gone back on Backups. On the S23 since 11:34 the same day, the laptop
+on the same commit, and a backup of its chosen folders carried through
+(decision 0063, *On the S23 and the laptop*). **Not checked:** the page on
+the S23 by anyone but the owner; *Nothing chosen* and the empty states;
+many folders.
