@@ -262,6 +262,15 @@ files, 26.3 GB -- *Android* 36,166 files and 11.4 GB of it, since
 well: the same bytes stored once, the files listed twice. Not seen: the
 S23's *Folders* page itself, by anyone but the owner.
 
+**What waits on the folders' backup, counted, 2026-10-25.** The bytes that
+keep a pass serving a computer until it has collected (`for_others`, the
+long pass and its notice) counted WhatsApp's backup and not the folders',
+since this decision: a large folder backup got an ordinary pass and no
+notice. Both count now, while the backups are offered (on Wi-Fi); tested in
+`folders_are_chosen_as_a_tree`. Found building what the owner asked for that
+day, a backup said file by file on Home and in a notice (the redesign log,
+*Built: Android, a backup on its way*).
+
 ## Reversing it
 
 Cheap before step 2. After it, each folder is rows like WhatsApp's: no longer

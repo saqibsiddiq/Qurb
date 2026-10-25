@@ -4426,6 +4426,51 @@ impl Db {
         )?)
     }
 
+    /// The files under `prefix` in this device's own vault that no device
+    /// it may count on holds yet -- what a backup still has to give the
+    /// computer keeping it, as [`outside_summary`](Self::outside_summary)
+    /// counts them -- the first `limit` by path, with how many there are and
+    /// their bytes: what Home and the notice name (the owner's list of
+    /// 2026-10-25).
+    pub fn outside_waiting(&self, prefix: &str, limit: usize) -> Result<(Vec<(String, u64)>, u64, u64)> {
+        let me = self.local_device()?;
+        let pattern = escape_like(&format!("{}/%", prefix.trim_end_matches('/')));
+        let waiting = format!(
+            "FROM files f
+              WHERE f.scope = ?1 AND f.deleted_at IS NULL AND f.path LIKE ?2 ESCAPE '\\'
+                AND NOT EXISTS (SELECT 1 FROM replicas r
+                                 WHERE r.content_hash = f.content_hash AND r.private = 0
+                                   AND {SAFE_ELSEWHERE})"
+        );
+        let (files, bytes): (i64, i64) = self.conn.query_row(
+            &format!("SELECT count(*), coalesce(sum(f.size), 0) {waiting}"),
+            params![me.as_bytes().as_slice(), pattern],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+        let mut stmt = self.conn.prepare(&format!("SELECT f.path, f.size {waiting} ORDER BY f.path LIMIT ?3"))?;
+        let rows = stmt.query_map(params![me.as_bytes().as_slice(), pattern, limit as i64], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))
+        })?;
+        Ok((rows.collect::<std::result::Result<_, _>>()?, files as u64, bytes as u64))
+    }
+
+    /// A live file of this device's own vault made of `chunk`: what a device
+    /// collecting that chunk is taking, for saying so (the owner's list of
+    /// 2026-10-25). Through `idx_file_chunks_hash`.
+    pub fn own_file_with_chunk(&self, chunk: &blake3::Hash) -> Result<Option<String>> {
+        let me = self.local_device()?;
+        self.conn
+            .query_row(
+                "SELECT f.path FROM file_chunks fc JOIN files f ON f.id = fc.file_id
+                  WHERE fc.chunk_hash = ?1 AND f.scope = ?2 AND f.deleted_at IS NULL
+                  LIMIT 1",
+                params![chunk.as_bytes().as_slice(), me.as_bytes().as_slice()],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub fn mark_peer_seen(&self, fingerprint: &[u8; 32]) -> Result<()> {
         self.conn.execute(
             "UPDATE peers SET last_seen = unixepoch() WHERE fingerprint = ?1",

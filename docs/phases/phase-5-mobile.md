@@ -2828,6 +2828,14 @@ the deepest choice decides a folder and a choice sets every choice inside it
 amended), in the choice rows the phone and the computer already kept in
 step. Checked on the emulator; not on the S23.
 
+A backup going says what it is since 2026-10-25, at the owner's word
+([details](../design/redesign.md#built-android-a-backup-on-its-way-2026-10-25)):
+on Home, the file going and how many more, a bar of this round, how much of
+how much, and the files with their folders and sizes; in a notice during any
+pass, then *Backed up*. A computer now says *got it* for each large file as
+it arrives, and a folder backup keeps a pass serving as WhatsApp's always
+did. Checked on the emulator with 600 MB of videos; not on the S23.
+
 Not built yet: the desktop, and a new folder in the phone's folder on a
 computer
 ([0073](../decisions/0073-the-phone-works-with-its-computer.md), *Progress*).

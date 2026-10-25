@@ -991,3 +991,61 @@ on the same commit, and a backup of its chosen folders carried through
 (decision 0063, *On the S23 and the laptop*). **Not checked:** the page on
 the S23 by anyone but the owner; *Nothing chosen* and the empty states;
 many folders.
+
+## The owner's list of 2026-10-25
+
+> i dont like the waiting screen, it only says folder instead it should be
+> informing exactly what is backing up, there is no progress bar, no file
+> size, no notifixation
+
+1. **Say exactly what is backing up.** Home's *Waiting* said *Folders, 18
+   files*.
+2. **A progress bar.** There was one, measured against the whole backup --
+   on the S23, 38,057 of 38,075 files -- so it was always full.
+3. **File sizes.**
+4. **A notification.** A backup had none unless it was over 32 MB, and then
+   it said *Sending*; a folder backup had none at all (decision 0063,
+   amended).
+
+Built straight away, with no Figma draft (below).
+
+## Built: Android, a backup on its way (2026-10-25)
+
+The owner's list of 2026-10-25, all four (`BackingUp.kt`, `HomeScreen.kt`,
+`Transfers.kt`):
+
+- **Home's *Waiting***, while a backup is going: *Backing up to* the
+  computer keeping it; under it the file going now and how many more -- the
+  file named from the last piece this phone handed over, which a computer
+  takes in turn; a bar, and *X of Y* under it; then the files themselves,
+  the first three by folder and name, each its folder and size, and *N more*
+  with their size. Drawn again every two seconds while Home is on screen and
+  the backup has moved.
+- **The bar is this round's**: from the first file waiting to the last one
+  the computer has. Files added while it runs make the round larger rather
+  than move the bar back; between the computer's word on each file, the
+  bytes handed over move it, so a long video does not hold it still.
+- **The notice**, during any pass a backup goes in, short or long: *Backing
+  up to* the computer, the file going and how many more, *X of Y*, the bar;
+  then *Backed up to* it, how many files and how much, quiet, in a place of
+  its own so that it stays when a long pass's notice goes.
+- **The computer says *got it* for each large file as it arrives**, rather
+  than every 32 or at the end, so that *N more* counts down: thirty videos
+  said *29 more* for three minutes. Small files still go in batches, as for
+  WhatsApp's tens of thousands. A computer-side change, `crates/peer`.
+
+**Where it differs, and why:** no Figma draft: the owner asked for it
+directly, and it is built from the parts the redesign already has (Home's
+queue rows, the transfers' notice). The rows gained a second line and a line
+under the bar.
+
+**Checked** on the emulator (`qurb-34g`, the debug build), the command line
+built for Android as its computer keeping the Vault, 30 videos of 20 MB in a
+camera folder: the notice, read every 15 seconds, from *VID_20261025_02.mp4
+and 28 more*, *40.0 MB of 600.0 MB* at 6%, to *VID_20261025_30.mp4*, *600.0
+MB of 600.0 MB* at 100% in three minutes, then *Backed up to a device, 30
+files, 600.0 MB*; Home mid-way, *Waiting 29*, the row and the files as above;
+then *All synced*. Before the *got it* change the same run said *29 more*
+throughout, and before the notice took the computer keeping the Vault it said
+only *Backing up*. **Not checked:** on the S23 and the laptop; WhatsApp's
+backup going this way; a round that grows mid-way; dark.

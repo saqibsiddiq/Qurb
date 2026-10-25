@@ -29,6 +29,9 @@ object Transfers {
     private const val CHANNEL = "transfers"
     const val NOTIFICATION = 7
     private const val PAUSED = 8
+    /** *Backed up*: a place of its own, since the transfers' goes when a long
+     *  pass's work ends. */
+    const val BACKED_UP = 9
 
     /** Set on the intent that opens the app from [paused]'s notification. */
     const val CONTINUE = "com.qurb.CONTINUE_SENDING"
@@ -110,6 +113,49 @@ object Transfers {
             )
             .build()
     }
+
+    /**
+     * A backup on its way to the computer (the owner's list of 2026-10-25):
+     * the file going now and how many more, how much of the round is there,
+     * and a bar. In the transfers' place, so that a long pass carrying a
+     * backup shows one notice, not two.
+     */
+    fun backingUp(context: Context, round: BackingUp.Round, to: String?): android.app.Notification {
+        channel(context)
+        return NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.qurb_glyph)
+            .setColor(ContextCompat.getColor(context, R.color.green))
+            .setContentTitle(if (to != null) "Backing up to $to" else "Backing up")
+            .setContentText(round.what)
+            .setSubText(round.sizes)
+            .setProgress(100, round.percent, false)
+            .setShowWhen(false)
+            .setOngoing(true)
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(open(context))
+            .build()
+    }
+
+    /** The round done: how many files, how much. Quiet, and gone when tapped. */
+    fun backedUp(context: Context, files: ULong, bytes: ULong, to: String?): android.app.Notification {
+        channel(context)
+        return NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.drawable.qurb_glyph)
+            .setColor(ContextCompat.getColor(context, R.color.green))
+            .setContentTitle(if (to != null) "Backed up to $to" else "Backed up")
+            .setContentText("${Words.files(files.toInt())}, ${Words.size(bytes)}")
+            .setSilent(true)
+            .setAutoCancel(true)
+            .setContentIntent(open(context))
+            .build()
+    }
+
+    private fun open(context: Context) = PendingIntent.getActivity(
+        context, 0,
+        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        PendingIntent.FLAG_IMMUTABLE,
+    )
 
     /**
      * A large transfer that Android would not let run in the background.

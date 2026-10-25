@@ -715,10 +715,21 @@ class MainActivity : AppCompatActivity() {
                 // 25 seconds: generous for someone watching, and still inside
                 // what a background window would grant. The deadline is the
                 // point of `syncWithin` -- see decision 0020.
-                val outcome = withContext(Dispatchers.IO) {
-                    // Holding the multicast lock, or the phone cannot hear the
-                    // devices on its own Wi-Fi answering.
-                    Engine.hearingTheNetwork(this@MainActivity) { engine.syncWithin(25u) }
+                // A backup going while it runs: the notice names it, and says
+                // *Backed up* if this sync sees it done (the owner's list of
+                // 2026-10-25).
+                val (backupBefore, to) = withContext(Dispatchers.IO) {
+                    runCatching { engine.backupWaiting(1u) }.getOrNull() to BackingUp.keeper(engine)
+                }
+                val watching = BackingUp.watch(this@MainActivity, engine, lifecycleScope, to)
+                val outcome = try {
+                    withContext(Dispatchers.IO) {
+                        // Holding the multicast lock, or the phone cannot hear the
+                        // devices on its own Wi-Fi answering.
+                        Engine.hearingTheNetwork(this@MainActivity) { engine.syncWithin(25u) }
+                    }
+                } finally {
+                    withContext(Dispatchers.IO) { BackingUp.finish(this@MainActivity, engine, backupBefore, watching, to) }
                 }
                 result = outcome
                 if (outcome.reached > 0u) Engine.noteSynced(this@MainActivity)

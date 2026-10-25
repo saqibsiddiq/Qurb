@@ -8,7 +8,9 @@ import com.qurb.databinding.ScreenHomeBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.qurb_mobile.BackupState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import uniffi.qurb_mobile.BackupWaiting
 import uniffi.qurb_mobile.ConflictInfo
 import uniffi.qurb_mobile.ConflictSide
 import uniffi.qurb_mobile.Outstanding
@@ -45,6 +47,11 @@ class HomeScreen(app: MainActivity) : Screen(app) {
     /** The state last drawn, to notice the moment everything becomes synced. */
     private var lastTitle: String? = null
 
+    /** The last reading, and the redraw every two seconds while a backup is
+     *  going, so that its bar moves as the computer collects. */
+    private var last: State? = null
+    private var ticking: Job? = null
+
     init {
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener {
@@ -66,9 +73,16 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         val conflicts: List<ConflictInfo>,
         /** Sent from here, not collected yet. */
         val sends: List<Waiting>,
-        val whatsApp: BackupState,
-        val folders: BackupState,
-    )
+        /** Both backups' files the computer does not have yet. */
+        val backup: BackupWaiting,
+        /** Bytes this phone has handed to collecting devices, for the bar. */
+        val served: ULong,
+        /** The file a collecting device is taking now, by name. */
+        val going: String?,
+    ) {
+        fun with(backup: BackupWaiting, served: ULong, going: String?) =
+            State(peers, holders, outstanding, conflicts, sends, backup, served, going)
+    }
 
     override fun refresh() {
         refreshing {
@@ -81,8 +95,9 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                         engine.outstanding(),
                         engine.conflicts(),
                         runCatching { engine.waiting() }.getOrDefault(emptyList()),
-                        engine.whatsappBackup(),
-                        engine.foldersBackup(),
+                        engine.backupWaiting(WAITING_ROWS.toUInt()),
+                        runCatching { engine.serving().bytes }.getOrDefault(0uL),
+                        runCatching { engine.servingFile() }.getOrNull(),
                     )
                 }
                 show(state)
@@ -94,6 +109,28 @@ class HomeScreen(app: MainActivity) : Screen(app) {
     }
 
     private fun show(state: State) {
+        last = state
+        // Every two seconds while Home is on screen, the backup read again
+        // and drawn again when it has moved: a backup that starts after Home
+        // was drawn shows, and its bar moves as the computer collects.
+        if (ticking == null) ticking = scope.launch {
+            while (view.isAttachedToWindow) {
+                delay(2_000)
+                val now = last ?: continue
+                val fresh = runCatching {
+                    withContext(Dispatchers.IO) {
+                        val engine = engine()
+                        now.with(engine.backupWaiting(WAITING_ROWS.toUInt()), engine.serving().bytes,
+                            runCatching { engine.servingFile() }.getOrNull())
+                    }
+                }.getOrNull() ?: continue
+                val moved = fresh.backup.filesLeft != now.backup.filesLeft ||
+                    fresh.backup.bytesLeft != now.backup.bytesLeft || fresh.going != now.going ||
+                    (backupsLeft(fresh) > 0 && fresh.served != now.served)
+                if (moved) show(fresh)
+            }
+            ticking = null
+        }
         val chosen = Engine.chosen(app, state.peers, state.holders)
         val off = chosen != null && Engine.isOff(app, chosen)
         // The later of the app's own note and the engine's record of when each
@@ -157,9 +194,8 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         val box = views.waiting
         box.removeAllViews()
         val files = state.outstanding.files
-        val whatsAppLeft = left(state.whatsApp)
-        val foldersLeft = left(state.folders)
-        val count = files.size + state.sends.size + whatsAppLeft + foldersLeft
+        val backupLeft = backupsLeft(state)
+        val count = files.size + state.sends.size + backupLeft
         box.visibility = if (count == 0) View.GONE else View.VISIBLE
         if (count == 0) return false
 
@@ -200,21 +236,33 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             kit.queueRow(queue, R.drawable.ic_send, "${state.sends.size - WAITING_ROWS} more",
                 Words.size(state.sends.drop(WAITING_ROWS).sumOf { it.size }))
         }
-        if (whatsAppLeft > 0) kit.queueRow(queue, R.drawable.ic_hard_drive, "WhatsApp",
-            Words.files(whatsAppLeft), done(state.whatsApp))
-        if (foldersLeft > 0) kit.queueRow(queue, R.drawable.ic_folder, "Folders",
-            Words.files(foldersLeft), done(state.folders))
+        // A backup going: where to, how far this round has got and how much
+        // it is, then the files themselves, each with its folder and size
+        // (the owner's list of 2026-10-25, which had only *Folders, 18 files*
+        // and a bar measured against the whole backup, always full).
+        if (backupLeft > 0) {
+            val round = BackingUp.round(app, state.backup, state.served, state.going)
+            val to = state.holders.firstOrNull()?.name
+            // The title and what is going given the row's whole width; how
+            // much under the bar, where a size at the end cut both short.
+            kit.queueRow(queue, R.drawable.ic_hard_drive, if (to != null) "Backing up to $to" else "Backing up",
+                "", round.fraction, detail = round.what, after = round.sizes)
+            val named = state.backup.files.take(WAITING_ROWS)
+            for (f in named) {
+                kit.queueRow(queue, States.icon(f.name), f.name, Words.size(f.size), detail = f.folder.ifEmpty { null })
+            }
+            val rest = backupLeft - named.size
+            if (rest > 0) {
+                kit.queueRow(queue, R.drawable.ic_folder, "${Words.count(rest.toLong())} more",
+                    Words.size(state.backup.bytesLeft - named.sumOf { it.size }))
+            }
+        }
         return true
     }
 
-    /** Files of a backup not yet on the computer keeping it. */
-    private fun left(b: BackupState): Int = if (b.heldFiles < b.files) (b.files - b.heldFiles).toInt() else 0
-
-    private fun done(b: BackupState): Float = if (b.files == 0uL) 0f else b.heldFiles.toFloat() / b.files.toFloat()
-
     /** Files of the WhatsApp and folder backups still to go, when a computer keeps them. */
     private fun backupsLeft(state: State): Int =
-        if (state.holders.isEmpty()) 0 else left(state.whatsApp) + left(state.folders)
+        if (state.holders.isEmpty()) 0 else state.backup.filesLeft.toInt()
 
     /** The state: its mark, and its two or three words. */
     private fun hero(look: StatusMark.Look, icon: Int, title: String) {

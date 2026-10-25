@@ -930,6 +930,17 @@ fn folders_are_chosen_as_a_tree() {
     assert_eq!((run.added, run.failed, run.remaining), (3, 0, 0), "{run:?}");
     assert_eq!(run.bytes_read, 5 << 20, "old's file read, or another left out");
 
+    // Named while the computer does not have them: each file, its folder as
+    // the phone's folder there shows it, its size (the owner's list of
+    // 2026-10-25), the first ones only, and how many in all.
+    let waiting = qurb.backup_waiting(2).unwrap();
+    assert_eq!((waiting.files_left, waiting.bytes_left), (3, 5 << 20));
+    let named: Vec<(String, String, u64)> = waiting.files.into_iter().map(|f| (f.folder, f.name, f.size)).collect();
+    assert_eq!(named, vec![("Download/ADM/2025".into(), "a.mkv".into(), 3 << 20), ("Download/Telegram".into(), "c.pdf".into(), 1 << 20)]);
+    // And waiting for the computer, which keeps a pass serving it -- on Wi-Fi.
+    qurb.set_unmetered(true).unwrap();
+    assert_eq!(qurb.waiting_for_others_bytes().unwrap(), 5 << 20, "a folder backup is not waited for");
+
     // Ticked again, the whole of it: everything inside, old included.
     qurb.choose_folder("Download".into(), true).unwrap();
     assert!(qurb.own_folders().unwrap().iter().filter(|f| f.path.starts_with("Download")).all(|f| f.tick == FolderTick::All));

@@ -168,6 +168,9 @@ pub struct NetworkSource<'a> {
     ready: std::collections::HashMap<[u8; 32], Vec<u8>>,
     /// What arrived, not yet told to the other end: told in batches.
     arrived: Vec<[u8; 32]>,
+    /// The small files of this plan, whose arrival waits for a batch; any
+    /// other is told at once.
+    small: std::collections::HashSet<[u8; 32]>,
 }
 
 /// Files fetched at once, when a plan asks for small ones: a round trip to a
@@ -197,6 +200,7 @@ impl<'a> NetworkSource<'a> {
             ahead: Default::default(),
             ready: Default::default(),
             arrived: Vec::new(),
+            small: Default::default(),
         }
     }
 
@@ -245,15 +249,20 @@ impl ContentSource for NetworkSource<'_> {
     ///
     /// Put off and told [`AHEAD`] at a time, all at once, rather than a round
     /// trip after every file; the rest when the plan is done.
+    /// Told in batches of small files, which a round trip each would slow;
+    /// a larger one at once, so that a phone backing up videos counts them
+    /// down as each arrives rather than all at the end (the owner's list of
+    /// 2026-10-25: thirty of them said *29 more* for three minutes).
     fn received(&mut self, content: &[u8; 32]) {
         self.arrived.push(*content);
-        if self.arrived.len() >= AHEAD {
+        if self.arrived.len() >= AHEAD || !self.small.contains(content) {
             self.tell_arrived();
         }
     }
 
     fn coming(&mut self, contents: &[([u8; 32], u64)]) {
         self.ahead = contents.iter().filter(|(_, size)| *size <= SMALL).copied().collect();
+        self.small = self.ahead.iter().map(|(hash, _)| *hash).collect();
     }
 
     fn finished(&mut self) {

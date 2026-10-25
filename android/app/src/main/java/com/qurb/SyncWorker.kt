@@ -83,7 +83,12 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             }
             val forOthers = runCatching { engine.waitingForOthersBytes() }.getOrDefault(0uL)
             // Named on the notice when there is one device to name.
-            val to = if (forOthers >= LONG_PASS_BYTES) Transfers.collector(engine) else null
+            val to = Transfers.collector(engine)
+            // A backup still going when the pass starts: named on the notice,
+            // and *Backed up* if the pass sees it done (the owner's list of
+            // 2026-10-25).
+            val backupBefore = runCatching { engine.backupWaiting(1u) }.getOrNull()
+            val keeper = BackingUp.keeper(engine)
             val long = forOthers >= LONG_PASS_BYTES && startLong(forOthers, started, to)
             // Another pass is the long one, and is already answering.
             val elsewhere = !long && LONG_PASS.get()
@@ -114,9 +119,20 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                         if (!moved && !stale) continue
                         shown = now
                         postedAt = SystemClock.elapsedRealtime()
-                        runCatching { Transfers.update(applicationContext, sent, forOthers, started, to) }
+                        // A backup going, named; anything else, as sending.
+                        val backup = runCatching { engine.backupWaiting(1u) }.getOrNull()
+                        runCatching {
+                            if (backup != null && backup.filesLeft > 0uL) {
+                                val round = BackingUp.round(applicationContext, backup, engine.serving().bytes,
+                                    runCatching { engine.servingFile() }.getOrNull())
+                                androidx.core.app.NotificationManagerCompat.from(applicationContext)
+                                    .notify(Transfers.NOTIFICATION, Transfers.backingUp(applicationContext, round, keeper))
+                            } else {
+                                Transfers.update(applicationContext, sent, forOthers, started, to)
+                            }
+                        }
                     }
-                } else null
+                } else BackingUp.watch(applicationContext, engine, this, keeper)
                 try {
                     withContext(Dispatchers.IO) {
                         Engine.hearingTheNetwork(applicationContext) {
@@ -125,7 +141,8 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                         }
                     }
                 } finally {
-                    showing?.cancel()
+                    // Long or not, *Backed up* when the pass saw the round done.
+                    BackingUp.finish(applicationContext, engine, backupBefore, showing, keeper)
                 }
             }
 

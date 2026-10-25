@@ -261,6 +261,27 @@ impl From<qurb_storage::chosen::Tick> for FolderTick {
     }
 }
 
+/// One file of a backup the computer keeping it does not have yet: what Home
+/// and the notice name (the owner's list of 2026-10-25).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct BackupFile {
+    /// `IMG_2041.jpg`.
+    pub name: String,
+    /// Where it is, as the phone's folder on the computer shows it:
+    /// `DCIM/Camera`, `WhatsApp/Media/WhatsApp Images`.
+    pub folder: String,
+    pub size: u64,
+}
+
+/// What the WhatsApp and folder backups still have to give the computer.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct BackupWaiting {
+    /// The first few, by folder and name.
+    pub files: Vec<BackupFile>,
+    pub files_left: u64,
+    pub bytes_left: u64,
+}
+
 /// What one run of the WhatsApp backup did (decision 0062).
 #[derive(Debug, Clone, Default, uniffi::Record)]
 pub struct BackupRun {
@@ -751,6 +772,8 @@ struct ServingStats {
     /// Devices that reached this one and asked it something since a pass
     /// last looked: marked seen when it ends, as if the pass had reached them.
     asked_by: std::sync::Mutex<std::collections::HashSet<[u8; 32]>>,
+    /// The last chunk served: which file is going now.
+    chunk: std::sync::Mutex<Option<blake3::Hash>>,
 }
 
 impl ServingStats {
@@ -769,7 +792,10 @@ impl ServingStats {
 }
 
 impl qurb_peer::Served for ServingStats {
-    fn served(&self, _to: &qurb_peer::Fingerprint, _chunk: &blake3::Hash, bytes: u64) {
+    fn served(&self, _to: &qurb_peer::Fingerprint, chunk: &blake3::Hash, bytes: u64) {
+        if let Ok(mut last) = self.chunk.lock() {
+            *last = Some(*chunk);
+        }
         self.bytes.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
         self.last.store(Self::now_millis(), std::sync::atomic::Ordering::Relaxed);
     }
@@ -1513,6 +1539,21 @@ impl Qurb {
         }
     }
 
+    /// The name of the file of this phone's own a collecting device is
+    /// taking now -- `VID_20261025_07.mp4` -- while one is: what the backup's
+    /// notice and Home name as going (the owner's list of 2026-10-25). None
+    /// when nothing went in the last few seconds.
+    pub fn serving_file(&self) -> Result<Option<String>, QurbError> {
+        if !self.serving.recently(COLLECTING) {
+            return Ok(None);
+        }
+        let Some(chunk) = self.serving.chunk.lock().ok().and_then(|c| *c) else {
+            return Ok(None);
+        };
+        let path = self.look()?.store().db().own_file_with_chunk(&chunk)?;
+        Ok(path.map(|p| p.rsplit('/').next().unwrap_or(&p).to_string()))
+    }
+
     /// Bytes a device reached would come and take from this one: sends not
     /// yet collected, shared files only this device has, and -- when a device
     /// keeps this one's files -- private ones not yet kept. What decides
@@ -2238,6 +2279,32 @@ impl Qurb {
     /// the computer has (decision 0063).
     pub fn folders_backup(&self) -> Result<BackupState, QurbError> {
         self.backup_state("folders", &format!("{}/storage", qurb_storage::db::OUTSIDE))
+    }
+
+    /// The files of both backups -- WhatsApp's and the chosen folders' -- the
+    /// computer keeping them does not have yet: the first `limit`, how many,
+    /// and their bytes (the owner's list of 2026-10-25: Home said *Folders,
+    /// 18 files* and nothing of what they were).
+    pub fn backup_waiting(&self, limit: u32) -> Result<BackupWaiting, QurbError> {
+        let engine = self.look()?;
+        let db = engine.store().db();
+        let mut files = Vec::new();
+        let (mut files_left, mut bytes_left) = (0, 0);
+        for prefix in [whatsapp_prefix(), format!("{}/storage", qurb_storage::db::OUTSIDE)] {
+            let room = (limit as usize).saturating_sub(files.len());
+            let (first, count, bytes) = db.outside_waiting(&prefix, room)?;
+            files_left += count;
+            bytes_left += bytes;
+            for (path, size) in first {
+                let shown = qurb_storage::person::shown_as(&path).unwrap_or(path);
+                let (folder, name) = match shown.rsplit_once('/') {
+                    Some((folder, name)) => (folder.to_string(), name.to_string()),
+                    None => (String::new(), shown),
+                };
+                files.push(BackupFile { name, folder, size });
+            }
+        }
+        Ok(BackupWaiting { files, files_left, bytes_left })
     }
 
     /// The WhatsApp backup as it stands: how much, and how much of it the
@@ -2973,13 +3040,17 @@ impl Qurb {
             }
         }
 
-        // The WhatsApp backup the computer does not have yet, while it is
-        // offered: on Wi-Fi (decision 0062). What keeps this phone serving
-        // until the computer has it all.
+        // The WhatsApp and folder backups the computer does not have yet,
+        // while they are offered: on Wi-Fi (decisions 0062 and 0063). What
+        // keeps this phone serving until the computer has them all. The
+        // folders' were left out until 2026-10-25, so a large one got
+        // neither the long pass nor its notice.
         if kept && store.db().outside_offered()? {
-            let backup = store.db().outside_summary(&whatsapp_prefix())?;
-            files += (backup.files - backup.held_files) as usize;
-            bytes += backup.bytes - backup.held_bytes;
+            for prefix in [whatsapp_prefix(), format!("{}/storage", qurb_storage::db::OUTSIDE)] {
+                let backup = store.db().outside_summary(&prefix)?;
+                files += (backup.files - backup.held_files) as usize;
+                bytes += backup.bytes - backup.held_bytes;
+            }
         }
         Ok((files, bytes))
     }

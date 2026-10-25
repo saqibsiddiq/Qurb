@@ -203,6 +203,10 @@ qurb.chosenFolders()                  // each ticked folder not inside another
 qurb.backUpChosen(storageRoot, 15)    // the folders chosen, here or on the computer,
                                       //   the deepest choice deciding each
 qurb.whatsappBackup(); qurb.foldersBackup()   // how many files, how many kept there
+qurb.backupWaiting(3)                 // both backups' files not on the computer
+                                      //   yet: the first three, named, and how
+                                      //   many and how much in all
+qurb.servingFile()                    // the file a computer is collecting now
 ```
 
 A computer asking to open this phone's folder there (decisions 0060 and

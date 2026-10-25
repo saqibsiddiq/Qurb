@@ -387,7 +387,9 @@ and recorded in order. A device collecting many small files fetches ahead:
 the engine tells its source what a plan will ask for
 (`ContentSource::coming`), and the network source fetches small files 32 at
 a time and reports what arrived in batches (`finished`) -- one at a time, a
-laptop collected 4 to 8 a second from a phone. A file kept for another device
+laptop collected 4 to 8 a second from a phone. A larger file is reported as
+soon as it arrives, so that a phone backing up videos counts them down as
+they go (2026-10-25). A file kept for another device
 that fails to arrive is logged, never written into this device's history. A
 source whose device has gone (`ContentSource::gone`, a closed connection) is
 asked for nothing more: the rest of the plan is left for the next sync and
@@ -1006,7 +1008,11 @@ qurb/
 │       │                  SyncWorker.kt       background sync, on WorkManager;
 │       │                                      a long pass in the foreground
 │       │                  Transfers.kt        the notification a long transfer
-│       │                                      runs under, and its progress
+│       │                                      runs under, and its progress; a
+│       │                                      backup's, *Backing up to …*
+│       │                  BackingUp.kt        a backup on its way: which file,
+│       │                                      how far this round, the notice
+│       │                                      while a pass runs, *Backed up*
 │       │                  Notices.kt          the desktop's three notifications,
 │       │                                      in the redesign's words: sent to
 │       │                                      you (Open), delivered, failed (Try

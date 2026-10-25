@@ -804,12 +804,23 @@ class Kit(private val app: AppCompatActivity) {
      * its name, how much of it, and, where how far it has got is known, a
      * bar under the name.
      */
-    fun queueRow(parent: ViewGroup, @DrawableRes icon: Int, name: String, size: String, done: Float? = null): View {
+    fun queueRow(
+        parent: ViewGroup,
+        @DrawableRes icon: Int,
+        name: String,
+        size: String,
+        done: Float? = null,
+        /** A second line under the name: where a file is, what is going. */
+        detail: String? = null,
+        /** A line under the bar: how much of how much. */
+        after: String? = null,
+    ): View {
         val row = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = dp(64)
-            setPadding(dp(12), 0, dp(14), 0)
+            // Room above and below once a row has more lines than its name.
+            setPadding(dp(12), dp(10), dp(14), dp(10))
         }
         val tile = FrameLayout(app).apply { background = ContextCompat.getDrawable(app, R.drawable.tile_quiet) }
         tile.addView(ImageView(app).apply {
@@ -825,6 +836,12 @@ class Kit(private val app: AppCompatActivity) {
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
         })
+        if (detail != null) words.addView(TextView(app).apply {
+            text = detail
+            setTextAppearance(R.style.Text_Meta)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+        })
         if (done != null) words.addView(
             android.widget.ProgressBar(app, null, android.R.attr.progressBarStyleHorizontal).apply {
                 progressDrawable = ContextCompat.getDrawable(app, R.drawable.progress_bar)
@@ -834,13 +851,20 @@ class Kit(private val app: AppCompatActivity) {
             },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(4)).apply { topMargin = dp(6) },
         )
+        if (after != null) words.addView(TextView(app).apply {
+            text = after
+            setTextAppearance(R.style.Text_Meta)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(4) })
         row.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(TextView(app).apply {
+        // No size at the end when a row says it under its bar instead.
+        if (size.isNotEmpty()) row.addView(TextView(app).apply {
             text = size
             setTextAppearance(R.style.Text_Meta)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { marginStart = dp(12) })
-        row.contentDescription = "$name, $size" + (done?.let { ", ${(it * 100).toInt()}% there" } ?: "")
+        row.contentDescription = listOfNotNull(name, detail, size.ifEmpty { null }, after,
+            done?.let { "${(it * 100).toInt()}% there" }).joinToString(", ")
         parent.addView(row)
         return row
     }
