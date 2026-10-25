@@ -1049,3 +1049,59 @@ then *All synced*. Before the *got it* change the same run said *29 more*
 throughout, and before the notice took the computer keeping the Vault it said
 only *Backing up*. **Not checked:** on the S23 and the laptop; WhatsApp's
 backup going this way; a round that grows mid-way; dark.
+
+## The owner's list of 2026-10-26
+
+His words, numbered as he gave them; the second 19 is counted as 20 here.
+
+1. "in home section, lets remove the sync button and only use a big send
+   button only"
+2. "in home section, remove the qurb logo in the top left and remove the
+   recent button and backup button on the top right"
+3. "in home section, rename the app from qurb to QurbSpace in the top left"
+4. "in home section, remove the selected device button below the big sync
+   button in the centre"
+5. "in home section, i want the circular icon in the top right which can be
+   either pressed and hold to trigger the same action which happens after
+   clicking the select device button below the big sync button in current
+   design or the circular icon can be clicked to open the page like in device
+   section of the page(just remove that send button and remove button should
+   be in red)"
+6. "i want a blue dot attached to circular icon to signify online and red
+   dot to signify offline"
+7. "the circular icon will either showcase the initial letter of the
+   selected device name or the pfp of the selected device and i want an
+   ability to change name and pfp of the device in settings"
+8. "activity log must be shifted to settings, also there is some issue with
+   activity log that it shows 1file 3 times, make it crisp and accurate and
+   we want to only store the activity log upto last 30days"
+9. "in files section, remove the recently deleted folder inside this phone"
+10. "in files section, remove the shared section"
+11. "in files section, there should be only device section and upon clicking
+    the specific device, you should get the option to either open shared
+    files or private file which is only accessible by the phone"
+12. "in files, rename the devices to remote access and use the blue and red
+    dot to signify online and offline"
+13. "upon remote accessing in private folder through phone, it is still not
+    yet designed as finalised in the figma file and since private folders can
+    only be accessed by the phone and not by the laptop, all the computer
+    operations like deleting a folder/file, renaming a folder/file, copying a
+    folder/file, pasting, moving, etc can be performed directly by the phone"
+14. "in remote access, the shared file must be the replica of the shared
+    folder of the desktop, but in my desktop the shared folders nothing but
+    still there are files in the shared folder of the phone"
+15. "i want to remove the entire device since i dont think, it is important
+    anymore cause all the operations are shifted to the circular icon in the
+    home page"
+16. "in settings, upon clicking on the background sync the user can select
+    how often they want the background sync through a timer or they can
+    choose to switch off the background at all"
+17. "in settings, after clicking show the 24 words the user must have the
+    option to download a text file containing the 24 words"
+18. "if someone clicks remove button, it must ask for phone
+    password/fingerprint/facelock"
+19. "our qr code and 6 digit page is not as beautiful as designed in the
+    figma file"
+20. "make sure to add some beautiful animations, different icon pack and
+    maintain our symmetric and beautiful design langauge throughout all the
+    changes"
