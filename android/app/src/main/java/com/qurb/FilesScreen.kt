@@ -10,7 +10,6 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.qurb.databinding.ItemFolderBinding
 import com.qurb.databinding.RowItemBinding
 import com.qurb.databinding.ScreenFilesBinding
 import kotlinx.coroutines.Dispatchers
@@ -64,18 +63,17 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
 
     init {
         if (private) {
-            views.title.text = "Private Vault"
-            views.subtitle.text = "Private to this phone. Only this phone can see these files; " +
-                "a device you choose can keep a backup."
-            views.searchBox.hint = "Search Private Vault"
-            views.search.hint = "Search Private Vault"
+            // As Figma's Vault: its name, and no paragraph under it.
+            views.title.text = "Vault"
+            views.searchBox.hint = "Search Vault"
+            views.search.hint = "Search Vault"
             views.back.visibility = View.VISIBLE
             views.back.text = "Files"
             views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         } else {
             views.subtitle.text = "Everything in your Qurb space, and where it is."
         }
-        views.subtitle.visibility = View.VISIBLE
+        views.subtitle.visibility = if (private) View.GONE else View.VISIBLE
         views.action.setOnClickListener { app.pickFilesToAdd(dir, private) }
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
@@ -159,12 +157,6 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                         (listing.folders + made).distinct().sorted() to listing.files
                     }
                 }
-                if (private) {
-                    views.subtitle.text = keptOn?.let {
-                        "Your folder, kept on $it and sealed on this phone: nobody using $it can open it. " +
-                            "Each file comes back when you open it."
-                    } ?: "Private to this phone. Only this phone can see these files; a device you choose can keep a backup."
-                }
                 shown = sorted(files)
                 val prefix = if (dir.isEmpty()) "" else "$dir/"
                 val list = buildList {
@@ -186,9 +178,15 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                             })
                         }
                     }
-                    if (folders.isNotEmpty()) add(Item.Label("Folders"))
+                    // Something copied in the Vault, to paste in this folder
+                    // (as Private on a computer has it); held, forgotten.
+                    val clip = VaultClip.copied
+                    if (private && clip != null && query.isEmpty()) {
+                        val clipName = clip.substringAfterLast('/')
+                        add(Item.Link(R.drawable.ic_clipboard, "Paste $clipName", "") { paste(clip) })
+                    }
+                    // As Figma draws a folder: cards, then rows, no headings.
                     addAll(folders.map { Item.Folder(it, prefix + it) })
-                    if (shown.isNotEmpty()) add(Item.Label(if (query.isEmpty()) "Files" else "Results"))
                     addAll(shown.map { Item.File(it) })
                     if (!private && dir.isEmpty() && query.isEmpty()) {
                         add(Item.Link(R.drawable.ic_trash_2, "Recently deleted",
@@ -223,6 +221,18 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
     private fun drawCrumbs() {
         val crumbs = views.crumbs
         crumbs.removeAllViews()
+        if (private) {
+            // As Figma's folder page: the folder's name as the title, the
+            // way back naming where it goes.
+            crumbs.visibility = View.GONE
+            views.title.text = if (dir.isEmpty()) "Vault" else dir.substringAfterLast('/')
+            views.back.text = when {
+                dir.isEmpty() -> "Files"
+                dir.contains('/') -> dir.substringBeforeLast('/').substringAfterLast('/')
+                else -> "Vault"
+            }
+            return
+        }
         if (query.isNotEmpty()) return
         val parts = if (dir.isEmpty()) emptyList() else dir.split('/')
         val crumb = { label: String, to: String, last: Boolean ->
@@ -276,24 +286,9 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
         val folder = entry.path.substringBeforeLast('/', "")
         val downloading = Downloads.wanted(entry)
         val state = States.of(entry, downloading, keptOn)
-        val sheet = kit.sheet().header(
-            States.icon(entry.path), name,
-            (if (entry.private) "Private Vault" else "Qurb") + if (folder.isEmpty()) "" else " / $folder",
-        )
-        val facts = android.widget.LinearLayout(app).apply { orientation = android.widget.LinearLayout.VERTICAL }
-        val group = kit.group(facts)
-        kit.item(group, state.words, when (entry.available) {
-            Available.HERE -> "On this phone, and another device has it too."
-            Available.ONLY_HERE -> "This is the only copy currently stored in Qurb. It reaches your other devices the next time one is online."
-            Available.ELSEWHERE -> if (downloading) "Coming to this phone at the next sync."
-                else "Not on this phone right now. It stays in Qurb; keep it here to open it."
-            Available.NOWHERE -> "No device this phone syncs with has this file. It was freed while another " +
-                "device kept it, and that device no longer has it or is no longer paired. It stays listed so " +
-                "you know it existed; deleting it removes it from your devices' lists."
-        })
-        kit.item(group, Words.size(entry.size),
-            "Changed ${Words.ago(entry.modifiedAt / 1_000_000_000)}")
-        sheet.view(facts, top = 16)
+        // As Figma's file sheet: its kind, its name, where it is as a chip,
+        // then what can be done as round buttons.
+        val sheet = kit.sheet().file(States.icon(entry.path), name, kit.chip(state.icon, state.words))
 
         // A file on no device can be read about and deleted, and nothing
         // else: there is nothing to open and nowhere to fetch it from.
@@ -301,23 +296,82 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
         if (here) {
             sheet.action(R.drawable.ic_external_link, "Open") { app.open(entry) }
         } else if (entry.available == Available.ELSEWHERE && !downloading) {
-            sheet.action(R.drawable.ic_download, "Keep on this phone") { fetch(entry) }
+            sheet.action(R.drawable.ic_download, "Keep here", meta = "Kept on this phone") { fetch(entry) }
         }
         if (entry.available == Available.HERE) {
-            sheet.action(R.drawable.ic_cloud_off, "Free local space") { free(entry) }
+            sheet.action(R.drawable.ic_cloud_off, "Free up", meta = "Free local space; it stays in Qurb") { free(entry) }
         }
         if (here) {
-            sheet.action(R.drawable.ic_send, "Send to device…") {
+            sheet.action(R.drawable.ic_send, "Send") {
                 app.chooseDevice("Send $name to") { to -> app.send(entry, to) }
             }
-            sheet.action(R.drawable.ic_save, "Save a copy to this phone") { app.saveCopy(entry) }
-            sheet.action(R.drawable.ic_pencil, "Rename…") { rename(entry) }
-            sheet.action(R.drawable.ic_folder_input, "Move to folder…") { move(entry) }
+            sheet.action(R.drawable.ic_save, "Save", meta = "A copy to this phone") { app.saveCopy(entry) }
+            sheet.action(R.drawable.ic_pencil, "Rename") { rename(entry) }
+            if (private) sheet.action(R.drawable.ic_copy, "Copy") { copy(entry.path) }
+            sheet.action(R.drawable.ic_folder_input, "Move") { move(entry) }
             // No moving between the shared area and the Vault (decision
             // 0057) since a phone keeps no shared files (decision 0073).
         }
         sheet.action(R.drawable.ic_trash_2, "Delete", danger = true) { delete(entry) }
         sheet.show()
+    }
+
+    /**
+     * A folder of the Vault, held: renamed, copied, moved or deleted whole,
+     * as a computer's file manager does (the owner, 2026-10-26), in the
+     * sheet a file's tap gives.
+     */
+    private fun folderActions(path: String) {
+        val name = path.substringAfterLast('/')
+        kit.sheet()
+            .file(R.drawable.ic_folder, name, iconTint = R.color.green)
+            .action(R.drawable.ic_pencil, "Rename") {
+                ask("Rename", name, "Rename") { to ->
+                    val parent = path.substringBeforeLast('/', "")
+                    vault("Renamed") { it.moveKept(path, if (parent.isEmpty()) to else "$parent/$to") }
+                }
+            }
+            .action(R.drawable.ic_copy, "Copy") { copy(path) }
+            .action(R.drawable.ic_folder_input, "Move") {
+                ask("Move to folder", path.substringBeforeLast('/', ""), "Move") { folder ->
+                    val to = folder.trim('/')
+                    vault("Moved") { it.moveKept(path, if (to.isEmpty()) name else "$to/$name") }
+                }
+            }
+            .action(R.drawable.ic_trash_2, "Delete", danger = true) {
+                kit.sheet()
+                    .mark(R.drawable.ic_trash_2)
+                    .title("Delete $name?", centred = true)
+                    .line("Everything in it, in Recently deleted for 30 days")
+                    .buttons("Delete", danger = true) { vault("Deleted $name") { it.deleteKept(path) } }
+                    .show()
+            }
+            .show()
+    }
+
+    private fun copy(path: String) {
+        VaultClip.copied = path
+        app.say("Copied ${path.substringAfterLast('/')}")
+        refresh()
+    }
+
+    private fun paste(clip: String) {
+        val name = clip.substringAfterLast('/')
+        vault("Pasted $name") { it.copyKept(clip, if (dir.isEmpty()) name else "$dir/$name") }
+    }
+
+    /** A change to the Vault, said done or why not, and the folder read again. */
+    private fun vault(done: String, work: (uniffi.qurb_mobile.Qurb) -> Unit) {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { work(engine()) }
+                app.say(done)
+                app.madeChange()
+            } catch (e: Exception) {
+                app.fail("Not done", e)
+                app.changed()
+            }
+        }
     }
 
     /** Ask for a name, with a starting text, then act on it. */
@@ -452,13 +506,20 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
         override fun getItemViewType(position: Int) = when (list[position]) {
             is Item.Folder -> FOLDER
             is Item.Label -> LABEL
+            is Item.File -> FILE
             else -> ROW
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
             val inflater = LayoutInflater.from(parent.context)
             return when (viewType) {
-                FOLDER -> FolderHolder(ItemFolderBinding.inflate(inflater, parent, false))
+                FOLDER -> FolderHolder(android.widget.FrameLayout(app).apply {
+                    layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                })
+                FILE -> FileHolder(kit.fileRow().also {
+                    it.root.layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(64))
+                        .apply { topMargin = kit.dp(4) }
+                })
                 LABEL -> object : RecyclerView.ViewHolder(TextView(app).apply {
                     setTextAppearance(R.style.Text_Label)
                     setPadding(kit.dp(8), kit.dp(18), kit.dp(8), kit.dp(6))  // 12 + 8: the gutter
@@ -471,7 +532,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             when (val item = list[position]) {
                 is Item.Label -> (holder.itemView as TextView).text = item.text
                 is Item.Folder -> (holder as FolderHolder).bind(item)
-                is Item.File -> (holder as RowHolder).bind(item.entry)
+                is Item.File -> (holder as FileHolder).bind(item.entry)
                 is Item.Link -> (holder as RowHolder).bind(item)
             }
         }
@@ -479,24 +540,48 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
         override fun getItemCount() = list.size
     }
 
-    private inner class FolderHolder(private val tile: ItemFolderBinding) : RecyclerView.ViewHolder(tile.root) {
+    /** A folder as a card, two to a row, 12 dp apart and 12 dp over the next. */
+    private inner class FolderHolder(private val slot: android.widget.FrameLayout) : RecyclerView.ViewHolder(slot) {
         fun bind(item: Item.Folder) {
-            tile.name.text = item.name
-            tile.root.setOnClickListener { open(item.path) }
+            slot.removeAllViews()
+            slot.addView(kit.folderCard(item.name,
+                onHold = if (private) ({ folderActions(item.path) }) else null) { open(item.path) })
+            val left = folderColumn(bindingAdapterPosition) == 0
+            slot.setPadding(if (left) 0 else kit.dp(6), 0, if (left) kit.dp(6) else 0, kit.dp(12))
         }
     }
 
-    private inner class RowHolder(private val row: RowItemBinding) : RecyclerView.ViewHolder(row.root) {
+    /** Which of the two columns the folder at `position` is in. */
+    private fun folderColumn(position: Int): Int {
+        var column = 0
+        for (i in 0 until position) column = if (items.at(i) is Item.Folder) (column + 1) % 2 else 0
+        return column
+    }
+
+    /** A file as Figma's row, a badge for where it is; tapped or held, its sheet. */
+    private inner class FileHolder(private val row: Kit.FileRow) : RecyclerView.ViewHolder(row.root) {
         fun bind(entry: FileEntry) {
             val downloading = Downloads.wanted(entry)
             // The whole path when searching, where the folder is part of the
             // answer; just the name inside a folder.
             val name = if (query.isNotEmpty()) entry.path else entry.path.substringAfterLast('/')
-            kit.bindRow(row, States.icon(entry.path), name, Words.size(entry.size),
-                States.of(entry, downloading, keptOn)) { choose(entry) }
+            val state = States.of(entry, downloading, keptOn)
+            kit.bindFile(row, States.icon(entry.path), name, Words.size(entry.size), badge(entry, downloading),
+                state.words) { choose(entry) }
             row.tile.alpha = if (!States.here(entry) && !downloading) 0.7f else 1f
         }
+    }
 
+    /** Where a file is, as Figma's badge: a check on green for here, a cloud on grey for elsewhere. */
+    private fun badge(entry: FileEntry, downloading: Boolean): Kit.Badge = when {
+        downloading && entry.available == Available.ELSEWHERE -> Kit.Badge(R.drawable.ic_download, R.color.green)
+        entry.available == Available.HERE -> Kit.Badge(R.drawable.ic_circle_check, R.color.healthy)
+        entry.available == Available.ONLY_HERE -> Kit.Badge(R.drawable.ic_circle_check, R.color.attention)
+        entry.available == Available.ELSEWHERE -> Kit.Badge(R.drawable.ic_cloud, R.color.neutral_bg, R.color.text_2)
+        else -> Kit.Badge(R.drawable.ic_triangle_alert, R.color.error)
+    }
+
+    private inner class RowHolder(private val row: RowItemBinding) : RecyclerView.ViewHolder(row.root) {
         fun bind(link: Item.Link) {
             kit.bindRow(row, link.icon, link.title, link.meta, trail = kit.chevron()) { link.go() }
             row.tile.alpha = 1f
@@ -508,6 +593,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
         const val ROW = 0
         const val FOLDER = 1
         const val LABEL = 2
+        const val FILE = 3
     }
 }
 
@@ -527,4 +613,13 @@ object Downloads {
         if (entry.available != Available.ELSEWHERE) asked -= entry.path
         entry.path in asked
     }
+}
+
+/**
+ * A file or folder of the Vault copied, by its path there, to paste in
+ * another folder: from the phone's own Vault or from Private on a computer,
+ * which are the same vault. Kept while the app is.
+ */
+object VaultClip {
+    var copied: String? = null
 }

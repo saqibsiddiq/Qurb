@@ -18,6 +18,8 @@
     <color name="green_hover">#4A9A7D</color>
     <color name="green_pressed">#357A61</color>
     <color name="green_soft">#1C2A24</color>
+    <color name="avatar_fill">#223A30</color>
+    <color name="avatar_ring">#33584A</color>
 
     <color name="healthy">#74C29B</color>
     <color name="online">#5B9BF0</color>

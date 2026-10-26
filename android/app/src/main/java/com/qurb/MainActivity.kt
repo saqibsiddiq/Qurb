@@ -146,6 +146,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** What a screen does with the picture picked for it, while the picker is open. */
+    private var pictureThen: ((Uri) -> Unit)? = null
+
+    private val picturePicker = registerForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        val then = pictureThen
+        pictureThen = null
+        if (then != null && uri != null) then(uri)
+    }
+
+    /** Pick a picture with the system's photo picker, for a screen to do `then` with. */
+    fun pickPicture(then: (Uri) -> Unit) {
+        pictureThen = then
+        try {
+            picturePicker.launch(
+                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        } catch (e: Exception) {
+            pictureThen = null
+            fail("Could not open the photo picker", e)
+        }
+    }
+
     /** The device files are being picked for, while the picker is open. */
     private var sendingTo: PeerInfo? = null
 
@@ -937,7 +961,7 @@ class MainActivity : AppCompatActivity() {
             .option(R.drawable.ic_qr_code, "Scan a code") {
                 scanner.launch(Intent(this, ScanActivity::class.java))
             }
-            .option(R.drawable.ic_smartphone, "Show my code") { ShowCode.show(this) }
+            .option(R.drawable.ic_smartphone, "Show my code") { push(ShowCode(this)) }
             .option(R.drawable.ic_keyboard, "Type 6 digits") { typeCode() }
             // Another person's computer, as a guest (decision 0060). Its code
             // says so, so scanning it from here or above does the same.
@@ -947,52 +971,14 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /**
-     * The six digits a device on the same Wi-Fi shows beside its QR code
-     * (decision 0066), on a number pad: joining starts as the sixth is typed,
-     * as WhatsApp's linking code does. The digits fetch the long code, which
-     * the engine still takes typed in full.
-     */
-    private fun typeCode() {
-        val input = EditText(this).apply {
-            hint = "000000"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            filters = arrayOf(android.text.InputFilter.LengthFilter(6))
-            gravity = android.view.Gravity.CENTER
-            textSize = 30f
-            letterSpacing = 0.35f
-            typeface = androidx.core.content.res.ResourcesCompat.getFont(this@MainActivity, R.font.inter_semibold)
-            fontFeatureSettings = "tnum"
-            importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO
-            setPadding(kit.dp(18), kit.dp(14), kit.dp(18), kit.dp(14))
-            background = androidx.core.content.ContextCompat.getDrawable(this@MainActivity, R.drawable.glass_group)
-        }
-        val sheet = kit.sheet()
-            // As the option that opens it says.
-            .title("Type 6 digits")
-            .view(input, top = 16)
-            .text("Both on the same Wi-Fi")
-            .buttons("Join") {
-                val code = input.text.toString()
-                if (code.length == 6) joinWith(code)
-            }
-        input.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(typed: android.text.Editable?) {
-                if (typed?.length == 6 && sheet.dialog.isShowing) {
-                    sheet.dialog.dismiss()
-                    joinWith(typed.toString())
-                }
-            }
-        })
-        sheet.show()
-        // The number pad up at once: the digits are all this sheet is for.
-        input.requestFocus()
-        sheet.dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
-    }
+    /** The six digits typed, on a page of their own ([TypeCode]). */
+    private fun typeCode() = push(TypeCode(this))
 
-    private fun joinWith(code: String) {
+    /** Whether `screen` is the one showing. */
+    fun showing(screen: Screen) = current === screen
+
+    /** Join the device whose code or six digits these are, and say how it went. */
+    fun joinWith(code: String) {
         lifecycleScope.launch {
             try {
                 // Six digits are looked for on this Wi-Fi, which the phone

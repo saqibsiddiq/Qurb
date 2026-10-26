@@ -18,6 +18,10 @@
     <color name="green_hover">#285B4A</color>
     <color name="green_pressed">#214B3D</color>
     <color name="green_soft">#E8F0EC</color>
+    <!-- A device's circle: deeper than green_soft, which all but vanishes on
+         the page in light mode, and ringed so that it reads as a shape. -->
+    <color name="avatar_fill">#D2E5DB</color>
+    <color name="avatar_ring">#A9C9B9</color>
     <!-- The luminous green, only ever faint: the environment and the light
          that means Qurb is moving something (§28). -->
     <color name="glow">#6FAF98</color>

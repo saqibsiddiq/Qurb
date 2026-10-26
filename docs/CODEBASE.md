@@ -912,7 +912,10 @@ qurb/
 │       │                                      attention, empty states, sheets;
 │       │                                      and the redesign's: device chips
 │       │                                      and cards, badges, pills, queue
-│       │                                      rows, card rows, sheet options
+│       │                                      rows, card rows, sheet options;
+│       │                                      Figma's file rows, folder cards,
+│       │                                      chips, and a file sheet whose
+│       │                                      actions are round buttons
 │       │                  StatusMark.kt       Home's large status mark: a disc, a
 │       │                                      ring in the state's colour, a light
 │       │                                      travelling round it while syncing;
@@ -940,12 +943,18 @@ qurb/
 │       │                                      as tiles), then Remote access, each
 │       │                                      computer opening to its Shared or
 │       │                                      this phone's Private folder there
-│       │                  FilesScreen.kt      the Private Vault: each file's
-│       │                                      state as an icon, its size; still
-│       │                                      carries the shared area's browsing,
-│       │                                      no longer reached since 0073
+│       │                  FilesScreen.kt      the Vault, as Figma's Files draws
+│       │                                      it: folders as cards, files as rows
+│       │                                      badged with where each is, a tap or
+│       │                                      a hold giving the round-button
+│       │                                      sheet; a folder held renamed,
+│       │                                      copied, moved or deleted whole
+│       │                                      (VaultClip, shared with KeptScreen);
+│       │                                      still carries the shared area's
+│       │                                      browsing, no longer reached (0073)
 │       │                  ReceivedScreen.kt   what other devices sent to this
-│       │                                      phone, from the history, by sender
+│       │                                      phone, from the history, the
+│       │                                      sender a badge; each file's sheet
 │       │                  DeviceScreen.kt     one device's page, from Home's
 │       │                                      circle: what it backs up, who it
 │       │                                      is, removing it, behind the
@@ -985,7 +994,12 @@ qurb/
 │       │                                      change your mind, the days left on
 │       │                                      a clock
 │       │                  ShowCode.kt         this phone showing a pairing code,
-│       │                                      its six digits, and Copy code
+│       │                                      a page as Figma has it: the QR
+│       │                                      code drawn as dots, its six digits,
+│       │                                      a clock, Copy code and Stop
+│       │                  TypeCode.kt         Home's Type 6 digits, a page of six
+│       │                                      boxes and Join
+│       │                  DigitBoxes.kt       the six boxes, shared with Setup
 │       │                  Approval.kt         a device asking to join, approved by
 │       │                                      the six digits both screens show;
 │       │                                      and, joining, the page that says
@@ -1232,6 +1246,7 @@ for the workspace as it stands.
 | Staying on the relay | the connection dialled again when it goes, from one second doubling to a minute, every name registered again; a relay down at start kept, known down, and not dialled through until up — tested by restarting a relay under a socket ([0068](decisions/0068-the-rendezvous-service-relays.md), amended 2026-10-18) |
 | A list fetched only when it changed | `TreeDigest`: the fingerprint of the list a device would send; the asker keeps each device's last list (`trees`) and fetches only a changed one, so a pass with nothing changed received 24 KiB rather than 9.8 MB on the S23 — [0071](decisions/0071-a-file-list-fetched-only-when-it-changed.md) |
 | Only what changed in a list | `TreeSince`: the entries changed since the asker's kept list, by a counter in the index that triggers move (schema 27), with the whole list's fingerprint; the asker rebuilds its list and uses it only if the fingerprint matches, else fetches it whole. On a copy of the laptop's index, one changed file costs 194 bytes rather than 7.9 MB; not yet run on the S23 or on a hotspot — [0072](decisions/0072-only-what-changed-in-a-list.md) |
+| A device's own name and picture | set on the device itself (the phone's Settings, the computer's Settings; a computer's config name recorded at each start, `daemon::tell_name`) into `own_profile` (schema 28), with a time always later than the last; every sync asks each paired device `Profile { since }` (`learn_profile`) and is answered only what changed, a picture at most 256 KiB (`wire::MAX_PICTURE`), kept in `peer_profiles` and the name written over the pairing name in `peers`, so a rename reaches devices already paired. Both apps make a 256-pixel square JPEG; the phone draws circles from memory, reading a picture again only when its time changes (`PeerInfo::picture_at`). A device from before this answers *not found* and keeps its pairing name (`tests/profile.rs`) — the owner's list of 2026-10-26, item 7 |
 | The relay alongside a slow direct path | the relay tried once the announced addresses have had four seconds, whichever connects first kept, rather than after all of them time out (0071) |
 | An edit in the clock's tick | a file read within three seconds of its time is read again on each scan until older, so a second write of the same size in the same tick is not missed (`racy`, index schema 26) — found on Android 8, [0069](decisions/0069-too-recent-to-trust.md) |
 | Congestion control | BBR rather than quinn's default, Cubic, which reads Wi-Fi's stray losses as congestion: 12.5–14.0 MB/s from the S23 against 5.2–5.3 — [0051](decisions/0051-bbr-not-cubic.md) |

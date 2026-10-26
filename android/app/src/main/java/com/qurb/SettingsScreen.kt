@@ -17,8 +17,8 @@ import uniffi.qurb_mobile.Usage
 /**
  * Settings, as redesigned (docs/design/redesign.md, Settings draft 2): four
  * short groups of rows, each an icon, a name and a short value. *This phone*:
- * its name, its identity, and its key (one row, opening where the key is safe
- * and the 24 words behind the screen lock). *Storage*: the space Qurb takes,
+ * its name and picture, its identity, and its key (one row, opening where the
+ * key is safe and the 24 words behind the screen lock). *Storage*: the space Qurb takes,
  * and Free up. *App*: notifications as one switch, the theme, motion.
  * *Connection*: background sync, and Advanced on a page of its own.
  *
@@ -27,9 +27,9 @@ import uniffi.qurb_mobile.Usage
  * here until Files has it, and the shared files' settings under Advanced until
  * the phone stops holding shared files (decision 0073).
  *
- * The name is shown and not changed here: a device learns this phone's name
- * when they pair and keeps it, so a new name would reach no device already
- * paired. Renaming waits on the engine telling devices a new name.
+ * The name and picture are this phone's own, set here and nowhere else, and
+ * every paired device learns them at its next sync (the owner's list of
+ * 2026-10-26, item 7). Until a name is set, the phone's model.
  */
 class SettingsScreen(app: MainActivity) : Screen(app) {
 
@@ -52,6 +52,9 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         val keyKept: Boolean,
         /** Whether that backup leaves the phone: Google's, with a screen lock. */
         val keyInCloud: Boolean,
+        /** The name set here, or empty. */
+        val name: String,
+        val picture: android.graphics.Bitmap?,
     )
 
     override fun refresh() {
@@ -72,6 +75,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                     // compared with this phone's own.
                     val found = Backup.find(app)
                     val mine = runCatching { engine.recoveryPhrase() }.getOrNull()
+                    val profile = runCatching { engine.ownProfile() }.getOrNull()
                     State(
                         engine.usage(),
                         runCatching { engine.identityShort() }.getOrDefault(""),
@@ -79,6 +83,8 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                         engine.sentCopies(),
                         found != null && found == mine,
                         Backup.leavesThePhone(app),
+                        profile?.name.orEmpty(),
+                        profile?.picture?.let { Devices.decode(it) },
                     )
                 }
                 show(state)
@@ -96,7 +102,15 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
 
         kit.label(page, "This phone", top = 12)
         var card = kit.card(page)
-        kit.setting(card, R.drawable.ic_smartphone, "Name", android.os.Build.MODEL ?: "Phone")
+        val name = state.name.ifEmpty { android.os.Build.MODEL ?: "Phone" }
+        kit.setting(card, R.drawable.ic_smartphone, "Name", name) {
+            kit.askName("Name", name, "Save") { to -> change { it.setOwnName(to) } }
+        }
+        // Its circle at the end, as the devices paired with it draw it.
+        val picture = kit.setting(card, R.drawable.ic_image, "Picture") { picture(state) }
+        picture.chevron.visibility = View.GONE
+        picture.root.addView(kit.avatar(name, null, state.picture, 36),
+            LinearLayout.LayoutParams(kit.dp(36), kit.dp(36)))
         if (state.identity.isNotEmpty()) kit.setting(card, R.drawable.ic_info, "Identity", state.identity)
         kit.setting(card, R.drawable.ic_shield_check, "Key", when {
             !state.keyKept -> "Not kept yet"
@@ -147,8 +161,35 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.label(page, "Connection")
         card = kit.card(page)
         kit.setting(card, R.drawable.ic_history, "Background sync",
-            SyncWorker.CHOICES.firstOrNull { it.first == SyncWorker.every(app) }?.second ?: "") { background() }
+            SyncWorker.words(SyncWorker.every(app))) { background() }
         kit.setting(card, R.drawable.ic_link, "Advanced") { app.push(AdvancedScreen(app)) }
+    }
+
+    /** Pick a picture for this phone, or, with one set, pick another or take it away. */
+    private fun picture(state: State) {
+        val pick = {
+            app.pickPicture { uri ->
+                scope.launch {
+                    val bytes = runCatching { withContext(Dispatchers.IO) { Devices.encode(app, uri) } }
+                        .getOrElse { app.fail("Could not read that picture", it); return@launch }
+                    change { it.setOwnPicture(bytes) }
+                }
+            }
+        }
+        if (state.picture == null) return pick()
+        kit.sheet().title("Picture")
+            .action(R.drawable.ic_image, "Choose another") { pick() }
+            .action(R.drawable.ic_trash_2, "Remove", danger = true) { change { it.setOwnPicture(null) } }
+            .show()
+    }
+
+    /** Change this phone's name or picture, and show it. */
+    private fun change(work: (uniffi.qurb_mobile.Qurb) -> Unit) {
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { work(engine()) } }
+                .onSuccess { refresh() }
+                .onFailure { app.fail("Could not change it", it) }
+        }
     }
 
     /**
@@ -273,9 +314,10 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
     }
 
     /**
-     * When the background sync last ran, and how often it does. The honest
-     * answer is "about every fifteen minutes, when Android allows", or every
-     * hour once another device's push has woken this phone lately.
+     * When the background sync last ran and how often it runs, with Set (a
+     * timer) and Off. Auto, until one is set, is "about every fifteen
+     * minutes, when Android allows", or every hour once another device's
+     * push has woken this phone lately.
      */
     private fun background() {
         val facts = LinearLayout(app).apply {
@@ -291,32 +333,81 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
             .mark(R.drawable.ic_history, R.color.green_soft, R.color.green)
             .title("Background sync", centred = true)
             .view(facts, top = 16)
-        // How often, or not at all (the owner's list of 2026-10-26, item
-        // 16): three of one width a row, the chosen one filled. Auto is
-        // every 15 minutes, or hourly once another device's push wakes this
-        // phone; Android's own batching makes any of them a floor.
-        val chosen = SyncWorker.every(app)
-        for (row in SyncWorker.CHOICES.chunked(3)) {
-            val line = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
-            for ((minutes, words) in row) {
-                line.addView(kit.button(words, if (minutes == chosen) Kit.Style.PRIMARY else Kit.Style.SECONDARY) {
-                    sheet.dismiss()
-                    SyncWorker.choose(app, minutes)
-                    app.say(if (minutes == SyncWorker.OFF) "Background sync off" else "Background sync: $words")
-                    refresh()
-                }, LinearLayout.LayoutParams(0, kit.dp(44), 1f).apply {
-                    if (line.childCount > 0) marginStart = kit.dp(8)
-                })
-            }
-            sheet.view(line, top = 10)
-        }
-        sheet.view(kit.button("Run now") {
+        kit.setting(facts, R.drawable.ic_clock, "Every", SyncWorker.words(SyncWorker.every(app)))
+        // Two buttons (the owner's list of 2026-10-26, item 16, as revised
+        // the same day): Set, for a timer, and Off, in red. Until one is
+        // set, Auto: every 15 minutes, or hourly once another device's push
+        // wakes this phone. Android's own batching makes any of them a floor.
+        val line = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
+        line.addView(kit.button("Set") { sheet.dismiss(); timer() },
+            LinearLayout.LayoutParams(0, kit.dp(48), 1f))
+        line.addView(kit.button("Off", Kit.Style.DANGER) {
             sheet.dismiss()
-            // Through the scheduler rather than directly, so this exercises
-            // the same path the periodic schedule uses.
-            SyncWorker.runNow(app)
-            app.say("Queued. It runs when Android allows.")
-        }, top = 18).show()
+            SyncWorker.choose(app, SyncWorker.OFF)
+            app.say("Background sync off")
+            refresh()
+        }, LinearLayout.LayoutParams(0, kit.dp(48), 1f).apply { marginStart = kit.dp(10) })
+        sheet.view(line, top = 18).show()
+    }
+
+    /**
+     * How often background sync runs, as a timer: hours and minutes on two
+     * wheels, from [SyncWorker.SHORTEST] to [SyncWorker.LONGEST], minutes in
+     * quarters. Starts at what is set, or 15 minutes.
+     */
+    private fun timer() {
+        val now = SyncWorker.every(app).takeIf { it > 0 } ?: SyncWorker.SHORTEST
+        val quarters = arrayOf("00", "15", "30", "45")
+        val hours = wheel(0, (SyncWorker.LONGEST / 60).toInt(), (now / 60).toInt())
+        val minutes = wheel(0, quarters.size - 1, ((now % 60) / 15).toInt()).apply { displayedValues = quarters }
+        // Never under 15 minutes, never over a day: the wheels put themselves right.
+        val keep = { _: android.widget.NumberPicker, _: Int, _: Int ->
+            if (hours.value == 0 && minutes.value == 0) minutes.value = 1
+            if (hours.value == hours.maxValue && minutes.value != 0) minutes.value = 0
+        }
+        hours.setOnValueChangedListener(keep)
+        minutes.setOnValueChangedListener(keep)
+
+        val row = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        for ((picker, unit) in listOf(hours to "h", minutes to "min")) {
+            row.addView(picker, LinearLayout.LayoutParams(kit.dp(72), ViewGroup.LayoutParams.WRAP_CONTENT))
+            row.addView(TextView(app).apply {
+                text = unit
+                setTextAppearance(R.style.Text_Title)
+                setTextColor(kit.color(R.color.text_2))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = kit.dp(4)
+                marginEnd = kit.dp(20)
+            })
+        }
+        val sheet = kit.sheet()
+            .mark(R.drawable.ic_clock, R.color.green_soft, R.color.green)
+            .title("Every", centred = true)
+            .view(row, top = 8)
+        sheet.view(kit.button("Set") {
+            sheet.dismiss()
+            val every = (hours.value * 60L + minutes.value * 15L)
+                .coerceIn(SyncWorker.SHORTEST, SyncWorker.LONGEST)
+            SyncWorker.choose(app, every)
+            app.say("Every ${SyncWorker.words(every)}")
+            refresh()
+        }, top = 12).show()
+    }
+
+    /** One wheel of [timer], its numbers in the page's colours. */
+    private fun wheel(min: Int, max: Int, at: Int) = android.widget.NumberPicker(app).apply {
+        minValue = min
+        maxValue = max
+        value = at.coerceIn(min, max)
+        wrapSelectorWheel = false
+        descendantFocusability = android.widget.NumberPicker.FOCUS_BLOCK_DESCENDANTS
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            textColor = kit.color(R.color.text)
+            selectionDividerHeight = kit.dp(1)
+        }
     }
 
     /** Keep the key in Block Store now, for a phone that does not have it. */

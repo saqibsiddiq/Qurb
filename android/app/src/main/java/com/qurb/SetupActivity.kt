@@ -161,53 +161,17 @@ class SetupActivity : AppCompatActivity() {
         step(R.drawable.ic_plus, null)
     }
 
-    /**
-     * Six boxes showing what is typed into the field under them, in two threes
-     * as the number is said; joining starts at the sixth.
-     */
+    /** Six boxes showing what is typed into the field under them; joining starts at the sixth. */
     private fun digitBoxes() {
-        val boxes = views.boxes
-        for (i in 0 until 6) {
-            if (i == 3) boxes.addView(Space(this), LinearLayout.LayoutParams(dp(24), 1))
-            boxes.addView(TextView(this).apply {
-                gravity = android.view.Gravity.CENTER
-                textSize = 26f
-                typeface = androidx.core.content.res.ResourcesCompat.getFont(this@SetupActivity, R.font.inter_semibold)
-                setTextColor(getColor(R.color.text))
-            }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { if (i % 3 != 0) marginStart = dp(8) })
-        }
-        fun paint() {
-            val typed = views.code.text?.toString().orEmpty()
-            var digit = 0
-            for (i in 0 until boxes.childCount) {
-                val box = boxes.getChildAt(i) as? TextView ?: continue
-                box.text = typed.getOrNull(digit)?.toString() ?: ""
-                box.background = androidx.core.content.ContextCompat.getDrawable(this,
-                    if (digit == typed.length.coerceAtMost(5)) R.drawable.digit_box_now else R.drawable.digit_box)
-                digit++
-            }
-        }
-        paint()
+        DigitBoxes.attach(this, views.boxes, views.code) { join(it) }
         views.code.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(text: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(typed: android.text.Editable?) {
-                paint()
-                ready()
-                // As WhatsApp's linking code does: the sixth digit is the go.
-                if (typed?.length == 6) join(typed.toString())
-            }
+            override fun afterTextChanged(typed: android.text.Editable?) = ready()
         })
-        boxes.setOnClickListener { askForDigits() }
     }
 
-    private fun askForDigits() {
-        views.code.requestFocus()
-        views.code.post {
-            getSystemService(android.view.inputmethod.InputMethodManager::class.java)
-                ?.showSoftInput(views.code, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-        }
-    }
+    private fun askForDigits() = DigitBoxes.ask(this, views.code)
 
     private fun hideKeyboard() {
         getSystemService(android.view.inputmethod.InputMethodManager::class.java)

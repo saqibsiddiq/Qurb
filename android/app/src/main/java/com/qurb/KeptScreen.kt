@@ -154,30 +154,32 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         page.addView(rows)
         // Something copied, to paste in this folder of the Private Vault
         // (the owner's list of 2026-10-26, item 13); the cross forgets it.
-        val clip = copied
+        val clip = VaultClip.copied
         if (clip != null && inVault && query.isEmpty()) {
             val clipName = clip.substringAfterLast('/')
             kit.row(rows, R.drawable.ic_clipboard, "Paste $clipName", "",
-                trail = kit.iconButton(R.drawable.ic_x, "Forget $clipName") { copied = null; refresh() }) {
+                trail = kit.iconButton(R.drawable.ic_x, "Forget $clipName") { VaultClip.copied = null; refresh() }) {
                 val into = dir.removePrefix(vault.orEmpty()).trim('/')
                 change("Pasted $clipName") { it.copyKept(clip, if (into.isEmpty()) clipName else "$into/$clipName") }
             }
         }
-        if (listing.folders.isNotEmpty()) kit.section(rows, if (dir.isEmpty()) "Phones" else "Folders")
-        for (name in listing.folders) {
+        // As Figma draws a folder's contents: folders as cards, two to a
+        // row, files as rows, no headings. A folder of the Private Vault,
+        // held, gives the sheet a tap on a file gives: what a computer's file
+        // manager does with one, done by this phone (item 13).
+        kit.folderGrid(rows, listing.folders.map { name ->
             val icon = if (dir.isEmpty()) R.drawable.ic_smartphone else R.drawable.ic_folder
-            val row = kit.row(rows, icon, name, if (dir.isEmpty() && name.endsWith(", earlier")) "Before it was set up again" else "") {
+            val path = "${dir.removePrefix(vault.orEmpty()).trim('/')}/$name".trim('/')
+            kit.folderCard(name, icon,
+                count = if (dir.isEmpty() && name.endsWith(", earlier")) "Before it was set up again" else null,
+                onHold = if (inVault) ({ folderActions(path, name) }) else null) {
                 dir = if (dir.isEmpty()) name else "$dir/$name"
                 refresh()
             }
-            // A folder of the Private Vault, held: what a computer's file
-            // manager does with one, done by this phone (item 13).
-            if (inVault) row.root.setOnLongClickListener {
-                folderActions("${dir.removePrefix(vault.orEmpty()).trim('/')}/$name".trim('/'), name)
-                true
-            }
+        })
+        if (listing.folders.isNotEmpty() && listing.files.isNotEmpty()) {
+            rows.addView(View(app), LinearLayout.LayoutParams(1, kit.dp(8)))
         }
-        if (listing.files.isNotEmpty()) kit.section(rows, "Files")
         showFiles(rows, listing.files, 0)
     }
 
@@ -190,7 +192,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
     private fun showFiles(rows: LinearLayout, files: List<KeptFile>, from: Int) {
         val upTo = minOf(files.size, from + PAGE)
         for (file in files.subList(from, upTo)) {
-            kit.row(rows, States.icon(file.name), file.name, Words.size(file.size)) { choose(file) }
+            kit.fileRow(rows, States.icon(file.name), file.name, Words.size(file.size)) { choose(file) }
         }
         if (upTo < files.size) {
             var more: View? = null
@@ -210,11 +212,11 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         // Its own name: a search names each file by its whole place.
         val name = file.path.substringAfterLast('/')
         val sheet = kit.sheet()
-            .header(States.icon(name), name, Words.size(file.size))
+            .file(States.icon(name), name, where())
             .action(R.drawable.ic_external_link, "Open", meta = "In an app on this phone, without saving a copy") {
                 open(file)
             }
-            .action(R.drawable.ic_download, "Download", meta = "A copy in this phone's Downloads, in Qurb") {
+            .action(R.drawable.ic_save, "Save", meta = "A copy in this phone's Downloads, in Qurb") {
                 fetch(file, downloads(file), "Saved to Downloads")
             }
             .action(R.drawable.ic_rotate_ccw, "Restore", meta = restoredTo(file)) { restore(file) }
@@ -227,11 +229,11 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
                     }
                 }
                 sheet.action(R.drawable.ic_copy, "Copy") {
-                    copied = file.path
+                    VaultClip.copied = file.path
                     app.say("Copied $name")
                     refresh()
                 }
-                sheet.action(R.drawable.ic_folder_input, "Move to folder") {
+                sheet.action(R.drawable.ic_folder_input, "Move") {
                     kit.askName("Move to folder", file.path.substringBeforeLast('/', ""), "Move") { folder ->
                         val to = folder.trim('/')
                         change("Moved") { it.rename(file.path, if (to.isEmpty()) name else "$to/$name") }
@@ -252,6 +254,10 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         sheet.show()
     }
 
+    /** Where these are: the computer, its dot blue on and red off. */
+    private fun where(): View = kit.chip(R.drawable.ic_laptop, computer.name,
+        if (Engine.isOff(app, computer)) R.color.offline else R.color.online)
+
     private fun backup(file: KeptFile) = file.path.startsWith(WHATSAPP) || file.path.startsWith(STORAGE)
 
     /**
@@ -262,7 +268,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
      */
     private fun folderActions(path: String, name: String) {
         kit.sheet()
-            .header(R.drawable.ic_folder, name, "")
+            .file(R.drawable.ic_folder, name, where(), iconTint = R.color.green)
             .action(R.drawable.ic_pencil, "Rename") {
                 kit.askName("Rename", name, "Rename") { to ->
                     val parent = path.substringBeforeLast('/', "")
@@ -270,11 +276,11 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
                 }
             }
             .action(R.drawable.ic_copy, "Copy") {
-                copied = path
+                VaultClip.copied = path
                 app.say("Copied $name")
                 refresh()
             }
-            .action(R.drawable.ic_folder_input, "Move to folder") {
+            .action(R.drawable.ic_folder_input, "Move") {
                 kit.askName("Move to folder", path.substringBeforeLast('/', ""), "Move") { folder ->
                     val to = folder.trim('/')
                     change("Moved") { it.moveKept(path, if (to.isEmpty()) name else "$to/$name") }
@@ -378,10 +384,6 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
     }
 
     companion object {
-        /** What was copied, by its vault path, to paste in another folder:
-         *  kept while the app is, across this page's visits. */
-        private var copied: String? = null
-
         /** Rows drawn at a time; a folder of WhatsApp images can hold thousands. */
         private const val PAGE = 100
         private const val WHATSAPP = ".qurb-outside/whatsapp/"

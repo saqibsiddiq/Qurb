@@ -102,6 +102,204 @@ class Kit(private val app: AppCompatActivity) {
         if (onTap != null) row.root.setOnClickListener { onTap() } else row.root.setOnClickListener(null)
     }
 
+    // ------------------------------------------------------- files, folders
+
+    /**
+     * A small badge on a file's tile, as Figma's Files draws one: where the
+     * file is (a check on green for here, a cloud on grey for elsewhere), or
+     * who sent it. Its icon white on `fill`.
+     */
+    data class Badge(@DrawableRes val icon: Int, val fill: Int, val tint: Int = android.R.color.white)
+
+    /** A file's row, its views kept for binding again (Files' list recycles them). */
+    class FileRow(val root: LinearLayout, val tile: FrameLayout, val icon: ImageView,
+                  val badge: ImageView, val name: TextView, val size: TextView)
+
+    /**
+     * A file as the Figma redesign's Files draws one (the owner's list of
+     * 2026-10-26, after item 20): no card, 64 dp tall; its kind in a 44 dp
+     * white tile, a badge on its corner where there is one; its name on one
+     * line; its size at the end.
+     */
+    fun fileRow(): FileRow {
+        val root = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            setPadding(dp(4), 0, dp(4), 0)
+            minimumHeight = dp(64)
+        }
+        val tile = FrameLayout(app).apply {
+            background = ContextCompat.getDrawable(app, R.drawable.file_tile)
+            clipChildren = false
+            clipToPadding = false
+        }
+        val icon = ImageView(app).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        tile.addView(icon, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+        val badge = ImageView(app).apply {
+            setPadding(dp(3))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        // Over the tile's corner, as Figma has it: 30 dp in, 18 across.
+        val holder = FrameLayout(app).apply { clipChildren = false; clipToPadding = false }
+        holder.addView(tile, FrameLayout.LayoutParams(dp(44), dp(44)))
+        holder.addView(badge, FrameLayout.LayoutParams(dp(18), dp(18)).apply { leftMargin = dp(30); topMargin = dp(30) })
+        root.addView(holder, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(10) })
+        val name = TextView(app).apply {
+            setTextAppearance(R.style.Text_Name)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        root.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val size = TextView(app).apply {
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(color(R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        root.addView(size, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { marginStart = dp(12) })
+        return FileRow(root, tile, icon, badge, name, size)
+    }
+
+    /** Show a file in `row`: tapped, `onTap`; held, the same (the owner, 2026-10-26). */
+    fun bindFile(
+        row: FileRow,
+        @DrawableRes icon: Int,
+        name: CharSequence,
+        size: String,
+        badge: Badge? = null,
+        said: String? = null,
+        onTap: () -> Unit,
+    ) {
+        row.icon.setImageResource(icon)
+        row.icon.imageTintList = ColorStateList.valueOf(color(R.color.text_2))
+        row.name.text = name
+        row.size.text = size
+        if (badge != null) {
+            row.badge.visibility = View.VISIBLE
+            row.badge.setImageResource(badge.icon)
+            row.badge.imageTintList = ColorStateList.valueOf(color(badge.tint))
+            row.badge.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(color(badge.fill))
+                setStroke(dp(2), color(R.color.surface))
+            }
+        } else {
+            row.badge.visibility = View.GONE
+        }
+        row.root.contentDescription = listOfNotNull(name, said, size.ifEmpty { null }).joinToString(", ")
+        row.root.setOnClickListener { onTap() }
+        row.root.setOnLongClickListener { onTap(); true }
+    }
+
+    /** A file's row, added to `parent`, 4 dp under the one before. */
+    fun fileRow(
+        parent: ViewGroup,
+        @DrawableRes icon: Int,
+        name: CharSequence,
+        size: String,
+        badge: Badge? = null,
+        said: String? = null,
+        onTap: () -> Unit,
+    ): FileRow {
+        val row = fileRow()
+        bindFile(row, icon, name, size, badge, said, onTap)
+        parent.addView(row.root, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64))
+            .apply { if (parent.childCount > 0) topMargin = dp(4) })
+        return row
+    }
+
+    /**
+     * A folder as Figma's Files draws one: a white card, its icon in green at
+     * the top, its name, and how many it holds where that is known. Opened on
+     * a tap; held, `onHold` -- the same sheet a file's tap gives.
+     */
+    fun folderCard(
+        name: String,
+        @DrawableRes icon: Int = R.drawable.ic_folder,
+        count: String? = null,
+        onHold: (() -> Unit)? = null,
+        onTap: () -> Unit,
+    ): LinearLayout {
+        val card = LinearLayout(app).apply {
+            orientation = LinearLayout.VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.folder_tile)
+            foreground = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            minimumHeight = dp(92)
+            contentDescription = listOfNotNull("Folder $name", count).joinToString(", ")
+            setOnClickListener { onTap() }
+            if (onHold != null) setOnLongClickListener { onHold(); true }
+        }
+        card.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(color(R.color.green))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(24), dp(24)))
+        card.addView(TextView(app).apply {
+            text = name
+            setTextAppearance(R.style.Text_Name)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(10) })
+        if (count != null) card.addView(TextView(app).apply {
+            text = count
+            setTextAppearance(R.style.Text_Meta)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(4) })
+        return card
+    }
+
+    /** Folder cards two to a row, 12 dp apart, as Figma lays them out. */
+    fun folderGrid(parent: ViewGroup, cards: List<View>) {
+        for (pair in cards.chunked(2)) {
+            val row = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
+            for ((i, card) in pair.withIndex()) {
+                row.addView(card, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    .apply { if (i == 1) marginStart = dp(12) })
+            }
+            if (pair.size == 1) row.addView(View(app), LinearLayout.LayoutParams(0, 0, 1f).apply { marginStart = dp(12) })
+            parent.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = dp(if (parent.childCount > 0) 12 else 0) })
+        }
+    }
+
+    /**
+     * A chip saying where something is, as Figma's file sheet has *saqib* and
+     * its dot: an icon, a name, and a dot coloured as the device is, or none.
+     */
+    fun chip(@DrawableRes icon: Int, label: String, dot: Int? = null): View {
+        val chip = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = GradientDrawable().apply {
+                cornerRadius = dp(17).toFloat()
+                setColor(color(R.color.surface))
+                setStroke(dp(1), color(R.color.border))
+            }
+            setPadding(dp(12), 0, dp(14), 0)
+            minimumHeight = dp(34)
+        }
+        chip.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(color(R.color.text_2))
+        }, LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginEnd = dp(8) })
+        chip.addView(TextView(app).apply {
+            text = label
+            setTextAppearance(R.style.Text_Name)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        if (dot != null) chip.addView(View(app).apply {
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color(dot)) }
+        }, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginStart = dp(8) })
+        return chip
+    }
+
     /** A chevron at the end of a row that leads somewhere. */
     fun chevron(): View = ImageView(app).apply {
         setImageResource(R.drawable.ic_chevron_right)
@@ -311,16 +509,18 @@ class Kit(private val app: AppCompatActivity) {
 
     /**
      * A device as a circle (the owner's list of 2026-10-26, items 5 to 7):
-     * its picture, or the first letter of its name on the soft green, and a
-     * dot on its edge, blue when it is on and red when it is off. With no
-     * device, a plus.
+     * its picture, or the first letter of its name on a green ringed to show
+     * in light mode as in dark, and a
+     * dot on its edge, blue when it is on and red when it is off -- none for
+     * [off] null, this phone's own. With no device, a plus.
      */
-    fun avatar(name: String?, off: Boolean, picture: android.graphics.Bitmap?, size: Int = 40): FrameLayout {
+    fun avatar(name: String?, off: Boolean?, picture: android.graphics.Bitmap?, size: Int = 40): FrameLayout {
         val box = FrameLayout(app).apply { clipChildren = false; clipToPadding = false }
         val face = FrameLayout(app).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(color(R.color.green_soft))
+                setColor(color(R.color.avatar_fill))
+                if (picture == null) setStroke(dp(1), color(R.color.avatar_ring))
             }
             clipToOutline = true
             outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
@@ -343,7 +543,7 @@ class Kit(private val app: AppCompatActivity) {
             }, FrameLayout.LayoutParams(dp(size / 2), dp(size / 2), Gravity.CENTER))
         }
         box.addView(face, FrameLayout.LayoutParams(dp(size), dp(size), Gravity.CENTER))
-        if (name != null) {
+        if (name != null && off != null) {
             // On the circle's edge, ringed in the page's colour so that it
             // reads apart from a picture.
             box.addView(View(app).apply {
@@ -355,7 +555,11 @@ class Kit(private val app: AppCompatActivity) {
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, FrameLayout.LayoutParams(dp(14), dp(14), Gravity.BOTTOM or Gravity.END))
         }
-        box.contentDescription = name?.let { "$it, ${if (off) "off" else "on"}" } ?: "Add a device"
+        box.contentDescription = when {
+            name == null -> "Add a device"
+            off == null -> name
+            else -> "$name, ${if (off) "off" else "on"}"
+        }
         return box
     }
 
@@ -422,7 +626,7 @@ class Kit(private val app: AppCompatActivity) {
         // it is on (the owner's list of 2026-10-26, items 6 and 7).
         val card = deviceCard(parent, States.device(peer.name, peer.kind), peer.name, null,
             peer.lastSeen?.let { Words.since(it) }, end = if (chosen) R.drawable.ic_circle_check else null,
-            lead = avatar(peer.name, off, Devices.picture(app, peer), 48), onTap = onTap)
+            lead = avatar(peer.name, off, Devices.picture(peer), 48), onTap = onTap)
         card.contentDescription = "${peer.name}, ${if (off) "off" else "on"}${if (chosen) ", chosen" else ""}"
         if (chosen) card.background = ContextCompat.getDrawable(app, R.drawable.card_chosen)
         return card
@@ -1183,6 +1387,106 @@ class Sheet(private val app: AppCompatActivity, private val kit: Kit) {
         return this
     }
 
+    /** The grid a [file] sheet's actions go into, three to a row; none for a list. */
+    private var grid: LinearLayout? = null
+    private var gridRow: LinearLayout? = null
+    private var gridCells = 0
+
+    /**
+     * What a file's or folder's sheet is about, as Figma draws it (the
+     * owner's list of 2026-10-26, after item 20): its kind in a 56 dp tile,
+     * its name, and a chip saying where it is. Its actions after this are
+     * round buttons, three to a row, rather than a list.
+     */
+    fun file(@DrawableRes icon: Int, name: String, chip: View? = null, iconTint: Int = R.color.text_2): Sheet {
+        val row = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val tile = FrameLayout(app).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = kit.dp(16).toFloat()
+                setColor(kit.color(R.color.surface_2))
+            }
+        }
+        tile.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(kit.color(iconTint))
+        }, FrameLayout.LayoutParams(kit.dp(28), kit.dp(28), Gravity.CENTER))
+        row.addView(tile, LinearLayout.LayoutParams(kit.dp(56), kit.dp(56)).apply { marginEnd = kit.dp(14) })
+        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(TextView(app).apply {
+            text = name
+            setTextAppearance(R.style.Text_Title)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            ViewCompat.setAccessibilityHeading(this, true)
+        })
+        if (chip != null) {
+            (chip.parent as? ViewGroup)?.removeView(chip)
+            words.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = kit.dp(6) })
+        }
+        row.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        body.addView(row)
+        grid = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        body.addView(grid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = kit.dp(16) })
+        return this
+    }
+
+    /** One round button of a [file] sheet's grid: a 48 dp circle and its word, 76 dp across. */
+    private fun cell(@DrawableRes icon: Int, label: String, danger: Boolean, meta: String, onTap: () -> Unit) {
+        val grid = grid ?: return
+        if (gridCells % 3 == 0) {
+            gridRow = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
+            grid.addView(gridRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { if (grid.childCount > 0) topMargin = kit.dp(14) })
+        }
+        val column = gridCells % 3
+        gridCells++
+        // Three columns spread across the sheet, the first at its left edge
+        // and the last at its right, as Figma spaces them.
+        val slot = FrameLayout(app)
+        val button = LinearLayout(app).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            background = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            setPadding(0, kit.dp(4), 0, kit.dp(4))
+            contentDescription = if (meta.isEmpty()) label else "$label, $meta"
+            setOnClickListener {
+                dialog.dismiss()
+                onTap()
+            }
+        }
+        val circle = FrameLayout(app).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(kit.color(if (danger) R.color.error_bg else R.color.surface_2))
+            }
+        }
+        circle.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(kit.color(if (danger) R.color.error else R.color.text))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(kit.dp(22), kit.dp(22), Gravity.CENTER))
+        button.addView(circle, LinearLayout.LayoutParams(kit.dp(48), kit.dp(48)))
+        button.addView(TextView(app).apply {
+            text = label
+            setTextAppearance(R.style.Text_Meta)
+            textSize = 12f
+            typeface = androidx.core.content.res.ResourcesCompat.getFont(app, R.font.inter_medium)
+            setTextColor(kit.color(if (danger) R.color.error else R.color.text))
+            gravity = Gravity.CENTER
+            maxLines = 2
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = kit.dp(6) })
+        slot.addView(button, FrameLayout.LayoutParams(kit.dp(84), ViewGroup.LayoutParams.WRAP_CONTENT,
+            when (column) { 0 -> Gravity.START; 1 -> Gravity.CENTER_HORIZONTAL; else -> Gravity.END }))
+        gridRow!!.addView(slot, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    }
+
     fun text(words: String, @StyleRes style: Int = R.style.Text_Quiet, color: Int? = null): Sheet {
         val view = kit.text(body, words, style, top = 12)
         if (color != null) view.setTextColor(kit.color(color))
@@ -1204,6 +1508,10 @@ class Sheet(private val app: AppCompatActivity, private val kit: Kit) {
         meta: String = "",
         onTap: () -> Unit,
     ): Sheet {
+        if (grid != null) {
+            cell(icon, label, danger, meta, onTap)
+            return this
+        }
         if (body.getTag(R.id.sheet_actions) == null) {
             body.setTag(R.id.sheet_actions, true)
             body.addView(View(app), LinearLayout.LayoutParams(1, kit.dp(10)))
@@ -1401,6 +1709,11 @@ class Sheet(private val app: AppCompatActivity, private val kit: Kit) {
     }
 
     fun show(): Sheet {
+        // A grid's last row filled out, so its buttons keep their columns.
+        while (grid != null && gridCells % 3 != 0) {
+            gridRow?.addView(View(app), LinearLayout.LayoutParams(0, 0, 1f))
+            gridCells++
+        }
         // Behind a window, the phone can blur (Android 12 and later, where
         // the device allows it); elsewhere the dim alone separates the sheet.
         val window = dialog.window

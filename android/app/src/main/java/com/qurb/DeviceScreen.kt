@@ -63,7 +63,8 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
                 val state = withContext(Dispatchers.IO) {
                     val engine = engine()
                     State(
-                        engine.peers().firstOrNull { it.fingerprint == peer.fingerprint },
+                        engine.peers().firstOrNull { it.fingerprint == peer.fingerprint }
+                            ?.also { Devices.load(engine, listOf(it)) },
                         engine.holders().any { it.fingerprint == peer.fingerprint },
                         engine.whatsappBackup(),
                         if (Folders.allowed(app)) engine.chosenFolders().size else 0,
@@ -98,7 +99,7 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
             gravity = Gravity.CENTER_VERTICAL
         }
         // Its circle, as Home's: its picture or first letter, and its dot.
-        head.addView(kit.avatar(peer.name, off, Devices.picture(app, peer), 64),
+        head.addView(kit.avatar(peer.name, off, Devices.picture(peer), 64),
             LinearLayout.LayoutParams(kit.dp(72), kit.dp(72)).apply { marginEnd = kit.dp(14) })
         val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
         words.addView(TextView(app).apply {

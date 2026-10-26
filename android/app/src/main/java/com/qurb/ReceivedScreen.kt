@@ -23,8 +23,10 @@ class ReceivedScreen(app: MainActivity) : Screen(app) {
     init {
         views.back.visibility = View.VISIBLE
         views.back.text = "Files"
+        views.back.setTextAppearance(R.style.Text_Name)
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         views.title.text = "Received"
+        views.title.setTextAppearance(R.style.Text_Hero)
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
     }
@@ -56,12 +58,48 @@ class ReceivedScreen(app: MainActivity) : Screen(app) {
             kit.empty(page, R.drawable.ic_download, "Nothing sent to this phone yet.")
             return
         }
-        val card = kit.card(page)
+        // As Figma's Received: rows, each with who sent it as a badge on
+        // its tile, and the sheet a file's tap gives, held or tapped.
+        val rows = android.widget.LinearLayout(app).apply { orientation = android.widget.LinearLayout.VERTICAL }
+        page.addView(rows)
         for ((file, h) in received) {
             val name = file.path.substringAfterLast('/')
-            // Who sent it; when, for a sender the history did not name.
-            kit.row(card, States.icon(name), name, h.device ?: Words.ago(h.at)) { app.open(file) }
+            val from = h.device
+            kit.fileRow(rows, States.icon(name), name, Words.size(file.size),
+                badge = from?.let { Kit.Badge(States.device(it), R.color.green) },
+                said = from?.let { "from $it" } ?: Words.ago(h.at)) { choose(file, from) }
         }
+    }
+
+    /** A file received: open it, save a copy, send it on, delete it. */
+    private fun choose(file: FileEntry, from: String?) {
+        val name = file.path.substringAfterLast('/')
+        kit.sheet()
+            .file(States.icon(name), name, from?.let { kit.chip(States.device(it), it) })
+            .action(R.drawable.ic_external_link, "Open") { app.open(file) }
+            .action(R.drawable.ic_save, "Save") { app.saveCopy(file) }
+            .action(R.drawable.ic_send, "Send") {
+                app.chooseDevice("Send $name to") { to -> app.send(file, to) }
+            }
+            .action(R.drawable.ic_trash_2, "Delete", danger = true) {
+                kit.sheet()
+                    .mark(R.drawable.ic_trash_2)
+                    .title("Delete $name?", centred = true)
+                    .line("In Recently deleted for 30 days")
+                    .buttons("Delete", danger = true) {
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) { engine().remove(file.path) }
+                                app.madeChange()
+                            } catch (e: Exception) {
+                                app.fail("Could not delete that", e)
+                            }
+                            refresh()
+                        }
+                    }
+                    .show()
+            }
+            .show()
     }
 
     companion object {

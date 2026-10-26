@@ -1118,12 +1118,21 @@ every other; and **build directly**, not Figma first. Item by item:
   one Send the width of the page, 60 dp tall. The mark still syncs when
   tapped, and pulling down still syncs.
 - **5-7, the circle.** The chosen device at the top right as a circle: its
-  picture (none can be set yet: item 7's engine work is to come) or the first
+  picture or the first
   letter of its name, and a dot on its edge, blue when it is on and red when
   it is off -- the dot app-wide is blue and red now, as item 12 asks of
   Files. Tapped, the device's page, without Send, its Remove in red; held,
   the list of devices to choose from, with *Add a device*. The list and the
   page show each device as its circle too.
+- **7, names and pictures.** Settings' *This phone* has *Name*, now
+  changeable, and *Picture*, its circle at the row's end: the photo picker,
+  the middle square at 256 pixels as a JPEG; with one set, *Choose another*
+  or *Remove*. The desktop's Settings has the same (*Choose…*, *Remove*),
+  and its config name is told as well. Each device asks every device it
+  syncs with what changed since it last heard (`Request::Profile`), keeps the
+  picture, and writes the name over the one given at pairing; the desktop's
+  device cards show the picture round. A device from before this keeps its
+  pairing name.
 - **8, Activity.** In Settings, under App; each file told once and 30 days
   kept (`db::told_once`, `forget_old_activity`), on the desktop and the
   command line as well.
@@ -1171,5 +1180,62 @@ Android as the computer, in Private: *notes2.txt* moved into a new *Work*,
 inside, and *Projects* deleted, both in the phone's Recently deleted.
 Settings' *Background sync* at *30 min* (WorkManager's own record: 30), *Off*
 (the schedule cancelled), *Auto* (15); the 24 words saved to Downloads, 24
-numbered lines, and the file deleted afterwards. **Not yet:** items 7
-(pictures and names between devices) and 19, and item 20's animations.
+numbered lines, and the file deleted afterwards. Item 7 between two stores
+over a real connection (`crates/peer/tests/profile.rs`), and the build
+installed on the S23 (2026-10-26), opening on its own index with schema 28.
+**Not yet checked:** a picture set on one real device appearing on the other
+(a name has: the S23 renamed itself *skib phone*, and the laptop listed it so).
+
+## Built: the owner's follow-ups of 2026-10-26
+
+His words: "lets do animations later 1. the circular icon is not properly
+visible in light mode 2. the background sync will have 2 buttons, set and
+off, set will open a timer and off should be in red colour instead of green
+3. desktop qurb is offline for some reason since my phone is unable to
+connect 4. do the qr code and 6 digit page"; then "in files section, inside
+vault, recieved and even in the remote access files, the figma design is not
+being used for showcasing the folders and files, also upon clicking the
+files, the options shown are not from the figma design, also upon press and
+holding the folders or files, the computer operations must in the same figma
+design as for single clicking the files".
+
+- **1, the circle.** Its own fill, deeper than `green_soft` (which all but
+  vanished on the light page, `#E8F0EC` on `#F7F7F4`), and a 1 dp green ring
+  when there is no picture; darker pair in dark mode.
+- **2, Background sync.** The sheet says when it last ran and how often, and
+  has two buttons: *Set*, opening a timer (hours and quarter-hours on two
+  wheels, 15 minutes to a day), and *Off*, red. *Auto* stays what a phone
+  that never set one runs, and **cannot be chosen again once a time is set** --
+  a gap, since his two buttons leave no place for it.
+- **3, the desktop offline.** Not the build: at 05:23 the laptop ran out of
+  memory and swap during a build, and `systemd-oomd` killed the terminal's
+  scope, the desktop app with it (started from that terminal). Started again
+  as its autostart unit, `app-qurb@autostart.service`, out of any terminal's
+  reach; the phone reached it again at once.
+- **4 (item 19), Show my code and Type 6 digits** as the Figma frames
+  *Show my code* and *Six digits*: pages of their own, not sheets. The QR
+  code drawn as dots with rounded finders, on the white card, 200 dp inside
+  24 dp of white (decoded from a screenshot of the S23 by `zbarimg`); the
+  digits large; the clock; *Copy code* and *Stop* at least 120 dp, wider
+  rather than on two lines at the S23's text size. Six boxes 42 by 56 dp,
+  14 dp corners, the next one edged in green, shared by Home and Setup
+  (`DigitBoxes`); *Same Wi-Fi*; Join at the foot.
+- **Files, as Figma's.** Vault, Received, and a computer's Shared and
+  Private: folders as white cards two to a row, files as 64 dp rows with no
+  card (a 44 dp tile, a badge on it -- here, elsewhere, or who sent it --
+  the name, the size); no *Folders* and *Files* headings; Vault titled
+  *Vault*, its paragraph gone, a subfolder titled by its name. A file's sheet,
+  tapped or held, is Figma's: its kind in a 56 dp tile, its name, a chip for
+  where it is, and its actions as round buttons three to a row, Delete red.
+  A folder held gives the same sheet: in the Vault and in Private, Rename,
+  Copy, Move, Delete, whole; in Shared, Rename and Delete. Received's files
+  have a sheet now (Open, Save, Send, Delete) where a tap opened them.
+
+**Checked on the S23**, light theme: Home's circle; Show my code; Type 6
+digits; Vault, a file's sheet, a folder held; Received; Shared (empty, so its
+cards not seen). Private on the laptop, after a fix: the first build drew it
+blank -- folder cards sized to their row's height collapsed to nothing inside
+the scrolling page, and Private's top is all folders -- so `Kit.folderGrid`'s
+cards wrap their own height. **Not checked:** dark mode, and any of the sheets'
+actions carried out from the new buttons. **Not built:** item 20's animations,
+which the owner put off.

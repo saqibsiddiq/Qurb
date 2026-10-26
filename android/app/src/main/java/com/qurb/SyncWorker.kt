@@ -329,9 +329,19 @@ class SyncWorker(context: Context, params: WorkerParameters) :
         const val AUTO = -1L
         const val OFF = 0L
 
-        /** What can be chosen in Settings (the owner's list of 2026-10-26,
-         *  item 16), as minutes and the words for them. */
-        val CHOICES = listOf(AUTO to "Auto", 15L to "15 min", 30L to "30 min", 60L to "1 hour", 360L to "6 hours", OFF to "Off")
+        /** The shortest and longest a timer in Settings sets (the owner's
+         *  list of 2026-10-26, item 16): WorkManager's floor, and a day. */
+        const val SHORTEST = 15L
+        const val LONGEST = 24 * 60L
+
+        /** A choice as Settings says it: Auto, Off, or how often. */
+        fun words(minutes: Long): String = when {
+            minutes == AUTO -> "Auto"
+            minutes == OFF -> "Off"
+            minutes < 60 -> "$minutes min"
+            minutes % 60 == 0L -> "${minutes / 60} h"
+            else -> "${minutes / 60} h ${minutes % 60} min"
+        }
 
         fun every(context: Context): Long =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(EVERY, AUTO)

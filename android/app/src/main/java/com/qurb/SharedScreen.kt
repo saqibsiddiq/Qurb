@@ -185,100 +185,33 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
                 if (query.isNotEmpty()) "Nothing called “$query”." else if (dir.isEmpty()) "Nothing shared yet." else "This folder is empty.")
             return
         }
-        // Folders as tiles, two to a row.
-        for (pair in listing.folders.chunked(2)) {
-            val row = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
-            for ((i, name) in pair.withIndex()) {
-                row.addView(folderTile(name), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                    .apply { if (i == 1) marginStart = kit.dp(12) })
+        // As Figma draws a folder's contents: folders as cards, two to a
+        // row; files as rows. Held, either gives the sheet a tap on a file
+        // gives (the owner, 2026-10-26).
+        kit.folderGrid(listed, listing.folders.map { name ->
+            kit.folderCard(name, onHold = { folderSheet(place(name), name) }) {
+                dir = place(name)
+                refresh()
             }
-            if (pair.size == 1) row.addView(View(app), LinearLayout.LayoutParams(0, 0, 1f).apply { marginStart = kit.dp(12) })
-            listed.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                .apply { if (listed.childCount > 0) topMargin = kit.dp(12) })
-        }
+        })
         for (file in listing.files.sortedBy { it.name.lowercase() }) {
-            listed.addView(fileRow(file), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(64))
-                .apply { topMargin = kit.dp(if (listed.childCount == 0) 0 else 4) })
+            kit.fileRow(listed, States.icon(file.name), file.name, Words.size(file.size)) { choose(file) }
         }
     }
 
     private fun place(name: String) = if (dir.isEmpty()) name else "$dir/$name"
 
-    /** A folder as a tile: its icon, its name. Opened on a tap; held, it can
-     *  be renamed or deleted. */
-    private fun folderTile(name: String): View {
-        val tile = LinearLayout(app).apply {
-            orientation = LinearLayout.VERTICAL
-            background = ContextCompat.getDrawable(app, R.drawable.folder_tile)
-            foreground = ContextCompat.getDrawable(app, R.drawable.row_bg)
-            setPadding(kit.dp(14), kit.dp(14), kit.dp(14), kit.dp(14))
-            contentDescription = "Folder $name"
-            setOnClickListener {
-                dir = place(name)
-                refresh()
-            }
-            setOnLongClickListener {
-                folderSheet(place(name), name)
-                true
-            }
-        }
-        tile.addView(ImageView(app).apply {
-            setImageResource(R.drawable.ic_folder)
-            imageTintList = ColorStateList.valueOf(kit.color(R.color.green))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(kit.dp(24), kit.dp(24)))
-        tile.addView(TextView(app).apply {
-            text = name
-            setTextAppearance(R.style.Text_Name)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { topMargin = kit.dp(6) })
-        return tile
-    }
-
-    /** A file: its kind in a small tile, its name, its size at the end. */
-    private fun fileRow(file: KeptFile): View {
-        val row = LinearLayout(app).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = ContextCompat.getDrawable(app, R.drawable.row_bg)
-            setPadding(kit.dp(4), 0, kit.dp(4), 0)
-            contentDescription = "${file.name}, ${Words.size(file.size)}"
-            setOnClickListener { choose(file) }
-        }
-        val tile = FrameLayout(app).apply { background = ContextCompat.getDrawable(app, R.drawable.file_tile) }
-        tile.addView(ImageView(app).apply {
-            setImageResource(States.icon(file.name))
-            imageTintList = ColorStateList.valueOf(kit.color(R.color.text_2))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, FrameLayout.LayoutParams(kit.dp(22), kit.dp(22), Gravity.CENTER))
-        row.addView(tile, LinearLayout.LayoutParams(kit.dp(44), kit.dp(44)).apply { marginEnd = kit.dp(14) })
-        row.addView(TextView(app).apply {
-            text = file.name
-            setTextAppearance(R.style.Text_Name)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(TextView(app).apply {
-            text = Words.size(file.size)
-            setTextAppearance(R.style.Text_Meta)
-            setTextColor(kit.color(R.color.text_2))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { marginStart = kit.dp(12) })
-        return row
-    }
+    /** Where these are: the computer, its dot blue on and red off. */
+    private fun where(): View = kit.chip(R.drawable.ic_laptop, computer.name,
+        if (Engine.isOff(app, computer)) R.color.offline else R.color.online)
 
     /** One file: open it, keep a copy, rename it, delete it. */
     private fun choose(file: KeptFile) {
         val name = file.path.substringAfterLast('/')
         kit.sheet()
-            .header(States.icon(name), name, Words.size(file.size))
+            .file(States.icon(name), name, where())
             .action(R.drawable.ic_external_link, "Open") { Opened.open(app, scope, folder, file) }
-            .action(R.drawable.ic_download, "Download") { download(file) }
+            .action(R.drawable.ic_download, "Save") { download(file) }
             .action(R.drawable.ic_pencil, "Rename") { rename(file.path, name) }
             .action(R.drawable.ic_trash_2, "Delete", danger = true) { delete(file.path, name) }
             .show()
@@ -287,7 +220,7 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
     /** A folder held: rename it, delete it. */
     private fun folderSheet(path: String, name: String) {
         kit.sheet()
-            .header(R.drawable.ic_folder, name)
+            .file(R.drawable.ic_folder, name, where(), iconTint = R.color.green)
             .action(R.drawable.ic_pencil, "Rename") { rename(path, name) }
             .action(R.drawable.ic_trash_2, "Delete", danger = true) { delete(path, name) }
             .show()

@@ -87,7 +87,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                 val state = withContext(Dispatchers.IO) {
                     val engine = engine()
                     State(
-                        engine.peers(),
+                        engine.peers().also { Devices.load(engine, it) },
                         engine.holders(),
                         engine.outstanding(),
                         engine.conflicts(),
@@ -163,7 +163,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         // 2026-10-26, items 4 to 7): tapped, its page; held, the list to
         // choose another, as the chip under the mark was.
         views.avatar.removeAllViews()
-        views.avatar.addView(kit.avatar(chosen?.name, off, Devices.picture(app, chosen)),
+        views.avatar.addView(kit.avatar(chosen?.name, off, Devices.picture(chosen)),
             android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         views.avatar.contentDescription = views.avatar.getChildAt(0).contentDescription
         views.avatar.setOnClickListener { if (chosen != null) app.push(DeviceScreen(app, chosen)) else app.pair() }
