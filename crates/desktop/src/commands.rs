@@ -140,6 +140,9 @@ pub struct Device {
     /// The device this one was set up again as, by id: listed as that one
     /// (the owner's item 6, 2026-10-14).
     replaced_by: Option<String>,
+    /// The picture it chose for itself, as a `data:` address for an `<img>`
+    /// (the owner's list of 2026-10-26, item 7), or none.
+    picture: Option<String>,
     /// The device this one replaced, by id.
     earlier: Option<String>,
 }
@@ -224,6 +227,9 @@ pub struct Settings {
     /// keeps it in its Google backup (decision 0053).
     key_also_on: Vec<String>,
     phone_holds_key: bool,
+    /// This computer's picture, as its paired devices are shown it: a
+    /// `data:` address, or none.
+    picture: Option<String>,
 }
 
 /// What screen the window should be on.
@@ -489,13 +495,14 @@ pub fn settings(hosted: Host<'_>) -> Answer<Settings> {
         .map(|p| p.as_str().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
     // Every paired device holds this key: pairing checks it (decision 0053).
-    let (key_also_on, phone_holds_key) = hosted
+    let (key_also_on, phone_holds_key, picture) = hosted
         .with_store(|store| {
             let peers = store.db().trusted_peers()?;
             let phone = peers.iter().any(|p| {
                 store.db().peer_kind(&p.device_id).ok().flatten().as_deref() == Some("phone")
             });
-            Ok((peers.into_iter().map(|p| p.name).collect::<Vec<_>>(), phone))
+            let picture = store.db().own_profile()?.and_then(|p| p.picture);
+            Ok((peers.into_iter().map(|p| p.name).collect::<Vec<_>>(), phone, picture))
         })
         .unwrap_or_default();
 
@@ -518,7 +525,30 @@ pub fn settings(hosted: Host<'_>) -> Answer<Settings> {
         notifications: config.notifications,
         key_also_on,
         phone_holds_key,
+        picture: picture.as_deref().map(picture_address),
     })
+}
+
+/// A device's picture as a `data:` address an `<img>` shows: a JPEG, as both
+/// apps make them, or a PNG.
+fn picture_address(bytes: &[u8]) -> String {
+    use base64::Engine as _;
+    let kind = if bytes.starts_with(b"\x89PNG") { "png" } else { "jpeg" };
+    format!("data:image/{kind};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
+/// Give this computer a picture -- a small JPEG the window made from the
+/// one chosen -- or take it away with none. Every paired device is shown it
+/// from its next sync (the owner's list of 2026-10-26, item 7).
+#[tauri::command]
+pub fn set_picture(hosted: Host<'_>, picture: Option<Vec<u8>>) -> Answer<()> {
+    if picture.as_ref().is_some_and(|p| p.len() > qurb_peer::wire::MAX_PICTURE) {
+        return Err("that picture is too large".to_string());
+    }
+    hosted
+        .with_store(|store| Ok(store.db().set_own_profile(None, Some(picture.as_deref()))?))
+        .map(|_| ())
+        .map_err(failed)
 }
 
 /// Change the settings that can be changed while running.
@@ -551,6 +581,9 @@ pub fn save_settings(
         return Err("a device needs a name — it is what the others will call it".to_string());
     }
     config.name = name.trim().to_string();
+    // Told to every paired device at its next sync, not only to the next
+    // one to pair (the owner's list of 2026-10-26, item 7).
+    hosted.with_store(|store| Ok(qurb_cli::daemon::tell_name(store, &config.name)?)).map_err(failed)?;
     config.signal = signal.trim().to_string();
     config.port = port;
     config.relay = match relay.as_deref().map(str::trim).filter(|r| !r.is_empty()) {
@@ -2148,13 +2181,23 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
     // The index knows who is paired and when each was last reached; only the
     // running daemon knows what is connected now.
     let links = hosted.status().map(|s| s.links).unwrap_or_default();
-    Ok(hosted
-        .with_store(|store| Ok(View::new(store, 0).devices()?))
-        .map_err(failed)?
+    let (devices, pictures) = hosted
+        .with_store(|store| {
+            let devices = View::new(store, 0).devices()?;
+            let pictures: Vec<_> = devices
+                .iter()
+                .map(|d| store.db().peer_profile(&d.id).ok().flatten().and_then(|p| p.picture))
+                .collect();
+            Ok((devices, pictures))
+        })
+        .map_err(failed)?;
+    Ok(devices
         .into_iter()
-        .map(|d| {
+        .zip(pictures)
+        .map(|(d, picture)| {
             let link = links.iter().find(|l| l.fingerprint == d.fingerprint);
             Device {
+                picture: picture.as_deref().map(picture_address),
                 id: d.id.short(),
                 route: link.map(|l| if l.relayed { "relay" } else { "direct" }),
                 address: link.map(|l| l.address.clone()),

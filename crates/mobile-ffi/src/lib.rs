@@ -261,6 +261,16 @@ impl From<qurb_storage::chosen::Tick> for FolderTick {
     }
 }
 
+/// This phone's own name and picture, as set in Settings (the owner's list of
+/// 2026-10-26, item 7): an empty name for none set, the app saying the
+/// phone's model instead.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OwnProfile {
+    pub name: String,
+    /// A small JPEG, or none.
+    pub picture: Option<Vec<u8>>,
+}
+
 /// One file of a backup the computer keeping it does not have yet: what Home
 /// and the notice name (the owner's list of 2026-10-25).
 #[derive(Debug, Clone, uniffi::Record)]
@@ -1025,6 +1035,7 @@ pub fn join_new(
         last_seen: None,
         relation: "own".into(),
         kind: None,
+        picture_at: None,
     })
 }
 
@@ -1440,6 +1451,7 @@ impl Qurb {
                     last_seen: p.last_seen,
                     relation: p.relation.as_str().into(),
                     kind: engine.store().db().peer_kind(&p.device_id).ok().flatten(),
+                    picture_at: engine.store().db().peer_picture_at(&p.device_id).ok().flatten(),
                 }
             })
             .collect())
@@ -1480,7 +1492,7 @@ impl Qurb {
             digits: host.digits().map(|d| qurb_peer::short::spaced(&d)),
             digits_work: Arc::new(std::sync::atomic::AtomicBool::new(true)),
             store: self.shared_store()?,
-            name: self.device_name.clone(),
+            name: self.my_name(),
             runtime,
             inner: Mutex::new(Some(host)),
             cancelled: Arc::new(tokio::sync::Notify::new()),
@@ -1521,7 +1533,8 @@ impl Qurb {
 
         // The other device asks its person to approve this one, comparing the
         // number `pairing_with` gave this screen (decision 0053).
-        let ours = qurb_peer::Ours { name: &self.device_name, kind: "phone", key: &self.master };
+        let name = self.my_name();
+        let ours = qurb_peer::Ours { name: &name, kind: "phone", key: &self.master };
         let paired = runtime
             .block_on(qurb_peer::accept(&invite, &identity, store, &ours, now()))
             .map_err(pairing_failed)?;
@@ -1534,6 +1547,7 @@ impl Qurb {
             last_seen: None,
             relation: "own".into(),
             kind: paired.kind,
+            picture_at: None,
         })
     }
 
@@ -1992,7 +2006,8 @@ impl Qurb {
         let mut engine = self.engine()?;
         let mut names = engine.store().db().device_names()?;
         // In a file name, this phone by the name other devices know it by.
-        names.insert(engine.store().device_id()?, self.device_name.clone());
+        let me = engine.store().db().own_profile()?.map(|p| p.name).filter(|n| !n.is_empty());
+        names.insert(engine.store().device_id()?, me.unwrap_or_else(|| self.device_name.clone()));
         let label = engine
             .store()
             .db()
@@ -2320,6 +2335,42 @@ impl Qurb {
         self.backup_state("folders", &format!("{}/storage", qurb_storage::db::OUTSIDE))
     }
 
+    /// This phone's own name and picture (the owner's list of 2026-10-26,
+    /// item 7), as every device paired with it learns them at its next sync.
+    pub fn own_profile(&self) -> Result<OwnProfile, QurbError> {
+        let profile = self.look()?.store().db().own_profile()?;
+        Ok(match profile {
+            Some(p) => OwnProfile { name: p.name, picture: p.picture },
+            None => OwnProfile { name: String::new(), picture: None },
+        })
+    }
+
+    /// Name this phone, as every device paired with it will call it.
+    pub fn set_own_name(&self, name: String) -> Result<(), QurbError> {
+        let name = name.trim();
+        if name.is_empty() || name.len() > 64 {
+            return Err(QurbError::Refused { detail: "a name of 1 to 64 characters".into() });
+        }
+        self.engine()?.store().db().set_own_profile(Some(name), None)?;
+        Ok(())
+    }
+
+    /// Give this phone a picture -- a small JPEG, at most 256 KiB -- or take
+    /// it away with none.
+    pub fn set_own_picture(&self, picture: Option<Vec<u8>>) -> Result<(), QurbError> {
+        if picture.as_ref().is_some_and(|p| p.len() > qurb_peer::wire::MAX_PICTURE) {
+            return Err(QurbError::Refused { detail: "that picture is too large".into() });
+        }
+        self.engine()?.store().db().set_own_profile(None, Some(picture.as_deref()))?;
+        Ok(())
+    }
+
+    /// A paired device's picture, as it set it, or none: for its circle.
+    pub fn peer_picture(&self, fingerprint: String) -> Result<Option<Vec<u8>>, QurbError> {
+        let device = self.device_of(&fingerprint)?;
+        Ok(self.look()?.store().db().peer_profile(&device)?.and_then(|p| p.picture))
+    }
+
     /// The files of both backups -- WhatsApp's and the chosen folders' -- the
     /// computer keeping them does not have yet: the first `limit`, how many,
     /// and their bytes (the owner's list of 2026-10-25: Home said *Folders,
@@ -2644,7 +2695,7 @@ impl Qurb {
     ) -> Result<PeerInfo, QurbError> {
         let store = self.shared_store()?;
         let host = runtime
-            .block_on(qurb_peer::visit(invite, identity, store, &self.device_name, "phone", now()))
+            .block_on(qurb_peer::visit(invite, identity, store, &self.my_name(), "phone", now()))
             .map_err(pairing_failed)?;
         Ok(PeerInfo {
             fingerprint: hex(host.fingerprint.as_bytes()),
@@ -2654,6 +2705,7 @@ impl Qurb {
             last_seen: None,
             relation: "host".into(),
             kind: Some("computer".into()),
+            picture_at: None,
         })
     }
 
@@ -3277,6 +3329,9 @@ impl Qurb {
             // And the other way: what it is recorded as holding for files
             // freed here, asked a few at a time (decision 0055).
             runtime.block_on(qurb_peer::check_holders(client, &reader, &known.device_id, 16));
+            // Its name and picture, if it changed them (item 7 of the
+            // owner's list of 2026-10-26).
+            runtime.block_on(qurb_peer::learn_profile(client, &reader, &known.device_id));
             // And what a computer keeping this phone's vault keeps that the
             // phone was not told of, a `Got` lost on the way: asked about, a
             // few each pass (`confirm_kept`).
@@ -3348,6 +3403,17 @@ impl Qurb {
                 only_kept: summary.only_kept,
             })
         })
+    }
+
+    /// What this phone is called to devices pairing with it: the name set in
+    /// Settings, else the model the app gave when it opened the engine.
+    fn my_name(&self) -> String {
+        self.look()
+            .ok()
+            .and_then(|l| l.store().db().own_profile().ok().flatten())
+            .map(|p| p.name)
+            .filter(|n| !n.is_empty())
+            .unwrap_or_else(|| self.device_name.clone())
     }
 
     /// The index to read, without the engine: a connection of its own, which
@@ -3685,6 +3751,9 @@ pub struct PeerInfo {
     /// what its icon is. None for a device paired before then that has not
     /// synced since.
     pub kind: Option<String>,
+    /// When the picture it chose for itself last changed (milliseconds), or
+    /// none if it has not given one: `peer_picture` has it.
+    pub picture_at: Option<i64>,
 }
 
 /// A pairing that did not happen, said as what it was. A refusal -- different
@@ -4235,6 +4304,7 @@ impl Pairing {
             last_seen: None,
             relation: "own".into(),
             kind: paired.kind,
+            picture_at: None,
         })
     }
 

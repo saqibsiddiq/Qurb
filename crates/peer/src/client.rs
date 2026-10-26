@@ -398,6 +398,19 @@ impl PeerClient {
         }
     }
 
+    /// The device's name and picture -- a JPEG, empty for none -- and when it
+    /// set them, if they changed after `since` (the owner's list of
+    /// 2026-10-26, item 7). None when nothing is newer, and from a device
+    /// that does not know the question.
+    pub async fn profile(&self, since: i64) -> Result<Option<(String, Vec<u8>, i64)>> {
+        match self.request(Request::Profile { since }).await {
+            Ok(Response::Profile { name, picture, changed_at }) => Ok(Some((name, picture, changed_at))),
+            Ok(Response::NotFound) => Ok(None),
+            Ok(other) => Err(unexpected("name and picture", &other)),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Whether this computer asks to open this guest's folder there: the
     /// ask's nonce, or none (decision 0060).
     pub async fn asks(&self) -> Result<Option<[u8; 16]>> {
@@ -674,6 +687,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Key { .. } => "key",
         Response::About { .. } => "description",
         Response::Who { .. } => "name of a device showing a code",
+        Response::Profile { .. } => "name and picture",
         Response::Refused { .. } => "refusal of a change",
         Response::Placed { .. } => "place of an added file",
         Response::Mismatch => "key mismatch",

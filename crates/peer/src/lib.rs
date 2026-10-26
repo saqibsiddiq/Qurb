@@ -60,5 +60,5 @@ pub use ranged::Ranged;
 pub use pairing::{accept, join, pairing_number, visit, who, Asking, Invite, Ours, Paired, PairingHost};
 pub use server::{trusted_fingerprints, Generation, PeerServer, Served, ServerStats};
 pub use kept::{fetch_kept, learn_kept};
-pub use source::{check_holders, confirm_kept, report_holdings, NetworkSource};
+pub use source::{check_holders, confirm_kept, learn_profile, report_holdings, NetworkSource};
 pub use wire::{Request, Response};

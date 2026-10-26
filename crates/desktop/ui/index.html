@@ -306,6 +306,15 @@
               <input class="input" type="text" id="set-name" spellcheck="false" autocomplete="off">
             </label>
             <div class="item">
+              <div class="label"><strong>Picture</strong><span>What your other devices show for this one.</span></div>
+              <div class="actions" style="margin: 0">
+                <span class="face" id="set-picture" aria-hidden="true"></span>
+                <button class="btn small" id="choose-picture">Choose…</button>
+                <button class="btn small hidden" id="remove-picture">Remove</button>
+              </div>
+              <input type="file" id="picture-file" accept="image/*" class="hidden">
+            </div>
+            <div class="item">
               <div class="label"><strong>Folder</strong><span id="set-root"></span></div>
             </div>
             <div class="item">

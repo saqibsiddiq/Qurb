@@ -66,8 +66,7 @@ async function drawDevices() {
 
   function drawCard(d) {
     const card = el("button", "device glass-frosted");
-    const tile = el("span", "tile");
-    tile.append(icon(deviceIcon(d.name, d.kind)));
+    const tile = deviceTile(d);
     const text = el("div");
     text.append(el("strong", null, d.name), presenceLine(d));
     const waiting = out.filter((o) => o.to_id === d.id).length;
@@ -89,6 +88,24 @@ async function drawDevices() {
 
 $("add-device").addEventListener("click", () => openAddDevice());
 
+/**
+ * A device's tile: the picture it chose for itself, round, or its icon (the
+ * owner's list of 2026-10-26, item 7).
+ */
+function deviceTile(d, size) {
+  const tile = el("span", "tile");
+  if (d.picture) {
+    tile.classList.add("picture");
+    const img = el("img");
+    img.src = d.picture;
+    img.alt = "";
+    tile.append(img);
+  } else {
+    tile.append(icon(deviceIcon(d.name, d.kind), size));
+  }
+  return tile;
+}
+
 // ------------------------------------------------------------ one device
 
 /** Every paired device as last drawn, those set up again included. */
@@ -104,8 +121,7 @@ let removing = null;
 async function openDevice(d) {
   const box = panel();
   const head = el("div", "panel-head");
-  const tile = el("span", "tile");
-  tile.append(icon(deviceIcon(d.name, d.kind), "large"));
+  const tile = deviceTile(d, "large");
   const names = el("div");
   names.style.paddingRight = "32px";
   names.append(el("h2", null, d.name), presenceLine(d));

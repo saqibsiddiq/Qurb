@@ -181,6 +181,7 @@ fn run() -> Result<()> {
             commands::reveal_phrase,
             commands::settings,
             commands::save_settings,
+            commands::set_picture,
             commands::summary,
             commands::storage,
             commands::storage_parts,

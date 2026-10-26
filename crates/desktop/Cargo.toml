@@ -24,6 +24,8 @@ qurb-storage = { path = "../storage" }
 qurb-sync = { path = "../sync" }
 
 anyhow.workspace = true
+# A device's picture to the page as a data: address. Already built for Tauri.
+base64 = "0.22"
 blake3.workspace = true
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tracing = "0.1"

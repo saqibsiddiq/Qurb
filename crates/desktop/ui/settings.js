@@ -368,6 +368,7 @@ async function drawSettings() {
     $("set-port").value = String(s.port);
     $("set-downloads").value = s.downloads;
   }
+  showPicture(s.picture, s.name);
   $("set-root").textContent = s.root;
   $("set-version").textContent = s.version;
   $("set-private").checked = s.own_files_private;
@@ -392,6 +393,74 @@ async function drawSettings() {
 
   $("at-login").checked = await invoke("starts_at_login");
 }
+
+/**
+ * This computer's picture (the owner's list of 2026-10-26, item 7): its
+ * circle, as its other devices show it, or the first letter of its name.
+ */
+function showPicture(address, name) {
+  const face = $("set-picture");
+  face.replaceChildren();
+  if (address) {
+    const img = el("img");
+    img.src = address;
+    img.alt = "";
+    face.append(img);
+  } else {
+    face.textContent = (name || "?").trim().slice(0, 1).toUpperCase();
+  }
+  $("remove-picture").classList.toggle("hidden", !address);
+}
+
+/**
+ * The middle square of a picture, 256 pixels across, as JPEG bytes: what the
+ * phone makes of one too. Read as a data: address, which the window's
+ * content policy lets an image load from; a blob: one it does not.
+ */
+async function squareJpeg(file) {
+  const address = await new Promise((done, fail) => {
+    const reader = new FileReader();
+    reader.onload = () => done(reader.result);
+    reader.onerror = () => fail(new Error("could not read that picture"));
+    reader.readAsDataURL(file);
+  });
+  const image = new Image();
+  await new Promise((done, fail) => {
+    image.onload = done;
+    image.onerror = () => fail(new Error("that isn't a picture"));
+    image.src = address;
+  });
+  const side = Math.min(image.naturalWidth, image.naturalHeight);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  canvas.getContext("2d").drawImage(image,
+    (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+  const blob = await new Promise((done, fail) => canvas.toBlob(
+    (b) => (b ? done(b) : fail(new Error("could not make the picture"))), "image/jpeg", 0.85));
+  return Array.from(new Uint8Array(await blob.arrayBuffer()));
+}
+
+$("choose-picture").addEventListener("click", () => $("picture-file").click());
+$("picture-file").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    await invoke("set_picture", { picture: await squareJpeg(file) });
+    toast("Picture set");
+    drawSettings();
+  } catch (e) {
+    toast(String(e), true);
+  }
+});
+$("remove-picture").addEventListener("click", async () => {
+  try {
+    await invoke("set_picture", { picture: null });
+    drawSettings();
+  } catch (e) {
+    toast(String(e), true);
+  }
+});
 
 /** A switch that applies at once, and puts itself back if that fails. */
 /** The theme choice (decision 0056): System, Light or Dark, applied at once. */

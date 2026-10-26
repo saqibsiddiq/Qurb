@@ -404,6 +404,7 @@ async fn serve_request(
         | Response::Key { .. }
         | Response::About { .. }
         | Response::Who { .. }
+        | Response::Profile { .. }
         | Response::Mismatch
         | Response::Declined
         | Response::Changed { .. }
@@ -826,6 +827,20 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
         Request::About => match store.db().local_kind()? {
             Some(kind) => Response::About { kind },
             None => Response::NotFound,
+        },
+
+        // This device's name and picture, to any device it trusts -- its
+        // person's and another's alike, who see its name already -- when
+        // they changed after what the asker last heard (the owner's list of
+        // 2026-10-26, item 7). Not found when nothing is newer, or nothing
+        // was ever set.
+        Request::Profile { since } => match store.db().own_profile()? {
+            Some(profile) if profile.changed_at > *since => Response::Profile {
+                name: profile.name,
+                picture: profile.picture.unwrap_or_default(),
+                changed_at: profile.changed_at,
+            },
+            _ => Response::NotFound,
         },
 
         // This device's folders, to a computer of the same person that keeps

@@ -114,6 +114,18 @@ impl Here {
     }
 }
 
+/// This device's name as its paired devices learn it at a sync (the owner's
+/// list of 2026-10-26, item 7): recorded when it differs from what they were
+/// last told, so that an unchanged name tells nobody anything new.
+pub fn tell_name(store: &Store, name: &str) -> qurb_storage::Result<()> {
+    let name = name.trim();
+    let told = store.db().own_profile()?.map(|p| p.name);
+    if !name.is_empty() && told.as_deref() != Some(name) {
+        store.db().set_own_profile(Some(name), None)?;
+    }
+    Ok(())
+}
+
 pub struct Daemon {
     root: PathBuf,
     store_dir: PathBuf,
@@ -406,6 +418,11 @@ impl Daemon {
             .store()
             .db()
             .set_local_kind(if self.is_replica() { "replica" } else { "computer" });
+        // And what it is called: the config's name, which a device paired
+        // before a rename learns at its next sync.
+        if let Err(e) = tell_name(engine.store(), &self.config.name) {
+            tracing::warn!(error = %e, "could not record this device's name for its peers");
+        }
 
         // Where a file sent to this device goes. Checked before anything
         // syncs: a directory overlapping the folder would put deliveries where
@@ -1086,6 +1103,11 @@ impl Daemon {
             let asked = qurb_peer::check_holders(&client, &reader, &known.device_id, 16).await;
             if asked > 0 {
                 tracing::debug!(peer = %peer.short(), asked, "asked what it holds");
+            }
+            // Its name and picture, if it changed them (the owner's list of
+            // 2026-10-26, item 7).
+            if qurb_peer::learn_profile(&client, &reader, &known.device_id).await {
+                tracing::info!(peer = %peer.short(), "a device's name or picture changed");
             }
             // A computer of another person keeping this device's vault,
             // sealed: what it keeps that this device does not know of, and

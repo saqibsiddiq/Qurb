@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27, V28];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -679,6 +679,27 @@ END;
 CREATE TRIGGER IF NOT EXISTS files_listed_delete AFTER DELETE ON files BEGIN
     DELETE FROM listed WHERE file_id = OLD.id;
 END;
+"#;
+
+/// Each device's own name and picture, set on it and shown on every device
+/// paired with it (the owner's list of 2026-10-26, item 7).
+const V28: &str = r#"
+-- This device's: what it tells a device that asks.
+CREATE TABLE IF NOT EXISTS own_profile (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    name       TEXT NOT NULL,
+    picture    BLOB,
+    changed_at INTEGER NOT NULL
+) STRICT;
+
+-- Each paired device's, as it last said: asked again with when, so that it
+-- answers only what changed since.
+CREATE TABLE IF NOT EXISTS peer_profiles (
+    device_id  BLOB PRIMARY KEY,
+    name       TEXT NOT NULL,
+    picture    BLOB,
+    changed_at INTEGER NOT NULL
+) STRICT;
 "#;
 
 /// Files whose size and time cannot yet be trusted to say they are unchanged
@@ -2161,6 +2182,88 @@ impl Db {
         )?;
         let rows = stmt.query_map(rusqlite::params![prefix, escape_like(&pattern)], |r| r.get(0))?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
+    }
+
+    /// This device's own name and picture, as it tells devices that ask,
+    /// once one has been set here (the owner's list of 2026-10-26, item 7).
+    pub fn own_profile(&self) -> Result<Option<Profile>> {
+        self.conn
+            .query_row("SELECT name, picture, changed_at FROM own_profile WHERE id = 1", [], |r| {
+                Ok(Profile { name: r.get(0)?, picture: r.get(1)?, changed_at: r.get(2)? })
+            })
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// Set this device's name, its picture, or both, now: `picture` `Some(None)`
+    /// takes the picture away. A device asking next is told.
+    pub fn set_own_profile(&self, name: Option<&str>, picture: Option<Option<&[u8]>>) -> Result<Profile> {
+        let now = now_ms();
+        let current = self.own_profile()?;
+        let profile = Profile {
+            name: name.map(str::to_string).or_else(|| current.as_ref().map(|p| p.name.clone())).unwrap_or_default(),
+            picture: match picture {
+                Some(picture) => picture.map(<[u8]>::to_vec),
+                None => current.and_then(|p| p.picture),
+            },
+            // Later than the last, whatever the clock says: a device asking
+            // with the last one's time must hear of this one.
+            changed_at: now,
+        };
+        self.conn.execute(
+            "INSERT INTO own_profile (id, name, picture, changed_at) VALUES (1, ?1, ?2, ?3)
+             ON CONFLICT (id) DO UPDATE SET name = excluded.name, picture = excluded.picture,
+                 changed_at = max(excluded.changed_at, own_profile.changed_at + 1)",
+            params![profile.name, profile.picture, profile.changed_at],
+        )?;
+        Ok(self.own_profile()?.unwrap_or(profile))
+    }
+
+    /// A paired device's name and picture, as it last said.
+    pub fn peer_profile(&self, device: &DeviceId) -> Result<Option<Profile>> {
+        self.conn
+            .query_row(
+                "SELECT name, picture, changed_at FROM peer_profiles WHERE device_id = ?1",
+                params![device.as_bytes().as_slice()],
+                |r| Ok(Profile { name: r.get(0)?, picture: r.get(1)?, changed_at: r.get(2)? }),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// When a paired device's picture last changed, if it has one: whether a
+    /// circle drawn from it is still right, without reading the picture.
+    pub fn peer_picture_at(&self, device: &DeviceId) -> Result<Option<i64>> {
+        self.conn
+            .query_row(
+                "SELECT changed_at FROM peer_profiles WHERE device_id = ?1 AND picture IS NOT NULL",
+                params![device.as_bytes().as_slice()],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// What a paired device said its name and picture are: kept, and its name
+    /// put where every list of devices reads it -- a device renaming itself
+    /// was known by its pairing name for good until this.
+    pub fn set_peer_profile(&self, device: &DeviceId, profile: &Profile) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        let newer = tx.execute(
+            "INSERT INTO peer_profiles (device_id, name, picture, changed_at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT (device_id) DO UPDATE SET name = excluded.name, picture = excluded.picture,
+                 changed_at = excluded.changed_at
+              WHERE excluded.changed_at > peer_profiles.changed_at",
+            params![device.as_bytes().as_slice(), profile.name, profile.picture, profile.changed_at],
+        )? > 0;
+        if newer && !profile.name.trim().is_empty() {
+            tx.execute(
+                "UPDATE peers SET name = ?2 WHERE device_id = ?1",
+                params![device.as_bytes().as_slice(), profile.name.trim()],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
     }
 
     /// The live files of this device's own vault at `prefix`: the file of
@@ -5043,6 +5146,16 @@ pub(crate) fn now() -> i64 {
 #[allow(dead_code)]
 fn _assert_error_conversion(e: rusqlite::Error) -> Error {
     e.into()
+}
+
+/// A device's name and picture, as it set them (the owner's list of
+/// 2026-10-26, item 7). `changed_at` in milliseconds, for asking what changed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Profile {
+    pub name: String,
+    /// A small JPEG, as the device chose it, or none.
+    pub picture: Option<Vec<u8>>,
+    pub changed_at: i64,
 }
 
 /// How long history is kept: 30 days (the owner's list of 2026-10-26, item 8).

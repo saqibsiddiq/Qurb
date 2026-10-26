@@ -90,7 +90,7 @@ fn start_hostile(
                         (_, Request::TreeSince { .. }) => Some(
                             Response::TreeDelta { now: 7, digest: [0x43; 32], changed: Vec::new() }.encode(),
                         ),
-                        (_, Request::Short { .. } | Request::ShortConfirm { .. } | Request::Kept { .. } | Request::Layout { .. }) => {
+                        (_, Request::Short { .. } | Request::ShortConfirm { .. } | Request::Kept { .. } | Request::Layout { .. } | Request::Profile { .. }) => {
                             Some(Response::NotFound.encode())
                         }
                         // Being told a peer holds something asks nothing of us

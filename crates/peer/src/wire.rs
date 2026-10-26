@@ -178,6 +178,14 @@ pub enum Request {
     /// connection, and the join goes on as before on another.
     Who { token: [u8; 16] },
 
+    /// This device's name and picture, as it set them, if they changed after
+    /// `since` (milliseconds; 0 for never asked): asked of every paired
+    /// device on a sync, so that a device renamed, or given a picture, shows
+    /// so everywhere (the owner's list of 2026-10-26, item 7). Answered with
+    /// [`Response::Profile`], or *not found* when nothing is newer -- which is
+    /// also what a device from before this answers.
+    Profile { since: i64 },
+
     /// One folder of this computer's shared folder, at `dir` (`""` for the
     /// top), live, to a phone of its own person or to a guest of it
     /// (decision 0073, item 6): answered in [`Response::Kept`]'s shape, each
@@ -327,6 +335,10 @@ pub enum Response {
     /// number both screens show is what is checked.
     Who { name: String, kind: String },
 
+    /// A device's name and picture -- a small JPEG, empty for none -- and
+    /// when it set them, answering [`Request::Profile`].
+    Profile { name: String, picture: Vec<u8>, changed_at: i64 },
+
     /// A change asked of the shared folder, not made, and why, in words for
     /// the person who asked (decision 0073).
     Refused { why: String },
@@ -363,6 +375,7 @@ const TAG_SHARED_DELETE: u8 = 25;
 const TAG_UPLOAD: u8 = 26;
 const TAG_UPLOAD_DONE: u8 = 27;
 const TAG_SEARCH: u8 = 28;
+const TAG_PROFILE: u8 = 29;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -412,6 +425,11 @@ const STATUS_TREE_DELTA: u8 = 22;
 const STATUS_WHO: u8 = 23;
 const STATUS_REFUSED: u8 = 24;
 const STATUS_PLACED: u8 = 25;
+const STATUS_PROFILE: u8 = 26;
+
+/// The largest picture a device may give itself: a 256-pixel square as JPEG
+/// is a few tens of KiB.
+pub const MAX_PICTURE: usize = 256 << 10;
 
 /// The most folders one answer may list: two levels of a phone's storage come
 /// to a few hundred. A peer claiming more is not describing a phone. Every
@@ -490,6 +508,10 @@ impl Request {
             Request::TreeDigest => out.push(TAG_TREE_DIGEST),
             Request::TreeSince { since } => {
                 out.push(TAG_TREE_SINCE);
+                out.extend_from_slice(&since.to_le_bytes());
+            }
+            Request::Profile { since } => {
+                out.push(TAG_PROFILE);
                 out.extend_from_slice(&since.to_le_bytes());
             }
             Request::Who { token } => {
@@ -573,6 +595,7 @@ impl Request {
             TAG_LAYOUT => Request::Layout { content: r.hash()? },
             TAG_TREE_DIGEST => Request::TreeDigest,
             TAG_TREE_SINCE => Request::TreeSince { since: r.u64()? },
+            TAG_PROFILE => Request::Profile { since: r.u64()? as i64 },
             TAG_WHO => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
@@ -726,6 +749,14 @@ impl Response {
                 put_name(&mut out, name);
                 put_name(&mut out, kind);
             }
+            Response::Profile { name, picture, changed_at } => {
+                out.push(STATUS_PROFILE);
+                put_name(&mut out, name);
+                let picture = if picture.len() > MAX_PICTURE { &[][..] } else { &picture[..] };
+                put_u32(&mut out, picture.len());
+                out.extend_from_slice(picture);
+                out.extend_from_slice(&changed_at.to_le_bytes());
+            }
             Response::Refused { why } => {
                 out.push(STATUS_REFUSED);
                 put_path(&mut out, why);
@@ -794,6 +825,15 @@ impl Response {
             },
             STATUS_ABOUT => Response::About { kind: r.name()? },
             STATUS_WHO => Response::Who { name: r.name()?, kind: r.name()? },
+            STATUS_PROFILE => {
+                let name = r.name()?;
+                let len = r.count()?;
+                if len > MAX_PICTURE {
+                    return Err(Error::Protocol { detail: format!("a picture of {len} bytes is not a device's") });
+                }
+                let picture = r.take(len)?.to_vec();
+                Response::Profile { name, picture, changed_at: r.u64()? as i64 }
+            }
             STATUS_REFUSED => Response::Refused { why: r.path()? },
             STATUS_PLACED => Response::Placed { path: r.path()? },
             STATUS_ASKS => Response::Asks {
@@ -1279,6 +1319,7 @@ mod tests {
             Request::Layout { content: [13; 32] },
             Request::TreeDigest,
             Request::TreeSince { since: 1 << 40 },
+            Request::Profile { since: 1_792_000_000_123 },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -1296,6 +1337,8 @@ mod tests {
             Response::Key { key: [4; 32] },
             Response::About { kind: "replica".into() },
             Response::Who { name: "saqib".into(), kind: "computer".into() },
+            Response::Profile { name: "Saqib's laptop".into(), picture: vec![0xFF, 0xD8, 0xFF], changed_at: 1_792_000_000_123 },
+            Response::Profile { name: "S23".into(), picture: vec![], changed_at: 1 },
             Response::Refused { why: "something is already called Notes".into() },
             Response::Placed { path: "Photos/beach (2).jpg".into() },
             Response::Mismatch,

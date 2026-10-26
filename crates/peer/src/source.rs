@@ -77,6 +77,26 @@ pub async fn report_holdings(
     told
 }
 
+/// Ask a peer for its name and picture if they changed since it last said,
+/// and keep them (the owner's list of 2026-10-26, item 7): its name where
+/// every list of devices reads it, its picture for its circle. Best effort,
+/// like [`report_holdings`]: a peer from before this knows no such question.
+/// Returns whether anything new was learned.
+pub async fn learn_profile(client: &PeerClient, store: &Store, peer: &qurb_sync::DeviceId) -> bool {
+    let since = store.db().peer_profile(peer).ok().flatten().map_or(0, |p| p.changed_at);
+    match client.profile(since).await {
+        Ok(Some((name, picture, changed_at))) => {
+            let profile = qurb_storage::db::Profile {
+                name,
+                picture: (!picture.is_empty()).then_some(picture),
+                changed_at,
+            };
+            store.db().set_peer_profile(peer, &profile).is_ok()
+        }
+        _ => false,
+    }
+}
+
 /// Ask a peer whether it holds what it is recorded as holding: content of
 /// files freed here, a few per pass and each once (decision 0055).
 ///
