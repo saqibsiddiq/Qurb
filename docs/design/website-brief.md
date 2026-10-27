@@ -8,8 +8,9 @@ which is made in Figma first — the file *QurbSpace — website*,
 <https://www.figma.com/design/9DQiFyvLWy0BlVtllA4pIk> — and built only once
 the owner has approved it there.
 
-**Status: built at `/preview` on the branch `website-qurbspace`, 2026-10-27,
-scene by scene with the owner; not yet the home page.** Three hero mockups
+**Status: the home page of qurb.cloud since 2026-10-27,** built scene by
+scene with the owner on the branch `website-qurbspace` (at `/preview` while
+it was designed) and merged to `main` at his word. Three hero mockups
 were drawn in Figma the same day, before this conversation, and the owner
 turned all three down; they stay on the file's first page as what not to do.
 Figma's free plan then ran out of tool calls after Scene 1's still, and the
@@ -241,9 +242,12 @@ the computer. Checked in still screenshots at 390 pixels wide.
 - **Phones.** Every scene scales down to fit a phone's width, which leaves
   the devices too small to read in every scene with a phone and a laptop; each
   needs a layout of its own for narrow screens.
-- **The October privacy page** (`/privacy-policy`) still exists, unlinked
-  from the new design and silent about the waitlist; when the page goes
-  live it should go, or send its visitors to `/docs/this-website`.
+- **The other October pages** — security, reporting a vulnerability,
+  licences, cookies, terms, status, notes, contact, download — are still in
+  the October design and still say *Qurb*; the privacy page now sends its
+  visitors to `/docs/this-website`.
+- **The image a shared link shows** (`app/opengraph-image.png`) is still the
+  October one, *Qurb*.
 - **The docs' words** follow the app's: *I already use Qurb* is quoted as
   the Android welcome still says it, though Home says *QurbSpace*.
 - **The downloads say *Coming soon*** until 0.1.0 is published on GitHub.

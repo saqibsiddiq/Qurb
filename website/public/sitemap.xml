@@ -1,15 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://www.qurb.cloud/</loc></url>
-  <url><loc>https://www.qurb.cloud/download</loc></url>
   <url><loc>https://www.qurb.cloud/docs</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/install-on-your-computer</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/install-on-your-phone</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/connect</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/open-your-computer</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/change-files</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/send</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/backups</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/private-vault</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/family</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/several-computers</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/your-key</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/how-it-works</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/how-files-sync</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/keys</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/encryption</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/private-folders</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/who-learns-what</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/this-website</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/limits</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/local-discovery</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/rendezvous</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/relay</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/pairing</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/cant-find-computer</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/computer-was-off</loc></url>
+  <url><loc>https://www.qurb.cloud/docs/two-versions</loc></url>
   <url><loc>https://www.qurb.cloud/security-policy</loc></url>
   <url><loc>https://www.qurb.cloud/responsible-disclosure</loc></url>
-  <url><loc>https://www.qurb.cloud/privacy-policy</loc></url>
-  <url><loc>https://www.qurb.cloud/cookie-policy</loc></url>
-  <url><loc>https://www.qurb.cloud/terms-of-service</loc></url>
   <url><loc>https://www.qurb.cloud/license-information</loc></url>
-  <url><loc>https://www.qurb.cloud/status</loc></url>
-  <url><loc>https://www.qurb.cloud/blog</loc></url>
-  <url><loc>https://www.qurb.cloud/contact</loc></url>
 </urlset>

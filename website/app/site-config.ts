@@ -19,28 +19,28 @@ export const releasesUrl = `${repoUrl}/releases`
 export const repoDoc = (path: string) => `${repoUrl}/blob/main/${path}`
 
 const description =
-  'Qurb keeps your files on the devices you own and moves them directly between them, encrypted. No cloud drive in the middle holds a copy.'
+  'QurbSpace keeps your files on your own devices and moves them straight between them, encrypted. No cloud in the middle keeps a copy.'
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'Qurb — Your files. Your devices. Your space.',
-    template: '%s · Qurb'
+    default: 'QurbSpace · Your files. Always near.',
+    template: '%s · QurbSpace'
   },
   description,
-  applicationName: 'Qurb',
+  applicationName: 'QurbSpace',
   keywords: ['private file sync', 'peer-to-peer sync', 'end-to-end encrypted', 'Linux', 'Android', 'Dropbox alternative'],
   openGraph: {
-    title: 'Qurb',
-    description: 'Your files. Your devices. Your space.',
+    title: 'QurbSpace',
+    description: 'Your files. Always near.',
     url: siteUrl,
-    siteName: 'Qurb',
+    siteName: 'QurbSpace',
     type: 'website'
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Qurb',
-    description: 'Your files. Your devices. Your space.'
+    title: 'QurbSpace',
+    description: 'Your files. Always near.'
   },
   alternates: {
     canonical: siteUrl

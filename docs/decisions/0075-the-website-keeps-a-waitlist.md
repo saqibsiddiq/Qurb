@@ -1,12 +1,11 @@
 # 0075 — The website says QurbSpace, keeps a waitlist, and downloads from GitHub Releases
 
-**Status:** Proposed — built on the branch `website-qurbspace` at `/preview`
-(2026-10-27). The waitlist works: Upstash for Redis provisioned
+**Status:** Accepted — the landing page since 2026-10-27, merged to `main`
+the day it was built. The waitlist works: Upstash for Redis provisioned
 (`upstash-kv-charcoal-canvas`) and connected to the project `qurb` for
 production, preview and development the same day; an address posted locally
 was stored, read back and removed, and a malformed one refused. The downloads
-say *Coming soon* until 0.1.0 is published on GitHub. Becomes Accepted when the new landing page replaces
-`app/page.tsx` on `main`.
+say *Coming soon* until 0.1.0 is published on GitHub.
 **Date:** 2026-10-27
 
 ## What was asked

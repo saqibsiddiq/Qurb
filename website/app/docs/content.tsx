@@ -23,7 +23,7 @@ export const SECTIONS: Section[] = [
         body: (
           <>
             <Note tone="soon">
-              QurbSpace 0.1.0 isn’t published yet. The day it is, the downloads appear on the <Link href="/preview#get">Get QurbSpace</Link> part of the home page.
+              QurbSpace 0.1.0 isn’t published yet. The day it is, the downloads appear on the <Link href="/#get">Get QurbSpace</Link> part of the home page.
             </Note>
             <h2>Pick the one for your computer</h2>
             <ul className="doc-list">

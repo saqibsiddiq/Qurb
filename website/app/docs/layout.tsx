@@ -1,7 +1,7 @@
 import { DocsShell } from '../../components/docs-shell'
 import { SiteFooter } from '../../components/qs-chrome'
 import { SECTIONS } from './content'
-import '../preview/preview.css'
+import '../home.css'
 import './docs.css'
 
 // The docs, laid out as documentation sites are: their own top bar with a

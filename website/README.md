@@ -56,25 +56,25 @@ parts, the same words.
   lets the privacy page say so.
 - **The mark** is `components/mark.tsx`, and `app/icon.svg` is
   `packaging/qurb.svg`.
-- **The product on the landing page is drawn, not screenshotted**
-  (`components/previews.tsx`): the window's sidebar, stage, rows and status
-  mark, and the phone's Home under its tab bar, with the apps' own words and
-  made-up files. A screenshot would go stale with the first change to an app;
-  these change only when the design does, and in one place.
+- **The product on the landing page is drawn, not screenshotted**, in each
+  scene's component (below): the apps' screens simplified, with their own
+  words and made-up files. A screenshot would go stale with the first change
+  to an app; these change only when the design does.
 - `app/opengraph-image.png`, the image a shared link shows, was rendered once
-  in Chromium from the same font and mark. Redraw it if the headline changes.
+  in Chromium from the same font and mark, in October. It still says *Qurb*
+  and the October headline: redraw it for QurbSpace.
 
-## The new landing page, at /preview
+## The landing page
 
-Redesigned from 2026-10-27 with the owner, scene by scene, and kept at
-`/preview` (not linked, not indexed) until it replaces `app/page.tsx`:
+Redesigned on 2026-10-27 with the owner, scene by scene, at `/preview`
+until it became `app/page.tsx` the same day:
 [../docs/design/website-brief.md](../docs/design/website-brief.md) is what it
 is for and what each scene shows. The scenes are `components/always-near.tsx`,
 `walkthrough.tsx`, `send-plane.tsx`, `backups.tsx`, `vault.tsx`,
 `family.tsx`, `no-middle.tsx` and `get-it.tsx`, in that order on the page; `components/timeline.ts` is the small engine the scripted ones
 share (keyframes in one number, p, and smooth flights), driven
 by the clock when each comes into view (`play-on-view.ts`). Its styles
-are `app/preview/preview.css`, prefixed so they touch nothing else.
+are `app/home.css`, prefixed so they touch nothing else.
 
 - **Richer**: `components/near-field.tsx` (the living dots and the closing
   wordmark they settle into), `depth.tsx` (arrivals, parallax, the lean to
@@ -82,9 +82,9 @@ are `app/preview/preview.css`, prefixed so they touch nothing else.
   `?settle` shows the ending alone in development.
 - **On a phone** the scenes are drawn tall, laptop over phone: `Tall` in
   `components/play-on-view.ts`, the layouts in `components/tall.ts`, and
-  the positions under *On a phone* in `app/preview/preview.css`.
+  the positions under *On a phone* in `app/home.css`.
 - **The docs** are `app/docs/`: one page a topic, how-to and technical,
-  written in `content.tsx`, with no animations, in the same design (`docs.css`, with `preview.css`), the
+  written in `content.tsx`, with no animations, in the same design (`docs.css`, with `home.css`), the
   top bar and footer shared from `components/qs-chrome.tsx`.
 - **The video** in the remote-access scene is `public/media/waves.*`:
   *Ocean surface waves 06* by Mostafameraji, CC0, from Wikimedia Commons,
@@ -127,13 +127,17 @@ app/layout.tsx            the shell every page shares, and the environment
 app/site-config.ts        the address, the repository, and the metadata
 app/globals.css           the design system, from the window's, and the pages
 app/download/             how to get Qurb today: from source, Linux and Android
-app/docs/                 the way into the documentation in the repository
+app/page.tsx, app/home.css the landing page, and its styles
+app/docs/                 the docs: how-to and technical pages, with search
+app/api/waitlist/         the waitlist, kept in Upstash Redis
 app/github/               a redirect to the repository
-app/<others>/             security, reporting a vulnerability, privacy,
-                          cookies, terms, licences, status, notes, contact
-components/               the header, the footer, the page shell, the
-                          previews, the mark, and the icons
-public/                   the fonts, robots.txt, sitemap.xml
+app/<others>/             security, reporting a vulnerability, cookies,
+                          terms, licences, status, notes, contact, in the
+                          October design; privacy sends to the docs
+components/               the scenes and their engine, the top bar and
+                          footer, the docs' parts; the October header,
+                          footer and page shell; the mark, and the icons
+public/                   the fonts, the video, robots.txt, sitemap.xml
 scripts/icons.mjs         the icons, from the window's sprite
 ```
 

@@ -1,9 +1,7 @@
 import Link from 'next/link'
 
-// The new design's top bar and footer, shared by the landing page and the
-// docs. HOME is where the landing page is while it is being designed; it
-// becomes '/' when the page replaces app/page.tsx.
-export const HOME = '/preview'
+// The top bar and footer, shared by the landing page and the docs.
+export const HOME = '/'
 
 export function SiteNav() {
   return (
