@@ -1127,7 +1127,9 @@ qurb/
                            tokens and components, its icons (generated from
                            its sprite), its words. Next.js on Vercel, deployed
                            by every push to main; otherwise separate — nothing
-                           here depends on it or builds it.
+                           here depends on it or builds it. Static but for
+                           one route, the waitlist, kept in Upstash Redis
+                           (decision 0075).
 ```
 
 **The `crates/` vs `experiments/` split is load-bearing.** Anything in

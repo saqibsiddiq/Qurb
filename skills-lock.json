@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "upstash-ratelimit-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-ratelimit-js/SKILL.md",
+      "computedHash": "b9287d583c4d8fe36d8bf1eeb3fb112b0cbb2624b47a83d1ee02d6f5390fe6f2"
+    },
+    "upstash-redis-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-redis-js/SKILL.md",
+      "computedHash": "4869db773b6391ed1fe1a39e9a9e3db7d4a597f089e82d4a5db396f80313a85b"
+    }
+  }
+}

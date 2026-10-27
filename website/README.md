@@ -64,6 +64,44 @@ parts, the same words.
 - `app/opengraph-image.png`, the image a shared link shows, was rendered once
   in Chromium from the same font and mark. Redraw it if the headline changes.
 
+## The new landing page, at /preview
+
+Redesigned from 2026-10-27 with the owner, scene by scene, and kept at
+`/preview` (not linked, not indexed) until it replaces `app/page.tsx`:
+[../docs/design/website-brief.md](../docs/design/website-brief.md) is what it
+is for and what each scene shows. The scenes are `components/always-near.tsx`,
+`walkthrough.tsx`, `send-plane.tsx`, `backups.tsx`, `vault.tsx`,
+`family.tsx`, `no-middle.tsx` and `get-it.tsx`, in that order on the page; `components/timeline.ts` is the small engine the scripted ones
+share (keyframes in one number, p, and smooth flights), driven
+by the clock when each comes into view (`play-on-view.ts`). Its styles
+are `app/preview/preview.css`, prefixed so they touch nothing else.
+
+- **Richer**: `components/near-field.tsx` (the living dots and the closing
+  wordmark they settle into), `depth.tsx` (arrivals, parallax, the lean to
+  the pointer, and the smooth wheel by Lenis) and `rise.tsx` (headlines word by word);
+  `?settle` shows the ending alone in development.
+- **On a phone** the scenes are drawn tall, laptop over phone: `Tall` in
+  `components/play-on-view.ts`, the layouts in `components/tall.ts`, and
+  the positions under *On a phone* in `app/preview/preview.css`.
+- **The docs** are `app/docs/`: one page a topic, how-to and technical,
+  written in `content.tsx`, with no animations, in the same design (`docs.css`, with `preview.css`), the
+  top bar and footer shared from `components/qs-chrome.tsx`.
+- **The video** in the remote-access scene is `public/media/waves.*`:
+  *Ocean surface waves 06* by Mostafameraji, CC0, from Wikimedia Commons,
+  made small and silent with ffmpeg.
+- **The waitlist** posts to `app/api/waitlist/route.ts`, which adds the
+  address to a set in Upstash Redis
+  ([decision 0075](../docs/decisions/0075-the-website-keeps-a-waitlist.md)).
+  The store is `upstash-kv-charcoal-canvas`, connected to the project for
+  every environment; `npx vercel env pull .env.local` (from this folder,
+  which is linked) gives a local copy of its address and token.
+- **The downloads** come from GitHub Releases by `release` in
+  `app/site-config.ts`; set `published: true` once 0.1.0 is there.
+- **In development**, `?connect=0.4`, `?remote=…`, `?change=…`, `?sp=…`,
+  `?bk=…`, `?vt=…`, `?fm=…`, `?nm=…` hold a scene at
+  that moment, and `?gi=android` (linux, windows, mac, ios) shows the last
+  scene as that device would; production ignores them.
+
 ## Every claim is the product's
 
 The words make no claim [../docs/features.md](../docs/features.md) does not,
