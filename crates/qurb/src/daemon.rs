@@ -786,9 +786,22 @@ impl Daemon {
                     while let Ok(more) = arrivals.try_recv() {
                         arrived.push(more);
                     }
+                    // Not a peer this daemon is already connected to and
+                    // listening to: its changes come down that connection
+                    // (above), so its announcing itself again says nothing
+                    // new. A phone awake announces every twenty seconds or
+                    // so, and each was a full pass, for hours on end
+                    // (2026-10-28).
                     let arrived: std::collections::BTreeSet<Fingerprint> = arrived
                         .into_iter()
                         .filter_map(|member| peers.member(&connector, member))
+                        .filter(|peer| {
+                            let listening = peers.listening(peer);
+                            if listening {
+                                tracing::debug!(peer = %peer.short(), "announced, and already listened to");
+                            }
+                            !listening
+                        })
                         .collect();
                     for peer in &arrived {
                         tracing::info!(peer = %peer.short(), "a peer is reachable and has news; syncing now");
@@ -1437,6 +1450,12 @@ impl Peers {
         });
     }
 
+    /// Whether this peer is connected and watched, so that its changes reach
+    /// this daemon down the connection without its having to announce them.
+    fn listening(&self, peer: &Fingerprint) -> bool {
+        self.watching.contains(peer) && self.connections.get(peer).is_some_and(|c| !c.is_closed())
+    }
+
     fn stop_watching(&mut self, peer: Fingerprint) {
         self.watching.remove(&peer);
     }
@@ -1668,6 +1687,43 @@ mod tests {
         assert_eq!(shown.len(), 1);
         assert_eq!((shown[0].path.as_str(), shown[0].device.as_str()), ("video.mp4", "phone"));
         assert_eq!((shown[0].size, shown[0].done), (600_000, total));
+    }
+
+    /// A device already connected and watched is listened to: its announcing
+    /// itself again is not news (2026-10-28). Not one only connected, and not
+    /// one whose connection has ended.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn an_announced_device_already_listened_to_is_not_news() {
+        let dir = tempfile::tempdir().unwrap();
+        let (server_dir, client_dir) = (dir.path().join("server"), dir.path().join("client"));
+        std::fs::create_dir_all(&server_dir).unwrap();
+        std::fs::create_dir_all(&client_dir).unwrap();
+        let server_id = Identity::load_or_create(&server_dir).unwrap();
+        let client_id = Identity::load_or_create(&client_dir).unwrap();
+        let store = qurb_storage::Store::open(
+            &server_dir.join("store"),
+            qurb_storage::ChunkKey::from_bytes([6; 32]),
+        )
+        .unwrap();
+        let server = qurb_peer::PeerServer::bind(
+            "127.0.0.1:0".parse().unwrap(),
+            &server_id,
+            &qurb_peer::tls::TrustList::new(vec![client_id.fingerprint()]),
+        )
+        .unwrap();
+        let addr = server.local_addr().unwrap();
+        tokio::spawn(async move { server.serve(Arc::new(Mutex::new(store))).await });
+
+        let peer = server_id.fingerprint();
+        let client = Arc::new(PeerClient::connect(addr, &client_id, peer).await.unwrap());
+        let mut peers = Peers::new(vec![peer]);
+        assert!(!peers.listening(&peer), "not connected");
+        peers.connected(peer, Arc::clone(&client));
+        assert!(!peers.listening(&peer), "connected, nobody watching");
+        peers.watch(peer, Arc::clone(&client));
+        assert!(peers.listening(&peer));
+        peers.disconnected(peer);
+        assert!(!peers.listening(&peer), "the connection has gone");
     }
 
     /// A device removed from the trust store is let go of: its connection

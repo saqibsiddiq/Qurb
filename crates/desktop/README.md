@@ -128,6 +128,15 @@ ms, `devices` about 55 ms; the main thread idle, the process at about 15% of
 a core in all, and its memory level at 257–261 MB over five minutes, the web
 view's at about 200 MB. Not measured yet: a day of it running.
 
+**An announcement is not news from a device already listened to**
+(2026-10-28). The same log showed a full pass with the S23 every 18 seconds
+or so, for hours: 34 in ten minutes. Each time the phone announced itself
+through the rendezvous service, the daemon took it for news, though it was
+already connected to the phone and holding a request open for its changes —
+the way news travels now. `Peers::listening` (connected, watched, the
+connection not closed) now filters those arrivals out; a phone that has just
+come back, or whose connection has gone, still syncs on arriving.
+
 ## Looking at the screens without a daemon
 
 [`experiments/desktop-fixtures`](../../experiments/desktop-fixtures) serves this
