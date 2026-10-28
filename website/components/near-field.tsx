@@ -4,8 +4,8 @@ import { useEffect, useRef } from 'react'
 
 // The page's living ground (docs/design/website-brief.md, *Richer*): a field
 // of tiny dots — files, if you like — drifting slowly behind everything and
-// gathering near the pointer or the finger, nearness made something you can
-// feel. Near the end of the page a second set flies in and settles into the
+// gathering near the mouse pointer, nearness made something you can feel.
+// Near the end of the page a second set flies in and settles into the
 // wordmark of the element marked data-settle.
 //
 // One canvas, fixed behind the page, drawn each frame; it stops when the tab
@@ -81,12 +81,15 @@ export function NearField() {
       canvas.style.width = `${w}px`
       canvas.style.height = `${h}px`
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      const n = Math.round(Math.min(w < 700 ? 110 : 260, (w * h) / 6500))
+      const n = Math.round(Math.min(w < 700 ? 60 : 260, (w * h) / 6500))
       field = Array.from({ length: n }, () => dot(Math.random() * w, Math.random() * h, 0.18 + Math.random() * 0.32))
       word = targets().map(([tx, ty]) => ({ ...dot(Math.random() * w, Math.random() * h, 0.55 + Math.random() * 0.35), tx, ty }))
     }
 
+    // Only a mouse draws the dots near. On a touch screen a finger is busy
+    // scrolling, and dots chasing it were a distraction (the owner).
     const move = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') return
       pointer.x = e.clientX
       pointer.y = e.clientY
       pointer.on = true

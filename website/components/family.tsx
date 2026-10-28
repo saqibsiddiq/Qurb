@@ -19,7 +19,7 @@ const DURATION = 12000
 // On a phone: the people in a row over the computer, then the computers over
 // the phone (preview.css). Nothing here flies free between two devices, so
 // the drops have tall routes of their own instead of bending.
-const TALL_FAMILY: Tall = { w: 640, h: 890, a: { x: 0, d: [0, 0] }, b: { x: 1, d: [0, 0] } }
+const TALL_FAMILY: Tall = { w: 640, h: 890, a: { x: 0, from: [0, 0], to: [0, 0], s: 1 }, b: { x: 1, from: [0, 0], to: [0, 0], s: 1 } }
 
 const TIMELINE: Record<string, Keys> = {
   // One computer, several people.

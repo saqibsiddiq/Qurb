@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 // Scene 1 of the website brief (docs/design/website-brief.md): a laptop at
 // home, a phone leaving it, and the laptop's folders following the phone
@@ -28,6 +28,20 @@ const DUCKS: { start: Pose; hop: Pose; trail: Pose; rest: Pose; hopAt: number }[
 ]
 const PHONE = { start: { x: 470, y: 52 }, mid: { x: 640, y: 52, r: -2 }, late: { x: 830, y: 52, r: -3 }, rest: { x: 950, y: 52, r: -4 } }
 
+// On a phone the drawing is tall: the laptop up at the left, the phone down
+// at the right and larger on the screen, the folders hopping out of the
+// laptop and trailing down to it.
+const DUCKS_TALL: typeof DUCKS = [
+  { start: { x: 100, y: 110, s: 0.7 }, hop: { x: 160, y: 0, s: 0.78, r: -8 }, trail: { x: 300, y: 70, s: 0.82, r: 6 }, rest: { x: 350, y: 236, s: 0.76, r: 8 }, hopAt: 0.5 },
+  { start: { x: 157, y: 110, s: 0.7 }, hop: { x: 230, y: -10, s: 0.82, r: 8 }, trail: { x: 320, y: 130, s: 0.88, r: -3 }, rest: { x: 376, y: 462, s: 0.84, r: -4 }, hopAt: 0.42 },
+  { start: { x: 214, y: 110, s: 0.7 }, hop: { x: 300, y: 0, s: 0.85, r: -12 }, trail: { x: 340, y: 190, s: 0.94, r: 4 }, rest: { x: 360, y: 390, s: 0.92, r: 5 }, hopAt: 0.34 },
+  { start: { x: 271, y: 110, s: 0.7 }, hop: { x: 360, y: -10, s: 0.9, r: 10 }, trail: { x: 360, y: 250, r: -6 }, rest: { x: 372, y: 310, r: -8 }, hopAt: 0.26 }
+]
+const PHONE_TALL = { start: { x: 395, y: 40 }, mid: { x: 420, y: 130, r: -2 }, late: { x: 432, y: 220, r: -3 }, rest: { x: 440, y: 300, r: -4 } }
+
+const WIDE = { ducks: DUCKS, phone: PHONE, box: '0 0 1200 400', laptop: '', home: 'translate(240 322)', trail: 'M 440 150 C 600 30 830 40 970 150', glow: [600, 250, 520, 170] }
+const TALL = { ducks: DUCKS_TALL, phone: PHONE_TALL, box: '0 0 640 620', laptop: 'translate(-70 -60)', home: 'translate(170 262)', trail: 'M 340 120 C 420 200 330 300 430 380', glow: [330, 380, 300, 220] }
+
 const DURATION = 3800
 const DELAY = 500
 const GLIDE = 'cubic-bezier(.45, 0, .25, 1)'
@@ -37,6 +51,9 @@ export function AlwaysNear() {
   const stage = useRef<SVGSVGElement>(null)
   // Its own ids, so that a page could draw it more than once.
   const id = useId().replace(/[^a-zA-Z0-9]/g, '')
+  const [tall, setTall] = useState(false)
+  useEffect(() => setTall(matchMedia('(max-width: 900px)').matches), [])
+  const L = tall ? TALL : WIDE
 
   useEffect(() => {
     const svg = stage.current
@@ -44,6 +61,7 @@ export function AlwaysNear() {
     svg.dataset.ready = ''
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
+    const { ducks: DUCKS, phone: PHONE } = tall ? TALL : WIDE
     const timing = { duration: DURATION, delay: DELAY, fill: 'both' as const }
     const run: Animation[] = []
     const phone = svg.querySelector<SVGGElement>('.qs-phone')!
@@ -84,10 +102,10 @@ export function AlwaysNear() {
     )
     run[0].finished.then(() => svg.classList.add('qs-settled')).catch(() => {})
     return () => run.forEach((a) => a.cancel())
-  }, [])
+  }, [tall])
 
   return (
-    <svg ref={stage} className="qs-near" viewBox="0 0 1200 400" role="img" aria-label="A laptop at home and a phone away from it, with the laptop's folders following the phone.">
+    <svg ref={stage} className={`qs-near${tall ? ' qs-near-tall' : ''}`} viewBox={L.box} role="img" aria-label="A laptop at home and a phone away from it, with the laptop's folders following the phone.">
       <defs>
         <radialGradient id={`${id}-glow`}>
           <stop offset="0" stopColor="#BFE3D2" stopOpacity="0.6" />
@@ -105,21 +123,23 @@ export function AlwaysNear() {
         </linearGradient>
       </defs>
 
-      <ellipse cx="600" cy="250" rx="520" ry="170" fill={`url(#${id}-glow)`} />
-      <path className="qs-trail" d="M 440 150 C 600 30 830 40 970 150" fill="none" stroke={GREEN} strokeOpacity="0.28" strokeWidth="2" strokeDasharray="1 9" strokeLinecap="round" />
+      <ellipse cx={L.glow[0]} cy={L.glow[1]} rx={L.glow[2]} ry={L.glow[3]} fill={`url(#${id}-glow)`} />
+      <path className="qs-trail" d={L.trail} fill="none" stroke={GREEN} strokeOpacity="0.28" strokeWidth="2" strokeDasharray="1 9" strokeLinecap="round" />
 
       {/* The laptop, at home. */}
-      <rect x="130" y="92" width="300" height="192" rx="14" fill="#1C1D1B" />
-      <rect x="138" y="100" width="284" height="176" rx="8" fill={`url(#${id}-screen)`} />
-      <rect x="100" y="284" width="360" height="14" rx="7" fill="#D6D7D1" />
-      <rect x="250" y="284" width="60" height="5" rx="2.5" fill="#C3C4BE" />
-      <g transform="translate(240 322)" fill={MUTE}>
+      <g transform={L.laptop || undefined}>
+        <rect x="130" y="92" width="300" height="192" rx="14" fill="#1C1D1B" />
+        <rect x="138" y="100" width="284" height="176" rx="8" fill={`url(#${id}-screen)`} />
+        <rect x="100" y="284" width="360" height="14" rx="7" fill="#D6D7D1" />
+        <rect x="250" y="284" width="60" height="5" rx="2.5" fill="#C3C4BE" />
+      </g>
+      <g transform={L.home} fill={MUTE}>
         <path d={HOUSE} transform="scale(0.0547)" />
         <text x="20" y="12" className="qs-caption">At home</text>
       </g>
 
       {/* The phone, with you. */}
-      <g className="qs-phone" style={{ transform: pose(PHONE.rest) }}>
+      <g className="qs-phone" style={{ transform: pose(L.phone.rest) }}>
         <rect width="132" height="268" rx="30" fill="#1C1D1B" filter={`url(#${id}-phone-shadow)`} />
         <rect x="6" y="6" width="120" height="256" rx="24" fill="#FFFFFF" />
         <rect x="49" y="15" width="34" height="10" rx="5" fill="#1C1D1B" />
@@ -134,7 +154,7 @@ export function AlwaysNear() {
         <text x="66" y="296" textAnchor="middle" className="qs-caption" fill={MUTE}>With you</text>
       </g>
 
-      {DUCKS.map((d, i) => (
+      {L.ducks.map((d, i) => (
         <g key={i} className="qs-duck" style={{ transform: pose(d.rest) }}>
           <g className="qs-bob" style={{ animationDelay: `${i * -0.9}s` }}>
             <rect width="56" height="56" rx="16" fill="#FFFFFF" filter={`url(#${id}-lift)`} />

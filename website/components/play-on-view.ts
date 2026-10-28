@@ -9,13 +9,18 @@ import { draw, type Keys, type Warp } from './timeline'
 // shows that scene alone, held at that point.
 // `range` plays only that part of the timeline, for scenes that share one.
 //
-// `tall` is how the scene is drawn on a phone, where it would be too small
-// side by side: its size there, and where each device moves to. `a` and `b`
-// are the devices' inner edges in the wide drawing, each with how far that
-// device moves; a point between them moves by a share of each, so a flight
-// from one device to the other bends into the tall drawing with them.
-export type Tall = { w: number; h: number; a: { x: number; d: [number, number] }; b: { x: number; d: [number, number] } }
-const TALL = '(max-width: 700px)'
+// `tall` is how the scene is drawn on a phone: phone first, big enough to
+// read, with the computer small above it. Its size there, and where each
+// device goes: `a` and `b` are the devices' inner edges in the wide drawing
+// (x), each with where its device's corner was (`from`), where it is now
+// (`to`) and how much it is scaled (`s`). A point near one device moves with
+// it, a point between them by a share of each, so a flight from one device
+// to the other bends into the tall drawing with them.
+type Side = { x: number; from: [number, number]; to: [number, number]; s: number }
+export type Tall = { w: number; h: number; a: Side; b: Side }
+const TALL = '(max-width: 900px)'
+// A tall drawing may grow past its own size on a tablet, up to this much.
+const TALL_GROW = 1.6
 
 export function usePlayOnView(
   root: RefObject<HTMLElement | null>,
@@ -42,16 +47,19 @@ export function usePlayOnView(
       stage.style.width = `${tall.w}px`
       stage.style.height = `${tall.h}px`
       room.style.aspectRatio = `${tall.w} / ${tall.h}`
-      room.style.maxWidth = `${tall.w}px`
+      room.style.maxWidth = `${tall.w * TALL_GROW}px`
       const { a, b } = tall
+      const map = (d: Side, x: number, y: number) => [d.to[0] + (x - d.from[0]) * d.s, d.to[1] + (y - d.from[1]) * d.s]
       warp = (x, y) => {
         const t = Math.min(1, Math.max(0, (x - a.x) / (b.x - a.x)))
-        return [x + a.d[0] + (b.d[0] - a.d[0]) * t, y + a.d[1] + (b.d[1] - a.d[1]) * t]
+        const [ax, ay] = map(a, x, y)
+        const [bx, by] = map(b, x, y)
+        return [ax + (bx - ax) * t, ay + (by - ay) * t]
       }
     }
     const paint = (p: number) => draw(timeline, els, at(p), warp)
     const fit = new ResizeObserver(([e]) => {
-      if (stage) stage.style.setProperty('--scene-scale', String(Math.min(1, e.contentRect.width / Number(stage.dataset.w))))
+      if (stage) stage.style.setProperty('--scene-scale', String(Math.min(warp ? TALL_GROW : 1, e.contentRect.width / Number(stage.dataset.w))))
     })
     if (room) fit.observe(room)
 

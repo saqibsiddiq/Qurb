@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { SiteMenu } from './site-menu'
 
 // The top bar and footer, shared by the landing page and the docs.
 export const HOME = '/'
@@ -17,6 +18,7 @@ export function SiteNav() {
           Get QurbSpace
         </Link>
       </div>
+      <SiteMenu home={HOME} />
     </nav>
   )
 }

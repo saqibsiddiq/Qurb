@@ -227,15 +227,27 @@ None of it moves with reduced motion asked for: the dots hold still, the
 name is simply there, nothing glides. The touch screen, the keyboard and
 the scrollbar scroll as they always do; only the wheel is smoothed.
 
-## On a phone
+## On a phone, and every screen
 
-A scene with a laptop and a phone side by side is drawn tall on a narrow
-screen (700 pixels or less): the laptop above, the phone under it, each
-about twice the size it had when the wide drawing was shrunk to fit. What
-flies between them bends with them (`Tall` in `play-on-view.ts`, `tall.ts`);
-where bending is not enough, a key has its own `tall` tracks — the phone
-rising to the laptop to scan it, the family's three people in a row over
-the computer. Checked in still screenshots at 390 pixels wide.
+The owner found the phone site "ugly and clunky" (2026-10-28), and asked
+for four things: no dots chasing a finger, a menu icon at the top right, the
+animations redone for the phone, and a site that looks good at every size.
+
+- **Phone first.** Up to 900 pixels wide every scene is drawn tall, the
+  phone at full size and the computer small above it (`Tall` in
+  `play-on-view.ts`, `tall.ts`), so what the phone shows can be read on the
+  phone it is shown on; what flies between them bends and shrinks with them.
+  On a tablet the tall drawing grows to fill the width, up to 1.6 times. The
+  hero has a tall drawing of its own: the laptop up at the left, the phone
+  down at the right, the folders trailing down to it.
+- **The dots** answer only a mouse, and there are fewer of them on a phone.
+- **A menu** behind an icon at the top right, opening the page's links full
+  screen (`site-menu.tsx`).
+- **Every size**: headlines balanced; the closing name sized to the width;
+  small phones (320) given smaller headlines and gutters; on screens from
+  1800 pixels the page grows with the screen (CSS `zoom`), so a 2560 monitor
+  is filled as a laptop is. Checked in still screenshots at 320, 390, 768,
+  1024, 1440, 1920 and 2560.
 
 ## Still open
 

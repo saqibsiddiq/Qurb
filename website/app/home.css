@@ -129,11 +129,7 @@
   }
 }
 
-@media (max-width: 720px) {
-  .qs-links a:not(.qs-cta) {
-    display: none;
-  }
-}
+
 
 /* ---------- The walkthrough's parts, shared by the scenes ---------- */
 
@@ -1981,7 +1977,7 @@
   text-decoration: none;
 }
 
-/* ---------- On a phone: the devices stacked, laptop over phone ---------- */
+/* ---------- On a phone: phone first, the computer small above it ---------- */
 
 .sp .scene-room {
   aspect-ratio: 1240 / 560;
@@ -1989,21 +1985,26 @@
 .sp .scene-stage {
   height: 560px;
 }
-.scene-stage[data-tall] .sp-laptop {
-  left: 30px;
-  top: 30px;
+/* On a phone or a tablet (play-on-view.ts, TALL). */
+.scene-stage[data-tall] .sp-laptop:not(.fm-laptop) {
+  left: 88px;
+  top: 20px;
+  transform: scale(0.42);
+  transform-origin: 0 0;
 }
-.scene-stage[data-tall] .wt-phone.sp-phone {
-  left: 200px;
-  top: 520px;
+.scene-stage[data-tall] .wt-phone.sp-phone:not(.fm-phone) {
+  left: 90px;
+  top: 250px;
 }
 .scene-stage[data-tall] .wt-laptop {
-  left: 30px;
-  top: 30px;
+  left: 82px;
+  top: 20px;
+  transform: scale(0.4);
+  transform-origin: 0 0;
 }
 .scene-stage[data-tall] .wt-phone:not(.sp-phone) {
-  left: 230px;
-  top: 520px;
+  left: 90px;
+  top: 230px;
 }
 .scene-stage[data-tall] .wt-beam,
 .scene-stage[data-tall] .nm-lines [data-k='cloud-up'],
@@ -2013,12 +2014,14 @@
 }
 /* The cloud floats in the gap between the two, where it would be. */
 .scene-stage[data-tall] .nm-lines {
-  transform: translate(-116px, 368px);
+  transform: translate(-95px, 138px) scale(0.7);
+  transform-origin: 0 0;
 }
 .scene-stage[data-tall] .nm-cloud-label {
-  left: 440px;
-  top: 452px;
+  left: 296px;
+  top: 184px;
   translate: none;
+  font-size: 11px;
 }
 
 /* Family, tall: the three people in a row over the computer, then the two
@@ -2065,10 +2068,7 @@
   .fm h2 {
     font-size: clamp(30px, 8vw, 40px);
   }
-  .qs-hero .qs-near {
-    width: 116%;
-    margin-left: -8%;
-  }
+
   .gi {
     padding: 140px 20px 120px;
   }
@@ -2309,4 +2309,183 @@ html.lenis {
 }
 .end-held .qs-end {
   margin-top: 30vh;
+}
+
+/* ---------- Every screen size ---------- */
+
+/* Headlines break where they read well. */
+.rise,
+.qs-hero h1,
+.scene h2,
+.sp h2 {
+  text-wrap: balance;
+}
+
+/* The ending fits any width. */
+.qs-end {
+  height: min(19vw, 300px);
+  font-size: min(16.5vw, 260px);
+  line-height: min(19vw, 300px);
+  overflow: hidden;
+}
+
+/* The menu: an icon at the top right on a small screen. */
+.qs-burger {
+  display: none;
+  position: relative;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.qs-burger span {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--qs-ink);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.qs-burger span:first-child {
+  top: 17px;
+}
+.qs-burger span:last-child {
+  top: 25px;
+}
+.qs-burger.on span:first-child {
+  top: 21px;
+  transform: rotate(45deg);
+}
+.qs-burger.on span:last-child {
+  top: 21px;
+  transform: rotate(-45deg);
+}
+.qs-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 110px 28px 40px;
+  background: rgba(250, 249, 246, 0.97);
+  backdrop-filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.qs-menu.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.qs-menu nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.qs-menu nav a {
+  padding: 10px 0;
+  color: var(--qs-ink);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+  transform: translateY(12px);
+  opacity: 0;
+  transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.4s ease;
+}
+.qs-menu.on nav a {
+  transform: none;
+  opacity: 1;
+}
+.qs-menu.on nav a:nth-child(2) {
+  transition-delay: 0.05s;
+}
+.qs-menu.on nav a:nth-child(3) {
+  transition-delay: 0.1s;
+}
+.qs-menu-cta {
+  display: block;
+  padding: 18px;
+  border-radius: 999px;
+  background: var(--qs-green);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+.qs-nav {
+  position: relative;
+  z-index: 60;
+}
+@media (max-width: 720px) {
+  .qs-links {
+    display: none;
+  }
+  .qs-burger {
+    display: block;
+  }
+  .qs-nav {
+    padding: 18px 20px;
+  }
+}
+
+/* Small phones, 320 to 380 wide. */
+@media (max-width: 380px) {
+  .qs-hero h1 {
+    font-size: 48px;
+  }
+  .scene h2,
+  .sp h2 {
+    font-size: 32px;
+  }
+  .scene,
+  .sp {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* The footer on a phone: stacked and roomy. */
+@media (max-width: 600px) {
+  .qs-foot {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+    padding: 28px 20px 40px;
+  }
+  .qs-foot nav {
+    gap: 20px;
+  }
+}
+
+/* The hero, tall, on a phone or a tablet. */
+.qs-hero .qs-near-tall {
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Large screens: the whole page grows with the screen, so it fills a big
+   monitor as it fills a laptop, rather than sitting small in the middle.
+   The field of dots, drawn to the window itself, does not. */
+@media (min-width: 1800px) {
+  .qs > :not(.near-field) {
+    zoom: 1.2;
+  }
+}
+@media (min-width: 2200px) {
+  .qs > :not(.near-field) {
+    zoom: 1.45;
+  }
+}
+@media (min-width: 3000px) {
+  .qs > :not(.near-field) {
+    zoom: 1.9;
+  }
 }
