@@ -276,7 +276,33 @@ fn a_folder_kept_outside_is_in_no_list_a_person_is_shown() {
     assert!(db.folder_search("IMG", 10).unwrap().is_empty());
     assert_eq!(db.live_bytes().unwrap(), 0);
     assert!(db.undelivered().unwrap().is_empty());
+    assert_eq!(db.undelivered_count().unwrap(), (0, 0));
     assert!(db.only_here().unwrap().is_empty());
+}
+
+/// Summing a phone's kept folders from one pass gives what asking once a
+/// folder gave (the desktop window's *Folders*, 2026-10-28).
+#[test]
+fn the_kept_files_summed_in_one_pass_match_asking_a_folder_at_a_time() {
+    let mut phone = Phone::new();
+    let a = phone.write("DCIM/Camera/1.jpg", &noisy(20_000, 50), 1);
+    let b = phone.write("DCIM/Camera/2.jpg", &noisy(30_000, 51), 1);
+    let c = phone.write("Documents/x.pdf", &noisy(10_000, 52), 1);
+    phone.sync(&[a, b, c], true);
+    let db = phone.store.db();
+    let owner = phone.store.device_id().unwrap();
+    // Kept for its owner, as a computer keeps a phone's backup.
+    for row in db.outside_under(PREFIX).unwrap() {
+        db.mark_held(&row.path, &owner).unwrap();
+    }
+    let all = db.held_outside_under(&owner, PREFIX).unwrap();
+    assert_eq!(all.len(), 3, "every kept file, in one pass");
+    for folder in ["DCIM", "DCIM/Camera", "Documents"] {
+        let prefix = format!("{PREFIX}/{folder}");
+        let under = format!("{prefix}/");
+        let summed = all.iter().filter(|(p, _)| p.starts_with(&under)).fold((0u64, 0u64), |(n, b), (_, s)| (n + 1, b + s));
+        assert_eq!(summed, db.held_outside_for(&owner, &prefix).unwrap(), "{folder}");
+    }
 }
 
 /// What Settings says about the backup: how much, how much the computer has,

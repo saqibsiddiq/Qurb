@@ -353,3 +353,27 @@ fn a_file_says_which_devices_hold_it() {
     holders.sort_by_key(|d| d.to_string());
     assert_eq!(holders, [phone, laptop]);
 }
+
+/// What the desktop window counts every few seconds, counted in the database
+/// rather than by listing everything (2026-10-28): the same numbers as the
+/// list, the first few named in the same order, and the evicted counted too.
+#[test]
+fn what_nobody_else_holds_is_counted_as_it_is_listed() {
+    let mut f = fixture();
+    let data = f.write("one.bin", 64 * 1024, 0x1111_1111);
+    f.write("two.bin", 96 * 1024, 0x2222_2222);
+    f.write("three.bin", 32 * 1024, 0x3333_3333);
+    let db = f.store.db();
+    let listed = db.undelivered().unwrap();
+    let (files, bytes) = db.undelivered_count().unwrap();
+    assert_eq!(files as usize, listed.len());
+    assert_eq!(bytes, listed.iter().map(|(_, size)| size).sum::<u64>());
+    assert_eq!(db.undelivered_first(2).unwrap(), listed[..2].to_vec());
+
+    f.store.note_replica(&blake3::hash(&data), &DeviceId::from_bytes([9; 32])).unwrap();
+    f.store.evict("one.bin").unwrap();
+    let db = f.store.db();
+    assert_eq!(db.undelivered_count().unwrap().0 as usize, db.undelivered().unwrap().len());
+    assert_eq!(db.evicted_count().unwrap(), db.evicted_paths().unwrap().len());
+    assert_eq!(db.evicted_count().unwrap(), 1);
+}

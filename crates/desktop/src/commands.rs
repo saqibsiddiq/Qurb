@@ -236,7 +236,7 @@ pub struct Settings {
 ///
 /// Asked first, before anything else, because the answer decides whether there
 /// is a device to ask about at all.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn situation(hosted: Host<'_>) -> Answer<Situation> {
     let root = hosted.root();
     let set_up = qurb_cli::is_set_up(&root);
@@ -261,7 +261,7 @@ pub fn key_protection(root: &std::path::Path) -> Option<qurb_keys::Protection> {
 ///
 /// The passphrase goes to the key-derivation function and nowhere else: not
 /// kept, not logged. A wrong one is said as such, and changes nothing.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unlock(hosted: Host<'_>, passphrase: String) -> Answer<()> {
     hosted.start(move || Ok(passphrase)).map_err(|e| {
         match e.chain().any(|cause| {
@@ -285,7 +285,7 @@ pub struct Security {
     events: Vec<Happened>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn security(hosted: Host<'_>) -> Answer<Security> {
     let root = hosted.root();
     // Read, never made: looking at Settings must not create an identity in a
@@ -323,7 +323,7 @@ pub fn security(hosted: Host<'_>) -> Answer<Security> {
 /// Change how the key is kept: "keystore", "passphrase" or "file". The key
 /// itself is untouched -- this changes the lock, not what it protects -- and
 /// the running daemon, which already holds it, carries on.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn protect_key(
     hosted: Host<'_>,
     to: String,
@@ -347,7 +347,7 @@ pub fn protect_key(
 /// Answered for paths that do not exist yet, because the commonest first action
 /// is to type somewhere new. Called on every keystroke, so it counts at most a
 /// couple of thousand files before giving up.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn inspect_folder(path: String) -> Answer<Folder> {
     let expanded = expand(&path);
     let looked = qurb_cli::setup::inspect(&expanded);
@@ -372,7 +372,7 @@ pub fn inspect_folder(path: String) -> Answer<Folder> {
 /// `allowance` is the disk this device may use, in bytes, from the question
 /// asked before the key is made (decision 0038). Written with the rest of the
 /// device's settings, before anything syncs.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_device(hosted: Host<'_>, path: String, allowance: String) -> Answer<()> {
     let bytes = bytes_of(&allowance)?;
     let root = expand(&path);
@@ -398,7 +398,7 @@ fn start_at_login_from_now() {
 }
 
 /// What somebody typed as a custom allowance, in bytes — or why it is not one.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_allowance(text: String) -> Answer<String> {
     qurb_cli::setup::allowance(&text).map(big).map_err(failed)
 }
@@ -413,7 +413,7 @@ fn bytes_of(allowance: &str) -> Answer<u64> {
 /// Set this folder up with a key that already exists on another device.
 ///
 /// `allowance` is as for [`create_device`].
-#[tauri::command]
+#[tauri::command(async)]
 pub fn enrol_device(
     hosted: Host<'_>,
     path: String,
@@ -472,7 +472,7 @@ pub async fn join_new_device(
 /// remembered. Offered at all because the key is already in this folder:
 /// somebody who can read it can read the files, so showing them the words gives
 /// away nothing they did not already have.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reveal_phrase(hosted: Host<'_>) -> Answer<Vec<String>> {
     let root = hosted.root();
     let vault = qurb_keys::Vault::at(&qurb_cli::store_dir(&root));
@@ -485,7 +485,7 @@ pub fn reveal_phrase(hosted: Host<'_>) -> Answer<Vec<String>> {
     Ok(qurb_cli::setup::reveal(&key).words().to_vec())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn settings(hosted: Host<'_>) -> Answer<Settings> {
     let root = hosted.root();
     let dir = qurb_cli::store_dir(&root);
@@ -540,7 +540,7 @@ fn picture_address(bytes: &[u8]) -> String {
 /// Give this computer a picture -- a small JPEG the window made from the
 /// one chosen -- or take it away with none. Every paired device is shown it
 /// from its next sync (the owner's list of 2026-10-26, item 7).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_picture(hosted: Host<'_>, picture: Option<Vec<u8>>) -> Answer<()> {
     if picture.as_ref().is_some_and(|p| p.len() > qurb_peer::wire::MAX_PICTURE) {
         return Err("that picture is too large".to_string());
@@ -557,7 +557,7 @@ pub fn set_picture(hosted: Host<'_>, picture: Option<Vec<u8>>) -> Answer<()> {
 /// daemon without writing it down would lose the change on the next restart.
 /// The daemon re-reads what it can and the rest takes effect on restart, which
 /// the screen says.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_settings(
     hosted: Host<'_>,
     name: String,
@@ -597,7 +597,7 @@ pub fn save_settings(
 }
 
 /// Open the folder files sent here are saved to, in the file manager.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_downloads(hosted: Host<'_>) -> Answer<()> {
     let root = hosted.root();
     let config = qurb_cli::Config::load(&qurb_cli::store_dir(&root)).map_err(failed)?;
@@ -616,7 +616,7 @@ pub fn open_downloads(hosted: Host<'_>) -> Answer<()> {
 /// path comes from what the daemon recorded, and is opened only if it is
 /// inside the downloads directory -- so nothing the page says can make this
 /// open anywhere else on the disk.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn show_received(hosted: Host<'_>, id: i64) -> Answer<()> {
     let root = hosted.root();
     let entry = hosted
@@ -782,7 +782,7 @@ pub struct Earlier {
 /// Which of the files picked went to `to` before: asked before sending, so
 /// that the window can say so and let the person choose (decision 0059).
 /// Folders are looked inside, as sending them would.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sent_before(hosted: Host<'_>, paths: Vec<String>, to: String) -> Answer<Vec<Earlier>> {
     let device = recipient(&hosted, &to)?;
     let picked: Vec<std::path::PathBuf> = paths.iter().map(std::path::PathBuf::from).collect();
@@ -814,7 +814,7 @@ pub fn sent_before(hosted: Host<'_>, paths: Vec<String>, to: String) -> Answer<V
 ///
 /// `leave_out` names files the person chose not to send again, having been
 /// told by [`sent_before`] that they went there before.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn send_files(
     hosted: Host<'_>,
     paths: Vec<String>,
@@ -955,7 +955,7 @@ pub async fn start_pairing(hosted: Host<'_>, guest: Option<bool>) -> Answer<Invi
 }
 
 /// How the attempt on screen is going. Polled while the code is up.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pairing_state(hosted: Host<'_>) -> Answer<PairingState> {
     use crate::session::Pairing;
     let Some(attempt) = hosted.attempt() else {
@@ -987,7 +987,7 @@ pub fn pairing_state(hosted: Host<'_>) -> Answer<PairingState> {
 }
 
 /// The person's answer to the device asking to pair (decision 0053).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn answer_pairing(hosted: Host<'_>, approve: bool) -> Answer<()> {
     match hosted.attempt() {
         Some(attempt) if attempt.answer(approve) => Ok(()),
@@ -1028,7 +1028,7 @@ pub async fn setup_pairing_number(path: String, code: String) -> Answer<String> 
 /// than having no cancel button at all: the code would be off the screen and
 /// live, which is precisely the state somebody pressing cancel is trying to
 /// avoid.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_pairing(hosted: Host<'_>) -> Answer<()> {
     hosted.end_pairing();
     Ok(())
@@ -1080,7 +1080,7 @@ fn now() -> i64 {
 /// Read from the watch channel rather than computed, because "is a device
 /// reachable" is true for as long as a connection is open and false a moment
 /// later. Nothing in the index can answer it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn summary(hosted: Host<'_>) -> Answer<Summary> {
     let status = hosted.status().ok_or("this device is not set up yet")?;
     Ok(Summary {
@@ -1103,7 +1103,7 @@ pub fn summary(hosted: Host<'_>) -> Answer<Summary> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage(hosted: Host<'_>) -> Answer<Storage> {
     let limit = hosted.limit();
     let numbers = hosted
@@ -1156,7 +1156,7 @@ pub struct GuestPart {
     size: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn storage_parts(hosted: Host<'_>) -> Answer<StorageParts> {
     let phones = owner_phones(&hosted)?;
     let mut parts = Vec::new();
@@ -1243,7 +1243,7 @@ pub struct Directory {
 /// its files -- which is the point of *Available elsewhere*. The index is
 /// flat, so a folder is what the paths beneath it say it is. The same query
 /// the phone's Files screen uses.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn browse(hosted: Host<'_>, dir: String, private: bool) -> Answer<Directory> {
     let dir = dir.trim_matches('/').to_string();
     let entries = hosted
@@ -1265,7 +1265,7 @@ pub fn browse(hosted: Host<'_>, dir: String, private: bool) -> Answer<Directory>
 }
 
 /// Files in the shared area or the Private Vault whose path contains `text`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn find(hosted: Host<'_>, text: String, private: bool) -> Answer<Vec<Entry>> {
     // As `search`: an empty box is somebody who has not typed yet.
     if text.trim().is_empty() {
@@ -1287,7 +1287,7 @@ pub struct Details {
     history: Vec<Happened>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn details(hosted: Host<'_>, path: String) -> Answer<Details> {
     hosted
         .with_store(|store| {
@@ -1319,7 +1319,7 @@ pub fn details(hosted: Host<'_>, path: String) -> Answer<Details> {
 /// *Free local space* for one file (brief §12): its bytes leave this device,
 /// the file stays in qurb, and *Keep on this device* brings it back. Refused
 /// for the only copy, by the store, whatever the window thought.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn free_file(hosted: Host<'_>, path: String) -> Answer<String> {
     hosted
         .with_store_mut(|store| Ok(store.free_local(&path)?))
@@ -1330,14 +1330,14 @@ pub fn free_file(hosted: Host<'_>, path: String) -> Answer<String> {
 /// Move a file into this computer's Private Vault, or out of it to every
 /// device (decision 0057). Returns whether it moved. Refused, by the store,
 /// for a file whose bytes are not here.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn move_file_area(hosted: Host<'_>, path: String, private: bool) -> Answer<bool> {
     hosted.with_store_mut(|store| Ok(store.move_area(&path, private)?)).map_err(failed)
 }
 
 /// The devices keeping this computer's Private Vault, by name: what moving a
 /// file into it says keeps a copy.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn vault_keepers(hosted: Host<'_>) -> Answer<Vec<String>> {
     hosted
         .with_store(|store| {
@@ -1357,7 +1357,7 @@ pub struct Freeable {
     files: Vec<Entry>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn freeable(hosted: Host<'_>) -> Answer<Freeable> {
     let found = hosted.with_store(|store| Ok(store.db().freeable(50)?)).map_err(failed)?;
     Ok(Freeable {
@@ -1369,7 +1369,7 @@ pub fn freeable(hosted: Host<'_>) -> Answer<Freeable> {
 
 /// Delete a file from qurb, on every device, keeping it in Recently deleted
 /// for thirty days (decision 0042).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_file(hosted: Host<'_>, path: String) -> Answer<()> {
     hosted
         .with_store_mut(|store| {
@@ -1419,7 +1419,7 @@ const PREVIEW_IMAGE_MAX: u64 = 6 << 20;
 /// or a list usually differ enough to tell them apart.
 const PREVIEW_TEXT_BYTES: usize = 2048;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn preview(hosted: Host<'_>, path: String) -> Answer<Preview> {
     let none = Preview { kind: "none", data: String::new() };
     let Ok(file) = on_disk(&hosted, &path) else { return Ok(none) };
@@ -1479,7 +1479,7 @@ fn base64(bytes: &[u8]) -> String {
 }
 
 /// Open a file with the program the desktop uses for it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_file(hosted: Host<'_>, path: String) -> Answer<()> {
     reveal(&on_disk(&hosted, &path)?)
 }
@@ -1536,7 +1536,7 @@ fn kept_prefix(folder: &str) -> String {
     format!("{}/storage/{folder}", qurb_storage::db::OUTSIDE)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn phone_folders(hosted: Host<'_>, phone: String) -> Answer<PhoneFolders> {
     let device = own_phone(&hosted, &phone)?;
     hosted
@@ -1549,11 +1549,22 @@ pub fn phone_folders(hosted: Host<'_>, phone: String) -> Answer<PhoneFolders> {
             let listed: std::collections::HashSet<String> = folders.iter().map(|f| f.path.clone()).collect();
             let choices: Vec<_> =
                 db.choices_for(&device.id)?.into_iter().filter(|c| listed.contains(&c.folder)).collect();
+            // What is kept of every folder, from one pass over the phone's
+            // kept files: once a folder, the same rows were scanned two dozen
+            // times, every five seconds, on the window's thread (2026-10-28).
+            let kept_files_all = db.held_outside_under(&device.id, &kept_prefix(""))?;
+            let kept_of = |folder: &str| {
+                let under = format!("{}/", kept_prefix(folder).trim_end_matches('/'));
+                kept_files_all
+                    .iter()
+                    .filter(|(path, _)| path.starts_with(&under))
+                    .fold((0u64, 0u64), |(n, bytes), (_, size)| (n + 1, bytes + size))
+            };
             let folders = folders
                 .into_iter()
                 .filter(|f| f.path.matches('/').count() < 2)
                 .map(|f| {
-                    let (kept_files, kept) = db.held_outside_for(&device.id, &kept_prefix(&f.path)).unwrap_or((0, 0));
+                    let (kept_files, kept) = kept_of(&f.path);
                     PhoneFolder {
                         chosen: qurb_storage::chosen::backed_up(&choices, &f.path),
                         partial: qurb_storage::chosen::tick(&choices, &f.path) == qurb_storage::chosen::Tick::Some,
@@ -1572,7 +1583,7 @@ pub fn phone_folders(hosted: Host<'_>, phone: String) -> Answer<PhoneFolders> {
 
 /// Tick, or untick, a phone's folder. Only one the phone said it has: the
 /// phone checks again what it is pointed at, and this keeps the list clean.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn choose_phone_folder(hosted: Host<'_>, phone: String, folder: String, chosen: bool) -> Answer<()> {
     let device = own_phone(&hosted, &phone)?;
     hosted
@@ -1596,7 +1607,7 @@ pub struct BackedUp {
 }
 
 /// What this computer keeps of a phone's folder.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn phone_backup(hosted: Host<'_>, phone: String, folder: String) -> Answer<Vec<BackedUp>> {
     owner_folder_open(&hosted)?;
     let device = own_phone(&hosted, &phone)?;
@@ -1616,7 +1627,7 @@ pub fn phone_backup(hosted: Host<'_>, phone: String, folder: String) -> Answer<V
 
 /// Open a file of a phone's backup: written out where opened files go, under
 /// the runtime directory, which never reaches the disk on a systemd desktop.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_backed_up(hosted: Host<'_>, phone: String, folder: String, path: String) -> Answer<()> {
     owner_folder_open(&hosted)?;
     let device = own_phone(&hosted, &phone)?;
@@ -1682,7 +1693,7 @@ fn opened_dir(person: &qurb_sync::DeviceId) -> std::path::PathBuf {
 /// How a guest's folder stands here, and, with `list`, its files while it is
 /// open. Without `list` it is only a look: it reads nothing and does not count
 /// as using the folder, so a window left watching it lets it lock itself.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn guest_folder(hosted: Host<'_>, guest: String, list: bool) -> Answer<GuestFolder> {
     let person = guest_person(&hosted, &guest)?;
     if !qurb_peer::openings::is_open(&person) {
@@ -1708,7 +1719,7 @@ pub fn guest_folder(hosted: Host<'_>, guest: String, list: bool) -> Answer<Guest
 
 /// Ask the guest's phone to open its folder here. Its person approves on the
 /// phone, behind their screen lock, at its next sync with this computer.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ask_guest_folder(hosted: Host<'_>, guest: String) -> Answer<()> {
     let person = guest_person(&hosted, &guest)?;
     qurb_peer::openings::ask(&person);
@@ -1718,7 +1729,7 @@ pub fn ask_guest_folder(hosted: Host<'_>, guest: String) -> Answer<()> {
 
 /// Open one file of an open guest folder, unsealed into memory-backed space,
 /// with the program the desktop uses for it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_guest_file(hosted: Host<'_>, guest: String, path: String) -> Answer<()> {
     let person = guest_person(&hosted, &guest)?;
     let key = qurb_peer::openings::key(&person).ok_or("the folder is locked")?;
@@ -1742,7 +1753,7 @@ pub fn open_guest_file(hosted: Host<'_>, guest: String, path: String) -> Answer<
 
 /// Lock a guest's folder here: the key is forgotten, and what was opened
 /// from it removed.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn lock_guest_folder(hosted: Host<'_>, guest: String) -> Answer<()> {
     let person = guest_person(&hosted, &guest)?;
     qurb_peer::openings::lock(&person);
@@ -1866,7 +1877,7 @@ fn folder_state(person: &qurb_sync::DeviceId) -> &'static str {
 }
 
 /// Everyone this computer keeps files for, the owner first.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn people(hosted: Host<'_>) -> Answer<Vec<Person>> {
     let people = everyone(&hosted)?;
     lay_out(&hosted, &people);
@@ -1962,7 +1973,7 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
 /// A person's folder at `dir`: its folders and files while it is open. The
 /// owner's lists each phone, then what is kept for it; a guest's, sealed, is
 /// one folder of theirs. Listing counts as using the folder.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn person_folder(hosted: Host<'_>, person: String, dir: String) -> Answer<PersonFolder> {
     let id = person_of(&hosted, &person)?;
     let state = folder_state(&id);
@@ -2024,7 +2035,7 @@ pub fn person_folder(hosted: Host<'_>, person: String, dir: String) -> Answer<Pe
 
 /// Ask the person's phone to open their folder here. They approve on it,
 /// behind its screen lock, at its next sync with this computer.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ask_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
     let id = person_of(&hosted, &person)?;
     qurb_peer::openings::ask(&id);
@@ -2034,7 +2045,7 @@ pub fn ask_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
 
 /// Lock a person's folder: forgotten until asked again, and what was opened
 /// from it removed.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn lock_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
     let id = person_of(&hosted, &person)?;
     qurb_peer::openings::lock(&id);
@@ -2045,7 +2056,7 @@ pub fn lock_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
 
 /// Open one file of an open folder: written out, checked, into memory-backed
 /// space, and handed to the desktop's program for it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_person_file(hosted: Host<'_>, person: String, device: Option<String>, path: String) -> Answer<()> {
     let id = person_of(&hosted, &person)?;
     let key = qurb_peer::openings::key(&id).ok_or("the folder is locked")?;
@@ -2141,7 +2152,7 @@ fn open_sealed(hosted: &Host<'_>, person: &qurb_sync::DeviceId, key: [u8; 32], p
 }
 
 /// Open the folder a file is in, in the file manager.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn show_file(hosted: Host<'_>, path: String) -> Answer<()> {
     let file = on_disk(&hosted, &path)?;
     reveal(file.parent().ok_or("that file has no folder")?)
@@ -2150,7 +2161,7 @@ pub fn show_file(hosted: Host<'_>, path: String) -> Answer<()> {
 /// Open the Qurb folder in the file manager: `~/qurb`, with *Shared* and
 /// each person's placeholder in it, once laid out by person (decision 0067);
 /// else the synced folder itself.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn show_root(hosted: Host<'_>) -> Answer<()> {
     let root = hosted.root();
     reveal(&qurb_cli::layout::people_dir(&root).unwrap_or(root))
@@ -2158,7 +2169,7 @@ pub fn show_root(hosted: Host<'_>) -> Answer<()> {
 
 /// Whether files added here go to this device's Private Vault rather than
 /// the shared area. The running daemon picks it up at its next pass.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_privacy(hosted: Host<'_>, private: bool) -> Answer<()> {
     let dir = qurb_cli::store_dir(&hosted.root());
     let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
@@ -2167,7 +2178,7 @@ pub fn set_privacy(hosted: Host<'_>, private: bool) -> Answer<()> {
 }
 
 /// Whether this desktop raises its three notifications.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_notifications(hosted: Host<'_>, on: bool) -> Answer<()> {
     let dir = qurb_cli::store_dir(&hosted.root());
     let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
@@ -2175,7 +2186,7 @@ pub fn set_notifications(hosted: Host<'_>, on: bool) -> Answer<()> {
     config.save(&dir).map_err(failed)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
     // Live, from the daemon: which devices it holds a connection to, and how.
     // The index knows who is paired and when each was last reached; only the
@@ -2217,7 +2228,7 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
         .collect())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn activity(
     hosted: Host<'_>,
     path: Option<String>,
@@ -2273,28 +2284,28 @@ pub struct Pending {
 /// How many of them Home names; the rest are counted.
 const NOT_ELSEWHERE_NAMED: usize = 3;
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn not_elsewhere(hosted: Host<'_>) -> Answer<NotElsewhere> {
-    let waiting = hosted.with_store(|store| Ok(store.undelivered()?)).map_err(failed)?;
+    // Counted, and the first few named, rather than the whole list built
+    // to count it: Home asks every few seconds (2026-10-28).
+    let ((files, size), first) = hosted
+        .with_store(|store| Ok((store.db().undelivered_count()?, store.db().undelivered_first(NOT_ELSEWHERE_NAMED)?)))
+        .map_err(failed)?;
     Ok(NotElsewhere {
-        files: waiting.len(),
-        size: big(waiting.iter().map(|(_, size)| size).sum()),
-        first: waiting
-            .into_iter()
-            .take(NOT_ELSEWHERE_NAMED)
-            .map(|(path, size)| Pending { path, size: big(size) })
-            .collect(),
+        files: files as usize,
+        size: big(size),
+        first: first.into_iter().map(|(path, size)| Pending { path, size: big(size) }).collect(),
     })
 }
 
 /// *Sync now*: every device tried at once, and told there is news.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sync_now(hosted: Host<'_>) -> Answer<()> {
     hosted.sync_now();
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn outgoing(hosted: Host<'_>) -> Answer<Vec<Outgoing>> {
     // Resolved to the name the person gave the device. A vault is scoped by
     // device id, which is the right key and the wrong thing to show somebody:
@@ -2324,7 +2335,7 @@ pub fn outgoing(hosted: Host<'_>) -> Answer<Vec<Outgoing>> {
 ///
 /// Refused once it has been: the file is theirs by then. See
 /// [`qurb_storage::Store::cancel_send`].
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cancel_send(hosted: Host<'_>, path: String, to: String) -> Answer<()> {
     let device = paired_device(&hosted, &to)?;
     hosted
@@ -2360,7 +2371,7 @@ pub struct ShareTarget {
     here: bool,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sharing(hosted: Host<'_>) -> Answer<Sharing> {
     hosted
         .with_store(|store| {
@@ -2387,7 +2398,7 @@ pub fn sharing(hosted: Host<'_>) -> Answer<Sharing> {
 
 /// Share a folder with exactly these devices (ids in hex), or with every
 /// device when `members` is empty.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_sharing(hosted: Host<'_>, folder: String, members: Vec<String>) -> Answer<()> {
     let members: std::collections::BTreeSet<qurb_sync::DeviceId> = members
         .iter()
@@ -2416,7 +2427,7 @@ pub struct KeptRemotely {
 }
 
 /// Keep a folder on this computer only remotely (decision 0045).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn keep_remotely(hosted: Host<'_>, folder: String) -> Answer<KeptRemotely> {
     let (freed, bytes, kept) =
         hosted.with_store_mut(|store| Ok(store.keep_remotely(&folder)?)).map_err(failed)?;
@@ -2424,7 +2435,7 @@ pub fn keep_remotely(hosted: Host<'_>, folder: String) -> Answer<KeptRemotely> {
 }
 
 /// Keep a folder on this computer again. Returns how many files are asked for.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn keep_locally(hosted: Host<'_>, folder: String) -> Answer<usize> {
     let asked = hosted.with_store_mut(|store| Ok(store.keep_locally(&folder)?)).map_err(failed)?;
     hosted.nudge();
@@ -2454,7 +2465,7 @@ pub struct Conflicted {
     other: Side,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn conflicts(hosted: Host<'_>) -> Answer<Vec<Conflicted>> {
     hosted
         .with_store(|store| {
@@ -2489,7 +2500,7 @@ pub fn conflicts(hosted: Host<'_>) -> Answer<Vec<Conflicted>> {
 
 /// Settle a conflict: keep "this" version, the "other", or "both". Returns
 /// the path of what was kept.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn settle_conflict(hosted: Host<'_>, other: String, keep: String) -> Answer<String> {
     let keep = match keep.as_str() {
         "this" => qurb_storage::Keep::Original,
@@ -2538,7 +2549,7 @@ pub struct Deleted {
     of: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recently_deleted(hosted: Host<'_>) -> Answer<Vec<Deleted>> {
     hosted
         .with_store(|store| {
@@ -2570,7 +2581,7 @@ pub fn recently_deleted(hosted: Host<'_>) -> Answer<Vec<Deleted>> {
 
 /// Put a file back from Recently deleted. Returns where it went, which is
 /// beside its old path when something is there now.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_deleted(hosted: Host<'_>, id: i64) -> Answer<String> {
     let at = hosted.with_store_mut(|store| Ok(store.restore_from_trash(id)?)).map_err(failed)?;
     hosted.nudge();
@@ -2578,7 +2589,7 @@ pub fn restore_deleted(hosted: Host<'_>, id: i64) -> Answer<String> {
 }
 
 /// Delete a file in Recently deleted for good.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn forget_deleted(hosted: Host<'_>, id: i64) -> Answer<()> {
     hosted.with_store_mut(|store| Ok(store.forget_deleted(id)?)).map_err(failed)
 }
@@ -2609,7 +2620,7 @@ fn paired_device(hosted: &Host<'_>, text: &str) -> Answer<qurb_cli::Device> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn removal_plan(hosted: Host<'_>, device: String) -> Answer<Removal> {
     let device = paired_device(&hosted, &device)?;
     let plan = hosted.with_store(|store| Ok(store.removal_plan(&device.id)?)).map_err(failed)?;
@@ -2628,7 +2639,7 @@ pub fn removal_plan(hosted: Host<'_>, device: String) -> Answer<Removal> {
 ///
 /// The daemon is told at once, so its connection to the device closes now
 /// rather than at the next check of the trust store.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_device(hosted: Host<'_>, device: String, delete_kept: bool) -> Answer<()> {
     let device = paired_device(&hosted, &device)?;
     hosted
@@ -2644,7 +2655,7 @@ pub fn remove_device(hosted: Host<'_>, device: String, delete_kept: bool) -> Ans
 /// no peer may be reachable right now, and a request written to the index is
 /// acted on whenever one next is. That is also what makes asking for a file
 /// while offline work.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn fetch(hosted: Host<'_>, path: String) -> Answer<bool> {
     hosted.with_store(|store| Ok(store.db().want(&path)?)).map_err(failed)
 }
@@ -2655,7 +2666,7 @@ pub fn fetch(hosted: Host<'_>, path: String) -> Answer<bool> {
 /// pass. Not sent to the daemon directly: the file is the setting, and a
 /// window that told the daemon without writing it down would lose the change on
 /// the next restart.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_limit(hosted: Host<'_>, bytes: String) -> Answer<()> {
     let bytes: u64 = bytes.parse().map_err(|_| "that is not a number of bytes".to_string())?;
     let dir = qurb_cli::store_dir(&hosted.root());
@@ -2760,7 +2771,7 @@ pub fn starts_at_login() -> bool {
     crate::autostart::config_dir().is_some_and(|dir| crate::autostart::is_enabled(&dir))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_starts_at_login(on: bool) -> Answer<()> {
     let dir = crate::autostart::config_dir().ok_or("there is no config directory to start from")?;
     if on {

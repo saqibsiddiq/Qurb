@@ -276,8 +276,9 @@ impl<'a> View<'a> {
             chunks: usage.chunks,
             limit: self.limit,
             file_count: self.store.db().live_count()?,
-            evicted: self.store.evicted()?.len(),
-            only_here: self.store.undelivered()?.len(),
+            // Counted rather than listed: the window asks often (2026-10-28).
+            evicted: self.store.db().evicted_count()?,
+            only_here: self.store.undelivered_count()?.0 as usize,
         })
     }
 

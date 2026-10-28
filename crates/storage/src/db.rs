@@ -829,6 +829,14 @@ const NOT_RULES: &str =
 const NOT_RULES_F: &str =
     "substr(f.path, 1, 14) <> '.qurb-sharing/' AND substr(f.path, 1, 14) <> '.qurb-outside/'";
 
+/// Live files this device made that no other device is known to hold
+/// ([`Db::undelivered`]), for a query that calls `files` `f`.
+const UNDELIVERED: &str = "f.deleted_at IS NULL
+                AND (f.scope IS NULL OR f.scope = (SELECT device_id FROM local WHERE id = 1))
+                AND f.modified_by = (SELECT device_id FROM local WHERE id = 1)
+                AND substr(f.path, 1, 14) <> '.qurb-sharing/' AND substr(f.path, 1, 14) <> '.qurb-outside/'
+                AND NOT EXISTS (SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash)";
+
 /// Where folders kept outside the vault's own go in it (decision 0062), each
 /// under a name of its own beneath this.
 pub const OUTSIDE: &str = ".qurb-outside";
@@ -1949,6 +1957,17 @@ impl Db {
     }
 
     /// Live paths whose bytes this device has dropped.
+    /// How many [`evicted_paths`](Self::evicted_paths) there are, counted.
+    pub fn evicted_count(&self) -> Result<usize> {
+        Ok(self.conn.query_row(
+            "SELECT count(*) FROM files
+              WHERE deleted_at IS NULL AND materialised = 0
+                AND (scope IS NULL OR scope = (SELECT device_id FROM local WHERE id = 1))",
+            [],
+            |r| r.get::<_, i64>(0),
+        )? as usize)
+    }
+
     pub fn evicted_paths(&self) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
             "SELECT path FROM files
@@ -2062,17 +2081,38 @@ impl Db {
     /// Newest first, because that is the order someone recognises: the thing
     /// they just shared is the thing they are asking about.
     pub fn undelivered(&self) -> Result<Vec<(String, u64)>> {
+        self.undelivered_where("")
+    }
+
+    /// The first `named` of [`undelivered`](Self::undelivered), newest first:
+    /// what a window names, without building the rest of the list.
+    pub fn undelivered_first(&self, named: usize) -> Result<Vec<(String, u64)>> {
+        self.undelivered_where(&format!("LIMIT {named}"))
+    }
+
+    /// How many files [`undelivered`](Self::undelivered) would list, and their
+    /// bytes, counted in the database. The desktop window asked for the whole
+    /// list every second and a half only to count it: on a computer with
+    /// forty thousand files nobody else holds, a second of work each time, on
+    /// the window's own thread (2026-10-28).
+    pub fn undelivered_count(&self) -> Result<(u64, u64)> {
+        Ok(self.conn.query_row(
+            &format!(
+                "SELECT count(*), coalesce(sum(f.size), 0)
+                   FROM files f
+                  WHERE {UNDELIVERED}"
+            ),
+            [],
+            |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, i64>(1)? as u64)),
+        )?)
+    }
+
+    fn undelivered_where(&self, tail: &str) -> Result<Vec<(String, u64)>> {
         let mut stmt = self.conn.prepare(&format!(
             "SELECT f.path, f.size
                FROM files f
-              WHERE f.deleted_at IS NULL
-                AND (f.scope IS NULL OR f.scope = (SELECT device_id FROM local WHERE id = 1))
-                AND f.modified_by = (SELECT device_id FROM local WHERE id = 1)
-                AND {NOT_RULES_F}
-                AND NOT EXISTS (
-                      SELECT 1 FROM replicas r WHERE r.content_hash = f.content_hash
-                    )
-              ORDER BY f.updated_at DESC, f.path"
+              WHERE {UNDELIVERED}
+              ORDER BY f.updated_at DESC, f.path {tail}"
         ))?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64)))?;
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
@@ -4423,6 +4463,22 @@ impl Db {
             params![owner.as_bytes().as_slice(), escape_like(&pattern)],
             |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, i64>(1)? as u64)),
         )?)
+    }
+
+    /// Every file this device keeps for `owner` beneath `prefix`, with its
+    /// size, in one pass: for summing several folders at once, where asking
+    /// [`held_outside_for`](Self::held_outside_for) once a folder scanned the
+    /// same rows each time (2026-10-28).
+    pub fn held_outside_under(&self, owner: &DeviceId, prefix: &str) -> Result<Vec<(String, u64)>> {
+        let pattern = format!("{}/%", prefix.trim_end_matches('/'));
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size FROM files
+              WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL AND path LIKE ?2 ESCAPE '\\'",
+        )?;
+        let rows = stmt.query_map(params![owner.as_bytes().as_slice(), escape_like(&pattern)], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))
+        })?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
     /// Everything this device keeps for `owner`, live: files and bytes.

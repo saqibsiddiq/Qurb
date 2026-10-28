@@ -99,6 +99,35 @@ slower beat, because redrawing a list somebody is reading is a cost rather than
 a feature. See
 [decision 0032](../../docs/decisions/0032-the-interface-hosts-the-daemon.md).
 
+**Off the window's thread, and never piled up** (2026-10-28). The owner found
+that opening the window froze his computer and GNOME offered to force it to
+quit. Measured on his laptop with his own folder — 122,132 files in the
+index, 41,150 of them shared (31,733 an Android toolchain nobody else holds)
+and 74,274 kept for his S23, two phones paired — the polled commands each
+took seconds, called from the page as the page calls them (WebDriver, below):
+`storage` 1.0–1.4 s every 1.5 s, `phone_folders` 2.5–3.7 s per phone and
+`not_elsewhere` about 3 s every 5 s, `summary` up to 2.7 s waiting behind
+them. Every command without `async` ran on the main thread, so every five
+seconds asked about twelve seconds of it: the window never caught up, the
+process stayed above a core for hours, and its scope peaked at 3.3 and 4.7 GB
+on 26 and 27 October before it was killed. Three changes:
+
+- Every command but `quit` and `starts_at_login` is
+  `#[tauri::command(async)]`, run on Tauri's pool rather than the thread that
+  draws the window.
+- A beat is skipped while the last one is still being answered; storage's
+  numbers are asked for every 15 seconds, not every beat; conflicts every 30.
+- What was listed only to be counted is counted in the database
+  (`undelivered_count`, `evicted_count`, `undelivered_first`), and a phone's
+  folders are summed from one pass over its kept files
+  (`held_outside_under`) rather than one scan a folder.
+
+After, on the same laptop and folder, a release build: `summary` 1–2 ms,
+`storage` about 110 ms, `phone_folders` 60–110 ms, `not_elsewhere` about 80
+ms, `devices` about 55 ms; the main thread idle, the process at about 15% of
+a core in all, and its memory level at 257–261 MB over five minutes, the web
+view's at about 200 MB. Not measured yet: a day of it running.
+
 ## Looking at the screens without a daemon
 
 [`experiments/desktop-fixtures`](../../experiments/desktop-fixtures) serves this

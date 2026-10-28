@@ -3651,6 +3651,12 @@ impl Store {
         self.db.undelivered()
     }
 
+    /// How many [`undelivered`](Self::undelivered) files there are, and their
+    /// bytes, without listing them.
+    pub fn undelivered_count(&self) -> Result<(u64, u64)> {
+        self.db.undelivered_count()
+    }
+
     /// What would be gone if this device were wiped: see [`Db::only_here`](db::Db::only_here).
     pub fn only_here(&self) -> Result<Vec<(String, u64, bool)>> {
         self.db.only_here()

@@ -76,6 +76,9 @@ function heroFor(s, st, conflicts) {
  *  reads every path. */
 let conflictCount = 0;
 let conflictsSeen = [];
+const STORAGE_EVERY = 15000;
+let storageAt = 0;
+let storageLast = null;
 
 async function drawHome() {
   let s;
@@ -85,8 +88,13 @@ async function drawHome() {
     setHero({ mark: "error", icon: "circle-alert", title: "Qurb can't read its state", says: String(e) });
     return;
   }
-  let st = null;
-  try { st = await invoke("storage"); } catch (e) { /* the facts line goes without */ }
+  // Storage's numbers change slowly and cost a scan to count, so Home asks
+  // for them every fifteen seconds rather than every beat (2026-10-28).
+  if (Date.now() - storageAt > STORAGE_EVERY) {
+    storageAt = Date.now();
+    try { storageLast = await invoke("storage"); } catch (e) { /* the facts line goes without */ }
+  }
+  const st = storageLast;
 
   const hero = heroFor(s, st, conflictCount);
   setHero(hero);

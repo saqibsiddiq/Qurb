@@ -98,24 +98,39 @@ decide();
 
 // The live state, often. A poll rather than a subscription because the value
 // is one small struct and the window is in the same process as the daemon
-// that publishes it: the cost of asking is a channel read.
-setInterval(() => {
-  if (settingUp) return;
-  if (screen === "home") drawHome();
-  drawChip();
+// that publishes it. Never a second beat while one is still being answered:
+// beats that piled up behind slow answers kept the window from ever catching
+// up, and GNOME offered to force it to quit (2026-10-28).
+let fastBusy = false;
+setInterval(async () => {
+  if (settingUp || fastBusy) return;
+  fastBusy = true;
+  try {
+    if (screen === "home") await drawHome();
+    await drawChip();
+  } finally {
+    fastBusy = false;
+  }
 }, 1500);
 
 // Lists, rarely, and only the one being looked at. Redrawing a list somebody
 // is reading is a cost, not a feature. Not while a menu, sheet or panel is
-// open over it, which would redraw what is being pointed at.
+// open over it, which would redraw what is being pointed at, nor while the
+// last round is still being answered.
 let slowTicks = 0;
-setInterval(() => {
-  if (settingUp) return;
-  // Conflicts every third beat: finding them reads every path.
-  if (++slowTicks % 3 === 0) drawAttention();
-  if (document.querySelector(".menu, .scrim") || openPanel) return;
-  if (screen === "home") drawHomeLists();
-  if (screen === "storage") drawStorage();
-  if ((screen === "files" || screen === "vault") && wanted.size) refreshScreen();
-  if (screen === "devices" && !watching && !removing) drawDevices();
+let slowBusy = false;
+setInterval(async () => {
+  if (settingUp || slowBusy) return;
+  slowBusy = true;
+  try {
+    // Conflicts every sixth beat, half a minute: finding them reads every path.
+    if (++slowTicks % 6 === 0) await drawAttention();
+    if (document.querySelector(".menu, .scrim") || openPanel) return;
+    if (screen === "home") await drawHomeLists();
+    if (screen === "storage") await drawStorage();
+    if ((screen === "files" || screen === "vault") && wanted.size) await refreshScreen();
+    if (screen === "devices" && !watching && !removing) await drawDevices();
+  } finally {
+    slowBusy = false;
+  }
 }, 5000);
