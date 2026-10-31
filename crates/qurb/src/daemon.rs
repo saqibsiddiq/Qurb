@@ -430,6 +430,12 @@ impl Daemon {
             .store()
             .db()
             .set_local_kind(if self.is_replica() { "replica" } else { "computer" });
+        // And what install it is, which outlives qurb reinstalled or the
+        // folder set up again: how its devices know it for what it was
+        // (`Db::became`).
+        if let Some(id) = crate::platform::install_id() {
+            let _ = engine.store().db().set_local_install(&qurb_storage::db::install_marker(&id));
+        }
         // And what it is called: the config's name, which a device paired
         // before a rename learns at its next sync.
         if let Err(e) = tell_name(engine.store(), &self.config.name) {
@@ -1133,6 +1139,16 @@ impl Daemon {
             if matches!(engine.store().db().peer_kind(device), Ok(None)) {
                 if let Ok(Some(kind)) = client.about().await {
                     let _ = engine.store().learn_kind(device, &kind);
+                }
+            }
+            // Its install, once: how, set up again later, it is known for
+            // this device (`Db::became`). A build from before cannot say,
+            // and is asked again next time.
+            if matches!(engine.store().db().peer_install(device), Ok(None)) {
+                if let Ok(Ok(Some(marker))) =
+                    tokio::time::timeout(Duration::from_secs(2), client.install()).await
+                {
+                    let _ = engine.store().db().set_peer_install(device, &marker);
                 }
             }
             // A phone of this person's: its folders, for choosing which it

@@ -193,6 +193,15 @@ object Engine {
                 // A file sent from the picker is read from where it is when
                 // the other device collects it (decision 0060).
                 it.setDocumentOpener(Documents(context.applicationContext))
+                // What Android keeps for this app across a reinstall or its
+                // data cleared: told to paired devices one way only, so that
+                // set up again this phone is known for what it was, not
+                // listed twice (the owner, 2026-10-31).
+                runCatching {
+                    android.provider.Settings.Secure.getString(
+                        context.contentResolver, android.provider.Settings.Secure.ANDROID_ID,
+                    )
+                }.getOrNull()?.let { id -> runCatching { it.setInstallId(id) } }
                 handle = it
             }
         }

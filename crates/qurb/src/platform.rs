@@ -59,3 +59,28 @@ pub fn reap(mut child: Child) {
         let _ = child.wait();
     });
 }
+
+/// What this computer keeps for itself across a reinstall of qurb and a new
+/// folder: its machine id. Made into an install marker
+/// (`qurb_storage::db::install_marker`) before any device is told it. None
+/// where it cannot be read.
+pub fn install_id() -> Option<String> {
+    let id = if cfg!(windows) {
+        // HKLM\SOFTWARE\Microsoft\Cryptography, MachineGuid: set at install.
+        let out = Command::new("reg")
+            .args(["query", r"HKLM\SOFTWARE\Microsoft\Cryptography", "/v", "MachineGuid"])
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        String::from_utf8(out.stdout).ok()?.lines().find_map(|l| l.split("REG_SZ").nth(1).map(|v| v.trim().to_string()))?
+    } else if cfg!(target_os = "macos") {
+        let out = Command::new("ioreg").args(["-rd1", "-c", "IOPlatformExpertDevice"]).stderr(Stdio::null()).output().ok()?;
+        let text = String::from_utf8(out.stdout).ok()?;
+        let line = text.lines().find(|l| l.contains("IOPlatformUUID"))?;
+        line.rsplit('"').nth(1)?.to_string()
+    } else {
+        ["/etc/machine-id", "/var/lib/dbus/machine-id"].iter().find_map(|p| std::fs::read_to_string(p).ok())?
+    };
+    let id = id.trim().to_string();
+    (!id.is_empty()).then_some(id)
+}

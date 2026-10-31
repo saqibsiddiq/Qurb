@@ -402,6 +402,19 @@ impl PeerClient {
         }
     }
 
+    /// The device's install marker, which outlives a reinstall
+    /// ([`Request::Install`]): none from a device without one, and none from
+    /// a build from before it, which cannot read the request.
+    pub async fn install(&self) -> Result<Option<[u8; 16]>> {
+        match self.request(Request::Install).await {
+            Ok(Response::Install { marker }) => Ok(Some(marker)),
+            Ok(Response::NotFound) => Ok(None),
+            Ok(other) => Err(unexpected("install marker", &other)),
+            // An older build drops a request it cannot read.
+            Err(_) => Ok(None),
+        }
+    }
+
     /// The device's name and picture -- a JPEG, empty for none -- and when it
     /// set them, if they changed after `since` (the owner's list of
     /// 2026-10-26, item 7). None when nothing is newer, and from a device
@@ -692,6 +705,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::About { .. } => "description",
         Response::Who { .. } => "name of a device showing a code",
         Response::Profile { .. } => "name and picture",
+        Response::Install { .. } => "install marker",
         Response::Refused { .. } => "refusal of a change",
         Response::Placed { .. } => "place of an added file",
         Response::Mismatch => "key mismatch",

@@ -63,52 +63,31 @@ pub struct Device {
     pub whatsapp: Option<(u64, u64)>,
     /// Everything this device keeps for it: files and bytes. None when none.
     pub held: Option<(u64, u64)>,
-    /// The device this one was set up again as: the same person's, the same
-    /// name and kind, paired after this one was last seen. Shown as that one,
-    /// not beside it (the owner's item 6, 2026-10-14: the S23 was listed
+    /// The device this one was set up again as (`Db::became`). Shown as that
+    /// one, not beside it (the owner's item 6, 2026-10-14: the S23 was listed
     /// twice after its data was cleared and it was paired again).
     pub replaced_by: Option<DeviceId>,
-    /// The device this one replaced, the other way round.
+    /// The device this one replaced, the other way round: the latest.
     pub earlier: Option<DeviceId>,
-    /// Which device the person said this one became, if they said: one set
-    /// up again under another name (`Db::set_same_device`).
-    pub said_same_as: Option<DeviceId>,
+    /// The person said what this one is (`Db::set_same_device`), rather than
+    /// a rule finding it: the word can be taken back.
+    pub said: bool,
 }
 
-/// Mark each device that was set up again as the newer one it became.
-///
-/// The same person's, with the same name and kind, the newer paired after the
-/// older was last seen: clearing a phone's data and pairing it again makes a
-/// new identity, and the old one stays paired, with whatever was kept for it.
-/// Neither is forgotten; the newer stands for both, and says what the older
-/// left here. A device still seen after the newer was paired is a second
-/// device, not the same one again. Or the person said so, which the name
-/// cannot: a phone set up again under a new name (`Db::set_same_device`),
-/// as `Db::earlier_selves` decides it too.
-fn set_up_again(devices: &mut [Device]) {
-    for newer in 0..devices.len() {
-        for older in 0..devices.len() {
-            let (n, o) = (&devices[newer], &devices[older]);
-            let both_own = newer != older
-                && n.relation == qurb_storage::db::Relation::Own
-                && o.relation == qurb_storage::db::Relation::Own
-                && o.paired_at < n.paired_at;
-            let by_name = o.said_same_as.is_none()
-                && n.name == o.name
-                && n.kind.is_some()
-                && n.kind == o.kind
-                && o.last_seen.is_none_or(|seen| seen <= n.paired_at);
-            let same = both_own && (by_name || o.said_same_as == Some(n.id));
-            // The latest earlier one, if it was set up again more than once.
-            let later_than_known = devices[newer]
-                .earlier
-                .and_then(|known| devices.iter().find(|d| d.id == known))
-                .is_none_or(|known| known.paired_at < devices[older].paired_at);
-            if same && later_than_known {
-                let (older_id, newer_id) = (devices[older].id, devices[newer].id);
-                devices[newer].earlier = Some(older_id);
-                devices[older].replaced_by = Some(newer_id);
-            }
+/// Mark each device that was set up again as the one it became, by
+/// `became` (`Db::became`, the one rule), and each such one with the latest
+/// it was before.
+fn set_up_again(devices: &mut [Device], became: impl Fn(&DeviceId) -> Option<DeviceId>) {
+    for older in 0..devices.len() {
+        let Some(newer_id) = became(&devices[older].id) else { continue };
+        let Some(newer) = devices.iter().position(|d| d.id == newer_id) else { continue };
+        devices[older].replaced_by = Some(newer_id);
+        let latest = devices[newer]
+            .earlier
+            .and_then(|known| devices.iter().find(|d| d.id == known))
+            .is_none_or(|known| known.paired_at < devices[older].paired_at);
+        if latest {
+            devices[newer].earlier = Some(devices[older].id);
         }
     }
 }
@@ -233,11 +212,11 @@ impl<'a> View<'a> {
                     held: self.store.db().held_for(&p.device_id).ok().filter(|(files, _)| *files > 0),
                     replaced_by: None,
                     earlier: None,
-                    said_same_as: self.store.db().said_same_as(&p.device_id).ok().flatten(),
+                    said: !matches!(self.store.db().said_same(&p.device_id), Ok(qurb_storage::db::Same::Unsaid)),
                 }
             })
             .collect::<Vec<_>>();
-        set_up_again(&mut devices);
+        set_up_again(&mut devices, |id| self.store.db().became(id).ok().flatten());
         Ok(devices)
     }
 
@@ -400,58 +379,28 @@ mod set_up_again_tests {
             held: None,
             replaced_by: None,
             earlier: None,
-            said_same_as: None,
+            said: false,
         }
     }
 
-    /// The owner's S23 as the laptop had it: paired 8 Oct, last seen 12 Oct,
-    /// paired again 13 Oct after its data was cleared. Listed once, as the
-    /// newer, which says what the older left here.
+    /// Each device is shown as the one it became, and that one with the
+    /// latest it was: set up again twice is one device.
     #[test]
-    fn a_phone_set_up_again_is_one_device() {
+    fn a_device_set_up_again_is_listed_once() {
         let mut devices = vec![
-            device(1, "SM-S911B", 1_791_492_981, Some(1_791_869_229)),
-            device(2, "SM-S911B", 1_791_893_368, Some(1_791_980_000)),
-            device(3, "Pixel 8", 1_791_000_000, Some(1_791_980_000)),
+            device(1, "SM-S911B", 1_791_000_000, Some(1_791_100_000)),
+            device(2, "SM-S911B", 1_791_200_000, Some(1_791_300_000)),
+            device(3, "skib phone", 1_791_400_000, Some(1_791_980_000)),
+            device(4, "Pixel 8", 1_791_000_000, Some(1_791_980_000)),
         ];
-        set_up_again(&mut devices);
-        assert_eq!(devices[0].replaced_by, Some(devices[1].id));
-        assert_eq!(devices[1].earlier, Some(devices[0].id));
-        assert_eq!((devices[1].replaced_by, devices[2].replaced_by, devices[2].earlier), (None, None, None));
-    }
-
-    /// Two phones of the same model, both still in use, are two devices; and
-    /// another person's never stands for this person's.
-    #[test]
-    fn two_phones_alike_are_two_devices() {
-        let mut both_in_use = vec![
-            device(1, "SM-S911B", 1_791_000_000, Some(1_791_980_000)),
-            device(2, "SM-S911B", 1_791_500_000, Some(1_791_980_000)),
-        ];
-        set_up_again(&mut both_in_use);
-        assert!(both_in_use.iter().all(|d| d.replaced_by.is_none()), "one hid the other");
-
-        let mut guest = vec![device(1, "SM-S911B", 1_791_000_000, Some(1_791_100_000)), device(2, "SM-S911B", 1_791_500_000, None)];
-        guest[1].relation = Relation::Guest;
-        set_up_again(&mut guest);
-        assert!(guest.iter().all(|d| d.replaced_by.is_none()), "a guest's phone stood for this person's");
-    }
-
-    /// The owner's S23 again, on 2026-10-31: first "SM-S911B", set up again
-    /// as "skib phone" -- a name the rule cannot match. One device once the
-    /// owner says so, and two again when they take it back.
-    #[test]
-    fn a_phone_renamed_is_one_device_when_the_person_says_so() {
-        let mut devices = vec![
-            device(1, "SM-S911B", 1_791_492_981, Some(1_791_980_000)),
-            device(2, "skib phone", 1_791_893_368, Some(1_792_000_000)),
-        ];
-        set_up_again(&mut devices);
-        assert!(devices.iter().all(|d| d.replaced_by.is_none()), "matched without being told");
-
-        devices[0].said_same_as = Some(devices[1].id);
-        set_up_again(&mut devices);
-        assert_eq!(devices[0].replaced_by, Some(devices[1].id));
-        assert_eq!(devices[1].earlier, Some(devices[0].id));
+        let (one, two, three) = (devices[0].id, devices[1].id, devices[2].id);
+        set_up_again(&mut devices, |id| match id {
+            id if *id == one => Some(two),
+            id if *id == two => Some(three),
+            _ => None,
+        });
+        assert_eq!((devices[0].replaced_by, devices[1].replaced_by), (Some(two), Some(three)));
+        assert_eq!((devices[1].earlier, devices[2].earlier), (Some(one), Some(two)));
+        assert_eq!((devices[2].replaced_by, devices[3].replaced_by, devices[3].earlier), (None, None, None));
     }
 }

@@ -401,6 +401,7 @@ async fn serve_request(
             stats.chunks_served.fetch_add(1, Ordering::Relaxed)
         }
         Response::NotFound
+        | Response::Install { .. }
         | Response::Noted
         | Response::Paired { .. }
         | Response::Welcome { .. }
@@ -835,6 +836,13 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
         // said.
         Request::About => match store.db().local_kind()? {
             Some(kind) => Response::About { kind },
+            None => Response::NotFound,
+        },
+
+        // What install of the app this is, to any device it trusts: how one
+        // set up again is known for what it was (`Db::became`).
+        Request::Install => match store.db().local_install()? {
+            Some(marker) => Response::Install { marker },
             None => Response::NotFound,
         },
 

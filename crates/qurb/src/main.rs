@@ -1313,8 +1313,8 @@ fn same(root: &Path, rest: &[String]) -> Result<()> {
     match rest {
         [older, not] if not == "--not" => {
             let older = named(older)?;
-            store.db().set_same_device(&older.id, None)?;
-            println!("{} is listed on its own again", older.name);
+            store.db().set_same_device(&older.id, qurb_storage::db::Same::Not)?;
+            println!("{} is listed on its own, as no other device", older.name);
         }
         [older, newer] => {
             let (older, newer) = (named(older)?, named(newer)?);
@@ -1324,7 +1324,7 @@ fn same(root: &Path, rest: &[String]) -> Result<()> {
             if older.id == newer.id || older.paired_at >= newer.paired_at {
                 bail!("{} was paired after {}, so it cannot be what it became", older.name, newer.name);
             }
-            store.db().set_same_device(&older.id, Some(&newer.id))?;
+            store.db().set_same_device(&older.id, qurb_storage::db::Same::Is(newer.id))?;
             println!("{} is {} now, set up again: listed as one device", older.name, newer.name);
         }
         _ => bail!("qurb same [dir] <older device> <newer device>|--not"),

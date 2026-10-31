@@ -1433,28 +1433,43 @@ impl Qurb {
         Ok(self.identity()?.fingerprint().short())
     }
 
-    /// Devices this one trusts.
+    /// Devices this one trusts, each once: one set up again -- reinstalled,
+    /// its data cleared -- is left out for the device it became
+    /// (`Db::became`, the rule the computer's list uses too), so that no
+    /// screen counts one device twice.
     pub fn peers(&self) -> Result<Vec<PeerInfo>, QurbError> {
         let engine = self.look()?;
-        Ok(engine
-            .store()
-            .db()
-            .trusted_peers()?
-            .into_iter()
-            .map(|p| {
-                let fingerprint = qurb_peer::Fingerprint::from_bytes(p.fingerprint);
-                PeerInfo {
-                    fingerprint: hex(fingerprint.as_bytes()),
-                    short: fingerprint.short(),
-                    name: p.name,
-                    paired_at: p.paired_at,
-                    last_seen: p.last_seen,
-                    relation: p.relation.as_str().into(),
-                    kind: engine.store().db().peer_kind(&p.device_id).ok().flatten(),
-                    picture_at: engine.store().db().peer_picture_at(&p.device_id).ok().flatten(),
-                }
-            })
-            .collect())
+        let db = engine.store().db();
+        let mut peers = Vec::new();
+        for p in db.trusted_peers()? {
+            if db.became(&p.device_id)?.is_some() {
+                continue;
+            }
+            let fingerprint = qurb_peer::Fingerprint::from_bytes(p.fingerprint);
+            peers.push(PeerInfo {
+                fingerprint: hex(fingerprint.as_bytes()),
+                short: fingerprint.short(),
+                name: p.name,
+                paired_at: p.paired_at,
+                last_seen: p.last_seen,
+                relation: p.relation.as_str().into(),
+                kind: db.peer_kind(&p.device_id).ok().flatten(),
+                picture_at: db.peer_picture_at(&p.device_id).ok().flatten(),
+            });
+        }
+        Ok(peers)
+    }
+
+    /// What the platform keeps for this app across a reinstall or cleared
+    /// data -- Android's `ANDROID_ID` -- told to devices this phone trusts
+    /// one way only, as its install marker, so that set up again it is known
+    /// for what it was (`Db::became`). Given by the app at every start.
+    pub fn set_install_id(&self, id: String) -> Result<(), QurbError> {
+        if id.trim().is_empty() {
+            return Ok(());
+        }
+        self.engine()?.store().db().set_local_install(&qurb_storage::db::install_marker(&id))?;
+        Ok(())
     }
 
     /// Offer an invitation, for another device to scan or be read.
@@ -3293,6 +3308,17 @@ impl Qurb {
                 });
                 if let Ok(Ok(Some(kind))) = asked {
                     let _ = engine.store().learn_kind(device, &kind);
+                }
+            }
+            // Its install, once: how, set up again later, it is known for
+            // this device (`Db::became`). Briefly; a build from before cannot
+            // say, and is asked again next time.
+            if matches!(engine.store().db().peer_install(device), Ok(None)) {
+                let asked = runtime.block_on(async {
+                    tokio::time::timeout(std::time::Duration::from_secs(2), client.install()).await
+                });
+                if let Ok(Ok(Some(marker))) = asked {
+                    let _ = engine.store().db().set_peer_install(device, &marker);
                 }
             }
             // Which folders the person chose for this phone on a computer

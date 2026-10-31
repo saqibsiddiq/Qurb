@@ -2341,7 +2341,7 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
                 held: d.held.map(|(files, bytes)| WhatsAppKept { files, bytes: big(bytes) }),
                 replaced_by: d.replaced_by.map(|id| id.short()),
                 earlier: d.earlier.map(|id| id.short()),
-                said_same: d.said_same_as.is_some(),
+                said_same: d.said,
             }
         })
         .collect())
@@ -2914,7 +2914,13 @@ pub fn same_device(hosted: Host<'_>, older: String, newer: Option<String>) -> An
         }
     }
     hosted
-        .with_store(|store| Ok(store.db().set_same_device(&older.id, newer.as_ref().map(|n| &n.id))?))
+        .with_store(|store| {
+            let word = match &newer {
+                Some(newer) => qurb_storage::db::Same::Is(newer.id),
+                None => qurb_storage::db::Same::Not,
+            };
+            Ok(store.db().set_same_device(&older.id, word)?)
+        })
         .map_err(failed)
 }
 

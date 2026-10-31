@@ -2953,6 +2953,23 @@ each pairing's files and counted them all. It now counts each content once
 Pictures 0.3. Not changed: what the phone backs up, which is the owner's
 choice.
 
+### One device, counted once, from the root
+
+The owner, after the two above: "it is a problem if the program is counting
+1 device twice, we have fix this from root ... i want to release this for
+public and this is a big bug." The root is that a device set up again gets
+a new identity, and a name cannot tell it from a second device. Now each
+device tells the devices it trusts an install marker that outlives a
+reinstall (Android's `ANDROID_ID`, a computer's machine id, hashed), and one
+rule, `Db::became`, decides for every list — the computer's, a phone's
+folder on it, and the phone's own, whose `peers()` now leaves out a device
+that became another; the phone app had no such rule at all before, so a
+computer set up again would have shown twice there
+([0077](../decisions/0077-one-device-is-counted-once.md)). Tested in the
+storage rules (word, install, name, a device still in use), in the list,
+and over a real connection; 570 tests of the five crates pass. The S23's
+SM-S911B pairing predates the marker and stays linked by the owner's word.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

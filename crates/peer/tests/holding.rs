@@ -635,3 +635,37 @@ async fn a_kept_file_the_phone_was_not_told_of_is_learned_of_by_asking() {
     assert!(phone.engine.store().db().holders_of_content(&later).unwrap().is_empty());
     assert_eq!(phone.engine.store().db().kept_unconfirmed(&desktop.id(), 64).unwrap(), vec![later]);
 }
+
+/// A phone set up again is known by its install, over a real connection
+/// (the owner, 2026-10-31: "it is a problem if the program is counting 1
+/// device twice"): the computer asks each identity what install it is, and
+/// the two the same phone made are one device, whatever each is called.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_set_up_again_is_known_by_its_install() {
+    let desktop = Device::new();
+    let before = Device::new();
+    introduce(&before, &desktop);
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    let after = Device::new();
+    introduce(&after, &desktop);
+    let marker = qurb_storage::db::install_marker("ANDROID_ID of one phone");
+
+    for phone in [&before, &after] {
+        let (addr, fingerprint) = phone.serve(desktop.identity.fingerprint());
+        let client = PeerClient::connect(addr, &desktop.identity, fingerprint).await.unwrap();
+        // Not told yet: none, as from a build from before.
+        assert_eq!(client.install().await.unwrap(), None);
+        client.close();
+        phone.engine.store().db().set_local_install(&marker).unwrap();
+        let (addr, fingerprint) = phone.serve(desktop.identity.fingerprint());
+        let client = PeerClient::connect(addr, &desktop.identity, fingerprint).await.unwrap();
+        let told = client.install().await.unwrap().expect("not told");
+        client.close();
+        desktop.engine.store().db().set_peer_install(&phone.id(), &told).unwrap();
+    }
+    let db = desktop.engine.store().db();
+    // Renamed when it was set up again: the name matches nothing.
+    db.set_peer_profile(&after.id(), &qurb_storage::db::Profile { name: "skib phone".into(), picture: None, changed_at: 1 }).unwrap();
+    assert_eq!(db.became(&before.id()).unwrap(), Some(after.id()));
+    assert_eq!(db.earlier_selves(&after.id()).unwrap(), vec![before.id()]);
+}

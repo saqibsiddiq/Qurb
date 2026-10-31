@@ -4537,49 +4537,124 @@ impl Db {
         Ok(out)
     }
 
-    /// The person's word that `older` is `newer` set up again, under another
-    /// name -- which the rule in [`earlier_selves`](Self::earlier_selves)
-    /// cannot see: on 2026-10-31 the owner's S23, first paired as
-    /// "SM-S911B", was set up again as "skib phone" and listed twice. `None`
-    /// takes the word back. Kept on this device only.
-    pub fn set_same_device(&self, older: &DeviceId, newer: Option<&DeviceId>) -> Result<()> {
-        self.set_local_fact(&format!("same_device:{}", older.to_hex()), &newer.map(|n| n.to_hex()).unwrap_or_default())
+    /// The person's word about `older`, a device of theirs paired before:
+    /// that it is `newer`, set up again (`Same::Is`), or that it is no other
+    /// device at all (`Same::Not`) -- which no rule below can see past.
+    /// Wanted when a phone set up again under another name, and from before
+    /// it could say its install (on 2026-10-31 the owner's S23, first
+    /// "SM-S911B", set up again as "skib phone", was listed twice).
+    /// `Same::Unsaid` takes the word back. Kept on this device only.
+    pub fn set_same_device(&self, older: &DeviceId, word: Same) -> Result<()> {
+        let value = match word {
+            Same::Is(newer) => newer.to_hex(),
+            Same::Not => "not".to_string(),
+            Same::Unsaid => String::new(),
+        };
+        self.set_local_fact(&format!("same_device:{}", older.to_hex()), &value)
     }
 
-    /// What the person said `older` became, if they said.
-    pub fn said_same_as(&self, older: &DeviceId) -> Result<Option<DeviceId>> {
-        Ok(self.local_fact(&format!("same_device:{}", older.to_hex()))?.as_deref().and_then(DeviceId::from_hex))
+    /// What the person said about `older`, if anything.
+    pub fn said_same(&self, older: &DeviceId) -> Result<Same> {
+        Ok(match self.local_fact(&format!("same_device:{}", older.to_hex()))?.as_deref() {
+            Some("not") => Same::Not,
+            Some(hex) => DeviceId::from_hex(hex).map_or(Same::Unsaid, Same::Is),
+            None => Same::Unsaid,
+        })
     }
 
-    /// This person's devices that `device` replaced: the same name and kind,
-    /// paired before it and last seen by the time it was paired -- the same
-    /// phone, its data cleared and set up again (the owner's item 6 of
-    /// 2026-10-14) -- or any of theirs paired before it that the person said
-    /// it is ([`set_same_device`](Self::set_same_device)). What is kept for
-    /// them is that phone's too, and it may reach it from its folder
-    /// (decision 0067).
-    pub fn earlier_selves(&self, device: &DeviceId) -> Result<Vec<DeviceId>> {
+    /// This device's install marker (`install_marker`): told to the devices
+    /// it trusts, so that set up again it is known for what it was.
+    pub fn local_install(&self) -> Result<Option<[u8; 16]>> {
+        Ok(self.local_fact("install")?.as_deref().and_then(marker_from_hex))
+    }
+
+    pub fn set_local_install(&self, marker: &[u8; 16]) -> Result<()> {
+        self.set_local_fact("install", &hex16(marker))
+    }
+
+    /// A paired device's install marker, as it said; none until it has.
+    pub fn peer_install(&self, device: &DeviceId) -> Result<Option<[u8; 16]>> {
+        Ok(self.local_fact(&format!("install:{}", device.to_hex()))?.as_deref().and_then(marker_from_hex))
+    }
+
+    pub fn set_peer_install(&self, device: &DeviceId, marker: &[u8; 16]) -> Result<()> {
+        self.set_local_fact(&format!("install:{}", device.to_hex()), &hex16(marker))
+    }
+
+    /// The device `older` became when it was set up again, if it was: the
+    /// one rule for it, which the window's list, a phone's folder on a
+    /// computer and the phone's own list all ask, so none counts one device
+    /// twice. In order:
+    ///
+    /// 1. **The person's word** ([`set_same_device`](Self::set_same_device)),
+    ///    either way.
+    /// 2. **The same install** (`install_marker`): another identity made
+    ///    by the same install of the app -- after its data was cleared, or
+    ///    it was reinstalled -- is that device again, whatever its name.
+    /// 3. **The same name and kind**, for devices from before installs were
+    ///    told.
+    ///
+    /// Either rule 2 or 3 also wants both the same person's, the newer paired
+    /// after the older, and the older not seen since: a device still in use
+    /// beside the newer is a second device -- two folders set up on one
+    /// computer share its install. Of several that fit, the first paired
+    /// after it: set up again twice is a chain, each the next one's earlier.
+    pub fn became(&self, older: &DeviceId) -> Result<Option<DeviceId>> {
         let peers = self.trusted_peers()?;
-        let Some(me) = peers.iter().find(|p| p.device_id == *device) else { return Ok(Vec::new()) };
-        let kind = self.peer_kind(device)?;
-        if me.relation != Relation::Own || kind.is_none() {
-            return Ok(Vec::new());
+        self.became_among(&peers, older)
+    }
+
+    fn became_among(&self, peers: &[TrustedPeer], older: &DeviceId) -> Result<Option<DeviceId>> {
+        let Some(old) = peers.iter().find(|p| p.device_id == *older) else { return Ok(None) };
+        match self.said_same(older)? {
+            Same::Is(newer) => return Ok(peers.iter().any(|p| p.device_id == newer).then_some(newer)),
+            Same::Not => return Ok(None),
+            Same::Unsaid => {}
         }
-        let mut earlier = Vec::new();
-        for p in &peers {
-            if p.device_id == *device || p.relation != Relation::Own || p.paired_at >= me.paired_at {
+        if old.relation != Relation::Own {
+            return Ok(None);
+        }
+        let (old_install, old_kind) = (self.peer_install(older)?, self.peer_kind(older)?);
+        let mut fits: Vec<&TrustedPeer> = Vec::new();
+        for p in peers {
+            if p.device_id == *older
+                || p.relation != Relation::Own
+                || p.paired_at <= old.paired_at
+                || old.last_seen.is_some_and(|seen| seen > p.paired_at)
+            {
                 continue;
             }
-            let said = self.said_same_as(&p.device_id)?;
-            let by_name = said.is_none()
-                && p.name == me.name
-                && p.last_seen.is_none_or(|seen| seen <= me.paired_at)
-                && self.peer_kind(&p.device_id)? == kind;
-            if by_name || said == Some(*device) {
-                earlier.push(p.device_id);
+            let same_install = old_install.is_some() && old_install == self.peer_install(&p.device_id)?;
+            let same_name = p.name == old.name && old_kind.is_some() && old_kind == self.peer_kind(&p.device_id)?;
+            if same_install || same_name {
+                fits.push(p);
             }
         }
-        Ok(earlier)
+        Ok(fits.into_iter().min_by_key(|p| p.paired_at).map(|p| p.device_id))
+    }
+
+    /// Every device `device` was before it was set up again, the latest
+    /// first, by [`became`](Self::became), through a chain of them. What is
+    /// kept for them is that device's too, and it may reach it from its
+    /// folder (decision 0067).
+    pub fn earlier_selves(&self, device: &DeviceId) -> Result<Vec<DeviceId>> {
+        let peers = self.trusted_peers()?;
+        let mut became = Vec::with_capacity(peers.len());
+        for p in &peers {
+            became.push((p.device_id, p.paired_at, self.became_among(&peers, &p.device_id)?));
+        }
+        let mut earlier: Vec<(DeviceId, i64)> = Vec::new();
+        let mut reaching = vec![*device];
+        while let Some(at) = reaching.pop() {
+            for (id, paired, to) in &became {
+                if *to == Some(at) && *id != *device && !earlier.iter().any(|(e, _)| e == id) {
+                    earlier.push((*id, *paired));
+                    reaching.push(*id);
+                }
+            }
+        }
+        earlier.sort_by_key(|(_, paired)| std::cmp::Reverse(*paired));
+        Ok(earlier.into_iter().map(|(id, _)| id).collect())
     }
 
     /// Whether content is kept here for one of `device`'s earlier selves,
@@ -4843,6 +4918,42 @@ impl Db {
         rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 }
+/// What the person said about whether a device is another set up again
+/// (`Db::set_same_device`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Same {
+    Unsaid,
+    /// It is this one, set up again.
+    Is(DeviceId),
+    /// It is no other device.
+    Not,
+}
+
+/// An install of the app, as told to other devices: `platform` -- what the
+/// platform keeps for this app across a reinstall or cleared data, Android's
+/// `ANDROID_ID`, a computer's machine id -- one way, and never sent as it is.
+pub fn install_marker(platform: &str) -> [u8; 16] {
+    let whole = blake3::derive_key("qurb 2026-10-31 install marker", platform.trim().as_bytes());
+    let mut marker = [0u8; 16];
+    marker.copy_from_slice(&whole[..16]);
+    marker
+}
+
+fn hex16(bytes: &[u8; 16]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn marker_from_hex(text: &str) -> Option<[u8; 16]> {
+    if text.len() != 32 {
+        return None;
+    }
+    let mut out = [0u8; 16];
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(text.get(2 * i..2 * i + 2)?, 16).ok()?;
+    }
+    Some(out)
+}
+
 
 /// A device this one has paired with.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -5478,28 +5589,78 @@ mod tests {
         assert_eq!(db.held_once(&[phone, earlier]).unwrap(), (2, 150));
     }
 
-    /// A phone set up again under another name (the owner's S23, 2026-10-31:
-    /// "SM-S911B", then "skib phone") reaches what was kept for it before
-    /// once the person says the two are one, and not before or after.
-    #[test]
-    fn a_renamed_phone_is_its_earlier_self_when_the_person_says_so() {
-        let db = Db::open_in_memory().unwrap();
+/// Two of the person's devices, `old` paired at 1,000 and last seen at
+    /// 2,000, `new` paired at 1,500 or `late`, named and of kinds as given.
+    fn two_devices(db: &Db, names: (&str, &str), late: bool) -> (DeviceId, DeviceId) {
         let (old, new) = (DeviceId::from_bytes([5; 32]), DeviceId::from_bytes([6; 32]));
-        db.trust_peer(&old, &[5; 32], "SM-S911B").unwrap();
-        db.trust_peer(&new, &[6; 32], "skib phone").unwrap();
-        for (device, paired, seen) in [(&old, 1_000, 2_000), (&new, 1_500, 3_000)] {
+        db.trust_peer(&old, &[5; 32], names.0).unwrap();
+        db.trust_peer(&new, &[6; 32], names.1).unwrap();
+        for (device, paired, seen) in [(&old, 1_000, 2_000), (&new, if late { 2_500 } else { 1_500 }, 3_000)] {
             db.set_peer_kind(device, "phone").unwrap();
             db.conn
                 .execute("UPDATE peers SET paired_at = ?2, last_seen = ?3 WHERE device_id = ?1", params![device.as_bytes().as_slice(), paired, seen])
                 .unwrap();
         }
-        assert!(db.earlier_selves(&new).unwrap().is_empty(), "matched by nothing");
-        db.set_same_device(&old, Some(&new)).unwrap();
-        assert_eq!(db.earlier_selves(&new).unwrap(), vec![old]);
-        assert!(db.earlier_selves(&old).unwrap().is_empty(), "the older became the newer's earlier self");
-        db.set_same_device(&old, None).unwrap();
-        assert!(db.earlier_selves(&new).unwrap().is_empty(), "the word was not taken back");
+        (old, new)
     }
+
+    /// A phone set up again is the device it was by the same install,
+    /// whatever its new name (the owner's S23, 2026-10-31: "SM-S911B", then
+    /// "skib phone"); by the same name, from before installs were told; or
+    /// on the person's word -- which also says, past every rule, that two
+    /// are not the same.
+    #[test]
+    fn a_device_set_up_again_is_known_for_what_it_was() {
+        let db = Db::open_in_memory().unwrap();
+        let (old, new) = two_devices(&db, ("SM-S911B", "skib phone"), true);
+        assert_eq!(db.became(&old).unwrap(), None, "matched by nothing");
+
+        let marker = install_marker("android id of the S23");
+        db.set_peer_install(&old, &marker).unwrap();
+        assert_eq!(db.became(&old).unwrap(), None, "matched by one side's install");
+        db.set_peer_install(&new, &marker).unwrap();
+        assert_eq!(db.became(&old).unwrap(), Some(new), "the same install");
+        assert_eq!(db.earlier_selves(&new).unwrap(), vec![old]);
+        assert!(db.earlier_selves(&old).unwrap().is_empty());
+
+        db.set_same_device(&old, Same::Not).unwrap();
+        assert_eq!(db.became(&old).unwrap(), None, "the person's word was passed over");
+        db.set_same_device(&old, Same::Unsaid).unwrap();
+        db.set_peer_install(&new, &install_marker("another phone")).unwrap();
+        assert_eq!(db.became(&old).unwrap(), None, "two installs taken for one");
+        db.set_same_device(&old, Same::Is(new)).unwrap();
+        assert_eq!(db.became(&old).unwrap(), Some(new), "the person's word");
+    }
+
+    /// The same name still finds a device from before installs were told;
+    /// and nothing finds one still in use after the newer was paired --
+    /// a second phone of the same model, or a second folder on one computer.
+    #[test]
+    fn a_device_still_in_use_is_a_second_device() {
+        let db = Db::open_in_memory().unwrap();
+        let (old, new) = two_devices(&db, ("SM-S911B", "SM-S911B"), true);
+        assert_eq!(db.became(&old).unwrap(), Some(new), "by its name");
+
+        let db = Db::open_in_memory().unwrap();
+        let (old, _) = two_devices(&db, ("SM-S911B", "SM-S911B"), false);
+        let marker = install_marker("machine id");
+        for d in [DeviceId::from_bytes([5; 32]), DeviceId::from_bytes([6; 32])] {
+            db.set_peer_install(&d, &marker).unwrap();
+        }
+        assert_eq!(db.became(&old).unwrap(), None, "a device seen after the newer was paired");
+    }
+
+    #[test]
+    fn an_install_is_told_one_way_and_kept() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(db.local_install().unwrap(), None);
+        let marker = install_marker("  0123456789abcdef\n");
+        assert_eq!(marker, install_marker("0123456789abcdef"), "spacing in a machine id changed it");
+        assert_ne!(&marker[..], &b"0123456789abcdef"[..]);
+        db.set_local_install(&marker).unwrap();
+        assert_eq!(db.local_install().unwrap(), Some(marker));
+    }
+
 
     /// A choice made on either side wins where it is the later one, an untick
     /// as much as a tick, on the phone and on the computer alike (item 10).

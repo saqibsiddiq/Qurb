@@ -186,6 +186,15 @@ pub enum Request {
     /// also what a device from before this answers.
     Profile { since: i64 },
 
+    /// What install of the app this device is: a marker that outlives a
+    /// reinstall or cleared data, made from what the platform keeps for the
+    /// app (`qurb_storage::install_marker`). A device set up again comes back
+    /// with a new identity and the same marker, and is known for what it
+    /// was. Answered with [`Response::Install`], or *not found* by a device
+    /// that has none -- or a build from before this, which cannot read the
+    /// request at all.
+    Install,
+
     /// One folder of this computer's shared folder, at `dir` (`""` for the
     /// top), live, to a phone of its own person or to a guest of it
     /// (decision 0073, item 6): answered in [`Response::Kept`]'s shape, each
@@ -339,6 +348,9 @@ pub enum Response {
     /// when it set them, answering [`Request::Profile`].
     Profile { name: String, picture: Vec<u8>, changed_at: i64 },
 
+    /// This device's install marker, answering [`Request::Install`].
+    Install { marker: [u8; 16] },
+
     /// A change asked of the shared folder, not made, and why, in words for
     /// the person who asked (decision 0073).
     Refused { why: String },
@@ -376,6 +388,7 @@ const TAG_UPLOAD: u8 = 26;
 const TAG_UPLOAD_DONE: u8 = 27;
 const TAG_SEARCH: u8 = 28;
 const TAG_PROFILE: u8 = 29;
+const TAG_INSTALL: u8 = 30;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -426,6 +439,7 @@ const STATUS_WHO: u8 = 23;
 const STATUS_REFUSED: u8 = 24;
 const STATUS_PLACED: u8 = 25;
 const STATUS_PROFILE: u8 = 26;
+const STATUS_INSTALL: u8 = 27;
 
 /// The largest picture a device may give itself: a 256-pixel square as JPEG
 /// is a few tens of KiB.
@@ -514,6 +528,7 @@ impl Request {
                 out.push(TAG_PROFILE);
                 out.extend_from_slice(&since.to_le_bytes());
             }
+            Request::Install => out.push(TAG_INSTALL),
             Request::Who { token } => {
                 out.push(TAG_WHO);
                 out.extend_from_slice(token);
@@ -596,6 +611,7 @@ impl Request {
             TAG_TREE_DIGEST => Request::TreeDigest,
             TAG_TREE_SINCE => Request::TreeSince { since: r.u64()? },
             TAG_PROFILE => Request::Profile { since: r.u64()? as i64 },
+            TAG_INSTALL => Request::Install,
             TAG_WHO => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
@@ -757,6 +773,10 @@ impl Response {
                 out.extend_from_slice(picture);
                 out.extend_from_slice(&changed_at.to_le_bytes());
             }
+            Response::Install { marker } => {
+                out.push(STATUS_INSTALL);
+                out.extend_from_slice(marker);
+            }
             Response::Refused { why } => {
                 out.push(STATUS_REFUSED);
                 put_path(&mut out, why);
@@ -824,6 +844,7 @@ impl Response {
                 key_check: r.hash()?,
             },
             STATUS_ABOUT => Response::About { kind: r.name()? },
+            STATUS_INSTALL => Response::Install { marker: r.array()? },
             STATUS_WHO => Response::Who { name: r.name()?, kind: r.name()? },
             STATUS_PROFILE => {
                 let name = r.name()?;
@@ -1320,6 +1341,7 @@ mod tests {
             Request::TreeDigest,
             Request::TreeSince { since: 1 << 40 },
             Request::Profile { since: 1_792_000_000_123 },
+            Request::Install,
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -1339,6 +1361,7 @@ mod tests {
             Response::Who { name: "saqib".into(), kind: "computer".into() },
             Response::Profile { name: "Saqib's laptop".into(), picture: vec![0xFF, 0xD8, 0xFF], changed_at: 1_792_000_000_123 },
             Response::Profile { name: "S23".into(), picture: vec![], changed_at: 1 },
+            Response::Install { marker: [9; 16] },
             Response::Refused { why: "something is already called Notes".into() },
             Response::Placed { path: "Photos/beach (2).jpg".into() },
             Response::Mismatch,
