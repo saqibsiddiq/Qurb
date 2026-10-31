@@ -22,7 +22,8 @@ async function drawSettings(main) {
       setting({ ic: "laptop", name: "Name", value: s.name, onclick: askName }),
       setting({ ic: "image", name: "Picture", end: circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-md circle-plain"), onclick: () => pictureSheet(s) }),
       setting({ ic: "shield-check", name: "Key", value: others.length ? "Safe" : "Only here", onclick: () => go("key") }),
-      setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") })),
+      setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") }),
+      setting({ ic: "hard-drive", name: "Back up folders", onclick: () => go("backup") })),
     group("Files",
       setting({ ic: "lock-keyhole", name: "New files go to the Vault", end: toggle(s.own_files_private, (on) => invoke("set_privacy", { private: on }), "New files go to the Vault") }),
       setting({ ic: "download", name: "Received files", value: downloadsWords(s), onclick: askDownloads }),
@@ -34,6 +35,7 @@ async function drawSettings(main) {
       setting({ ic: "palette", name: "Theme", value: theme, onclick: themeSheet }),
       setting({ ic: "sliders-horizontal", name: "Motion", value: calm ? "Reduced" : "Full" })),
     group("Connection",
+      setting({ ic: "arrow-up-down", name: "Speed limit", value: speedWords(s), onclick: () => go("speed") }),
       setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") })),
     group(null, setting({ ic: "x", name: "Quit QurbSpace", danger: true, onclick: () => invoke("quit") })));
 }
@@ -128,8 +130,10 @@ const GIB = 1024 ** 3;
 async function drawStorage(main) {
   const body = h("div", {});
   main.append(h("div", { class: "pg pg-narrow" }, pageHead("Storage", { words: "Settings", go: () => go("settings") }), body));
-  let st, fr, parts;
-  try { [st, fr, parts] = await Promise.all([invoke("storage"), invoke("freeable"), invoke("storage_parts")]); } catch (e) { put(body, oops(e)); return; }
+  let st, fr, parts, alone;
+  try {
+    [st, fr, parts, alone] = await Promise.all([invoke("storage"), invoke("freeable"), invoke("storage_parts"), invoke("not_elsewhere").catch(() => null)]);
+  } catch (e) { put(body, oops(e)); return; }
   const used = Number(st.used), freeable = Number(fr.bytes), free = Number(st.free_disk), limit = Number(st.limit), disk = Number(st.disk);
   const whole = Math.max(limit > 0 ? limit : Math.max(disk, used + free), used, 1);
   const pct = (n) => `${Math.max(0, (100 * n) / whole)}%`;
@@ -166,7 +170,10 @@ async function drawStorage(main) {
       setting({ ic: "smartphone", name: "Your phones' backups", value: size(phoneBytes), onclick: () => inFiles("owner") }),
       setting({ ic: "folder", name: "Shared", value: size(parts.shared_here), onclick: () => inFiles("shared") }),
       parts.guests.length ? setting({ ic: "users", name: "People's folders", value: size(guestBytes) }) : null,
-      setting({ ic: "trash-2", name: "Recently deleted", value: size(parts.deleted), onclick: () => go("deleted") })),
+      setting({ ic: "trash-2", name: "Recently deleted", value: size(parts.deleted), onclick: () => go("deleted") }),
+      // Made here, and on no other device yet (component 5: storage's, not
+      // Home's Waiting).
+      alone?.files ? setting({ ic: "laptop", name: "Only on this computer", value: count(alone.files, "file"), onclick: () => onlyHere(alone) }) : null),
     group("Limit",
       setting({ ic: "sliders-horizontal", name: "Limit QurbSpace's space", end: toggle(limit > 0, async (on) => {
         limitBox.hidden = !on;
@@ -179,6 +186,13 @@ async function drawStorage(main) {
       end: h("button", { class: "btn btn-quiet btn-sm", onclick: async () => { await freeUp(f.path); go("storage"); } }, "Free up"),
     }))) : null,
     h("p", { class: "note" }, "Freed files stay in QurbSpace, on your other devices"));
+}
+
+/** The files made here that no other device has yet: the first few. */
+function onlyHere(alone) {
+  const box = sheet({ ic: "laptop", title: "Only on this computer", sub: `${count(alone.files, "file")}, ${size(alone.size)}` });
+  box.append(h("div", { class: "rows" }, ...alone.first.map((f) => row({ ic: fileIcon(f.path), name: base(f.path), sub: [size(f.size), folderOf(f.path) || "Shared"] }))),
+    h("p", { class: "note" }, "They reach your other devices when one is online"));
 }
 
 async function freeAll(b) {
@@ -253,6 +267,105 @@ function protectSheet(to, was) {
     } catch (e) { says.textContent = String(e); says.classList.add("warn"); }
   }, "btn-main")));
   (current ?? fresh)?.focus();
+}
+
+// ---------- Speed limit ----------
+
+/** The rates a person picks from, bytes a second; 0 for none. */
+const SPEEDS = [0, 1e6, 5e6, 10e6, 25e6];
+const speed = (rate) => (Number(rate) ? `${size(rate)}/s` : "None");
+function speedWords(s) {
+  const [up, down] = [Number(s.upload_limit ?? 0), Number(s.download_limit ?? 0)];
+  return up || down ? [up ? `${speed(up)} up` : null, down ? `${speed(down)} down` : null].filter(Boolean).join(", ") : "None";
+}
+
+/** How fast files may go to and come from other devices: chips for each
+ * way, applied at once. */
+async function drawSpeed(main) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Speed limit", { words: "Settings", go: () => go("settings") }), body));
+  let s;
+  try { s = await invoke("settings"); } catch (e) { put(body, oops(e)); return; }
+  const rates = { up: String(s.upload_limit ?? "0"), down: String(s.download_limit ?? "0") };
+  const way = (key, ic, words) => {
+    const chips = h("div", { class: "amounts amounts-l" });
+    const draw = () => put(chips, ...SPEEDS.map((r) => h("button", {
+      class: `amount${Number(rates[key]) === r ? " on" : ""}`,
+      onclick: async () => {
+        const was = rates[key];
+        rates[key] = String(r);
+        draw();
+        try { await invoke("set_bandwidth", rates); } catch (e) { rates[key] = was; draw(); toast(String(e), true); }
+      },
+    }, speed(r))));
+    draw();
+    return h("section", { class: "grp" }, label(words), h("div", { class: "speed" }, icon(ic, "set-ic"), chips));
+  };
+  put(body,
+    way("up", "arrow-up", "Sending to your devices"),
+    way("down", "arrow-down", "Receiving from them"),
+    h("p", { class: "note" }, "Leaves room on your connection for everything else"));
+}
+
+// ---------- Backing up this computer's folders ----------
+
+/** Folders of this computer, kept by your other computers (the owner's list
+ * of 2026-10-28): which, and by whom. */
+async function drawBackup(main) {
+  const body = h("div", { id: "backup-body" });
+  main.append(h("div", { class: "pg pg-narrow" },
+    pageHead("Back up folders", { words: "Settings", go: () => go("settings") },
+      h("button", { class: "btn btn-main btn-sm", onclick: addBackupFolder }, icon("plus"), "Add a folder")),
+    body));
+  await listsBackup();
+}
+
+let BACKUPS = null;
+
+async function listsBackup() {
+  const body = $("backup-body");
+  if (!body) return;
+  try { BACKUPS = await invoke("backups"); } catch (e) { put(body, oops(e)); return; }
+  const b = BACKUPS;
+  const anyOn = b.keepers.some((k) => k.on);
+  put(body,
+    b.folders.length
+      ? h("div", { class: "rows" }, label("Folders"), ...b.folders.map((f) => row({
+        ic: f.refused ? tile("triangle-alert", "tile-warn") : "folder",
+        name: f.name,
+        title: f.path,
+        sub: f.refused ? [f.refused] : [f.files ? `${count(f.files, "file")}` : "Not read yet", f.files ? size(f.size) : null],
+        cls: f.refused ? "row-warn" : "",
+        end: h("button", { class: "icon-btn", "aria-label": `Stop backing up ${f.name}`, title: "Stop backing up", onclick: () => removeBackupFolder(f) }, icon("x")),
+      })))
+      : empty("hard-drive", "Folders of this computer, kept by your other computers"),
+    label("Kept on"),
+    b.keepers.length
+      ? h("div", { class: "grp-box" }, ...b.keepers.map((k) => setting({
+        ic: "laptop",
+        name: k.name,
+        value: k.online ? null : "Off",
+        end: toggle(k.on, async (on) => { await invoke("set_keeper", { device: k.fingerprint, on }); listsBackup(); }, k.name),
+      })))
+      : h("p", { class: "note" }, "Pair another computer to keep them"),
+    b.folders.length && b.keepers.length && !anyOn ? h("p", { class: "note warn" }, "No computer keeps them yet") : null,
+    h("p", { class: "note" }, "Files deleted here stay with them. Your Vault goes with them too"));
+}
+
+async function addBackupFolder() {
+  const dialog = window.__TAURI__?.dialog;
+  if (!dialog) { toast("No folder chooser here", true); return; }
+  const chosen = await dialog.open({ directory: true, multiple: false });
+  if (!chosen) return;
+  const folders = [...(BACKUPS?.folders ?? []).map((f) => f.path), Array.isArray(chosen) ? chosen[0] : chosen];
+  try { await invoke("set_backup_folders", { folders }); } catch (e) { toast(String(e), true); return; }
+  listsBackup();
+}
+
+async function removeBackupFolder(f) {
+  const folders = (BACKUPS?.folders ?? []).map((x) => x.path).filter((p) => p !== f.path);
+  try { await invoke("set_backup_folders", { folders }); toast("What's kept already stays kept"); } catch (e) { toast(String(e), true); }
+  listsBackup();
 }
 
 // ---------- Advanced ----------

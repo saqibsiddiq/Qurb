@@ -22,18 +22,34 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 /// One file being served.
 struct Served {
-    person: qurb_sync::DeviceId,
+    /// Whose folder it is from: served only while that is open. None for a
+    /// file of this computer's own folder, on its disk.
+    person: Option<qurb_sync::DeviceId>,
     kind: &'static str,
-    chunks: Vec<(blake3::Hash, u32)>,
-    /// Where each chunk starts, then the file's size.
-    starts: Vec<u64>,
-    /// A store of its own, so a long play never holds the window's.
-    store: Mutex<Store>,
+    body: Body,
+}
+
+/// Where a served file's bytes are.
+enum Body {
+    /// In the store, as a person's folder keeps them.
+    Held {
+        chunks: Vec<(blake3::Hash, u32)>,
+        /// Where each chunk starts, then the file's size.
+        starts: Vec<u64>,
+        /// A store of its own, so a long play never holds the window's.
+        store: Box<Mutex<Store>>,
+    },
+    /// A file on this computer's disk, in the synced folder: what quick
+    /// preview shows a video or a PDF from (the redesign's item 11).
+    Disk { path: std::path::PathBuf, size: u64 },
 }
 
 impl Served {
     fn size(&self) -> u64 {
-        self.starts.last().copied().unwrap_or(0)
+        match &self.body {
+            Body::Held { starts, .. } => starts.last().copied().unwrap_or(0),
+            Body::Disk { size, .. } => *size,
+        }
     }
 }
 
@@ -85,8 +101,23 @@ pub fn serve(
         at += u64::from(*size);
     }
     starts.push(at);
-    let served = Arc::new(Served { person, kind, chunks, starts, store: Mutex::new(store) });
+    let served = Arc::new(Served { person: Some(person), kind, body: Body::Held { chunks, starts, store: Box::new(Mutex::new(store)) } });
+    address(served, name)
+}
 
+/// Serve a file of this computer's own folder, on its disk, as `kind`, and
+/// return the address the window shows it from.
+pub fn serve_disk(path: &Path, kind: &'static str) -> anyhow::Result<String> {
+    let size = std::fs::metadata(path)?.len();
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+    // One preview is shown at a time: the address of the one before goes.
+    if let Some(server) = SERVER.get() {
+        server.open.lock().expect("streams").retain(|_, s| !matches!(s.body, Body::Disk { .. }));
+    }
+    address(Arc::new(Served { person: None, kind, body: Body::Disk { path: path.to_path_buf(), size } }), &name)
+}
+
+fn address(served: Arc<Served>, name: &str) -> anyhow::Result<String> {
     let server = server()?;
     let token = token();
     server.open.lock().expect("streams").insert(token.clone(), served);
@@ -97,7 +128,7 @@ pub fn serve(
 /// Stop serving `person`'s files: their folder has been locked.
 pub fn forget(person: &qurb_sync::DeviceId) {
     if let Some(server) = SERVER.get() {
-        server.open.lock().expect("streams").retain(|_, s| s.person != *person);
+        server.open.lock().expect("streams").retain(|_, s| s.person != Some(*person));
     }
 }
 
@@ -208,25 +239,35 @@ fn answer(stream: TcpStream) -> std::io::Result<()> {
         return Ok(());
     }
 
-    let mut index = match served.starts[..served.chunks.len()].binary_search(&start) {
+    let (chunks, starts, store) = match &served.body {
+        Body::Held { chunks, starts, store } => (chunks, starts, store),
+        Body::Disk { path, .. } => {
+            use std::io::{Read, Seek};
+            let mut file = std::fs::File::open(path)?;
+            file.seek(std::io::SeekFrom::Start(start))?;
+            std::io::copy(&mut file.take(end - start), &mut out)?;
+            return Ok(());
+        }
+    };
+    let mut index = match starts[..chunks.len()].binary_search(&start) {
         Ok(i) => i,
         Err(after) => after.saturating_sub(1),
     };
-    while index < served.chunks.len() && served.starts[index] < end {
+    while index < chunks.len() && starts[index] < end {
         // The folder locked while this played: stopped, within a chunk. By
         // the window, or by itself -- idle ten minutes, or the computer
         // asleep longer -- which until 2026-10-18 left the address playing
         // on. Playing is using it, so the idle time starts again.
         let still = SERVER.get().and_then(|s| s.open.lock().ok().map(|open| open.contains_key(token)));
-        if still != Some(true) || qurb_peer::openings::key(&served.person).is_none() {
+        if still != Some(true) || served.person.is_some_and(|p| qurb_peer::openings::key(&p).is_none()) {
             return Ok(());
         }
         let bytes = {
-            let store = served.store.lock().map_err(|_| std::io::Error::other("a reader failed"))?;
-            store.read_chunk(&served.chunks[index].0).map_err(std::io::Error::other)?
+            let store = store.lock().map_err(|_| std::io::Error::other("a reader failed"))?;
+            store.read_chunk(&chunks[index].0).map_err(std::io::Error::other)?
         };
-        let from = start.saturating_sub(served.starts[index]) as usize;
-        let to = ((end - served.starts[index]) as usize).min(bytes.len());
+        let from = start.saturating_sub(starts[index]) as usize;
+        let to = ((end - starts[index]) as usize).min(bytes.len());
         // A player that seeks elsewhere closes this connection; the write
         // fails, and that is the end of this answer.
         out.write_all(&bytes[from.min(to)..to])?;

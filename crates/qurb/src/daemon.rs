@@ -153,7 +153,17 @@ pub struct Daemon {
     /// be awake at the same moment. See
     /// [decision 0006](../../docs/decisions/0006-availability-gap.md).
     pins: Option<PinSet>,
+    /// When this computer's own folders were last looked through for its
+    /// backup (`crate::backup`), so that a busy run of syncs does not read
+    /// them each time.
+    backed_up_at: Mutex<Option<std::time::Instant>>,
 }
+
+/// How often this computer's own folders are looked through for its backup,
+/// and for how long at most: a new folder of thousands of files is read
+/// across several passes, rather than holding up syncing for all of it.
+const BACKUP_EVERY: Duration = Duration::from_secs(300);
+const BACKUP_FOR: Duration = Duration::from_secs(20);
 
 impl Daemon {
     pub fn new(
@@ -173,6 +183,7 @@ impl Daemon {
             nudge: None,
             asked: None,
             pins: None,
+            backed_up_at: Mutex::new(None),
         }
     }
 
@@ -408,6 +419,7 @@ impl Daemon {
                 self.root.display()
             ),
         };
+        self.refresh_rates();
 
         // Which folder this is, by more than its name: see [`Here`].
         let here = Here::of(&self.store_dir)?;
@@ -897,6 +909,59 @@ impl Daemon {
         Config::load(&self.store_dir).map(|c| c.limit).unwrap_or(self.config.limit)
     }
 
+    /// How fast files may cross the network, read fresh for the same reason
+    /// as [`limit`], and applied to the whole process (`qurb_peer::limit`).
+    ///
+    /// [`limit`]: Self::limit
+    fn refresh_rates(&self) {
+        let Ok(config) = Config::load(&self.store_dir) else { return };
+        let rates = (config.upload_limit, config.download_limit);
+        if qurb_peer::limit::rates() != rates {
+            tracing::info!(up = rates.0, down = rates.1, "bytes a second allowed now, 0 for any");
+            qurb_peer::limit::set(rates.0, rates.1);
+        }
+    }
+
+    /// Keep this computer's own folders in its vault (`crate::backup`), at
+    /// most every [`BACKUP_EVERY`] and for [`BACKUP_FOR`]; sooner again while
+    /// a folder still has files left to read.
+    fn back_up_folders(&self, engine: &mut Engine) {
+        if self.is_replica() {
+            return;
+        }
+        let Ok(config) = Config::load(&self.store_dir) else { return };
+        if config.backup_folders.is_empty() {
+            return;
+        }
+        let now = std::time::Instant::now();
+        {
+            let at = self.backed_up_at.lock().expect("backup time poisoned");
+            if at.is_some_and(|at| now < at) {
+                return;
+            }
+        }
+        let until = now + BACKUP_FOR;
+        let reports = tokio::task::block_in_place(|| crate::backup::run(engine.store_mut(), &config, &self.root, until));
+        let mut unfinished = false;
+        for (name, report) in reports {
+            match report {
+                Ok(r) => {
+                    unfinished |= r.remaining > 0;
+                    if r.added + r.changed + r.deleted + r.kept + r.remaining > 0 || !r.failed.is_empty() {
+                        tracing::info!(
+                            folder = %name, added = r.added, changed = r.changed, deleted = r.deleted,
+                            kept = r.kept, remaining = r.remaining, failed = r.failed.len(),
+                            "backed up this computer's folder"
+                        );
+                    }
+                }
+                Err(e) => tracing::warn!(folder = %name, error = %e, "not backing up this computer's folder"),
+            }
+        }
+        let next = if unfinished { Duration::from_secs(5) } else { BACKUP_EVERY };
+        *self.backed_up_at.lock().expect("backup time poisoned") = Some(std::time::Instant::now() + next);
+    }
+
     /// Where deliveries go, and whether this device's own new files are
     /// private, read fresh, for the same reason as [`limit`]: both are
     /// switches in the window's Settings.
@@ -940,6 +1005,8 @@ impl Daemon {
         generation: &Arc<qurb_peer::Generation>,
     ) {
         self.refresh_downloads(engine);
+        self.refresh_rates();
+        self.back_up_folders(engine);
         let mut reached = 0usize;
         // Set by whichever peer brought something new, so the others can be
         // told once at the end rather than per peer.

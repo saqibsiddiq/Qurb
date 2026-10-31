@@ -34,6 +34,7 @@ const FIXTURE_FILES = [
   { path: "Work/Quarterly report.pdf", size: "4000000", modified: now - 300, availability: "here", private: false },
   { path: "Work/archive.tar.gz", size: "912000000", modified: now - 900000, availability: "elsewhere", private: false },
   { path: "Budget 2026.xlsx", size: "88000", modified: now - 7200, availability: "only here", private: false },
+  { path: "Holiday clip.mp4", size: "84000000", modified: now - 50000, availability: "here", private: false },
   { path: "Interview.m4a", size: "31000000", modified: now - 190000, availability: "elsewhere", private: false },
   { path: "Lost with an old phone.jpg", size: "2100000", modified: now - 900000, availability: "nowhere", private: false },
   { path: "Passport scan.pdf", size: "1200000", modified: now - 400000, availability: "here", private: true },
@@ -73,6 +74,9 @@ const WORDS = [
 ];
 
 let startedPairingAt = 0;
+const fixtureRates = { up: 0, down: 5_000_000 };
+let fixtureBackup = ["/home/saqib/Pictures", "/home/saqib/Documents"];
+let fixtureKeeperOn = true;
 // The person's answer to a device asking to join: null until given.
 let pairingAnswer = null;
 // Whether the code on screen is a guest code (decision 0060).
@@ -157,7 +161,33 @@ const ANSWERS = {
     notifications: true,
     key_also_on: ["Galaxy S23"],
     phone_holds_key: true,
+    upload_limit: String(fixtureRates.up),
+    download_limit: String(fixtureRates.down),
   }),
+  set_bandwidth: ({ up, down }) => { fixtureRates.up = Number(up); fixtureRates.down = Number(down); return null; },
+
+  // This computer's own folders, backed up (the owner's list of 2026-10-28).
+  backups: () => ({
+    folders: fixtureBackup.map((path, i) => ({
+      name: path.split("/").pop(), path,
+      files: path.endsWith("Gone") ? 0 : [1840, 312, 77][i % 3], size: ["31400000000", "2100000000", "640000000"][i % 3],
+      refused: path.endsWith("Gone") ? `${path} is not a folder` : null,
+    })),
+    keepers: [{ fingerprint: "e5f60718", name: "Study desktop", on: fixtureKeeperOn, online: STATE === "synced" }],
+  }),
+  set_backup_folders: ({ folders }) => { fixtureBackup = folders; return null; },
+  set_keeper: ({ on }) => { fixtureKeeperOn = on; return null; },
+
+  // Search inside people's folders: the owner's, while it is open.
+  find_people: ({ text }) => (personState() !== "open" ? [] : [
+    { person: "owner", name: "Galaxy S23/Documents/Lease 2026.pdf", path: ".qurb-outside/storage/Documents/Lease 2026.pdf", device: "a1b2c3d4", size: "2400000", modified_at: now - 86400 * 3 },
+    { person: "owner", name: "Galaxy S23/DCIM/Camera/VID_20261001.mp4", path: ".qurb-outside/storage/DCIM/Camera/VID_20261001.mp4", device: "a1b2c3d4", size: "84000000", modified_at: now - 86400 * 9 },
+  ].filter((f) => f.name.toLowerCase().includes(text.toLowerCase()))),
+
+  // Quick preview of video, songs and PDFs: the website's own clip stands in
+  // for any of them, since a fixture has no files.
+  peek: ({ path }) => ({ kind: path.endsWith(".pdf") ? "pdf" : /\.(mp3|m4a|ogg|flac|wav)$/i.test(path) ? "audio" : "video", url: "../../website/public/media/waves.mp4" }),
+  peek_kept: ({ path }) => ({ kind: path.endsWith(".pdf") ? "pdf" : "video", url: "../../website/public/media/waves.mp4" }),
   save_settings: () => null,
   set_privacy: () => null,
   set_notifications: () => null,

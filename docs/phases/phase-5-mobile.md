@@ -2889,10 +2889,37 @@ command failing: set up, every place, paired by six digits, a send, the
 device removed, a passphrase set and unlocked; set up by joining; the
 desktop's dark preference followed. Installed, the window with its daemon
 took about 210 MB resident twenty seconds after starting, rescanning the
-owner's folder; not measured further. Not built: a **bandwidth limit** and **the computer backing up its own folders
-to another computer**, which the owner asked for and which need engine work
-first; quick preview shows pictures and text only, not PDFs or video; search
-does not reach people's folders or a phone's backups.
+owner's folder; not measured further.
+
+### The four left, built the same day
+
+At the owner's "build all the still not built", the same evening:
+
+- **A speed limit**, one rate each way for the whole process
+  (`qurb_peer::limit`), chosen in Settings. Measured on this laptop over a
+  loopback QUIC connection (`crates/peer/tests/limit.rs`): 4 MB fetched in
+  0.23 s with no limit and 3.05 s at 1 MB/s.
+- **This computer's own folders backed up to another computer**: read where
+  they lie into its vault, kept by the computers chosen as its vault's
+  keepers, shown on those in the owner's folder
+  ([0076](../decisions/0076-a-computer-backs-up-its-folders-and-holds-back-its-speed.md)).
+  Proved over a real connection in `crates/peer/tests/holding.rs` and in the
+  real window by the smoke test; **not yet between two real computers** —
+  the owner has one.
+- **Search in people's folders**: every open one, the owner's phones'
+  backups included (`find_people`, on the search the phone already had).
+- **Quick preview of video, songs and PDFs**, served to the window from
+  127.0.0.1 at a token by the server that already streamed media to players
+  (`src/stream.rs`, which now also serves files on disk); the window's
+  content policy allows media and frames from 127.0.0.1. A video **played
+  in the real window** in the smoke test; **a PDF has not been seen there**.
+
+`tests/wiring.rs` found what the fixtures could not: six commands the old
+window used and the new one does not — the guest-folder and phone-backup
+ones, which the new window reaches through a person's folder — now removed;
+and `not_elsewhere`, files only on this computer, which the agreed design
+put in Storage and which was missing there until then. 505 tests of the
+four crates touched pass, and all three smoke modes.
 
 ## Deliberately left undone
 

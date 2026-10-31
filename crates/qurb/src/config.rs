@@ -38,6 +38,14 @@ pub struct Config {
     /// Whether the desktop raises its three notifications: a file sent here,
     /// one collected, one that failed. On unless somebody turns them off.
     pub notifications: bool,
+    /// How fast files may go to other devices, in bytes a second. Zero means
+    /// no limit (`qurb_peer::limit`).
+    pub upload_limit: u64,
+    /// How fast files may come from other devices, likewise.
+    pub download_limit: u64,
+    /// Folders of this computer, outside the synced one, kept in its own
+    /// vault and so by the devices that keep that (`crate::backup`).
+    pub backup_folders: Vec<PathBuf>,
 }
 
 /// Where a file somebody sends this device is put.
@@ -162,6 +170,9 @@ impl Default for Config {
             downloads: Downloads::Default,
             own_files_private: false,
             notifications: true,
+            upload_limit: 0,
+            download_limit: 0,
+            backup_folders: Vec::new(),
         }
     }
 }
@@ -246,6 +257,18 @@ impl Config {
             };
         }
 
+        for (key, field) in [("upload-limit", &mut config.upload_limit), ("download-limit", &mut config.download_limit)] {
+            if let Some(rate) = settings.remove(key) {
+                *field = parse_size(&rate)
+                    .with_context(|| format!("{}: {key} is not a size a second", path.display()))?;
+            }
+        }
+
+        if let Some(folders) = settings.remove("backup-folders") {
+            config.backup_folders =
+                folders.split(';').map(str::trim).filter(|f| !f.is_empty()).map(expand_home).collect();
+        }
+
         // Unknown keys are reported rather than ignored. A misspelled setting
         // that silently does nothing is a bad afternoon.
         if let Some(unknown) = settings.keys().next() {
@@ -292,7 +315,16 @@ impl Config {
              \n\
              # Whether the desktop says when a file is sent here, when one you\n\
              # sent is collected, and when something fails: `on` or `off`.\n\
-             notifications = {}\n",
+             notifications = {}\n\
+             \n\
+             # How fast files may go to and come from other devices, a second:\n\
+             # 0 for no limit, or a size, as for limit: 2M is 2 MiB a second.\n\
+             upload-limit = {}\n\
+             download-limit = {}\n\
+             \n\
+             # Folders of this computer, outside this one, backed up to the\n\
+             # devices that keep its own files (`qurb holders`), separated by ;\n\
+             backup-folders = {}\n",
             self.signal,
             self.name,
             self.port,
@@ -300,6 +332,9 @@ impl Config {
             self.downloads.as_setting(),
             if self.own_files_private { "private" } else { "shared" },
             if self.notifications { "on" } else { "off" },
+            human_size(self.upload_limit),
+            human_size(self.download_limit),
+            self.backup_folders.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join("; "),
         );
         std::fs::write(Self::path(store_dir), text)
             .with_context(|| format!("writing {}", Self::path(store_dir).display()))
@@ -380,6 +415,9 @@ mod tests {
             downloads: Downloads::At("/srv/incoming".into()),
             own_files_private: true,
             notifications: false,
+            upload_limit: 2 << 20,
+            download_limit: 0,
+            backup_folders: vec!["/home/someone/Pictures".into(), "/srv/work files".into()],
         };
         config.save(dir.path()).unwrap();
 
@@ -392,6 +430,8 @@ mod tests {
         assert_eq!(loaded.downloads, config.downloads);
         assert_eq!(loaded.own_files_private, config.own_files_private);
         assert_eq!(loaded.notifications, config.notifications);
+        assert_eq!((loaded.upload_limit, loaded.download_limit), (config.upload_limit, config.download_limit));
+        assert_eq!(loaded.backup_folders, config.backup_folders);
     }
 
     #[test]

@@ -1638,7 +1638,10 @@ network. iOS needs Xcode, which needs a Mac. See
 | Security | in Settings: how the key is kept and changing it, under This device; pairings and removals, under Devices; this device's identity, under Advanced |
 | One qurb per person | closing the window keeps it syncing; launching again shows the running one |
 | Pictures, small | `preview` with `small` and `backed_up_preview` answer a camera's JPEG with the thumbnail it carries in its EXIF block, read from the file's first 128 KB (`exif_thumbnail`), for a gallery; used by the redesign only so far |
-| Gallery and quick preview | a folder mostly of pictures, the phone's camera folder included, as a grid of the pictures' own thumbnails; Space shows the picture or text under the pointer, large, the arrow keys moving through the folder |
+| Gallery and quick preview | a folder mostly of pictures, the phone's camera folder included, as a grid of the pictures' own thumbnails; Space shows the picture, text, video, song or PDF under the pointer, large, the arrow keys moving through the folder. Video, songs and PDFs are served to the window from 127.0.0.1 at a token (`peek`, `peek_kept`, `src/stream.rs`, which serves files on disk as well as from the store) |
+| Search | one field over the shared folder, the Vault, and every person's folder open at the time (`find_people`); a locked one is not searched, and said so |
+| Speed limit | one rate up, one down, for the whole process (`qurb_peer::limit`), settings `upload-limit` and `download-limit`, applied at once from the window ([0076](decisions/0076-a-computer-backs-up-its-folders-and-holds-back-its-speed.md)) |
+| A computer's own folders, backed up | folders outside the synced one kept in this computer's vault under `.qurb-outside/folders/`, read where they lie (`qurb_cli::backup`, setting `backup-folders`), and so kept by the computers chosen to keep its vault; shown on those in the owner's folder ([0076](decisions/0076-a-computer-backs-up-its-folders-and-holds-back-its-speed.md)) |
 
 ### Designed but not built
 

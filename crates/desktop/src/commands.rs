@@ -227,6 +227,10 @@ pub struct Settings {
     /// keeps it in its Google backup (decision 0053).
     key_also_on: Vec<String>,
     phone_holds_key: bool,
+    /// How fast files may go to and come from other devices, bytes a
+    /// second, as strings like every other size; "0" for no limit.
+    upload_limit: String,
+    download_limit: String,
     /// This computer's picture, as its paired devices are shown it: a
     /// `data:` address, or none.
     picture: Option<String>,
@@ -525,6 +529,8 @@ pub fn settings(hosted: Host<'_>) -> Answer<Settings> {
         notifications: config.notifications,
         key_also_on,
         phone_holds_key,
+        upload_limit: config.upload_limit.to_string(),
+        download_limit: config.download_limit.to_string(),
         picture: picture.as_deref().map(picture_address),
     })
 }
@@ -1481,6 +1487,54 @@ fn base64(bytes: &[u8]) -> String {
     out
 }
 
+/// Where quick preview shows a video, a song or a PDF from (the redesign's
+/// item 11): an address on this computer only, at a token nobody else knows.
+#[derive(Serialize)]
+pub struct Peek {
+    /// "video", "audio" or "pdf".
+    kind: &'static str,
+    url: String,
+}
+
+/// What quick preview plays or shows, by name: the kinds the window's own
+/// player and PDF viewer take.
+fn peek_type(name: &str) -> Option<(&'static str, &'static str)> {
+    if name.to_ascii_lowercase().ends_with(".pdf") {
+        return Some(("pdf", "application/pdf"));
+    }
+    let kind = crate::stream::media_type(name)?;
+    Some((if kind.starts_with("video/") { "video" } else { "audio" }, kind))
+}
+
+/// A video, song or PDF of this computer's folder, for quick preview.
+#[tauri::command(async)]
+pub fn peek(hosted: Host<'_>, path: String) -> Answer<Peek> {
+    let file = on_disk(&hosted, &path)?;
+    let (kind, mime) = peek_type(&path).ok_or("quick preview shows pictures, text, video, songs and PDFs")?;
+    Ok(Peek { kind, url: crate::stream::serve_disk(&file, mime).map_err(failed)? })
+}
+
+/// The same, for a file of one of the owner's phones kept here, while their
+/// folder is open: served from the store, with no copy anywhere.
+#[tauri::command(async)]
+pub fn peek_kept(hosted: Host<'_>, device: String, path: String) -> Answer<Peek> {
+    let id = person_of(&hosted, OWNER)?;
+    let (kind, mime) = peek_type(&path).ok_or("quick preview shows pictures, text, video, songs and PDFs")?;
+    qurb_peer::openings::key(&id).ok_or("the folder is locked")?;
+    let phone = own_phone(&hosted, &device)?;
+    if !qurb_sync::is_safe_path(&path) {
+        return Err("that is not a file of the folder".to_string());
+    }
+    let row = hosted
+        .with_store(|store| Ok(store.db().live_row_in(&path, Some(&phone.id))?))
+        .map_err(failed)?
+        .ok_or("that file is not in the folder")?;
+    let name = std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+    let (dir, key) = hosted.with_store(|store| Ok((store.root().to_path_buf(), store.chunk_key()))).map_err(failed)?;
+    let url = crate::stream::serve(&dir, key, id, &row.content_hash, &name, mime).map_err(failed)?;
+    Ok(Peek { kind, url })
+}
+
 /// Open a file with the program the desktop uses for it.
 #[tauri::command(async)]
 pub fn open_file(hosted: Host<'_>, path: String) -> Answer<()> {
@@ -1598,63 +1652,6 @@ pub fn choose_phone_folder(hosted: Host<'_>, phone: String, folder: String, chos
             Ok(db.choose_folder(&device.id, &folder, chosen)?)
         })
         .map_err(failed)
-}
-
-/// A file of a phone's backup kept here.
-#[derive(Serialize)]
-pub struct BackedUp {
-    /// From the folder: `IMG-1.jpg`, `2026/notes.pdf`.
-    path: String,
-    size: String,
-    modified_at: i64,
-}
-
-/// What this computer keeps of a phone's folder.
-#[tauri::command(async)]
-pub fn phone_backup(hosted: Host<'_>, phone: String, folder: String) -> Answer<Vec<BackedUp>> {
-    owner_folder_open(&hosted)?;
-    let device = own_phone(&hosted, &phone)?;
-    if !qurb_sync::is_safe_path(&folder) {
-        return Err("that is not a folder of the phone".to_string());
-    }
-    hosted
-        .with_store(|store| Ok(store.db().held_under(&device.id, &kept_prefix(&folder))?))
-        .map_err(failed)
-        .map(|files| {
-            files
-                .into_iter()
-                .map(|(path, size, mtime)| BackedUp { path, size: big(size), modified_at: mtime / 1_000_000_000 })
-                .collect()
-        })
-}
-
-/// Open a file of a phone's backup: written out where opened files go, under
-/// the runtime directory, which never reaches the disk on a systemd desktop.
-#[tauri::command(async)]
-pub fn open_backed_up(hosted: Host<'_>, phone: String, folder: String, path: String) -> Answer<()> {
-    owner_folder_open(&hosted)?;
-    let device = own_phone(&hosted, &phone)?;
-    if !qurb_sync::is_safe_path(&path) || !qurb_sync::is_safe_path(&folder) {
-        return Err("that is not a file of the backup".to_string());
-    }
-    let name = std::path::Path::new(&path).file_name().ok_or("that file has no name")?;
-    let dir = opened_dir(&device.id).join("backup");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(opened_dir(&device.id), std::fs::Permissions::from_mode(0o700));
-    }
-    let to = dir.join(name);
-    let kept = format!("{}/{path}", kept_prefix(&folder));
-    hosted
-        .with_store(|store| {
-            let mut out = std::fs::File::create(&to)?;
-            store.read_held_into(&device.id, &kept, &mut out)?;
-            Ok(())
-        })
-        .map_err(failed)?;
-    reveal(&to)
 }
 
 /// How much of a backed-up photo is read for its thumbnail: the start, where
@@ -1799,109 +1796,12 @@ fn thumbnail_in(tiff: &[u8]) -> Option<&[u8]> {
 
 // ------------------------------------------------- a guest's folder, opened
 
-/// A guest's folder at this computer (decision 0060, step 5): "locked",
-/// "asking" while its phone has not answered, or "open", with its files.
-#[derive(Serialize)]
-pub struct GuestFolder {
-    state: &'static str,
-    files: Vec<GuestFile>,
-}
-
-#[derive(Serialize)]
-pub struct GuestFile {
-    path: String,
-    size: String,
-    modified_at: i64,
-}
-
-/// The person a guest device belongs to: whose folder this computer keeps.
-fn guest_person(hosted: &Host<'_>, guest: &str) -> Result<qurb_sync::DeviceId, String> {
-    let device = recipient(hosted, guest)?;
-    if device.relation != qurb_storage::db::Relation::Guest {
-        return Err(format!("{} is not a guest of this computer", device.name));
-    }
-    hosted
-        .with_store(|store| Ok(store.db().person_of(&device.id)?.unwrap_or(device.id)))
-        .map_err(failed)
-}
-
 /// Where files opened from a guest's folder are unsealed: under the runtime
 /// directory, which is memory-backed on a systemd desktop, so they never
 /// reach the disk, and removed when the folder is locked.
 fn opened_dir(person: &qurb_sync::DeviceId) -> std::path::PathBuf {
     let base = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
     base.join("qurb-open").join(person.short())
-}
-
-/// How a guest's folder stands here, and, with `list`, its files while it is
-/// open. Without `list` it is only a look: it reads nothing and does not count
-/// as using the folder, so a window left watching it lets it lock itself.
-#[tauri::command(async)]
-pub fn guest_folder(hosted: Host<'_>, guest: String, list: bool) -> Answer<GuestFolder> {
-    let person = guest_person(&hosted, &guest)?;
-    if !qurb_peer::openings::is_open(&person) {
-        // Locked, by hand or by idling: what was opened from it goes too.
-        let _ = std::fs::remove_dir_all(opened_dir(&person));
-        let state = if qurb_peer::openings::asking(&person).is_some() { "asking" } else { "locked" };
-        return Ok(GuestFolder { state, files: Vec::new() });
-    }
-    if !list {
-        return Ok(GuestFolder { state: "open", files: Vec::new() });
-    }
-    let key = qurb_peer::openings::key(&person).ok_or("the folder has just locked itself")?;
-    let key = qurb_storage::sealed::FolderKey::from_bytes(key);
-    let files = hosted.with_store(|store| Ok(store.open_kept(&person, &key)?)).map_err(failed)?;
-    Ok(GuestFolder {
-        state: "open",
-        files: files
-            .into_iter()
-            .map(|f| GuestFile { path: f.path, size: big(f.size), modified_at: f.modified_at })
-            .collect(),
-    })
-}
-
-/// Ask the guest's phone to open its folder here. Its person approves on the
-/// phone, behind their screen lock, at its next sync with this computer.
-#[tauri::command(async)]
-pub fn ask_guest_folder(hosted: Host<'_>, guest: String) -> Answer<()> {
-    let person = guest_person(&hosted, &guest)?;
-    qurb_peer::openings::ask(&person);
-    hosted.nudge();
-    Ok(())
-}
-
-/// Open one file of an open guest folder, unsealed into memory-backed space,
-/// with the program the desktop uses for it.
-#[tauri::command(async)]
-pub fn open_guest_file(hosted: Host<'_>, guest: String, path: String) -> Answer<()> {
-    let person = guest_person(&hosted, &guest)?;
-    let key = qurb_peer::openings::key(&person).ok_or("the folder is locked")?;
-    let key = qurb_storage::sealed::FolderKey::from_bytes(key);
-    let sealed = hosted
-        .with_store(|store| Ok(store.kept_file(&person, &key, &path)?))
-        .map_err(failed)?
-        .ok_or("that file is not in the folder")?;
-    let name = std::path::Path::new(&path).file_name().ok_or("that file has no name")?;
-    let dir = opened_dir(&person).join(&sealed.to_hex().as_str()[..12]);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(opened_dir(&person), std::fs::Permissions::from_mode(0o700));
-    }
-    let to = dir.join(name);
-    hosted.with_store(|store| Ok(store.unseal_kept(&key, &sealed, &path, &to)?)).map_err(failed)?;
-    reveal(&to)
-}
-
-/// Lock a guest's folder here: the key is forgotten, and what was opened
-/// from it removed.
-#[tauri::command(async)]
-pub fn lock_guest_folder(hosted: Host<'_>, guest: String) -> Answer<()> {
-    let person = guest_person(&hosted, &guest)?;
-    qurb_peer::openings::lock(&person);
-    let _ = std::fs::remove_dir_all(opened_dir(&person));
-    Ok(())
 }
 
 // ---------------------------------------------- a folder for each person
@@ -1987,9 +1887,13 @@ fn owner_name() -> String {
 /// folder shows: one set up again keeps its own folder, as *earlier*.
 fn owner_phones(hosted: &Hosted) -> Result<Vec<(String, qurb_cli::Device)>, String> {
     let devices = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)).map_err(failed)?;
+    // The owner's phones, and any of their computers this one keeps files
+    // for: a computer backing up its own folders here (the owner's list of
+    // 2026-10-28) is shown as a phone's backups are.
     let phones: Vec<qurb_cli::Device> = devices
         .into_iter()
-        .filter(|d| d.relation == qurb_storage::db::Relation::Own && d.kind.as_deref() == Some("phone"))
+        .filter(|d| d.relation == qurb_storage::db::Relation::Own)
+        .filter(|d| d.kind.as_deref() == Some("phone") || d.held.is_some())
         .filter(|d| d.held.is_some() || d.replaced_by.is_none())
         .collect();
     // Phones in use first, then what was kept for them before, as the phone
@@ -2176,6 +2080,68 @@ pub fn person_folder(hosted: Host<'_>, person: String, dir: String) -> Answer<Pe
     Ok(PersonFolder { state, folders: folders.into_iter().collect(), files })
 }
 
+/// A file found in a person's folder: whose, and where in it.
+#[derive(Serialize)]
+pub struct FoundKept {
+    /// The person, as `person_folder` takes them.
+    person: String,
+    #[serde(flatten)]
+    file: PersonFile,
+}
+
+/// The most files a search of people's folders answers with.
+const FOUND_MOST: usize = 500;
+
+/// Search every person's folder that is open now -- the owner's phones'
+/// backups, a guest's sealed folder while they have opened it -- for files
+/// whose place holds `text`, ignoring case. A locked folder is not searched:
+/// its names are as much its own as its files.
+#[tauri::command(async)]
+pub fn find_people(hosted: Host<'_>, text: String) -> Answer<Vec<FoundKept>> {
+    let needle = text.trim().to_lowercase();
+    let mut found = Vec::new();
+    if needle.is_empty() {
+        return Ok(found);
+    }
+    for person in everyone(&hosted)? {
+        let id = person_of(&hosted, &person.id)?;
+        let Some(key) = qurb_peer::openings::key(&id) else { continue };
+        if person.id == OWNER {
+            let phones = owner_phones(&hosted)?;
+            let named: Vec<(String, qurb_sync::DeviceId)> = phones.iter().map(|(name, d)| (name.clone(), d.id)).collect();
+            let shown = hosted
+                .with_store(|store| Ok(qurb_storage::person::search(store.db(), &named, &needle, FOUND_MOST)?))
+                .map_err(failed)?;
+            found.extend(shown.into_iter().map(|f| FoundKept {
+                person: OWNER.to_string(),
+                file: PersonFile {
+                    name: f.name,
+                    path: f.path,
+                    device: phones.iter().find(|(_, d)| d.id == f.owner).map(|(_, d)| d.fingerprint.clone()),
+                    size: big(f.size),
+                    modified_at: f.modified_at,
+                },
+            }));
+        } else {
+            let key = qurb_storage::sealed::FolderKey::from_bytes(key);
+            let kept = hosted.with_store(|store| Ok(store.open_kept(&id, &key)?)).map_err(failed)?;
+            found.extend(kept.into_iter().filter(|f| f.path.to_lowercase().contains(&needle)).map(|f| FoundKept {
+                person: person.id.clone(),
+                file: PersonFile {
+                    name: f.path.clone(),
+                    path: f.path,
+                    device: None,
+                    size: big(f.size),
+                    modified_at: f.modified_at,
+                },
+            }));
+        }
+    }
+    found.sort_by_key(|f| std::cmp::Reverse(f.file.modified_at));
+    found.truncate(FOUND_MOST);
+    Ok(found)
+}
+
 /// Ask the person's phone to open their folder here. They approve on it,
 /// behind its screen lock, at its next sync with this computer.
 #[tauri::command(async)]
@@ -2270,7 +2236,7 @@ fn free_space(dir: &std::path::Path) -> u64 {
     qurb_cli::disk::available(dir)
 }
 
-/// A guest's file, unsealed: as [`open_guest_file`] does.
+/// A guest's file, unsealed into memory-backed space, and opened.
 fn open_sealed(hosted: &Host<'_>, person: &qurb_sync::DeviceId, key: [u8; 32], path: &str) -> Answer<()> {
     let key = qurb_storage::sealed::FolderKey::from_bytes(key);
     let sealed = hosted
@@ -2816,6 +2782,124 @@ pub fn set_limit(hosted: Host<'_>, bytes: String) -> Answer<()> {
     let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
     config.limit = bytes;
     config.save(&dir).map_err(failed)
+}
+
+/// This computer's own folders, backed up to its other computers (the
+/// owner's list of 2026-10-28; `qurb_cli::backup`): each folder, what of it
+/// is kept in this computer's vault so far, and the computers that may keep
+/// that vault, each on or off.
+#[derive(Serialize)]
+pub struct Backups {
+    folders: Vec<BackedUpFolder>,
+    keepers: Vec<Keeper>,
+}
+
+#[derive(Serialize)]
+pub struct BackedUpFolder {
+    /// The name it is kept under.
+    name: String,
+    /// Where it is on this computer.
+    path: String,
+    /// Files of it kept so far, and their size.
+    files: u64,
+    size: String,
+    /// Why it is not backed up, if it is not: gone, or inside the synced
+    /// folder.
+    refused: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct Keeper {
+    fingerprint: String,
+    name: String,
+    /// It keeps this computer's own files now.
+    on: bool,
+    online: bool,
+}
+
+#[tauri::command(async)]
+pub fn backups(hosted: Host<'_>) -> Answer<Backups> {
+    let root = hosted.root();
+    let config = qurb_cli::Config::load(&qurb_cli::store_dir(&root)).map_err(failed)?;
+    let mut folders = Vec::new();
+    for (name, path) in qurb_cli::backup::named(&config.backup_folders) {
+        let prefix = format!("{}/{name}", qurb_cli::backup::prefix());
+        let kept = hosted.with_store(|store| Ok(store.db().outside_under(&prefix)?)).map_err(failed)?;
+        folders.push(BackedUpFolder {
+            name,
+            refused: qurb_cli::backup::refused(&path, &root),
+            path: path.display().to_string(),
+            files: kept.len() as u64,
+            size: big(kept.iter().map(|r| r.size).sum()),
+        });
+    }
+    let holders = hosted.with_store(|store| Ok(store.db().holders()?)).map_err(failed)?;
+    let devices = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)).map_err(failed)?;
+    let links = hosted.status().map(|s| s.links).unwrap_or_default();
+    let keepers = devices
+        .into_iter()
+        .filter(|d| d.relation == qurb_storage::db::Relation::Own && d.replaced_by.is_none() && d.kind.as_deref() != Some("phone"))
+        .map(|d| Keeper {
+            on: holders.contains(&d.id),
+            online: links.iter().any(|l| l.fingerprint == d.fingerprint),
+            fingerprint: d.fingerprint,
+            name: d.name,
+        })
+        .collect();
+    Ok(Backups { folders, keepers })
+}
+
+/// The folders to back up, as chosen: refused if one cannot be.
+#[tauri::command(async)]
+pub fn set_backup_folders(hosted: Host<'_>, folders: Vec<String>) -> Answer<()> {
+    let root = hosted.root();
+    let folders: Vec<std::path::PathBuf> = folders.iter().map(std::path::PathBuf::from).collect();
+    for folder in &folders {
+        if let Some(why) = qurb_cli::backup::refused(folder, &root) {
+            return Err(why);
+        }
+    }
+    let dir = qurb_cli::store_dir(&root);
+    let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
+    config.backup_folders = folders;
+    config.save(&dir).map_err(failed)?;
+    hosted.sync_now();
+    Ok(())
+}
+
+/// Whether one of this person's computers keeps this one's own files -- its
+/// Vault and its backed-up folders (`qurb holders`).
+#[tauri::command(async)]
+pub fn set_keeper(hosted: Host<'_>, device: String, on: bool) -> Answer<()> {
+    let device = recipient(&hosted, &device)?;
+    hosted
+        .with_store(|store| {
+            match on {
+                true => store.db().add_holder(&device.id)?,
+                false => {
+                    store.db().remove_holder(&device.id)?;
+                }
+            }
+            Ok(())
+        })
+        .map_err(failed)?;
+    hosted.sync_now();
+    Ok(())
+}
+
+/// How fast files may go to and come from other devices, in bytes a second,
+/// "0" for no limit: saved, and applied at once, since the daemon runs here.
+#[tauri::command(async)]
+pub fn set_bandwidth(hosted: Host<'_>, up: String, down: String) -> Answer<()> {
+    let rate = |r: &str| r.parse::<u64>().map_err(|_| "that is not a number of bytes".to_string());
+    let (up, down) = (rate(&up)?, rate(&down)?);
+    let dir = qurb_cli::store_dir(&hosted.root());
+    let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
+    config.upload_limit = up;
+    config.download_limit = down;
+    config.save(&dir).map_err(failed)?;
+    qurb_peer::limit::set(up, down);
+    Ok(())
 }
 
 /// A `SystemTime` as unix seconds, or nothing if the clock says it is before

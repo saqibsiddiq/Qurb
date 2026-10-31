@@ -19,11 +19,11 @@ fn page() -> String {
     [
         include_str!("../ui/theme.js"),
         include_str!("../ui/core.js"),
-        include_str!("../ui/setup.js"),
         include_str!("../ui/home.js"),
-        include_str!("../ui/files.js"),
         include_str!("../ui/devices.js"),
+        include_str!("../ui/files.js"),
         include_str!("../ui/settings.js"),
+        include_str!("../ui/setup.js"),
         include_str!("../ui/app.js"),
     ]
     .concat()
@@ -42,7 +42,7 @@ fn every_script_the_page_loads_is_read() {
         .collect();
     assert_eq!(
         loaded,
-        ["theme.js", "core.js", "setup.js", "home.js", "files.js", "devices.js", "settings.js", "app.js"],
+        ["theme.js", "core.js", "home.js", "devices.js", "files.js", "settings.js", "setup.js", "app.js"],
         "index.html loads a different set of scripts from the one this test reads"
     );
 }

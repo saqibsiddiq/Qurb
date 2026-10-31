@@ -8,6 +8,7 @@
 //! Neither owns the daemon; both run the same one.
 
 pub mod awake;
+pub mod backup;
 pub mod config;
 pub mod daemon;
 pub mod disk;

@@ -328,6 +328,7 @@ impl PeerClient {
                 break;
             }
             hasher.update(&piece[..filled]);
+            crate::limit::spend(crate::limit::Way::Up, filled).await;
             match self.request(Request::Upload { id, offset, bytes: piece[..filled].to_vec() }).await? {
                 Response::Noted => {}
                 Response::Refused { why } => return Ok(Err(why)),
@@ -362,7 +363,10 @@ impl PeerClient {
 
     pub async fn chunk(&self, hash: [u8; 32]) -> Result<Option<Vec<u8>>> {
         match self.request(Request::Chunk { hash }).await? {
-            Response::Chunk(bytes) => Ok(Some(bytes)),
+            Response::Chunk(bytes) => {
+                crate::limit::spend(crate::limit::Way::Down, bytes.len()).await;
+                Ok(Some(bytes))
+            }
             Response::NotFound => Ok(None),
             other => Err(unexpected("chunk", &other)),
         }

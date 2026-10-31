@@ -21,6 +21,8 @@ const PLACES = {
   storage: { draw: drawStorage, parent: "settings" },
   key: { draw: drawKey, parent: "settings" },
   advanced: { draw: drawAdvanced, parent: "settings" },
+  speed: { draw: drawSpeed, parent: "settings" },
+  backup: { draw: drawBackup, lists: listsBackup, parent: "settings" },
   activity: { draw: drawActivity, parent: "settings" },
 };
 

@@ -107,7 +107,10 @@ function kindOf(name) {
 const KIND_ICON = { image: "file-image", video: "file-video", audio: "file-audio", text: "file-text", archive: "file-archive", code: "file-code", file: "file" };
 const fileIcon = (name) => KIND_ICON[kindOf(name)];
 /** Whether the window can show it itself: pictures, and text it can read. */
-const peekable = (name) => kindOf(name) === "image" || /\.(txt|md|csv|json|toml|ya?ml|log|rs|js|py|sh|html|css)$/i.test(name);
+const peekable = (name) => kindOf(name) === "image" || /\.(txt|md|csv|json|toml|ya?ml|log|rs|js|py|sh|html|css)$/i.test(name) || played(name);
+/** What quick preview plays or shows from an address rather than reading:
+ * video, songs, PDFs. */
+const played = (name) => /\.(mp4|m4v|webm|mkv|mov|mp3|m4a|aac|ogg|oga|opus|flac|wav|pdf)$/i.test(name);
 
 /** A tile: an icon in a soft rounded square, as on the phone. */
 const tile = (name, cls = "") => h("span", { class: `tile ${cls}`.trim() }, icon(name));

@@ -258,6 +258,54 @@ async fn a_folder_kept_where_it_lies_is_held_by_the_desktop() {
     assert_eq!(on_desktop(&desktop, &newer).unwrap(), newer);
 }
 
+/// A computer backing up a folder of its own to another computer (the
+/// owner's list of 2026-10-28): what a phone does, done by a computer whose
+/// new files are shared, not private. Kept by the other, never shown there,
+/// and a file deleted from the folder still kept.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_computers_own_folder_is_kept_by_the_computer_it_names() {
+    let mut laptop = Device::new();
+    let mut desktop = Device::new();
+    introduce(&laptop, &desktop);
+    laptop.engine.store().db().add_holder(&desktop.id()).unwrap();
+    laptop.engine.store().db().set_outside_offered(true).unwrap();
+
+    let pictures = laptop._dir.path().join("Pictures");
+    let entry = |relative: &str, bytes: &[u8]| {
+        let path = pictures.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, bytes).unwrap();
+        qurb_storage::OutsideEntry {
+            path: relative.to_string(),
+            source: path.to_string_lossy().into_owned(),
+            size: bytes.len() as u64,
+            mtime_ns: 1,
+        }
+    };
+    let holiday: Vec<u8> = (0..500_000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 11) as u8).collect();
+    let scan: Vec<u8> = (0..70_000u32).map(|i| (i.wrapping_mul(48_271) >> 5) as u8).collect();
+    let listing = [entry("2026/holiday.jpg", &holiday), entry("scan.pdf", &scan)];
+    let prefix = ".qurb-outside/folders/Pictures";
+    let report = laptop.engine.store_mut().keep_outside_folder(prefix, &listing, &|_| true, None, &|_| false).unwrap();
+    assert_eq!(report.added, 2);
+    laptop.engine.reconcile().unwrap();
+
+    let held = desktop.sync_from(&laptop).await;
+    assert_eq!(held.held, 2, "{held:?}");
+    assert_eq!(laptop.engine.store().usage().unwrap().chunks, 0, "the laptop stored a copy");
+    assert_eq!(desktop.engine.store().read_content(&blake3::hash(&holiday)).unwrap().unwrap(), holiday);
+    assert!(!desktop.root.join(".qurb-outside").exists(), "shown on the desktop");
+
+    // Deleted from the folder: kept, since the desktop holds it.
+    fs::remove_file(pictures.join("scan.pdf")).unwrap();
+    let report = laptop.engine.store_mut().keep_outside_folder(prefix, &listing[..1], &|_| true, None, &|_| false).unwrap();
+    assert_eq!((report.kept, report.deleted), (1, 0));
+    desktop.sync_from(&laptop).await;
+    let laptop_id = laptop.id();
+    assert!(desktop.engine.store().db().live_row_in(&format!("{prefix}/scan.pdf"), Some(&laptop_id)).unwrap().is_some());
+    assert_eq!(desktop.engine.store().read_content(&blake3::hash(&scan)).unwrap().unwrap(), scan);
+}
+
 /// Not a test: how long the desktop takes to collect many small files of a
 /// folder kept where it lies, over a connection on this machine.
 /// `cargo test --release -p qurb-peer --test holding timing -- --ignored --nocapture`

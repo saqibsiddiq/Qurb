@@ -31,6 +31,8 @@ pub fn shown_as(path: &str) -> Option<String> {
         Some(rest) => match rest.split_once('/') {
             Some(("whatsapp", rest)) => Some(format!("WhatsApp/{rest}")),
             Some(("storage", rest)) => Some(rest.to_string()),
+            // A computer's own folders, backed up here (`qurb_cli::backup`).
+            Some(("folders", rest)) => Some(rest.to_string()),
             _ => None,
         },
         None => Some(format!("Private Vault/{path}")),
@@ -123,6 +125,7 @@ mod tests {
     #[test]
     fn kept_paths_show_where_a_person_looks_for_them() {
         assert_eq!(shown_as(".qurb-outside/whatsapp/Media/a.jpg").as_deref(), Some("WhatsApp/Media/a.jpg"));
+        assert_eq!(shown_as(".qurb-outside/folders/Pictures/a.jpg").as_deref(), Some("Pictures/a.jpg"));
         assert_eq!(shown_as(".qurb-outside/storage/DCIM/Screenshots/b.png").as_deref(), Some("DCIM/Screenshots/b.png"));
         assert_eq!(shown_as("Notes/c.md").as_deref(), Some("Private Vault/Notes/c.md"));
         assert_eq!(shown_as(".qurb-outside/other/d"), None);

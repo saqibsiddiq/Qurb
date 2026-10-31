@@ -245,7 +245,7 @@ def go(window, place, arg=None):
 # Every place that opens with nothing chosen first: the sidebar's three, and
 # the pages reached from them.
 PLACES = ["home", "files", "settings", "storage", "key", "advanced", "activity",
-          "received", "deleted", "conflicts", "waiting", "add"]
+          "received", "deleted", "conflicts", "waiting", "add", "speed", "backup"]
 
 
 def every_place(window):
@@ -328,6 +328,89 @@ def home(window):
     time.sleep(1)
 
 
+def call_js(window, command, args):
+    """Call a command the way the page does, and wait for its answer."""
+    window.js("""window.__answer = undefined;
+        invoke(arguments[0], arguments[1]).then(r => { window.__answer = {ok: r === undefined ? null : r} },
+                                                e => { window.__answer = {error: String(e)} });""", command, args)
+    answer = window.until(f"{command} to answer", "return window.__answer")
+    assert "error" not in answer, f"{command}: {answer['error']}"
+    return answer["ok"]
+
+
+def new_features(window, device):
+    """The four built after the redesign (2026-10-31): the speed limit, this
+    computer's folders backed up to another, search in people's folders,
+    and quick preview of a video served to the window."""
+    # The speed limit, chosen on its page, and read back as saved.
+    go(window, "speed")
+    window.until("the rates", "return document.querySelectorAll('.speed .amount').length === 10")
+    window.js("document.querySelectorAll('.speed')[0].querySelectorAll('.amount')[2].click()")
+    window.until("the upload limit saved",
+        "return document.querySelectorAll('.speed')[0].querySelectorAll('.amount')[2].classList.contains('on')")
+    settings = call_js(window, "settings", {})
+    assert settings["upload_limit"] == "5000000", settings["upload_limit"]
+    call_js(window, "set_bandwidth", {"up": "0", "down": "0"})
+
+    # A folder of this computer, backed up, kept by the paired device: read
+    # into the vault by the daemon on its next pass, which choosing it asks for.
+    pictures = os.path.join(HOME, "Pictures")
+    os.makedirs(os.path.join(pictures, "2026"), exist_ok=True)
+    for name, size in (("2026/holiday.jpg", 300_000), ("scan.pdf", 20_000)):
+        with open(os.path.join(pictures, name), "wb") as f:
+            f.write(os.urandom(size))
+    call_js(window, "set_backup_folders", {"folders": [pictures]})
+    keepers = call_js(window, "backups", {})["keepers"]
+    assert [k["name"] for k in keepers] == [device], keepers
+    call_js(window, "set_keeper", {"device": keepers[0]["fingerprint"], "on": True})
+    go(window, "backup")
+    window.until("the folder read into the vault",
+        "return (BACKUPS?.folders ?? []).some(f => f.files === 2) || (listsBackup(), false)", timeout=60)
+    assert call_js(window, "backups", {})["keepers"][0]["on"]
+    inside = os.path.join(HOME, "qurb", "inside")
+    os.makedirs(inside, exist_ok=True)
+    window.js("""window.__answer = undefined;
+        invoke('set_backup_folders', {folders: [arguments[0]]}).then(() => window.__answer = 'taken', e => window.__answer = String(e));""",
+        inside)
+    said = window.until("a folder inside the synced one refused", "return window.__answer")
+    assert said != "taken", "a folder inside the synced one was taken"
+
+    # Search in people's folders: none is open, so none is searched.
+    assert call_js(window, "find_people", {"text": "holiday"}) == []
+
+    # Quick preview of a video in the synced folder: an address on this
+    # machine, which answers a range as a player asks for one.
+    clip = os.urandom(150_000)
+    with open(os.path.join(HOME, "qurb", "clip.mp4"), "wb") as f:
+        f.write(clip)
+    window.until("the clip in the index",
+        "return window.__TAURI__.core.invoke('find', {text: 'clip', private: false}).then(r => window.__found = r.length), window.__found",
+        timeout=30)
+    peeked = call_js(window, "peek", {"path": "clip.mp4"})
+    assert peeked["kind"] == "video" and peeked["url"].startswith("http://127.0.0.1:"), peeked
+    request = urllib.request.Request(peeked["url"], headers={"Range": "bytes=1000-1999"})
+    with urllib.request.urlopen(request, timeout=10) as answer:
+        assert answer.status == 206 and answer.read() == clip[1000:2000], "the range served is not the file's"
+
+    # And the window itself plays from such an address -- its content policy
+    # lets it, and WebKit takes it: a real clip, the website's, opened in
+    # quick preview as a person would, until the player knows its length.
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "website/public/media/waves.mp4"), "rb") as f:
+        waves = f.read()
+    with open(os.path.join(HOME, "qurb", "waves.mp4"), "wb") as f:
+        f.write(waves)
+    window.until("the clip in the index",
+        "return window.__TAURI__.core.invoke('find', {text: 'waves', private: false}).then(r => window.__waves = r.length), window.__waves",
+        timeout=30)
+    window.js("FILES.shown = [sharedItem({path: 'waves.mp4', availability: 'here', size: '0', modified: 0, private: false})]; peek(0)")
+    played = window.until("the clip playing in quick preview",
+        "const v = document.querySelector('.peek video');"
+        " return v && (v.error ? 'error ' + v.error.code : v.readyState >= 1 && v.duration > 0 && String(v.duration))", timeout=30)
+    assert not str(played).startswith("error"), f"the window could not play the clip: {played}"
+    window.js("document.querySelector('.peek .icon-btn[aria-label=Close]').click()")
+
+
 def remove(window, device):
     """Remove the paired device from its page, and see it gone.
 
@@ -348,7 +431,10 @@ def remove(window, device):
 
 
 # Failures a step causes on purpose, and so not a reason to fail the run.
-EXPECTED = ("unlock: that passphrase does not open this key",)
+EXPECTED = (
+    r"^unlock: that passphrase does not open this key$",
+    r"^set_backup_folders: .*/qurb/inside overlaps your QurbSpace folder",
+)
 
 # Failures from windows already closed: starting again opens a new page, and
 # its list starts empty.
@@ -427,7 +513,7 @@ def main():
         window.close()
         # Printed on the way out of a failed step too: which command failed,
         # and with what, is usually the reason the step did not finish.
-        failures = [f for f in EARLIER + failures if f not in EXPECTED]
+        failures = [f for f in EARLIER + failures if not any(re.search(e, f) for e in EXPECTED)]
         if failures:
             print("commands that failed:", *failures, sep="\n  ")
 
@@ -452,6 +538,8 @@ def run_through(window):
     print(f"sent a file to {device}")
     home(window)
     print("Home lists it as waiting, and the mark syncs when clicked")
+    new_features(window, device)
+    print("set a speed limit; backed a folder up, kept by", device, "; searched people's folders; previewed a video by its address, and played it in the window")
     remove(window, device)
     print(f"removed {device}, and its waiting send with it")
     # The wrong passphrase is a command that fails on purpose.

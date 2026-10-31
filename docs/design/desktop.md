@@ -82,10 +82,14 @@ his review.
     — of rows with a value, a switch or an arrow; this computer's circle and
     name at the top; Storage, Key, Activity and Advanced as pages; Quit in
     red at the end.
-11. **The new features.** The gallery and quick preview (Space, arrows,
-    Escape) are built; search covers the shared folder and the Vault. Not
-    built: the bandwidth limit and the computer backing up its own folders,
-    which need the engine first.
+11. **The new features.** The gallery; quick preview (Space, arrows,
+    Escape) of pictures, text, video, songs and PDFs; search over the shared
+    folder, the Vault and every open person's folder; a **speed limit** in
+    Settings, Connection — chips for each way, None to 25 MB/s; and **Back
+    up folders** in Settings, This computer — the folders, *Add a folder*,
+    and *Kept on*, a switch per other computer
+    ([0076](../decisions/0076-a-computer-backs-up-its-folders-and-holds-back-its-speed.md)).
+    Storage gained *Only on this computer*, where component 5 put it.
 12. **Two versions on Home.** When a file has two versions the mark says so
     in amber, and clicking it opens them instead of syncing; *Something needs
     attention* opens Activity. This extends component 2.
@@ -100,6 +104,9 @@ then swapped in as `ui/` at the owner's word, before his review of 6 to 12.
 through all of it — set up, every place, pairing by six digits, a send,
 removing a device, a passphrase and unlocking; joining by code; following
 the desktop's dark preference — with no command failing (2026-10-31, on
-this laptop, Broadway display). Not built: the bandwidth
-limit, the computer backing up its own folders, quick preview of PDFs and
-video, search inside people's folders and phones' backups.
+this laptop, Broadway display). The four features left then were built the
+same day and added to that run: a speed limit set and read back, a folder
+backed up and kept by the paired device, people's folders searched, a video
+played in quick preview from its local address. **A PDF in quick preview
+has not been seen** in the real window: WebKitGTK 2.54 carries a PDF
+viewer, and whether it shows one inside the window's frame is untested.

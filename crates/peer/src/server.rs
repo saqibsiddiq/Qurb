@@ -344,6 +344,10 @@ async fn serve_request(
 ) -> Result<()> {
     let raw = recv.read_to_end(MAX_MESSAGE).await?;
     let request = Request::decode(&raw)?;
+    // Part of a file pushed here: held to this device's download rate.
+    if let Request::Upload { bytes, .. } = &request {
+        crate::limit::spend(crate::limit::Way::Down, bytes.len()).await;
+    }
 
     // Handled here rather than in `answer`, because it is the one request that
     // waits: holding the store's lock while doing so would stop this device
@@ -420,6 +424,11 @@ async fn serve_request(
         | Response::Refused { .. }
         | Response::Placed { .. } => 0,
     };
+
+    // A chunk's bytes, held to this device's upload rate.
+    if let Response::Chunk(bytes) = &response {
+        crate::limit::spend(crate::limit::Way::Up, bytes.len()).await;
+    }
 
     match (&request, &response) {
         // In frames, so that a list larger than one message still goes

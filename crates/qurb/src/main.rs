@@ -1711,6 +1711,9 @@ fn configure(root: &Path, settings: &[String]) -> Result<()> {
             }
         );
         println!("own-files = {}", if config.own_files_private { "private" } else { "shared" });
+        let rate = |r: u64| if r == 0 { "none".to_string() } else { format!("{} a second", qurb_cli::config::human_size(r)) };
+        println!("upload-limit = {}", rate(config.upload_limit));
+        println!("download-limit = {}", rate(config.download_limit));
         println!(
             "downloads = {}",
             match config.downloads.resolve(root) {
@@ -1740,6 +1743,8 @@ fn configure(root: &Path, settings: &[String]) -> Result<()> {
             "name" => config.name = value.trim().to_string(),
             "port" => config.port = value.trim().parse().context("port should be a number")?,
             "limit" => config.limit = qurb_cli::config::parse_size(value)?,
+            "upload-limit" => config.upload_limit = qurb_cli::config::parse_size(value)?,
+            "download-limit" => config.download_limit = qurb_cli::config::parse_size(value)?,
             "own-files" => {
                 config.own_files_private = match value.trim() {
                     "private" => true,

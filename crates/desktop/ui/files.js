@@ -79,19 +79,52 @@ function card(ic, name, sub, onclick) {
 
 /** Search: the shared folder and the Vault at once. */
 async function drawFound(body, text) {
-  let shared, vault;
+  let shared, vault, kept;
   try {
-    [shared, vault] = await Promise.all([invoke("find", { text, private: false }), invoke("find", { text, private: true })]);
+    [shared, vault, kept] = await Promise.all([
+      invoke("find", { text, private: false }),
+      invoke("find", { text, private: true }),
+      // People's folders, those open now: a locked one is not searched.
+      invoke("find_people", { text }).catch(() => []),
+    ]);
   } catch (e) {
     put(body, oops(e));
     return;
   }
   if (text !== FILES.query) return;
   const found = [...shared, ...vault];
-  FILES.shown = found.map(sharedItem);
-  put(body, 
-    label(count(found.length, "result")),
-    found.length ? h("div", { class: "rows" }, ...found.map((f, i) => fileRow(f, i, true))) : empty("search", "Nothing by that name"));
+  const whose = (k) => FILES.people.find((p) => p.id === k.person)?.name ?? "Folder";
+  FILES.shown = [...found.map(sharedItem), ...kept.map((k) => personItem(k.person, k))];
+  const keptRows = kept.map((k, j) => {
+    const r = row({
+      ic: fileIcon(k.name), name: base(k.name),
+      sub: [size(k.size), folderOf(k.name) || whose(k)],
+      end: h("span", { class: "chip chip-quiet" }, whose(k)),
+      onclick: () => personItem(k.person, k).open().catch((e) => toast(String(e), true)),
+    });
+    hoverable(r, found.length + j);
+    return r;
+  });
+  const locked = FILES.people.filter((p) => p.state !== "open").length;
+  put(body,
+    label(count(found.length + kept.length, "result")),
+    found.length + kept.length
+      ? h("div", { class: "rows" }, ...found.map((f, i) => fileRow(f, i, true)), ...keptRows)
+      : empty("search", "Nothing by that name"),
+    locked ? h("p", { class: "note" }, locked === 1 ? "A locked folder isn't searched" : `${locked} locked folders aren't searched`) : null);
+}
+
+/** A file of a person's folder, as quick preview and the gallery see it. */
+function personItem(person, f) {
+  const own = person === "owner";
+  return {
+    name: base(f.name),
+    here: true,
+    small: () => (own ? invoke("backed_up_preview", { phone: f.device, path: f.path, small: true }) : Promise.resolve(null)),
+    large: () => (own ? invoke("backed_up_preview", { phone: f.device, path: f.path, small: false }) : Promise.resolve({ kind: "none" })),
+    media: own ? () => invoke("peek_kept", { device: f.device, path: f.path }) : null,
+    open: () => invoke("open_person_file", { person, device: f.device ?? null, path: f.path }),
+  };
 }
 
 // ---------- The shared folder and the Vault ----------
@@ -228,6 +261,7 @@ function sharedItem(f) {
     here: isHere(f),
     small: () => invoke("preview", { path: f.path, small: true }),
     large: () => invoke("preview", { path: f.path }),
+    media: () => invoke("peek", { path: f.path }),
     open: () => invoke("open_file", { path: f.path }),
     sheet: () => fileSheet(f),
   };
@@ -391,13 +425,7 @@ async function drawPerson(main) {
     try { await invoke("lock_person_folder", { person }); } catch (e) { toast(String(e), true); }
     inFiles(person);
   } }, icon("lock-keyhole"), "Lock"));
-  const item = (f) => ({
-    name: f.name,
-    here: true,
-    small: () => (own ? invoke("backed_up_preview", { phone: f.device, path: f.path, small: true }) : Promise.resolve(null)),
-    large: () => (own ? invoke("backed_up_preview", { phone: f.device, path: f.path, small: false }) : Promise.resolve({ kind: "none" })),
-    open: () => invoke("open_person_file", { person, device: f.device ?? null, path: f.path }),
-  });
+  const item = (f) => personItem(person, f);
   FILES.shown = answer.files.map(item);
   put(body, 
     answer.folders.length ? h("div", { class: "cards" }, ...answer.folders.map((name) => {
@@ -447,6 +475,14 @@ function peek(i) {
     if (!it.here) { stage.append(h("p", {}, "Not on this computer")); return; }
     if (!peekable(it.name)) return;
     try {
+      if (played(it.name)) {
+        if (!it.media) return;
+        const m = await it.media();
+        if (mine !== at) return;
+        put(stage, m.kind === "pdf" ? h("iframe", { class: "peek-pdf", src: m.url, title: it.name })
+          : h(m.kind, { src: m.url, controls: true, autoplay: true, class: `peek-${m.kind}` }));
+        return;
+      }
       const p = await it.large();
       if (mine !== at) return;
       if (p.kind === "image") put(stage, h("img", { src: p.data, alt: it.name }));
