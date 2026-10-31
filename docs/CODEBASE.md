@@ -891,6 +891,10 @@ qurb/
 │   │                        a script per place (core, setup, home, files,
 │   │                        devices, settings, app), icons.js (generated),
 │   │                        fonts/ (Inter, bundled)
+│   │   └── ui-next/         the window redesigned (design/desktop.md), on the
+│   │                        same commands, beside the one it will replace:
+│   │                        not shipped yet; looked at with the fixtures in
+│   │                        experiments/desktop-fixtures/next.html
 │   │
 │   └── tray/              An icon in the corner: the daemon with a face.
 │       ├── src/main.rs      the daemon, with an icon or a window to show
@@ -1091,6 +1095,7 @@ qurb/
 │   ├── android-test.sh    run the test suite on a device, over adb: arm64,
 │   │                      x86_64, or 32-bit x86 on an x86_64 emulator
 │   ├── desktop-icons.py   the Lucide icons the window uses, as a sprite
+│   ├── desktop-next-icons.py the phone's icons, for the redesigned window
 │   ├── desktop-smoke.sh   drive the real desktop window end to end, on a
 │   │                      display of its own (with desktop_smoke.py)
 │   ├── smoke_portal.py    a stand-in desktop settings portal, for the
@@ -1637,6 +1642,8 @@ network. iOS needs Xcode, which needs a Mac. See
 | Who has each folder | a folder's options, from its menu in Files: share it with chosen devices; free its space here or keep it on this computer |
 | Security | in Settings: how the key is kept and changing it, under This device; pairings and removals, under Devices; this device's identity, under Advanced |
 | One qurb per person | closing the window keeps it syncing; launching again shows the running one |
+| Pictures, small | `preview` with `small` and `backed_up_preview` answer a camera's JPEG with the thumbnail it carries in its EXIF block, read from the file's first 128 KB (`exif_thumbnail`), for a gallery; used by the redesign only so far |
+| The redesign | `ui-next/`, every place of the window above rebuilt in the phone's and the website's language ([design/desktop.md](design/desktop.md)); not yet the window that ships |
 
 ### Designed but not built
 

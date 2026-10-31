@@ -1419,20 +1419,23 @@ const PREVIEW_IMAGE_MAX: u64 = 6 << 20;
 /// or a list usually differ enough to tell them apart.
 const PREVIEW_TEXT_BYTES: usize = 2048;
 
+///
+/// With `small`, for a gallery, a camera's JPEG is answered with the
+/// thumbnail it carries, read from the file's first bytes, when it has one.
 #[tauri::command(async)]
-pub fn preview(hosted: Host<'_>, path: String) -> Answer<Preview> {
+pub fn preview(hosted: Host<'_>, path: String, small: Option<bool>) -> Answer<Preview> {
     let none = Preview { kind: "none", data: String::new() };
     let Ok(file) = on_disk(&hosted, &path) else { return Ok(none) };
     let ext = path.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
-    let image = match ext.as_str() {
-        "jpg" | "jpeg" => Some("image/jpeg"),
-        "png" => Some("image/png"),
-        "gif" => Some("image/gif"),
-        "webp" => Some("image/webp"),
-        "bmp" => Some("image/bmp"),
-        _ => None,
-    };
-    if let Some(mime) = image {
+    if small == Some(true) && matches!(ext.as_str(), "jpg" | "jpeg") {
+        use std::io::Read as _;
+        let mut start = Vec::with_capacity(THUMBNAIL_FROM);
+        let read = std::fs::File::open(&file).and_then(|f| f.take(THUMBNAIL_FROM as u64).read_to_end(&mut start));
+        if let Some(thumb) = read.ok().and_then(|_| exif_thumbnail(&start)) {
+            return Ok(Preview { kind: "image", data: format!("data:image/jpeg;base64,{}", base64(thumb)) });
+        }
+    }
+    if let Some(mime) = image_type(&ext) {
         let small = std::fs::metadata(&file).map(|m| m.len() <= PREVIEW_IMAGE_MAX).unwrap_or(false);
         return Ok(match small.then(|| std::fs::read(&file).ok()).flatten() {
             Some(bytes) => Preview { kind: "image", data: format!("data:{mime};base64,{}", base64(&bytes)) },
@@ -1652,6 +1655,146 @@ pub fn open_backed_up(hosted: Host<'_>, phone: String, folder: String, path: Str
         })
         .map_err(failed)?;
     reveal(&to)
+}
+
+/// How much of a backed-up photo is read for its thumbnail: the start, where
+/// a camera's JPEG carries one of its own (the EXIF thumbnail, inside the
+/// first 64 KB by that standard's rule).
+const THUMBNAIL_FROM: usize = 128 << 10;
+
+/// A picture of one photo a phone backs up here, from the owner's folder as
+/// `person_folder` lists it (`path` as it gives it). `small` for the gallery
+/// (the redesign's item 11): the thumbnail a camera embeds in its JPEG, a few
+/// kilobytes, so a page of photos crosses to the window in less than one
+/// photo would. Otherwise, or for a picture with none -- a screenshot, say --
+/// the picture itself, if it is small enough to preview at all.
+#[tauri::command(async)]
+pub fn backed_up_preview(hosted: Host<'_>, phone: String, path: String, small: bool) -> Answer<Preview> {
+    let none = Preview { kind: "none", data: String::new() };
+    owner_folder_open(&hosted)?;
+    let device = own_phone(&hosted, &phone)?;
+    if !qurb_sync::is_safe_path(&path) {
+        return Err("that is not a file of the folder".to_string());
+    }
+    let ext = path.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    let Some(mime) = image_type(&ext) else { return Ok(none) };
+    let read = |limit: usize| {
+        let mut start = Start { bytes: Vec::new(), limit };
+        // Stopped on purpose once `limit` is read: the error that stops it is
+        // ours, and what was read is what was wanted.
+        let whole = hosted.with_store(|store| Ok(store.read_held_into(&device.id, &path, &mut start)?)).is_ok();
+        (start.bytes, whole)
+    };
+    let (start, whole) = read(THUMBNAIL_FROM);
+    if small {
+        if let Some(thumb) = exif_thumbnail(&start) {
+            return Ok(Preview { kind: "image", data: format!("data:image/jpeg;base64,{}", base64(thumb)) });
+        }
+    }
+    let bytes = if whole { start } else {
+        let (all, whole) = read(PREVIEW_IMAGE_MAX as usize + 1);
+        if !whole || all.len() > PREVIEW_IMAGE_MAX as usize { return Ok(none) }
+        all
+    };
+    if bytes.is_empty() {
+        return Ok(none);
+    }
+    Ok(Preview { kind: "image", data: format!("data:{mime};base64,{}", base64(&bytes)) })
+}
+
+/// The image types a webview shows, by extension.
+fn image_type(ext: &str) -> Option<&'static str> {
+    match ext {
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "gif" => Some("image/gif"),
+        "webp" => Some("image/webp"),
+        "bmp" => Some("image/bmp"),
+        _ => None,
+    }
+}
+
+/// The start of a file, up to a limit, and then a stop: a write that fails
+/// is how the reader is told no more is wanted.
+struct Start {
+    bytes: Vec<u8>,
+    limit: usize,
+}
+
+impl std::io::Write for Start {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let room = self.limit - self.bytes.len();
+        if room == 0 {
+            return Err(std::io::Error::other("read as far as wanted"));
+        }
+        let n = buf.len().min(room);
+        self.bytes.extend_from_slice(&buf[..n]);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// The thumbnail a JPEG carries in its EXIF block, if it has one: IFD1's
+/// JPEGInterchangeFormat and its length, inside the APP1 segment.
+fn exif_thumbnail(jpeg: &[u8]) -> Option<&[u8]> {
+    if jpeg.get(..2)? != [0xFF, 0xD8] {
+        return None;
+    }
+    let mut at = 2;
+    while at + 4 <= jpeg.len() {
+        if jpeg[at] != 0xFF {
+            return None;
+        }
+        let marker = jpeg[at + 1];
+        // The image itself begins: there was no EXIF block before it.
+        if marker == 0xDA || marker == 0xD9 {
+            return None;
+        }
+        let len = u16::from_be_bytes([jpeg[at + 2], jpeg[at + 3]]) as usize;
+        let body = jpeg.get(at + 4..at + 2 + len)?;
+        if marker == 0xE1 && body.starts_with(b"Exif\0\0") {
+            return thumbnail_in(&body[6..]);
+        }
+        at += 2 + len;
+    }
+    None
+}
+
+/// IFD1's thumbnail in a TIFF block, either byte order.
+fn thumbnail_in(tiff: &[u8]) -> Option<&[u8]> {
+    let little = match tiff.get(..2)? {
+        b"II" => true,
+        b"MM" => false,
+        _ => return None,
+    };
+    let u16_at = |i: usize| -> Option<usize> {
+        let b: [u8; 2] = tiff.get(i..i + 2)?.try_into().ok()?;
+        Some(if little { u16::from_le_bytes(b) } else { u16::from_be_bytes(b) } as usize)
+    };
+    let u32_at = |i: usize| -> Option<usize> {
+        let b: [u8; 4] = tiff.get(i..i + 4)?.try_into().ok()?;
+        Some(if little { u32::from_le_bytes(b) } else { u32::from_be_bytes(b) } as usize)
+    };
+    let ifd0 = u32_at(4)?;
+    let ifd1 = u32_at(ifd0 + 2 + u16_at(ifd0)? * 12)?;
+    if ifd1 == 0 {
+        return None;
+    }
+    let (mut offset, mut length) = (None, None);
+    for e in 0..u16_at(ifd1)? {
+        let entry = ifd1 + 2 + e * 12;
+        match u16_at(entry)? {
+            0x0201 => offset = Some(u32_at(entry + 8)?),
+            0x0202 => length = Some(u32_at(entry + 8)?),
+            _ => {}
+        }
+    }
+    let (offset, length) = (offset?, length?);
+    let thumb = tiff.get(offset..offset.checked_add(length)?)?;
+    thumb.starts_with(&[0xFF, 0xD8]).then_some(thumb)
 }
 
 // ------------------------------------------------- a guest's folder, opened
@@ -2696,6 +2839,42 @@ mod tests {
             assert_eq!(base64(plain.as_bytes()), encoded, "{plain:?}");
         }
         assert_eq!(base64(&[0xff, 0xfe, 0xfd]), "//79");
+    }
+
+    /// A JPEG as a camera writes one: an APP1 EXIF block whose IFD1 points at
+    /// a thumbnail, in either byte order; and one with no thumbnail.
+    #[test]
+    fn a_cameras_thumbnail_is_found_in_its_exif() {
+        let thumb = [0xFF, 0xD8, 0xFF, 0xD9];
+        for little in [true, false] {
+            let w16 = |v: u16| if little { v.to_le_bytes() } else { v.to_be_bytes() };
+            let w32 = |v: u32| if little { v.to_le_bytes() } else { v.to_be_bytes() };
+            let mut tiff = Vec::new();
+            tiff.extend_from_slice(if little { b"II" } else { b"MM" });
+            tiff.extend_from_slice(&w16(42));
+            tiff.extend_from_slice(&w32(8)); // IFD0 at 8
+            tiff.extend_from_slice(&w16(0)); // IFD0: no entries
+            tiff.extend_from_slice(&w32(14)); // IFD1 at 14
+            tiff.extend_from_slice(&w16(2)); // IFD1: two entries
+            for (tag, value) in [(0x0201u16, 44u32), (0x0202, thumb.len() as u32)] {
+                tiff.extend_from_slice(&w16(tag));
+                tiff.extend_from_slice(&w16(4));
+                tiff.extend_from_slice(&w32(1));
+                tiff.extend_from_slice(&w32(value));
+            }
+            tiff.extend_from_slice(&w32(0)); // no IFD2
+            assert_eq!(tiff.len(), 44);
+            tiff.extend_from_slice(&thumb);
+
+            let mut jpeg = vec![0xFF, 0xD8, 0xFF, 0xE1];
+            jpeg.extend_from_slice(&((tiff.len() + 8) as u16).to_be_bytes());
+            jpeg.extend_from_slice(b"Exif\0\0");
+            jpeg.extend_from_slice(&tiff);
+            jpeg.extend_from_slice(&[0xFF, 0xDA, 0, 2]);
+            assert_eq!(exif_thumbnail(&jpeg), Some(&thumb[..]), "little endian: {little}");
+        }
+        assert_eq!(exif_thumbnail(&[0xFF, 0xD8, 0xFF, 0xDA, 0, 2]), None);
+        assert_eq!(exif_thumbnail(b"not a jpeg"), None);
     }
 
     fn detail(path: &std::path::Path) -> String {

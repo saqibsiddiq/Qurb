@@ -143,6 +143,7 @@ fn run() -> Result<()> {
             commands::choose_phone_folder,
             commands::phone_backup,
             commands::open_backed_up,
+            commands::backed_up_preview,
             commands::lock_guest_folder,
             commands::people,
             commands::person_folder,

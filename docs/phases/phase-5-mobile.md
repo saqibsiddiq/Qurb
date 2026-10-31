@@ -2840,6 +2840,52 @@ Not built yet: the desktop, and a new folder in the phone's folder on a
 computer
 ([0073](../decisions/0073-the-phone-works-with-its-computer.md), *Progress*).
 
+## The desktop window redesigned, every place, 2026-10-31
+
+The owner agreed the redesigned window's first five components one at a
+time ([design/desktop.md](../design/desktop.md)), then asked for the rest to
+be built at once, keeping every function the old window has, and to review
+the design afterwards. Built in `crates/desktop/ui-next/`, on the same engine
+commands, beside the window it will replace:
+
+- **Files**: one search over the shared folder and the Vault; This computer's
+  places as cards two to a row — Shared, Vault, Received, Recently deleted —
+  and a folder for each person, opened with their phone's yes; folders as
+  cards, files as rows with an icon for where their bytes are; a folder that
+  is mostly pictures as a **gallery**; a file's sheet of round buttons
+  (preview, open, show, keep here, send, free up, to the Vault or back,
+  delete) and the devices that hold it; a top folder's options (who has it,
+  kept here or not) from a right click; **quick preview** with Space, the
+  arrow keys moving through the folder.
+- **Two versions** side by side with previews; **Received**; **Recently
+  deleted**, restore or delete for good with a second press.
+- **Through Home's circle**: a device's page (what it backs up here, what
+  waits for it, its earlier self, details folded away, *Remove* with what that
+  does said first); a phone's folders to back up, as switches; adding a
+  device — show a code, enter one, add a person — with the approval by
+  number; the full Waiting list.
+- **Settings**, as the phone groups them, with Storage (the limit on a
+  square-law track), the key (how it is kept, the 24 words, pairings),
+  Advanced and Activity as its pages.
+- **Setting up and unlocking**, a step at a time over the whole window.
+- Sending asks first about a file sent there before (decision 0059), which
+  Home's Send did not yet.
+
+One engine addition, for the gallery: `backed_up_preview`, and `small` on
+`preview`, answer a camera's JPEG with the thumbnail it embeds in its EXIF
+block, read from the first 128 KB of the file, rather than the whole photo
+(`exif_thumbnail`, tested in both byte orders). How large those thumbnails
+are on the owner's phone, and how fast a gallery of a few thousand fills,
+**has not been measured**: the gallery has only been seen with the fixtures'
+drawn pictures.
+
+Looked at in the fixtures page in light and dark. **Not run in the real
+window yet**, and not shipped: `tauri.conf.json` still serves `ui/`. Not
+built: a **bandwidth limit** and **the computer backing up its own folders
+to another computer**, which the owner asked for and which need engine work
+first; quick preview shows pictures and text only, not PDFs or video; search
+does not reach people's folders or a phone's backups.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

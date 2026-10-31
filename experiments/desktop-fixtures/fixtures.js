@@ -25,7 +25,7 @@ const params = new URLSearchParams(location.search);
 const STATE = params.get("state") ?? "synced";
 const QUIET = params.has("quiet") || STATE === "synced";
 
-const FILES = [
+const FIXTURE_FILES = [
   { path: "Notes.md", size: "1840", modified: now - 120, availability: "here", private: false },
   { path: "Project Plan.pdf", size: "2400000", modified: now - 300, availability: "here", private: false },
   { path: "Photos/cat.png", size: "250112", modified: now - 4000, availability: "here", private: false },
@@ -38,7 +38,30 @@ const FILES = [
   { path: "Lost with an old phone.jpg", size: "2100000", modified: now - 900000, availability: "nowhere", private: false },
   { path: "Passport scan.pdf", size: "1200000", modified: now - 400000, availability: "here", private: true },
   { path: "Tax/2025 return.pdf", size: "640000", modified: now - 800000, availability: "only here", private: true },
+  // A camera's folder, for the gallery.
+  ...Array.from({ length: 18 }, (_, i) => ({
+    path: `Camera/IMG_2026${String(i).padStart(4, "0")}.jpg`, size: String(2_400_000 + i * 51_000),
+    modified: now - i * 5400, availability: i % 7 === 6 ? "elsewhere" : "here", private: false,
+  })),
 ];
+
+/** A made-up photo: a sky, a sun and the ground, in a colour of its own. */
+function photo(path, w = 320, h = 240) {
+  let hash = 0;
+  for (const ch of path) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const hue = hash % 360;
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  const sky = g.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, `hsl(${hue} 60% 70%)`);
+  sky.addColorStop(1, `hsl(${(hue + 40) % 360} 70% 88%)`);
+  g.fillStyle = sky; g.fillRect(0, 0, w, h);
+  g.fillStyle = `hsl(${(hue + 180) % 360} 70% 92%)`;
+  g.beginPath(); g.arc(w * (0.2 + (hash % 60) / 100), h * 0.35, h * 0.12, 0, 7); g.fill();
+  g.fillStyle = `hsl(${(hue + 150) % 360} 35% 32%)`; g.fillRect(0, h * 0.72, w, h * 0.28);
+  return c.toDataURL("image/jpeg", 0.8);
+}
 
 // Flip this to see the setting-up screens instead of the running window.
 const SETTING_UP = params.has("setup");
@@ -62,7 +85,7 @@ function browse({ dir, private: priv }) {
   const prefix = dir ? `${dir}/` : "";
   const folders = new Set();
   const files = [];
-  for (const f of FILES.filter((x) => x.private === priv && x.path.startsWith(prefix))) {
+  for (const f of FIXTURE_FILES.filter((x) => x.private === priv && x.path.startsWith(prefix))) {
     const rest = f.path.slice(prefix.length);
     if (rest.includes("/")) folders.add(rest.split("/")[0]);
     else files.push(f);
@@ -216,6 +239,7 @@ const ANSWERS = {
     modified_at: now - i * 3600,
   })),
   open_backed_up: () => null,
+  backed_up_preview: ({ path, small }) => (/\.jpe?g$/i.test(path) ? { kind: "image", data: small ? photo(path, 160, 120) : photo(path, 960, 720) } : { kind: "none", data: "" }),
   lock_guest_folder: () => { guestAskedAt = 0; return null; },
 
   // A file called tickets.pdf went to the device three days ago, so the
@@ -271,7 +295,7 @@ const ANSWERS = {
     disk: "494384795648",
     free_disk: "201326592000",
     over: false,
-    file_count: FILES.length,
+    file_count: FIXTURE_FILES.length,
     evicted: 3,
     only_here: 2,
   }),
@@ -294,10 +318,10 @@ const ANSWERS = {
     // One deliberate failure, to see what a rejected command looks like on
     // the screen rather than only in a console.
     if (text === "boom") throw new Error("the index could not be read");
-    return FILES.filter((f) => f.private === priv && f.path.toLowerCase().includes(text.toLowerCase()));
+    return FIXTURE_FILES.filter((f) => f.private === priv && f.path.toLowerCase().includes(text.toLowerCase()));
   },
   details: ({ path }) => {
-    const file = FILES.find((f) => f.path === path) ?? { path, size: "2400000", modified: now - 300, availability: "here", private: false };
+    const file = FIXTURE_FILES.find((f) => f.path === path) ?? { path, size: "2400000", modified: now - 300, availability: "here", private: false };
     return {
       file,
       holders: ["only here", "nowhere"].includes(file.availability) ? [] : ["Galaxy S23"],
@@ -308,7 +332,7 @@ const ANSWERS = {
     };
   },
   move_file_area: ({ path, private: into }) => {
-    const f = FILES.find((x) => x.path === path);
+    const f = FIXTURE_FILES.find((x) => x.path === path);
     if (!f || f.private === into) return false;
     f.private = into;
     return true;
@@ -316,16 +340,16 @@ const ANSWERS = {
   // No device keeps this computer's vault in the fixture: the warning shows.
   vault_keepers: () => [],
   free_file: ({ path }) => {
-    const f = FILES.find((x) => x.path === path);
+    const f = FIXTURE_FILES.find((x) => x.path === path);
     if (!f || f.availability === "only here") throw new Error(`cannot evict ${path}: no other device is known to hold this content`);
     f.availability = "elsewhere";
     return f.size;
   },
   freeable: () => {
-    const files = FILES.filter((f) => f.availability === "here").sort((a, b) => Number(b.size) - Number(a.size));
+    const files = FIXTURE_FILES.filter((f) => f.availability === "here").sort((a, b) => Number(b.size) - Number(a.size));
     return { count: files.length, bytes: String(files.reduce((n, f) => n + Number(f.size), 0)), files };
   },
-  delete_file: ({ path }) => { FILES.splice(FILES.findIndex((f) => f.path === path), 1); return null; },
+  delete_file: ({ path }) => { FIXTURE_FILES.splice(FIXTURE_FILES.findIndex((f) => f.path === path), 1); return null; },
   open_file: () => null,
   show_file: () => null,
   show_root: () => null,
@@ -393,8 +417,8 @@ const ANSWERS = {
         { name: "Passport.jpg", path: ".qurb-outside/storage/Documents/Passport.jpg", device: "a1b2c3d4", size: "1800000", modified_at: now - 86400 * 40 },
       ] },
     };
-    const at = tree[dir] ?? { folders: [], files: Array.from({ length: 6 }, (_, i) => ({
-      name: `IMG_2026${String(i).padStart(4, "0")}.jpg`, path: `x/${i}`, device: "a1b2c3d4", size: String(2_400_000 + i * 1000), modified_at: now - i * 3600,
+    const at = tree[dir] ?? { folders: [], files: Array.from({ length: dir.endsWith("Camera") ? 240 : 6 }, (_, i) => ({
+      name: `IMG_2026${String(i).padStart(4, "0")}.jpg`, path: `.qurb-outside/storage/${dir}/IMG_${i}.jpg`, device: "a1b2c3d4", size: String(2_400_000 + i * 1000), modified_at: now - i * 3600,
     })) };
     return { state, ...at };
   },
@@ -458,6 +482,7 @@ const ANSWERS = {
         ? "# Groceries\n\n- oat milk\n- lemons\n- coffee beans\n- bread (the seeded one)\n"
         : "# Groceries\n\n- oat milk\n- lemons\n- coffee\n- eggs\n- bread\n" };
     }
+    if (path.startsWith("Camera/")) return { kind: "image", data: photo(path) };
     if (path.endsWith(".jpg")) {
       const c = document.createElement("canvas");
       c.width = 320; c.height = 200;
@@ -539,7 +564,10 @@ window.__TAURI__ = {
 // walks the setting-up screens as far as the storage question; `&custom=75`
 // then types into its custom field; `&at=phrase` goes on to the 24 words.
 (() => {
+  let tries = 0;
   const ready = setInterval(async () => {
+    // The redesigned window has neither: it opens a place with `?place=`.
+    if (++tries > 100) clearInterval(ready);
     if (typeof lookAtFolder !== "function" || typeof showScreen !== "function") return;
     clearInterval(ready);
     const screen = params.get("screen");
