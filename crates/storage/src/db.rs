@@ -4491,6 +4491,31 @@ impl Db {
         )?)
     }
 
+    /// What this device keeps for any of `owners`, each content counted once:
+    /// how many files and bytes that is. Not [`held_for`](Self::held_for)
+    /// summed: one phone's WhatsApp backed up both as WhatsApp and inside a
+    /// chosen folder, and again for itself before it was set up again, is
+    /// stored once and was counted three times -- 41.6 GB listed for 26.8 GB
+    /// of content on the owner's laptop, 2026-10-31.
+    pub fn held_once(&self, owners: &[DeviceId]) -> Result<(u64, u64)> {
+        let (mut files, mut bytes) = (0u64, 0u64);
+        let mut seen = std::collections::HashSet::new();
+        let mut stmt = self.conn.prepare(
+            "SELECT content_hash, size FROM files WHERE scope = ?1 AND held = 1 AND deleted_at IS NULL",
+        )?;
+        for owner in owners {
+            let rows = stmt.query_map(params![owner.as_bytes().as_slice()], |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, i64>(1)?)))?;
+            for row in rows {
+                let (hash, size) = row?;
+                if seen.insert(hash) {
+                    files += 1;
+                    bytes += size as u64;
+                }
+            }
+        }
+        Ok((files, bytes))
+    }
+
     /// Every file this device keeps for `owner`, live, with its content: what
     /// a phone browsing its folder here may fetch (decision 0067, step 4).
     pub fn held_entries(&self, owner: &DeviceId) -> Result<Vec<(String, u64, i64, blake3::Hash)>> {
@@ -5426,6 +5451,31 @@ mod tests {
         let mut stmt = db.conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
         let rows = stmt.query_map([vec![0u8; 32]], |r| r.get::<_, String>(3)).unwrap();
         rows.map(|r| r.unwrap()).collect::<Vec<_>>().join(" | ")
+    }
+
+    /// What is kept for a phone counts each content once (2026-10-31): its
+    /// WhatsApp kept as WhatsApp and again inside its Android folder, and
+    /// again for itself before it was set up again, is one file.
+    #[test]
+    fn what_is_kept_counts_each_content_once() {
+        let db = Db::open_in_memory().unwrap();
+        let (phone, earlier) = (DeviceId::from_bytes([7; 32]), DeviceId::from_bytes([8; 32]));
+        let keep = |owner: &DeviceId, path: &str, content: u8, size: i64, held: bool| {
+            db.conn
+                .execute(
+                    "INSERT INTO files (path, size, content_hash, mtime_ns, created_at, updated_at, scope, held)
+                     VALUES (?1, ?2, ?3, 0, 0, 0, ?4, ?5)",
+                    params![path, size, vec![content; 32], owner.as_bytes().as_slice(), held as i64],
+                )
+                .unwrap();
+        };
+        keep(&phone, ".qurb-outside/whatsapp/Media/a.jpg", 1, 100, true);
+        keep(&phone, ".qurb-outside/storage/Android/media/com.whatsapp/WhatsApp/Media/a.jpg", 1, 100, true);
+        keep(&phone, ".qurb-outside/storage/DCIM/b.jpg", 2, 50, true);
+        keep(&earlier, ".qurb-outside/whatsapp/Media/a.jpg", 1, 100, true);
+        keep(&earlier, "notes.txt", 3, 7, false);
+        assert_eq!(db.held_for(&phone).unwrap(), (3, 250));
+        assert_eq!(db.held_once(&[phone, earlier]).unwrap(), (2, 150));
     }
 
     /// A phone set up again under another name (the owner's S23, 2026-10-31:

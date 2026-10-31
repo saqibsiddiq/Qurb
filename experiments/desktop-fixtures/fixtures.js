@@ -336,6 +336,7 @@ const ANSWERS = {
       { name: "Galaxy S23", whatsapp_files: 36055, whatsapp: "6200000000", folders_files: 97, folders: "61500000", vault_files: 214, vault: "1100000000" },
       { name: "Galaxy S23, earlier", whatsapp_files: 6637, whatsapp: "3700000000", folders_files: 0, folders: "0", vault_files: 0, vault: "0" },
     ],
+    phones_once: "9500000000",
     guests: [{ name: "Ammi's phone", size: "12582912" }],
     shared_files: 12,
     shared_here: "5400000000",

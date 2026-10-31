@@ -1139,6 +1139,9 @@ pub fn storage(hosted: Host<'_>) -> Answer<Storage> {
 #[derive(Serialize)]
 pub struct StorageParts {
     phones: Vec<PhoneParts>,
+    /// All the phones' backups, each content counted once: what they take
+    /// before compression, where the parts above may count a file twice.
+    phones_once: String,
     guests: Vec<GuestPart>,
     /// The shared folder: how many files, and how much of them is here.
     shared_files: usize,
@@ -1169,6 +1172,8 @@ pub struct GuestPart {
 #[tauri::command(async)]
 pub fn storage_parts(hosted: Host<'_>) -> Answer<StorageParts> {
     let phones = owner_phones(&hosted)?;
+    let ids: Vec<qurb_sync::DeviceId> = phones.iter().map(|(_, p)| p.id).collect();
+    let (_, phones_once) = hosted.with_store(|s| Ok(s.db().held_once(&ids)?)).map_err(failed)?;
     let mut parts = Vec::new();
     for (name, phone) in phones {
         let (all_files, all) = hosted.with_store(|s| Ok(s.db().held_for(&phone.id)?)).map_err(failed)?;
@@ -1201,6 +1206,7 @@ pub fn storage_parts(hosted: Host<'_>) -> Answer<StorageParts> {
     let deleted = hosted.with_store(|s| Ok(s.recently_deleted()?)).map_err(failed)?;
     Ok(StorageParts {
         phones: parts,
+        phones_once: big(phones_once),
         guests,
         shared_files: numbers.file_count,
         shared_here: big(numbers.files),
@@ -1973,10 +1979,9 @@ fn lay_out(hosted: &Hosted, people: &[Person]) {
 fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
     let owner = person_of(hosted, OWNER)?;
     let phones = owner_phones(hosted)?;
-    let (files, bytes) = phones.iter().fold((0, 0), |(f, b), (_, p)| {
-        let (pf, pb) = p.held.unwrap_or((0, 0));
-        (f + pf, b + pb)
-    });
+    // Each content once: the same file kept twice for a phone is stored once.
+    let ids: Vec<qurb_sync::DeviceId> = phones.iter().map(|(_, p)| p.id).collect();
+    let (files, bytes) = hosted.with_store(|store| Ok(store.db().held_once(&ids)?)).map_err(failed)?;
     let mut people = vec![Person {
         id: OWNER.to_string(),
         name: owner_name(),

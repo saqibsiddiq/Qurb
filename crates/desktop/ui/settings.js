@@ -155,7 +155,8 @@ async function drawStorage(main) {
   const limitBox = h("div", { class: "limit", hidden: limit === 0 }, track, amount,
     btn("Apply", async () => { await invoke("set_limit", { bytes: String(fromTrack(Number(track.value)) * GIB) }).catch((e) => toast(String(e), true)); go("storage"); }, "btn-main btn-sm"));
 
-  const phoneBytes = parts.phones.reduce((n, p) => n + Number(p.whatsapp) + Number(p.folders) + Number(p.vault), 0);
+  // Each file once: a phone's WhatsApp inside a backed-up folder is stored once.
+  const phoneBytes = Number(parts.phones_once ?? parts.phones.reduce((n, p) => n + Number(p.whatsapp) + Number(p.folders) + Number(p.vault), 0));
   const guestBytes = parts.guests.reduce((n, g) => n + Number(g.size), 0);
   put(body, 
     h("div", { class: "used" },

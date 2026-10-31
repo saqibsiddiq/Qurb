@@ -2936,6 +2936,23 @@ backups (`Db::earlier_selves`). Applied to the owner's laptop the same day:
 `qurb status` lists SM-S911B as set up again as skib phone. Tested in
 `view.rs` and `db.rs`; the smoke test passes.
 
+### 42 GB for under 20, 2026-10-31
+
+The owner: "why is saqib folder storing 42gb, when ive backedup under
+20gbs". Read from the laptop's index the same day: 41.6 GB listed for the
+S23, 26.8 GB of distinct content, 25 GB of chunks on disk (compressed, and
+including the shared folder's). Three causes. WhatsApp keeps its media in
+`Android/media/com.whatsapp/`, and **Android** was a chosen folder: 36,140
+of its 36,167 files (10.8 GB) are the WhatsApp backup's files again. The
+earlier pairing, SM-S911B, kept 6,631 WhatsApp files (3.5 GB), all also kept
+for skib phone, and counted again once the two were said to be one phone.
+Content is stored once, so neither took disk twice; the folder card summed
+each pairing's files and counted them all. It now counts each content once
+(`Db::held_once`), as does Storage. The 26.8 GB is real: WhatsApp 11.5, DCIM
+8.2, Download 5.8 (two games' installers and an episode), Movies 1.0,
+Pictures 0.3. Not changed: what the phone backs up, which is the owner's
+choice.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
