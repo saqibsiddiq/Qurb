@@ -70,6 +70,9 @@ pub struct Device {
     pub replaced_by: Option<DeviceId>,
     /// The device this one replaced, the other way round.
     pub earlier: Option<DeviceId>,
+    /// Which device the person said this one became, if they said: one set
+    /// up again under another name (`Db::set_same_device`).
+    pub said_same_as: Option<DeviceId>,
 }
 
 /// Mark each device that was set up again as the newer one it became.
@@ -79,19 +82,23 @@ pub struct Device {
 /// new identity, and the old one stays paired, with whatever was kept for it.
 /// Neither is forgotten; the newer stands for both, and says what the older
 /// left here. A device still seen after the newer was paired is a second
-/// device, not the same one again.
+/// device, not the same one again. Or the person said so, which the name
+/// cannot: a phone set up again under a new name (`Db::set_same_device`),
+/// as `Db::earlier_selves` decides it too.
 fn set_up_again(devices: &mut [Device]) {
     for newer in 0..devices.len() {
         for older in 0..devices.len() {
             let (n, o) = (&devices[newer], &devices[older]);
-            let same = newer != older
+            let both_own = newer != older
                 && n.relation == qurb_storage::db::Relation::Own
                 && o.relation == qurb_storage::db::Relation::Own
+                && o.paired_at < n.paired_at;
+            let by_name = o.said_same_as.is_none()
                 && n.name == o.name
                 && n.kind.is_some()
                 && n.kind == o.kind
-                && o.paired_at < n.paired_at
                 && o.last_seen.is_none_or(|seen| seen <= n.paired_at);
+            let same = both_own && (by_name || o.said_same_as == Some(n.id));
             // The latest earlier one, if it was set up again more than once.
             let later_than_known = devices[newer]
                 .earlier
@@ -226,6 +233,7 @@ impl<'a> View<'a> {
                     held: self.store.db().held_for(&p.device_id).ok().filter(|(files, _)| *files > 0),
                     replaced_by: None,
                     earlier: None,
+                    said_same_as: self.store.db().said_same_as(&p.device_id).ok().flatten(),
                 }
             })
             .collect::<Vec<_>>();
@@ -392,6 +400,7 @@ mod set_up_again_tests {
             held: None,
             replaced_by: None,
             earlier: None,
+            said_same_as: None,
         }
     }
 
@@ -426,5 +435,23 @@ mod set_up_again_tests {
         guest[1].relation = Relation::Guest;
         set_up_again(&mut guest);
         assert!(guest.iter().all(|d| d.replaced_by.is_none()), "a guest's phone stood for this person's");
+    }
+
+    /// The owner's S23 again, on 2026-10-31: first "SM-S911B", set up again
+    /// as "skib phone" -- a name the rule cannot match. One device once the
+    /// owner says so, and two again when they take it back.
+    #[test]
+    fn a_phone_renamed_is_one_device_when_the_person_says_so() {
+        let mut devices = vec![
+            device(1, "SM-S911B", 1_791_492_981, Some(1_791_980_000)),
+            device(2, "skib phone", 1_791_893_368, Some(1_792_000_000)),
+        ];
+        set_up_again(&mut devices);
+        assert!(devices.iter().all(|d| d.replaced_by.is_none()), "matched without being told");
+
+        devices[0].said_same_as = Some(devices[1].id);
+        set_up_again(&mut devices);
+        assert_eq!(devices[0].replaced_by, Some(devices[1].id));
+        assert_eq!(devices[1].earlier, Some(devices[0].id));
     }
 }

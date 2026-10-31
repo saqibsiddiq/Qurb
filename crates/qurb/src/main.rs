@@ -55,6 +55,9 @@ qurb — private cloud storage
   qurb forget [dir] <#n or path>      delete a recently deleted file for good, here
   qurb holders [dir] [add|remove <device>]
                                       the devices that keep this one's own files
+  qurb same [dir] <older device> <newer device>|--not
+                                      say a device was set up again under a new
+                                        name: listed as one from then on
   qurb remove-device [dir] <device> [--delete-kept] [--yes]
                                       stop trusting a paired device; says what
                                         that does first, and does it with --yes
@@ -275,6 +278,11 @@ fn run() -> Result<()> {
             // `qurb holders`, `qurb holders add phone`, or with the folder first.
             let (root, rest) = folder_first(&args)?;
             holders(&root, rest)
+        }
+        "same" => {
+            // `qurb same SM-S911B "skib phone"`, or `--not` to take it back.
+            let (root, rest) = folder_first(&args)?;
+            same(&root, rest)
         }
         "version" | "--version" | "-V" => {
             println!("{}", qurb_cli::version());
@@ -1288,6 +1296,40 @@ fn holders(root: &Path, rest: &[String]) -> Result<()> {
         }
         _ => bail!("qurb holders [dir] [add|remove <device>]"),
     }
+}
+
+/// Say that a device paired before is another, set up again under a new
+/// name (`Db::set_same_device`): listed as one from then on, the newer
+/// reaching what is kept for the older. `--not` takes it back.
+fn same(root: &Path, rest: &[String]) -> Result<()> {
+    let (_, _, store, _) = open(root)?;
+    let view = qurb_cli::View::new(&store, 0);
+    let named = |text: &str| -> Result<qurb_cli::Device> {
+        match view.device_named(text)? {
+            qurb_cli::Recipient::One(device) => Ok(*device),
+            _ => bail!("no single paired device called {text} — see `qurb status`"),
+        }
+    };
+    match rest {
+        [older, not] if not == "--not" => {
+            let older = named(older)?;
+            store.db().set_same_device(&older.id, None)?;
+            println!("{} is listed on its own again", older.name);
+        }
+        [older, newer] => {
+            let (older, newer) = (named(older)?, named(newer)?);
+            if older.relation != qurb_storage::db::Relation::Own || newer.relation != qurb_storage::db::Relation::Own {
+                bail!("only two of your own devices can be the same one");
+            }
+            if older.id == newer.id || older.paired_at >= newer.paired_at {
+                bail!("{} was paired after {}, so it cannot be what it became", older.name, newer.name);
+            }
+            store.db().set_same_device(&older.id, Some(&newer.id))?;
+            println!("{} is {} now, set up again: listed as one device", older.name, newer.name);
+        }
+        _ => bail!("qurb same [dir] <older device> <newer device>|--not"),
+    }
+    Ok(())
 }
 
 /// Say what removing a device does, then -- with `--yes` -- do it.

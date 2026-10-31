@@ -49,12 +49,27 @@ async function listsDevicePage() {
     rows.push(h("button", { class: "row", onclick: () => openGuest(d) }, tile("lock-keyhole"),
       h("span", { class: "row-main" }, h("b", {}, "Their folder"), h("small", {}, Number(d.kept ?? 0) > 0 ? `${size(d.kept)}, sealed` : "Nothing kept yet")), icon("chevron-right", "row-go")));
   }
-  // What it was before it was set up again (item 6), and a way to let it go.
+  // What it was before it was set up again (item 6), and a way to let it go
+  // -- or, when it is counted as this one only on the person's word, to take
+  // that back.
   const earlier = d.earlier ? all.find((e) => e.id === d.earlier) : null;
   if (earlier) {
     rows.push(h("div", { class: "row" }, tile("history"),
-      h("span", { class: "row-main" }, h("b", {}, "From before it was set up again"), h("small", {}, earlier.held ? `${count(earlier.held.files, "file")}, ${size(earlier.held.bytes)}` : "Nothing kept")),
+      h("span", { class: "row-main" }, h("b", {}, "From before it was set up again"),
+        h("small", {}, earlier.name !== d.name ? h("span", {}, earlier.name) : null, earlier.held ? `${count(earlier.held.files, "file")}, ${size(earlier.held.bytes)}` : "Nothing kept")),
+      earlier.said_same ? h("button", { class: "btn btn-quiet btn-sm", onclick: () => sameDevice(earlier, null) }, "Not the same") : null,
       h("button", { class: "btn btn-quiet btn-sm", onclick: () => askToRemove(earlier, `the earlier ${earlier.name}`) }, "Remove")));
+  }
+  // One of the person's devices paired after this one may be this one set up
+  // again under another name, which only they can say (2026-10-31: the S23,
+  // "SM-S911B" first, then "skib phone").
+  const later = d.relation === "own" && !d.replaced_by
+    ? all.filter((x) => x.relation === "own" && !x.replaced_by && x.id !== d.id && x.paired_at > d.paired_at)
+    : [];
+  if (later.length) {
+    rows.push(h("button", { class: "row", onclick: () => sameAs(d, later) }, tile("git-compare"),
+      h("span", { class: "row-main" }, h("b", {}, "The same as another device"), h("small", {}, "Set up again, under another name")),
+      icon("chevron-right", "row-go")));
   }
   const waiting = out.filter((o) => o.to_id === d.id);
   put(box, 
@@ -74,6 +89,25 @@ async function openGuest(d) {
   const p = people.find((x) => x.relation === "guest" && (x.devices ?? []).includes(d.name)) ?? people.find((x) => x.id.startsWith(d.fingerprint));
   if (p) inFiles(p.id);
   else toast("Nothing kept for them yet");
+}
+
+/** Which later device this one became: chosen, then counted as one. */
+function sameAs(d, later) {
+  const box = sheet({ ic: circle(d, "circle-lg"), title: `${d.name} is now…`, sub: "Listed as one device from then on" });
+  box.append(h("div", { class: "rows" }, ...later.map((x) => row({
+    ic: circle(x, "circle-md"), name: x.name, sub: x.route ? "Online" : `Seen ${ago(x.last_seen)}`,
+    onclick: () => { box.close(); sameDevice(d, x); },
+  }))));
+}
+
+async function sameDevice(older, newer) {
+  try {
+    await invoke("same_device", { older: older.fingerprint, newer: newer?.fingerprint ?? null });
+  } catch (e) { toast(String(e), true); return; }
+  toast(newer ? `${older.name} is ${newer.name} now` : `${older.name} is listed on its own again`);
+  await listsHome();
+  const fresh = HOME.devices.find((x) => x.fingerprint === (newer ?? older).fingerprint);
+  go("device", fresh ?? newer ?? older);
 }
 
 // ---------- A phone's folders (decision 0063) ----------

@@ -205,6 +205,7 @@ fn run() -> Result<()> {
             commands::fetch,
             commands::set_limit,
             commands::set_bandwidth,
+            commands::same_device,
             commands::backups,
             commands::set_backup_folders,
             commands::set_keeper,

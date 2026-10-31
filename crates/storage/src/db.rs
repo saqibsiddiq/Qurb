@@ -4512,11 +4512,27 @@ impl Db {
         Ok(out)
     }
 
+    /// The person's word that `older` is `newer` set up again, under another
+    /// name -- which the rule in [`earlier_selves`](Self::earlier_selves)
+    /// cannot see: on 2026-10-31 the owner's S23, first paired as
+    /// "SM-S911B", was set up again as "skib phone" and listed twice. `None`
+    /// takes the word back. Kept on this device only.
+    pub fn set_same_device(&self, older: &DeviceId, newer: Option<&DeviceId>) -> Result<()> {
+        self.set_local_fact(&format!("same_device:{}", older.to_hex()), &newer.map(|n| n.to_hex()).unwrap_or_default())
+    }
+
+    /// What the person said `older` became, if they said.
+    pub fn said_same_as(&self, older: &DeviceId) -> Result<Option<DeviceId>> {
+        Ok(self.local_fact(&format!("same_device:{}", older.to_hex()))?.as_deref().and_then(DeviceId::from_hex))
+    }
+
     /// This person's devices that `device` replaced: the same name and kind,
     /// paired before it and last seen by the time it was paired -- the same
     /// phone, its data cleared and set up again (the owner's item 6 of
-    /// 2026-10-14). What is kept for them is that phone's too, and it may
-    /// reach it from its folder (decision 0067).
+    /// 2026-10-14) -- or any of theirs paired before it that the person said
+    /// it is ([`set_same_device`](Self::set_same_device)). What is kept for
+    /// them is that phone's too, and it may reach it from its folder
+    /// (decision 0067).
     pub fn earlier_selves(&self, device: &DeviceId) -> Result<Vec<DeviceId>> {
         let peers = self.trusted_peers()?;
         let Some(me) = peers.iter().find(|p| p.device_id == *device) else { return Ok(Vec::new()) };
@@ -4526,13 +4542,15 @@ impl Db {
         }
         let mut earlier = Vec::new();
         for p in &peers {
-            if p.device_id != *device
-                && p.relation == Relation::Own
+            if p.device_id == *device || p.relation != Relation::Own || p.paired_at >= me.paired_at {
+                continue;
+            }
+            let said = self.said_same_as(&p.device_id)?;
+            let by_name = said.is_none()
                 && p.name == me.name
-                && p.paired_at < me.paired_at
                 && p.last_seen.is_none_or(|seen| seen <= me.paired_at)
-                && self.peer_kind(&p.device_id)? == kind
-            {
+                && self.peer_kind(&p.device_id)? == kind;
+            if by_name || said == Some(*device) {
                 earlier.push(p.device_id);
             }
         }
@@ -5408,6 +5426,29 @@ mod tests {
         let mut stmt = db.conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
         let rows = stmt.query_map([vec![0u8; 32]], |r| r.get::<_, String>(3)).unwrap();
         rows.map(|r| r.unwrap()).collect::<Vec<_>>().join(" | ")
+    }
+
+    /// A phone set up again under another name (the owner's S23, 2026-10-31:
+    /// "SM-S911B", then "skib phone") reaches what was kept for it before
+    /// once the person says the two are one, and not before or after.
+    #[test]
+    fn a_renamed_phone_is_its_earlier_self_when_the_person_says_so() {
+        let db = Db::open_in_memory().unwrap();
+        let (old, new) = (DeviceId::from_bytes([5; 32]), DeviceId::from_bytes([6; 32]));
+        db.trust_peer(&old, &[5; 32], "SM-S911B").unwrap();
+        db.trust_peer(&new, &[6; 32], "skib phone").unwrap();
+        for (device, paired, seen) in [(&old, 1_000, 2_000), (&new, 1_500, 3_000)] {
+            db.set_peer_kind(device, "phone").unwrap();
+            db.conn
+                .execute("UPDATE peers SET paired_at = ?2, last_seen = ?3 WHERE device_id = ?1", params![device.as_bytes().as_slice(), paired, seen])
+                .unwrap();
+        }
+        assert!(db.earlier_selves(&new).unwrap().is_empty(), "matched by nothing");
+        db.set_same_device(&old, Some(&new)).unwrap();
+        assert_eq!(db.earlier_selves(&new).unwrap(), vec![old]);
+        assert!(db.earlier_selves(&old).unwrap().is_empty(), "the older became the newer's earlier self");
+        db.set_same_device(&old, None).unwrap();
+        assert!(db.earlier_selves(&new).unwrap().is_empty(), "the word was not taken back");
     }
 
     /// A choice made on either side wins where it is the later one, an untick

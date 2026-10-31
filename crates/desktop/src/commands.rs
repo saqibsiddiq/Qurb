@@ -145,6 +145,10 @@ pub struct Device {
     picture: Option<String>,
     /// The device this one replaced, by id.
     earlier: Option<String>,
+    /// That it is counted as another of the person's devices set up again
+    /// because they said so, not by its name (`Db::set_same_device`): the
+    /// word can be taken back.
+    said_same: bool,
 }
 
 #[derive(Serialize)]
@@ -2332,6 +2336,7 @@ pub fn devices(hosted: Host<'_>) -> Answer<Vec<Device>> {
                 held: d.held.map(|(files, bytes)| WhatsAppKept { files, bytes: big(bytes) }),
                 replaced_by: d.replaced_by.map(|id| id.short()),
                 earlier: d.earlier.map(|id| id.short()),
+                said_same: d.said_same_as.is_some(),
             }
         })
         .collect())
@@ -2885,6 +2890,27 @@ pub fn set_keeper(hosted: Host<'_>, device: String, on: bool) -> Answer<()> {
         .map_err(failed)?;
     hosted.sync_now();
     Ok(())
+}
+
+/// The person's word that `older` -- a device of theirs paired before -- is
+/// `newer` set up again under another name: one device from then on, the
+/// newer standing for both and reaching what is kept for the older. `newer`
+/// absent takes the word back.
+#[tauri::command(async)]
+pub fn same_device(hosted: Host<'_>, older: String, newer: Option<String>) -> Answer<()> {
+    let older = recipient(&hosted, &older)?;
+    let newer = newer.map(|n| recipient(&hosted, &n)).transpose()?;
+    if let Some(newer) = &newer {
+        if older.relation != qurb_storage::db::Relation::Own || newer.relation != qurb_storage::db::Relation::Own {
+            return Err("only two of your own devices can be the same one".to_string());
+        }
+        if older.id == newer.id || older.paired_at >= newer.paired_at {
+            return Err(format!("{} was paired after {}, so it cannot be what it became", older.name, newer.name));
+        }
+    }
+    hosted
+        .with_store(|store| Ok(store.db().set_same_device(&older.id, newer.as_ref().map(|n| &n.id))?))
+        .map_err(failed)
 }
 
 /// How fast files may go to and come from other devices, in bytes a second,

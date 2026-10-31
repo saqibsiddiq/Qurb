@@ -2921,6 +2921,21 @@ and `not_elsewhere`, files only on this computer, which the agreed design
 put in Storage and which was missing there until then. 505 tests of the
 four crates touched pass, and all three smoke modes.
 
+### One phone, two names, 2026-10-31
+
+The owner: "sm-s911b and skib phone are the same devices". His S23 was
+paired first under its model name and set up again as *skib phone*, and the
+rule that lists a phone set up again as one (item 6 of 2026-10-14) matches
+by name, so it was listed twice. A rename cannot be told from a second phone
+by anything the computer sees, so the person says it: on the older's page,
+*The same as another device*, or `qurb same <older> <newer>`; `--not`, or
+*Not the same* on the newer's page, takes it back. Kept as a local fact on
+the computer, and honoured by both copies of the rule — the window's list
+(`view::set_up_again`) and what the phone may reach of its earlier self's
+backups (`Db::earlier_selves`). Applied to the owner's laptop the same day:
+`qurb status` lists SM-S911B as set up again as skib phone. Tested in
+`view.rs` and `db.rs`; the smoke test passes.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
