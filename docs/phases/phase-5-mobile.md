@@ -2879,9 +2879,17 @@ are on the owner's phone, and how fast a gallery of a few thousand fills,
 **has not been measured**: the gallery has only been seen with the fixtures'
 drawn pictures.
 
-Looked at in the fixtures page in light and dark. **Not run in the real
-window yet**, and not shipped: `tauri.conf.json` still serves `ui/`. Not
-built: a **bandwidth limit** and **the computer backing up its own folders
+Looked at in the fixtures page in light and dark, then, at the owner's
+word, swapped in for the old window (`ui-next/` became `ui/`, the old one
+deleted, the fixtures and the icon script following it) and installed on
+the laptop. `scripts/desktop-smoke.sh` was rewritten for the new window —
+buttons found by their words, places opened with its own `go` — and all
+three of its modes passed against the release build on 2026-10-31 with no
+command failing: set up, every place, paired by six digits, a send, the
+device removed, a passphrase set and unlocked; set up by joining; the
+desktop's dark preference followed. Installed, the window with its daemon
+took about 210 MB resident twenty seconds after starting, rescanning the
+owner's folder; not measured further. Not built: a **bandwidth limit** and **the computer backing up its own folders
 to another computer**, which the owner asked for and which need engine work
 first; quick preview shows pictures and text only, not PDFs or video; search
 does not reach people's folders or a phone's backups.

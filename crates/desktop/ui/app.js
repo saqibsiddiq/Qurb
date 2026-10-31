@@ -1,136 +1,103 @@
-// Which of the two the window is -- setting a device up, or showing one -- and
-// moving between places once it is showing one.
+// The window: three places, as on the phone — Home, Files, Settings — with
+// devices and people reached through Home's circle (docs/design/desktop.md).
 //
-// Two rhythms, because two kinds of thing change at different rates:
-//
-//   - the daemon's live state (syncing, devices reachable, what is moving) is
-//     polled often and cheaply, because it changes many times a second and
-//     only the latest value matters;
-//   - lists are fetched when their place is opened, and refreshed on a slower
-//     beat, because they change rarely and are expensive to redraw under
-//     somebody's cursor.
+// Two rhythms (decision 0032), and the lesson of 2026-10-28 kept: a beat is
+// skipped while the last one is still being answered, so slow answers can
+// never pile up and freeze the window.
 
-// The window opens on one of two things: setting a device up, or showing one.
-// Asked before anything is drawn, because the answer decides which.
-//
-// True until the answer is in, so the timers at the bottom draw nothing for a
-// device that may not exist: each of their commands refuses until it does.
-let settingUp = true;
+const PLACES = {
+  home: { draw: drawHome, live: liveHome, lists: listsHome },
+  device: { draw: drawDevicePage, lists: listsDevicePage, parent: "home" },
+  "phone-folders": { draw: drawPhoneFolders, parent: "home" },
+  add: { draw: drawAdd, parent: "home" },
+  "pair-show": { draw: drawShowCode, parent: "home" },
+  "pair-enter": { draw: drawEnterCode, parent: "home" },
+  waiting: { draw: drawWaitingAll, live: listsWaitingAll, parent: "home" },
+  files: { draw: drawFiles },
+  received: { draw: drawReceived, parent: "files" },
+  deleted: { draw: drawDeleted, parent: "files" },
+  conflicts: { draw: drawConflicts, parent: "files" },
+  settings: { draw: drawSettings },
+  storage: { draw: drawStorage, parent: "settings" },
+  key: { draw: drawKey, parent: "settings" },
+  advanced: { draw: drawAdvanced, parent: "settings" },
+  activity: { draw: drawActivity, parent: "settings" },
+};
 
-async function decide() {
-  let where;
-  try {
-    where = await invoke("situation");
-  } catch (e) {
-    // Nothing can be shown and nothing can be set up. Saying so beats an empty
-    // window that looks like it is still loading.
-    document.body.textContent = String(e);
-    return;
-  }
+/** Whether the window is showing a running device: until it is, nothing
+ * beats, since every command refuses until there is one. */
+let running = false;
 
-  // Locked is shown in the setting-up frame too: nothing else can answer
-  // until the key is open (decision 0046).
-  settingUp = !where.set_up || where.locked;
-  rootPath = where.root;
-  $("setup").classList.toggle("hidden", !settingUp);
-  $("app").classList.toggle("hidden", settingUp);
+let place = "home";
 
-  if (where.locked) {
-    step("unlock");
-    $("unlock-passphrase").focus();
-    return;
-  }
-  if (settingUp) {
-    $("folder-path").value = where.root;
-    step("welcome");
-    return;
-  }
-
-  if (!where.running) {
-    // A folder with a key that could not be opened. The commands will refuse,
-    // so say why once rather than showing every place with the same failure.
-    setHero({ mark: "error", icon: "circle-alert", title: "Qurb can't open this folder", says: where.problem ?? "" });
-    return;
-  }
-
-  showScreen("home");
-  drawAttention();
-  drawChip();
-}
-
-// ---------------------------------------------------------------- navigation
-
-let screen = "home";
-
-/** Places that are not in the sidebar light up the one they belong to. */
-function showScreen(name) {
-  screen = name;
+function go(to, arg) {
+  place = PLACES[to] ? to : "home";
+  const lit = PLACES[place].parent ?? place;
+  document.querySelectorAll("[data-go]").forEach((b) => b.classList.toggle("on", b.dataset.go === lit));
   closePanel();
-  const section = $(name);
-  const lit = section?.dataset.parent ?? name;
-  document.querySelectorAll("#tabs .nav").forEach((b) =>
-    b.classList.toggle("on", b.dataset.screen === lit));
-  document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === name));
-  $("scroll").scrollTop = 0;
-  refreshScreen();
+  if (place !== "pair-show") stopPairing();
+  const main = $("main");
+  put(main);
+  main.scrollTop = 0;
+  PLACES[place].draw(main, arg);
 }
 
-document.querySelectorAll("#tabs .nav").forEach((b) => {
-  b.addEventListener("click", () => showScreen(b.dataset.screen));
-});
-document.querySelectorAll("[data-go]").forEach((b) => {
-  b.addEventListener("click", () => showScreen(b.dataset.go));
-});
+let liveBusy = false;
+setInterval(async () => {
+  if (!running || liveBusy || document.hidden) return;
+  liveBusy = true;
+  try { await PLACES[place].live?.(); } finally { liveBusy = false; }
+}, 2000);
 
-function refreshScreen() {
-  if (settingUp) return;
-  if (screen === "home") { drawHome(); drawHomeLists(); }
-  if (screen === "files") { filesBrowser.draw(); drawDeletedLink(); }
-  if (screen === "vault") vaultBrowser.draw();
-  if (screen === "devices") drawDevices();
-  if (screen === "storage") drawStorage();
-  if (screen === "settings") drawSettings();
-  if (screen === "activity") drawActivity();
-  if (screen === "deleted") drawDeleted();
+let listsBusy = false;
+setInterval(async () => {
+  if (!running || listsBusy || document.hidden || document.querySelector(".scrim")) return;
+  listsBusy = true;
+  try { await PLACES[place].lists?.(); } finally { listsBusy = false; }
+}, 8000);
+
+// Files dragged anywhere over the window, in any place, go to the chosen
+// device: the window says where, in one line, while they are held over it.
+(function wireDrop() {
+  const ev = window.__TAURI__?.event;
+  if (!ev) return;
+  const shade = $("dropping");
+  ev.listen("tauri://drag-enter", () => {
+    if (!running) return;
+    const to = chosenDevice();
+    $("dropping-words").textContent = to ? `Drop to send to ${to.name}` : "Add a device to send to";
+    shade.classList.add("on");
+  });
+  ev.listen("tauri://drag-leave", () => shade.classList.remove("on"));
+  ev.listen("tauri://drag-drop", (e) => {
+    shade.classList.remove("on");
+    if (!running) return;
+    send(e.payload?.paths ?? []);
+  });
+})();
+
+document.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => go(b.dataset.go)));
+icons();
+
+/** Which the window is: setting a device up, unlocking it, or showing it.
+ * Asked before anything is drawn, because the answer decides which. */
+async function start() {
+  let where;
+  try { where = await invoke("situation"); } catch (e) { document.body.textContent = String(e); return; }
+  rootPath = where.root;
+  if (!where.set_up || where.locked) { running = false; drawSetup(where); return; }
+  document.body.classList.remove("setting-up");
+  put($("setup"));
+  running = where.running;
+  if (!where.running) {
+    // A folder with a key that could not be opened: said once, rather than
+    // every place failing the same way.
+    put($("main"), h("div", { class: "locked" }, h("span", { class: "empty-orb warn" }, icon("circle-alert")),
+      h("h1", {}, "QurbSpace can't open this folder"), h("p", { class: "note" }, where.problem ?? "")));
+    return;
+  }
+  const at = new URLSearchParams(location.search).get("place");
+  go(at || "home");
 }
 
-decide();
-
-// The live state, often. A poll rather than a subscription because the value
-// is one small struct and the window is in the same process as the daemon
-// that publishes it. Never a second beat while one is still being answered:
-// beats that piled up behind slow answers kept the window from ever catching
-// up, and GNOME offered to force it to quit (2026-10-28).
-let fastBusy = false;
-setInterval(async () => {
-  if (settingUp || fastBusy) return;
-  fastBusy = true;
-  try {
-    if (screen === "home") await drawHome();
-    await drawChip();
-  } finally {
-    fastBusy = false;
-  }
-}, 1500);
-
-// Lists, rarely, and only the one being looked at. Redrawing a list somebody
-// is reading is a cost, not a feature. Not while a menu, sheet or panel is
-// open over it, which would redraw what is being pointed at, nor while the
-// last round is still being answered.
-let slowTicks = 0;
-let slowBusy = false;
-setInterval(async () => {
-  if (settingUp || slowBusy) return;
-  slowBusy = true;
-  try {
-    // Conflicts every sixth beat, half a minute: finding them reads every path.
-    if (++slowTicks % 6 === 0) await drawAttention();
-    if (document.querySelector(".menu, .scrim") || openPanel) return;
-    if (screen === "home") await drawHomeLists();
-    if (screen === "storage") await drawStorage();
-    if ((screen === "files" || screen === "vault") && wanted.size) await refreshScreen();
-    if (screen === "devices" && !watching && !removing) await drawDevices();
-  } finally {
-    slowBusy = false;
-  }
-}, 5000);
+start();

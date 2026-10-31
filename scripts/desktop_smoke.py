@@ -7,14 +7,14 @@ What it does, in the real application with the real engine behind it:
 
 1. Sets a device up from nothing through the window -- folder and storage;
    nothing to write down since decision 0052.
-2. Opens every place in the sidebar.
+2. Opens every place, and the pages reached from them.
 3. Adds a device: shows a pairing code, has a second device (the command line,
    in a folder not set up) join with its six digits (decision 0066) and take
    the key, and approves it in the window once the two numbers match
    (decision 0053).
-4. Sends that device a file, and sees it waiting under Transfers and on
-   Home, then presses *Sync now*.
-5. Removes that device, from its details, answering the question.
+4. Sends that device a file, sees it waiting on Home, and clicks the
+   status mark, which syncs.
+5. Removes that device, from its page, answering the question.
 6. Protects the key with a passphrase from Settings, starts again, and
    unlocks from the window -- a wrong passphrase refused first.
 
@@ -22,6 +22,9 @@ With SMOKE_MODE=join it instead sets the window's device up by joining
 another device's code (decision 0052): the command line shows the code and
 asks y/N, and says yes only when the number the window shows is the number it
 asks about (decision 0053). Then it opens every place.
+
+The window is the redesigned one (docs/design/desktop.md): places are opened
+with its own `go`, and buttons found by their words.
 
 With SMOKE_MODE=theme it sets a device up and checks that the window follows
 the desktop's dark preference (decision 0056): dark when the desktop is dark
@@ -99,29 +102,57 @@ class Window:
             pass
 
 
-def visible(step):
-    return (f"return !document.querySelector('[data-step={step}]')"
-            f".classList.contains('hidden') && document.querySelector('[data-step={step}]')"
-            f".classList.contains('on')")
+# The window's own helpers, defined in the page once: a button by its words,
+# and setting a field as typing would.
+HELPERS = """
+window.__smoke = {
+  // The newest of what `scope` names: a sheet closing is still in the page
+  // for a moment after the next one opens.
+  within: (scope) => (scope ? [...document.querySelectorAll(scope)].pop() : document),
+  button: (words, scope) => [...(__smoke.within(scope)?.querySelectorAll('button') ?? [])]
+      .find(b => b.textContent.trim() === words),
+  press: (words, scope) => {
+    const b = __smoke.button(words, scope);
+    if (!b) throw new Error(`no button ${words} in ${scope} (${scope ? document.querySelectorAll(scope).length : 1} of them)`);
+    b.click();
+  },
+  type: (selector, value) => { const f = document.querySelector(selector); f.value = value; f.dispatchEvent(new Event('input')); },
+};
+"""
+
+
+def press(window, words, scope=None):
+    window.js(HELPERS + "__smoke.press(arguments[0], arguments[1])", words, scope)
+
+
+def enabled(words, scope=None):
+    return ("const w = arguments[1] ? [...document.querySelectorAll(arguments[1])].pop() : document;"
+            " const b = w && [...w.querySelectorAll('button')].find(b => b.textContent.trim() === arguments[0]);"
+            " return b && !b.disabled", words, scope)
+
+
+def running(window):
+    window.until("the main window",
+        "return !document.body.classList.contains('setting-up') && document.getElementById('home-mark')")
+
+
+def folder_and_storage(window, choice):
+    window.until("the setting-up screens", "return document.querySelector('.setup-in .choice')")
+    press(window, choice, ".setup-in")
+    window.until("the folder step", "return document.querySelector('.setup-in .field')")
+    window.js(HELPERS + "__smoke.type('.setup-in .field', arguments[0])", f"{HOME}/qurb")
+    window.until("the folder accepted", *enabled("Continue", ".setup-in"))
+    press(window, "Continue", ".setup-in")
+    window.until("a size chosen", "return document.querySelector('.setup-in .amount.on')")
+    window.until("Continue", *enabled("Continue", ".setup-in"))
+    press(window, "Continue", ".setup-in")
 
 
 def set_up(window):
-    window.until("the setting-up screens", "return !document.getElementById('setup').classList.contains('hidden')")
-    window.click("get-started")
-    window.click("choose-new")
-    window.js("""const f = document.getElementById('folder-path');
-                 f.value = arguments[0]; f.dispatchEvent(new Event('input'));""", f"{HOME}/qurb")
-    window.until("the folder accepted", "return !document.getElementById('folder-next').disabled")
-    window.click("folder-next")
-
-    window.until("the storage presets", "return document.querySelectorAll('#allowances button:not([disabled])').length")
-    window.js("document.querySelector('#allowances button:not([disabled])').click()")
-    window.until("a size chosen", "return !document.getElementById('storage-next').disabled")
-    window.click("storage-next")
-
-    window.until("the ready screen", visible("ready"))
-    window.click("ready-next")
-    window.until("the main window", "return document.getElementById('setup').classList.contains('hidden')")
+    folder_and_storage(window, "Start hereThis is my first device")
+    window.until("the ready screen", *enabled("Open QurbSpace", ".setup-in"))
+    press(window, "Open QurbSpace", ".setup-in")
+    running(window)
 
 
 def join_by_code(window):
@@ -138,23 +169,12 @@ def join_by_code(window):
         found = re.search(r"(qurb1-\S+)", line)
         code = found.group(1) if found else None
 
-    window.until("the setting-up screens", "return !document.getElementById('setup').classList.contains('hidden')")
-    window.click("get-started")
-    window.click("choose-join")
-    window.js("""const f = document.getElementById('folder-path');
-                 f.value = arguments[0]; f.dispatchEvent(new Event('input'));""", f"{HOME}/qurb")
-    window.until("the folder accepted", "return !document.getElementById('folder-next').disabled")
-    window.click("folder-next")
-    window.until("the storage presets", "return document.querySelectorAll('#allowances button:not([disabled])').length")
-    window.js("document.querySelector('#allowances button:not([disabled])').click()")
-    window.until("a size chosen", "return !document.getElementById('storage-next').disabled")
-    window.click("storage-next")
-    window.until("the join step", visible("join"))
-    window.js("document.getElementById('given-code').value = arguments[0]", code)
-    window.click("join-next")
+    folder_and_storage(window, "Join my phoneWith a code from it")
+    window.until("the join step", "return document.querySelector('.setup-in .digits-in')")
+    window.js(HELPERS + "__smoke.type('.setup-in .digits-in', arguments[0])", code)
+    press(window, "Join", ".setup-in")
     shown = window.until("the number to compare",
-        "const s = document.getElementById('join-says');"
-        "return !s.classList.contains('hidden') && (s.textContent.match(/\\d{3} \\d{3}/) || [])[0]")
+        "const b = document.querySelector('.setup-in .note b'); return b && b.textContent")
 
     while "Approve?" not in said:
         more = host.stdout.read(1)
@@ -165,9 +185,9 @@ def join_by_code(window):
     host.stdin.write("y\n")
     host.stdin.flush()
 
-    window.until("the ready screen", visible("ready"))
-    window.click("ready-next")
-    window.until("the main window", "return document.getElementById('setup').classList.contains('hidden')")
+    window.until("the ready screen", *enabled("Open QurbSpace", ".setup-in"))
+    press(window, "Open QurbSpace", ".setup-in")
+    running(window)
     rest, _ = host.communicate(timeout=60)
     assert "Paired with" in rest, f"qurb pair did not pair: {said}{rest}"
     return shown
@@ -179,6 +199,13 @@ def portal(scheme):
                     "--object-path", "/org/freedesktop/portal/desktop",
                     "--method", "org.qurb.SmokePortal.Set", str(scheme)],
                    check=True, capture_output=True)
+
+
+def choose_theme(window, words):
+    go(window, "settings")
+    window.js("themeSheet()")
+    window.until("the theme sheet", "return document.querySelector('.sheet .rounds')")
+    press(window, words, ".sheet")
 
 
 def follows_the_desktop(window):
@@ -198,50 +225,53 @@ def follows_the_desktop(window):
     if seen["dark at start"] == seen["the desktop switched to light"]:
         raise AssertionError(f"the theme changed and the page did not: {seen}")
 
-    go(window, "settings")
-    window.js("document.querySelector('#theme-choice [data-theme=light]').click()")
+    choose_theme(window, "Light")
     seen["Light chosen, the desktop dark"] = drawn_as("light", "light, when chosen")
     portal(2)
     portal(1)
     time.sleep(0.5)
     if window.js(drawn)[0] != "light":
         raise AssertionError("the desktop's style overrode the choice made in Settings")
-    window.js("document.querySelector('#theme-choice [data-theme=system]').click()")
+    choose_theme(window, "System")
     seen["System chosen again"] = drawn_as("dark", "the desktop's again")
     return seen
 
 
-def go(window, place):
-    window.js("document.querySelector(`#tabs [data-screen=${arguments[0]}]`).click()", place)
-    window.until(f"the {place} screen", "return document.getElementById(arguments[0]).classList.contains('on')", place)
+def go(window, place, arg=None):
+    window.js("go(arguments[0], arguments[1] ?? undefined)", place, arg)
+    window.until(f"the {place} place", "return place === arguments[0]", place)
 
 
-def every_tab(window):
-    places = window.js("return [...document.querySelectorAll('#tabs .nav')].map(b => b.dataset.screen)")
-    for place in places:
+# Every place that opens with nothing chosen first: the sidebar's three, and
+# the pages reached from them.
+PLACES = ["home", "files", "settings", "storage", "key", "advanced", "activity",
+          "received", "deleted", "conflicts", "waiting", "add"]
+
+
+def every_place(window):
+    for place in PLACES:
         go(window, place)
-        time.sleep(0.5)
-    return places
+        time.sleep(0.6)
+    for area in ("shared", "vault"):
+        window.js("inFiles(arguments[0])", area)
+        time.sleep(0.6)
+    return PLACES + ["Shared", "Vault"]
 
 
 def pair(window):
     other = f"{HOME}/other"
 
-    go(window, "devices")
-    window.click("add-device")
-    window.until("the two ways to add one", "return document.getElementById('pair-show')")
-    window.click("pair-show")
-    code = window.until("a code on the screen",
-        "const t = document.getElementById('pair-code'); return t && t.textContent.split(' ').pop()")
-    qr = window.js("return document.getElementById('qr').innerHTML.length")
+    go(window, "add")
+    press(window, "Show a codeScan it with your phone")
+    digits = window.until("six digits on the screen",
+        "const d = document.querySelector('.pair > .digits'); return d && /\\d{3} \\d{3}/.test(d.textContent) && d.textContent")
+    qr = window.js("return document.querySelector('.qr').innerHTML.length")
     assert qr > 1000, f"no QR drawn ({qr} characters)"
-    # Joined by the six digits beside it (decision 0066), which fetch the
-    # long code over this machine's own network; SMOKE_LONG_CODE=1 for the
-    # long code instead.
-    digits = window.js("return document.getElementById('pair-digits').textContent")
-    assert re.fullmatch(r"\d{3} \d{3}", digits or ""), f"no six digits shown: {digits!r}"
-    if not os.environ.get("SMOKE_LONG_CODE"):
-        code = digits.replace(" ", "")
+    code = digits.replace(" ", "")
+    # Joined by the six digits (decision 0066), which fetch the long code over
+    # this machine's own network; SMOKE_LONG_CODE=1 for the long code instead.
+    if os.environ.get("SMOKE_LONG_CODE"):
+        code = window.js("return document.querySelector('.pair .code').textContent.split(' ').pop()")
 
     # The joining side prints the number before it connects, then waits for
     # the window's answer; the window shows who asks and the number it should
@@ -258,17 +288,16 @@ def pair(window):
             break
     assert expected, f"qurb join printed no number: {said}"
     shown = window.until("the window asking about the device",
-        "const a = document.getElementById('pair-asking');"
-        "return a && !a.classList.contains('hidden') && document.getElementById('pair-number').textContent")
+        "const d = document.querySelector('.asking-box .digits'); return d && d.textContent")
     assert shown == expected, f"the window shows {shown}, the joining device {expected}"
     # As long as a person comparing two numbers might take.
     time.sleep(float(os.environ.get("SMOKE_THINK", "0")))
-    window.click("pair-approve")
+    press(window, "Approve", ".asking-box")
     rest, _ = joining.communicate(timeout=60)
     assert joining.returncode == 0, f"qurb join failed: {said}{rest}"
     named = window.until("the window saying paired",
-        "return document.getElementById('pair-done') && document.getElementById('pair-with').textContent")
-    window.click("pair-finish")
+        "const h = document.querySelector('.arrived h1'); return h && h.textContent")
+    press(window, "Done", ".arrived")
     return other, named
 
 
@@ -280,51 +309,42 @@ def send(window, device):
     # dialog, which WebDriver cannot drive. execute/sync cannot wait on a
     # promise, so it is started and its result polled for.
     window.js("""window.__sent = null;
-        window.__TAURI__.core.invoke('send_files', {paths: [arguments[0]], to: arguments[1]})
+        window.__TAURI__.core.invoke('send_files', {paths: [arguments[0]], to: arguments[1], leaveOut: null})
           .then(r => { window.__sent = r }, e => { window.__sent = {error: String(e)} });""", path, device)
     report = window.until("the send to finish", "return window.__sent")
     assert "error" not in report, f"send failed: {report['error']}"
     assert report["sent"] == 1, f"sent {report}"
 
-    # Transfers appear when something is moving or waiting (direction §25).
-    window.until("the Transfers chip", "return !document.getElementById('transfers-chip').classList.contains('hidden')")
-    window.click("transfers-chip")
-    window.until("the send listed under Transfers",
-        "const p = document.querySelector('.panel.transfers'); return p && p.textContent.includes('to-send.txt')")
-    window.js("closePanel()")
-
 
 def home(window):
-    """Home lists the send under Waiting, and Sync now is taken (the owner's
-    item 8 of 2026-10-14). The other device never runs, so nothing is
-    synced: what this checks is that asking works."""
+    """Home lists the send under Waiting, and the mark syncs when clicked.
+    The other device never runs, so nothing is synced: what this checks is
+    that asking works."""
     go(window, "home")
+    window.js("listsHome()")
     window.until("the send under Waiting",
         "const w = document.getElementById('home-waiting'); return w && w.textContent.includes('to-send.txt')")
-    window.click("home-sync")
-    window.until("Sync now taken",
-        "const t = document.querySelector('.toast:not(.warn)'); return t && t.textContent.includes('Syncing with your devices')")
+    window.js("document.getElementById('home-mark').click()")
+    time.sleep(1)
 
 
 def remove(window, device):
-    """Remove the paired device through its details, and see it gone.
+    """Remove the paired device from its page, and see it gone.
 
     The file sent to it was never collected -- the other device is a command
     line that never ran -- so the question must say a send will be cancelled.
     """
-    go(window, "devices")
-    window.until("the device listed", "return document.querySelector('#device-list button.device')")
-    window.js("document.querySelector('#device-list button.device').click()")
-    window.until("its details", "return document.querySelector('.panel')")
-    window.js("[...document.querySelectorAll('.panel button')].find(b => b.textContent.startsWith('Remove this device')).click()")
-    said = window.until("the question", "const c = document.querySelector('.confirm'); return c && c.textContent")
+    window.until("the device in the circle's list", "return HOME.devices.length")
+    window.js("go('device', HOME.devices[0])")
+    window.until("its page", "return document.querySelector('.remove')")
+    window.js("document.querySelector('.remove').click()")
+    said = window.until("the question", "const c = document.querySelector('.sheet'); return c && c.textContent")
     assert f"Remove {device}?" in said, said
-    assert "1 file waiting for it to collect will be cancelled" in said, said
-    window.js("[...document.querySelectorAll('.confirm button')].find(b => b.textContent === 'Remove device').click()")
-    window.until("the device gone",
-        "return !document.querySelector('#device-list button.device')")
-    window.until("the send no longer waiting",
-        "return document.getElementById('transfers-chip').classList.contains('hidden')")
+    assert "1 send cancelled" in said, said
+    press(window, "Remove", ".sheet .acts")
+    window.until("back home", "return place === 'home'")
+    window.js("listsHome()")
+    window.until("the device gone, and its send", "return HOME.devices.length === 0 && HOME.sends.length === 0")
 
 
 # Failures a step causes on purpose, and so not a reason to fail the run.
@@ -341,20 +361,20 @@ def lock_and_unlock(window):
 
     Returns the new window: the old one is closed by starting again.
     """
-    go(window, "settings")
-    window.until("the Security section",
-        "return [...document.querySelectorAll('#protection-buttons button')].find(b => b.textContent.startsWith('Protect'))")
-    window.js("[...document.querySelectorAll('#protection-buttons button')].find(b => b.textContent.startsWith('Protect')).click()")
-    window.js("""document.getElementById('protect-new').value = 'correct horse battery';
-                 document.getElementById('protect-again').value = 'correct horse battery';
-                 document.getElementById('protect-go').click();""")
+    go(window, "key")
+    window.until("how the key is kept", "return [...document.querySelectorAll('.set')].some(s => s.textContent.startsWith('Passphrase'))")
+    window.js("[...document.querySelectorAll('.set')].find(s => s.textContent.startsWith('Passphrase')).click()")
+    window.until("the passphrase sheet", "return document.querySelectorAll('.sheet .field').length === 2")
+    window.js("""const f = document.querySelectorAll('.sheet .field');
+                 f[0].value = 'correct horse battery'; f[1].value = 'correct horse battery';""")
+    press(window, "Change", ".sheet")
     window.until("the key kept by passphrase",
-        "return document.getElementById('protection-says').textContent.startsWith('Behind a passphrase')")
+        "return [...document.querySelectorAll('.set')].some(s => s.textContent.startsWith('Passphrase') && s.querySelector('.set-tick'))")
     EARLIER.extend(window.js("return window.qurbFailures || []"))
     # Quit, not close: closing the window keeps qurb running (decision 0040),
     # and the next launch would only ask that one to show itself.
     try:
-        window.js("document.getElementById('quit').click()")
+        window.js("invoke('quit')")
     except Exception:
         pass  # the page may go before the answer does
     window.close()
@@ -364,15 +384,15 @@ def lock_and_unlock(window):
     # the most recently registered, and would otherwise be the one opened.
     window = Window([f"{HOME}/qurb"])
     window.until("the unlock screen",
-        "const s = document.querySelector('[data-step=unlock]'); return s && s.classList.contains('on') && !document.getElementById('setup').classList.contains('hidden')")
-    window.js("""document.getElementById('unlock-passphrase').value = 'wrong horse';
-                 document.getElementById('unlock-go').click();""")
+        "const h = document.querySelector('.setup-in h1'); return h && h.textContent === 'QurbSpace is locked'")
+    window.js("document.querySelector('.setup-in .field').value = 'wrong horse'")
+    press(window, "Unlock", ".setup-in")
     said = window.until("the wrong one refused",
-        "const s = document.getElementById('unlock-says'); return !s.classList.contains('hidden') && s.textContent")
+        "const s = document.querySelector('.setup-in .note.warn'); return s && s.textContent")
     assert "does not open" in said, said
-    window.js("""document.getElementById('unlock-passphrase').value = 'correct horse battery';
-                 document.getElementById('unlock-go').click();""")
-    window.until("the main window", "return document.getElementById('setup').classList.contains('hidden')")
+    window.js("document.querySelector('.setup-in .field').value = 'correct horse battery'")
+    press(window, "Unlock", ".setup-in")
+    running(window)
     return window
 
 
@@ -385,7 +405,7 @@ def main():
         if os.environ.get("SMOKE_MODE") == "join":
             number = join_by_code(window)
             print(f"set up by joining another device's code, approved there at {number}")
-            print("opened", ", ".join(every_tab(window)))
+            print("opened", ", ".join(every_place(window)))
         elif os.environ.get("SMOKE_MODE") == "theme":
             set_up(window)
             for step, background in follows_the_desktop(window).items():
@@ -422,7 +442,7 @@ def run_through(window):
     set_up(window)
     print("set up through the window")
 
-    print("opened", ", ".join(every_tab(window)))
+    print("opened", ", ".join(every_place(window)))
 
     other, named = pair(window)
     print(f"paired by its six digits with {named}, approved in the window by its number")
@@ -431,7 +451,7 @@ def run_through(window):
     send(window, device)
     print(f"sent a file to {device}")
     home(window)
-    print("Home lists it as waiting, and Sync now is taken")
+    print("Home lists it as waiting, and the mark syncs when clicked")
     remove(window, device)
     print(f"removed {device}, and its waiting send with it")
     # The wrong passphrase is a command that fails on purpose.

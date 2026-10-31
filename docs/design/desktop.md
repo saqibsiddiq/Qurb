@@ -14,9 +14,10 @@ green the only colour against warm off-white (`#FAF9F6`) or its dark twin;
 and the same few parts everywhere — the status mark, the device circle,
 folders two to a row, plain file rows, a sheet of round buttons.
 
-It is built in `crates/desktop/ui-next/` beside the window it will replace,
-on the same engine commands (`src/commands.rs`), and looked at with made-up
-answers in `experiments/desktop-fixtures/next.html` (`?state=synced`,
+It was built in `crates/desktop/ui-next/` beside the window it replaced, on
+the same engine commands (`src/commands.rs`), and became `ui/` on
+2026-10-31 at the owner's word. It is looked at with made-up answers in
+`experiments/desktop-fixtures/index.html` (`?state=synced`,
 `syncing`, `away`, `alone`, `attention`). When every place is agreed and
 built, it replaces `ui/`.
 
@@ -93,8 +94,12 @@ Still to agree: 13, the tray and notifications, which are unchanged.
 
 ## Built so far
 
-Every place, in `ui-next/`, on 2026-10-31, looked at with the fixtures in
-light and dark. Not run in the real window yet: `tauri.conf.json` still
-serves `ui/`, until the owner has reviewed it. Not built: the bandwidth
+Every place, on 2026-10-31, looked at with the fixtures in light and dark;
+then swapped in as `ui/` at the owner's word, before his review of 6 to 12.
+`scripts/desktop-smoke.sh`, rewritten for it, drives the real window
+through all of it — set up, every place, pairing by six digits, a send,
+removing a device, a passphrase and unlocking; joining by code; following
+the desktop's dark preference — with no command failing (2026-10-31, on
+this laptop, Broadway display). Not built: the bandwidth
 limit, the computer backing up its own folders, quick preview of PDFs and
 video, search inside people's folders and phones' backups.

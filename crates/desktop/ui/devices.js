@@ -1,797 +1,267 @@
-// Devices, adding one, and removing one.
-//
-// "My phone", "my laptop" -- never nodes (direction §16). A device shows its
-// name, what it is, whether it is here now; identities and addresses are kept
-// under Technical details for whoever wants them.
+// Devices, reached through Home's circle: a device's page, choosing a
+// phone's folders, adding a device or a person, and removing one.
 
-/** The fingerprint of a device that has just been paired, to materialise. */
-let justPaired = null;
+// ---------- A device's page ----------
 
-/** How a device is reached right now, in words, and whether it is here. */
-function presence(d) {
-  if (d.route === "direct") return { on: true, words: "Connected" };
-  if (d.route === "relay") return { on: true, words: "Connected through the relay" };
-  if (d.last_seen) return { on: false, words: `Last seen ${when(d.last_seen)}` };
-  return { on: false, words: "Not connected yet" };
+function drawDevicePage(main, d) {
+  HOME.page = d;
+  const own = d.relation === "own";
+  main.append(
+    h("div", { class: "page" },
+      h("button", { class: "back", onclick: () => go("home") }, icon("arrow-left"), "Home"),
+      h("div", { class: "page-hd" },
+        circle(d, "circle-xl"),
+        h("h1", {}, d.name),
+        h("p", { class: `state ${d.route ? "on" : "off"}` }, d.route ? (d.route === "relay" ? "Online, through the relay" : "Online") : d.last_seen ? `Off, seen ${ago(d.last_seen)}` : "Not connected yet")),
+      own && chosenDevice()?.fingerprint !== d.fingerprint
+        ? h("button", { class: "btn btn-quiet", onclick: () => { choose(d); go("device", d); } }, icon("send"), "Send here")
+        : null,
+      h("div", { class: "page-list", id: "page-list" }),
+      h("details", { class: "tech" },
+        h("summary", {}, "Details"),
+        h("dl", {},
+          h("dt", {}, "Identity"), h("dd", {}, d.fingerprint),
+          h("dt", {}, "Paired"), h("dd", {}, ago(d.paired_at)),
+          h("dt", {}, "Path"), h("dd", {}, d.route === "relay" ? "Relayed" : d.route === "direct" ? "Direct" : "Not connected"),
+          d.address ? [h("dt", {}, "Address"), h("dd", {}, d.address)] : null)),
+      h("button", { class: "remove", onclick: () => askToRemove(d) }, d.relation === "guest" ? "Remove this person" : "Remove this device")));
+  listsDevicePage();
 }
 
-function presenceLine(d) {
-  const p = presence(d);
-  const line = el("span", p.on ? "presence on" : "presence");
-  line.append(el("span", "dot"), el("span", null, p.words));
-  return line;
-}
-
-async function drawDevices() {
-  const grid = $("device-list");
-  let devices, me, out;
-  try {
-    [devices, me, out] = await Promise.all([invoke("devices"), invoke("settings"), invoke("outgoing")]);
-  } catch (e) {
-    oops(grid, e);
-    return;
-  }
-  grid.replaceChildren();
-
-  const self = el("div", "device self glass-frosted");
-  const t = el("span", "tile");
-  t.append(icon("laptop"));
-  const words = el("div");
-  const here = el("span", "presence on");
-  here.append(el("span", "dot"), el("span", null, "This computer"));
-  words.append(el("strong", null, me.name), here);
-  self.append(t, words);
-  grid.append(self);
-
-  // This person's own devices first, then other people's (decision 0060):
-  // guests of this computer, and computers it visits.
-  const groups = [
-    ["own", null],
-    ["guest", "Guests"],
-    ["host", "Computers you visit as a guest"],
-  ];
-  // One card a device: one set up again is shown as what it became, and its
-  // earlier self is reached from there (the owner's item 6, 2026-10-14).
-  everyDevice = devices;
-  for (const [relation, label] of groups) {
-    const these = devices.filter((d) => (d.relation ?? "own") === relation && !d.replaced_by);
-    if (these.length === 0) continue;
-    if (label) {
-      const heading = el("div", "list-label", label);
-      heading.style.gridColumn = "1 / -1";
-      grid.append(heading);
+async function listsDevicePage() {
+  const d = HOME.page;
+  const box = $("page-list");
+  if (!d || !box) return;
+  const all = await invoke("devices").catch(() => []);
+  const out = await invoke("outgoing").catch(() => []);
+  const rows = [];
+  if (d.whatsapp) rows.push(listRow("whatsapp", "WhatsApp", `${count(d.whatsapp.files, "file")} kept here`));
+  if (d.kind === "phone" && d.relation === "own") {
+    const f = await invoke("phone_folders", { phone: d.fingerprint }).catch(() => null);
+    const chosen = (f?.folders ?? []).filter((x) => x.chosen);
+    for (const x of chosen) {
+      rows.push(listRow("folder", x.path, x.kept_files >= x.files ? `${count(x.files, "file")} kept here` : `${x.kept_files.toLocaleString()} of ${count(x.files, "file")} kept here`, x.files ? x.kept_files / x.files : 1));
     }
-    for (const d of these) drawCard(d);
+    rows.push(h("button", { class: "row", onclick: () => go("phone-folders", d) }, tile("sliders-horizontal"),
+      h("span", { class: "row-main" }, h("b", {}, chosen.length ? "Choose folders" : "Back up its folders")), icon("chevron-right", "row-go")));
   }
-
-  function drawCard(d) {
-    const card = el("button", "device glass-frosted");
-    const tile = deviceTile(d);
-    const text = el("div");
-    text.append(el("strong", null, d.name), presenceLine(d));
-    const waiting = out.filter((o) => o.to_id === d.id).length;
-    if (waiting) text.append(el("span", "meta", `${count(waiting, "file")} waiting for it`));
-    card.append(tile, text);
-    if (justPaired === d.fingerprint) { card.classList.add("arrived"); justPaired = null; }
-    card.addEventListener("click", () => openDevice(d));
-    grid.append(card);
+  if (d.relation === "guest") {
+    rows.push(h("button", { class: "row", onclick: () => openGuest(d) }, tile("lock-keyhole"),
+      h("span", { class: "row-main" }, h("b", {}, "Their folder"), h("small", {}, Number(d.kept ?? 0) > 0 ? `${size(d.kept)}, sealed` : "Nothing kept yet")), icon("chevron-right", "row-go")));
   }
-
-  if (devices.length === 0) {
-    const add = button("Add a device", "btn primary", "plus");
-    add.addEventListener("click", openAddDevice);
-    const hint = empty("monitor-smartphone", "Add your phone or another computer, and your files move between them.", add);
-    hint.style.gridColumn = "1 / -1";
-    grid.append(hint);
-  }
-}
-
-$("add-device").addEventListener("click", () => openAddDevice());
-
-/**
- * A device's tile: the picture it chose for itself, round, or its icon (the
- * owner's list of 2026-10-26, item 7).
- */
-function deviceTile(d, size) {
-  const tile = el("span", "tile");
-  if (d.picture) {
-    tile.classList.add("picture");
-    const img = el("img");
-    img.src = d.picture;
-    img.alt = "";
-    tile.append(img);
-  } else {
-    tile.append(icon(deviceIcon(d.name, d.kind), size));
-  }
-  return tile;
-}
-
-// ------------------------------------------------------------ one device
-
-/** Every paired device as last drawn, those set up again included. */
-let everyDevice = [];
-
-/**
- * The device whose removal is being asked about, if one is. The list is not
- * redrawn meanwhile: a redraw every few seconds would take the question away
- * from under somebody reading it.
- */
-let removing = null;
-
-async function openDevice(d) {
-  const box = panel();
-  const head = el("div", "panel-head");
-  const tile = deviceTile(d, "large");
-  const names = el("div");
-  names.style.paddingRight = "32px";
-  names.append(el("h2", null, d.name), presenceLine(d));
-  head.append(tile, names);
-
-  const body = el("div", "panel-body");
-  const facts = el("dl", "facts");
-  const p = presence(d);
-  // One of this person's phones: its folders, chosen here (decision 0063).
-  const ownPhone = d.relation === "own" && d.kind === "phone";
-  let folders = null;
-  if (ownPhone) {
-    try { folders = await invoke("phone_folders", { phone: d.fingerprint }); } catch (e) { /* not shown */ }
-  }
-  const chosen = folders ? folders.folders.filter((f) => f.chosen) : [];
-  // What it was before it was set up again, if it was.
-  const earlier = d.earlier ? everyDevice.find((e) => e.id === d.earlier) : null;
-  const who = {
-    guest: "A guest: another person's device, with its own key. It sees only what you send it.",
-    host: "Another person's computer, which you visit as a guest. It sees only what you send it.",
-  }[d.relation];
-  for (const [term, value] of [
-    ["Status", p.words],
-    ["Paired", when(d.paired_at)],
-    ...(who ? [["Who", who]] : []),
-    // Their private folder here: sealed on their phone, so nothing on this
-    // computer can open it -- not its name, not a byte (decision 0060).
-    ...(d.relation === "guest"
-      ? [["Their folder", Number(d.kept ?? 0) > 0
-          ? `${size(d.kept)} kept here, sealed: you cannot open it`
-          : "Nothing kept here yet"]]
-      : []),
-    // A phone's WhatsApp, kept here in its Private Vault: out of sight, and
-    // brought back only through Qurb on a phone (decision 0062).
-    ...(d.whatsapp
-      ? [["WhatsApp", `${count(d.whatsapp.files, "file")}, ${size(d.whatsapp.bytes)}, kept here for it, out of sight`]]
-      : []),
-    ...(chosen.length
-      ? [["Folders", `${count(chosen.length, "folder")} backed up here: ` +
-          `${count(chosen.reduce((n, f) => n + f.kept_files, 0), "file")} so far`]]
-      : []),
-    ...(earlier
-      ? [["Set up again", `${when(d.paired_at)}. ` + (earlier.held
-          ? `From before, ${count(earlier.held.files, "file")}, ${size(earlier.held.bytes)}, are still kept here.`
-          : "Nothing from before is kept here.")]]
-      : []),
-  ]) facts.append(el("dt", null, term), el("dd", null, value));
-  body.append(facts);
-
-  let out = [];
-  try { out = (await invoke("outgoing")).filter((o) => o.to_id === d.id); } catch (e) { /* none shown */ }
-  if (out.length) {
-    body.append(el("div", "list-label", "Waiting for it to collect"));
-    const list = el("ul", "rows");
-    for (const o of out) list.append(row({ iconName: KIND_ICON[kindOf(o.path)], name: base(o.path), sub: [size(o.size)] }));
-    body.append(list);
-  }
-
-  const actions = el("div", "actions");
-  actions.style.flexDirection = "column";
-  actions.style.alignItems = "stretch";
-  const send = button("Send files…", "btn primary", "send");
-  send.style.justifyContent = "flex-start";
-  send.addEventListener("click", () => openSend([], d));
-  // A guest's folder, sealed here: opened only with their approval on their
-  // phone (decision 0060).
-  if (d.relation === "guest" && Number(d.kept ?? 0) > 0) {
-    const look = button("Open their folder…", "btn", "lock-keyhole");
-    look.style.justifyContent = "flex-start";
-    look.addEventListener("click", () => openGuestFolder(d));
-    actions.append(look);
-  }
-  // Removing it, from here rather than anywhere more prominent: it is rare,
-  // and it is the one thing on this screen that cannot be undone without the
-  // other device in hand.
-  const remove = button(d.relation === "guest" ? "Remove this guest…" : "Remove this device…", "btn ghost quiet-danger", "x");
-  remove.style.justifyContent = "flex-start";
-  remove.addEventListener("click", () => askToRemove(d, body));
-  // The main thing first, then what is particular to this device, then
-  // removing, which is rare.
-  actions.append(send);
-  if (ownPhone) {
-    const back = button("Choose folders to back up…", "btn", "hard-drive");
-    back.style.justifyContent = "flex-start";
-    back.addEventListener("click", () => openPhoneFolders(d));
-    actions.append(back);
-  }
+  // What it was before it was set up again (item 6), and a way to let it go.
+  const earlier = d.earlier ? all.find((e) => e.id === d.earlier) : null;
   if (earlier) {
-    const before = button("Remove the earlier one…", "btn ghost", "history");
-    before.style.justifyContent = "flex-start";
-    before.addEventListener("click", () => askToRemove(earlier, body, `the earlier ${earlier.name}, from before it was set up again`));
-    actions.append(before);
+    rows.push(h("div", { class: "row" }, tile("history"),
+      h("span", { class: "row-main" }, h("b", {}, "From before it was set up again"), h("small", {}, earlier.held ? `${count(earlier.held.files, "file")}, ${size(earlier.held.bytes)}` : "Nothing kept")),
+      h("button", { class: "btn btn-quiet btn-sm", onclick: () => askToRemove(earlier, `the earlier ${earlier.name}`) }, "Remove")));
   }
-  actions.append(remove);
-  body.append(actions);
-
-  // For whoever wants them, folded away (§16: no identifiers by default).
-  const tech = el("details");
-  tech.style.marginTop = "24px";
-  tech.append(el("summary", "meta", "Technical details"));
-  const more = el("dl", "facts");
-  for (const [term, value] of [
-    ["Identity", d.fingerprint],
-    ["Path", d.route === "relay" ? "Relayed" : d.route === "direct" ? "Direct" : "Not connected"],
-    ...(d.address ? [["Address", d.address]] : []),
-    ["Transport", "QUIC, end-to-end encrypted with this device's pinned key"],
-  ]) more.append(el("dt", null, term), el("dd", "mono", value));
-  tech.append(more);
-  body.append(tech);
-
-  box.append(head, body);
+  const waiting = out.filter((o) => o.to_id === d.id);
+  put(box, 
+    ...(rows.length ? [label(d.relation === "guest" ? "Kept here" : "Backed up here"), ...rows] : []),
+    ...(waiting.length ? [label("Waiting for it"), ...waiting.map((o) => listRow(fileIcon(o.path), base(o.path), size(o.size)))] : []));
 }
 
-/**
- * A phone's folders, for choosing which it backs up here (decision 0063).
- * The phone lists them for this computer once it has "All files access";
- * ticked ones reach it the next time it syncs, and it keeps them where they
- * lie, files deleted on it staying here.
- */
-async function openPhoneFolders(d) {
-  const box = sheet({ wide: true, onClose: () => refreshScreen() });
-  box.append(el("h2", null, `Back up ${d.name}'s folders`));
-  let answer;
-  try {
-    answer = await invoke("phone_folders", { phone: d.fingerprint });
-  } catch (e) {
-    oops(box, e);
-    return;
-  }
-  if (answer.seen_at == null || answer.folders.length === 0) {
-    box.append(el("p", "lead",
-      `${d.name} hasn't listed its folders here yet. On the phone, open Qurb, then Settings, ` +
-      "Backups, Back up your folders, and allow it to read this phone's files. Its folders " +
-      "appear here after it next syncs."));
-    const actions = el("div", "actions end");
-    const close = button("Close", "btn primary");
-    close.addEventListener("click", () => box.close());
-    actions.append(close);
-    box.append(actions);
-    return;
-  }
-  box.append(el("p", "lead",
-    `The folders you choose are kept here, in ${d.name}'s Private Vault: over Wi-Fi, and files ` +
-    "deleted on the phone stay here."));
-  box.append(el("div", "list-label", `On ${d.name}, as it said ${when(answer.seen_at)}`));
-  const says = el("p", "says warn hidden");
-  const picks = el("div", "group glass-frosted");
-  // Each switch is the folder's own: ticking or unticking it takes every
-  // folder inside it the same way, and a folder inside can be set apart
-  // again, as on the phone's tree. Drawn again after each change, so that
-  // what a change did inside is what shows.
-  const draw = (folders) => {
-    picks.replaceChildren();
-    for (const f of folders) {
-      const item = el("label", "item");
-      const label = el("div", "label");
-      const depth = f.path.split("/").length;
-      if (depth > 1) label.style.paddingLeft = "24px";
-      label.append(el("strong", null, depth > 1 ? base(f.path) : f.path));
-      const facts = `${count(f.files, "file")}, ${size(f.size)}` + (f.kept_files ? ` · ${count(f.kept_files, "file")} kept here` : "");
-      label.append(el("p", "meta", f.partial ? `${facts} · some of it chosen` : facts));
-      const sw = el("span", "switch");
-      const input = el("input");
-      input.type = "checkbox";
-      input.value = f.path;
-      input.checked = f.chosen;
-      sw.append(input, el("span"));
-      item.append(icon("folder"), label);
-      // Before the switch, so that the switches stay in one column.
-      if ((f.chosen || f.partial) && f.kept_files) {
-        const look = button("Open", "btn small ghost");
-        look.addEventListener("click", (event) => {
-          event.preventDefault();
-          // In the owner's folder in Files, which opens with a yes on the
-          // phone (decision 0067).
-          box.close();
-          showScreen("files");
-          filesBrowser.openPerson("owner", `${d.name}/${f.path}`);
+function listRow(ic, title, sub, progress) {
+  return h("div", { class: "row" }, tile(ic),
+    h("span", { class: "row-main" }, h("b", {}, title), h("small", {}, sub),
+      progress != null && progress < 1 ? h("span", { class: "w-bar" }, h("i", { style: { width: `${Math.round(progress * 100)}%` } })) : null));
+}
+
+/** A guest's folder is a person's folder in Files (decision 0067). */
+async function openGuest(d) {
+  const people = await invoke("people").catch(() => []);
+  const p = people.find((x) => x.relation === "guest" && (x.devices ?? []).includes(d.name)) ?? people.find((x) => x.id.startsWith(d.fingerprint));
+  if (p) inFiles(p.id);
+  else toast("Nothing kept for them yet");
+}
+
+// ---------- A phone's folders (decision 0063) ----------
+
+async function drawPhoneFolders(main, d) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg" }, pageHead("Back up folders", { words: d.name, go: () => go("device", d) }), body));
+  const draw = async () => {
+    let answer;
+    try { answer = await invoke("phone_folders", { phone: d.fingerprint }); } catch (e) { put(body, oops(e)); return; }
+    if (answer.seen_at == null || !answer.folders.length) {
+      put(body, empty("smartphone", `On ${d.name}: QurbSpace, Settings, Backups, Back up your folders`));
+      return;
+    }
+    put(body, 
+      h("p", { class: "note" }, "Over Wi-Fi. Files deleted on the phone stay here"),
+      h("div", { class: "grp-box" }, ...answer.folders.map((f) => {
+        const depth = f.path.split("/").length - 1;
+        const s = setting({
+          ic: "folder",
+          name: depth ? base(f.path) : f.path,
+          value: f.kept_files ? `${f.kept_files.toLocaleString()} of ${f.files.toLocaleString()}` : `${f.files.toLocaleString()} ${f.files === 1 ? "file" : "files"}`,
+          end: toggle(f.chosen, async (on) => {
+            await invoke("choose_phone_folder", { phone: d.fingerprint, folder: f.path, chosen: on });
+            draw();
+          }, f.path),
         });
-        item.append(look);
-      }
-      item.append(sw);
-      picks.append(item);
-      // At once, as every switch in Qurb is: there is no Save to miss. On
-      // the owner's first try (2026-10-14) Save sat below a long list's edge,
-      // and the folder he ticked was never chosen.
-      input.addEventListener("change", async () => {
-        says.classList.add("hidden");
-        try {
-          await invoke("choose_phone_folder", { phone: d.fingerprint, folder: input.value, chosen: input.checked });
-          toast(input.checked
-            ? `${input.value} is backed up from the next time ${d.name} syncs`
-            : `${input.value} backs up nothing new`);
-          draw((await invoke("phone_folders", { phone: d.fingerprint })).folders);
-        } catch (e) {
-          input.checked = !input.checked;
-          says.textContent = String(e);
-          says.classList.remove("hidden");
-        }
-      });
-    }
+        s.style.paddingLeft = `${16 + depth * 28}px`;
+        return s;
+      })),
+      h("p", { class: "note" }, `As ${d.name} said ${ago(answer.seen_at)}`));
   };
-  draw(answer.folders);
-  box.append(says, picks);
-  box.append(el("p", "note", "Unticked, a folder backs up nothing new. What is kept here already stays."));
-}
-
-/** What this computer keeps of one of a phone's folders, each file openable. */
-async function openBackup(d, folder) {
-  const box = sheet({ wide: true });
-  box.append(el("h2", null, folder));
-  box.append(el("p", "lead", `Kept here from ${d.name}, including files deleted on the phone.`));
-  const label = el("div", "list-label", "Files");
-  const list = el("ul", "rows");
-  box.append(label, list);
-  let files;
-  try {
-    files = await invoke("phone_backup", { phone: d.fingerprint, folder });
-  } catch (e) {
-    oops(list, e);
-    return;
-  }
-  label.textContent = count(files.length, "file");
-  if (files.length === 0) {
-    list.append(empty("hard-drive", "Nothing kept here yet. It comes over Wi-Fi.", null, true));
-    return;
-  }
-  for (const f of files.slice(0, 500)) {
-    list.append(row({
-      iconName: KIND_ICON[kindOf(f.path)],
-      name: base(f.path),
-      sub: [folderOf(f.path) || folder, size(f.size), when(f.modified_at)],
-      onClick: async () => {
-        try {
-          await invoke("open_backed_up", { phone: d.fingerprint, folder, path: f.path });
-        } catch (e) {
-          toast(String(e), true);
-        }
-      },
-    }));
-  }
-  if (files.length > 500) box.append(el("p", "note", `The first 500 of ${count(files.length, "file")}.`));
-}
-
-/**
- * A guest's folder at this computer (decision 0060). Sealed on their phone,
- * so nothing here can open it: the window asks their phone, their person
- * approves behind a fingerprint, face or screen lock, and the folder opens
- * here until it is locked -- by hand, after ten minutes unused, or when Qurb
- * quits.
- */
-function openGuestFolder(d) {
-  let polling = null;
-  const box = sheet({
-    wide: true,
-    onClose: () => { clearInterval(polling); },
-  });
-  box.append(el("h2", null, `Folder kept for ${d.name}`));
-  const lead = el("p", "lead");
-  const body = el("div");
-  const actions = el("div", "actions end");
-  box.append(lead, body, actions);
-
-  // What is drawn, so the watch below redraws only when that changes.
-  let shown = null;
-
-  // A look every 1.5 s, which reads nothing and does not count as using the
-  // folder: an open folder left on screen still locks itself when idle.
-  async function watch() {
-    try {
-      const { state } = await invoke("guest_folder", { guest: d.fingerprint, list: false });
-      if (state !== shown) draw();
-    } catch (e) { /* drawn on the next change */ }
-  }
-
-  async function draw() {
-    let folder;
-    try {
-      folder = await invoke("guest_folder", { guest: d.fingerprint, list: true });
-    } catch (e) {
-      lead.textContent = String(e);
-      return;
-    }
-    shown = folder.state;
-    body.replaceChildren();
-    actions.replaceChildren();
-    if (folder.state === "locked") {
-      lead.textContent = `Kept here sealed: this computer can't open it. To open it here, ask ${d.name}.`;
-      const ask = button(`Ask ${d.name}'s phone`, "btn primary", "lock-keyhole");
-      ask.addEventListener("click", async () => {
-        try { await invoke("ask_guest_folder", { guest: d.fingerprint }); } catch (e) { lead.textContent = String(e); return; }
-        draw();
-      });
-      actions.append(ask);
-      return;
-    }
-    if (folder.state === "asking") {
-      lead.textContent = `Waiting for ${d.name}. Open Qurb on their phone and approve — it asks for their fingerprint, face or screen lock.`;
-      const stop = button("Stop asking", "btn");
-      stop.addEventListener("click", async () => {
-        try { await invoke("lock_guest_folder", { guest: d.fingerprint }); } catch (e) { /* already */ }
-        draw();
-      });
-      actions.append(stop);
-      return;
-    }
-    lead.textContent = "Open here. Anyone at this computer can see these files until you lock it. It locks itself after ten minutes unused.";
-    const list = el("ul", "rows");
-    for (const f of folder.files) {
-      list.append(row({
-        iconName: KIND_ICON[kindOf(f.path)],
-        name: f.path,
-        sub: [size(f.size), when(f.modified_at)],
-        onClick: async () => {
-          try { await invoke("open_guest_file", { guest: d.fingerprint, path: f.path }); } catch (e) { lead.textContent = String(e); }
-        },
-      }));
-    }
-    if (folder.files.length === 0) list.append(el("li", "meta", "Nothing in it."));
-    body.append(list);
-    const lock = button("Lock", "btn primary", "lock-keyhole");
-    lock.addEventListener("click", async () => {
-      try { await invoke("lock_guest_folder", { guest: d.fingerprint }); } catch (e) { /* already */ }
-      draw();
-    });
-    actions.append(lock);
-  }
   draw();
-  polling = setInterval(watch, 1500);
 }
 
-/**
- * Ask before removing a device, saying exactly what it does (brief §35):
- * trust ends here; nothing on the device itself is touched; and whatever this
- * computer can no longer get back because of it, named.
- */
-async function askToRemove(device, where, called = null) {
-  let plan;
-  try {
-    plan = await invoke("removal_plan", { device: device.fingerprint });
-  } catch (e) {
-    toast(String(e), true);
-    return;
-  }
-  removing = device.fingerprint;
-  where.querySelector(".confirm")?.remove();
+// ---------- Removing ----------
 
-  const box = el("div", "confirm card glass-frosted");
-  box.style.marginTop = "16px";
-  // Named as the person would tell it apart: the earlier self of a device set
-  // up again has the same name as the device in front of them.
-  box.append(el("strong", null, `Remove ${called ?? plan.name}?`));
-  const say = (text, cls = "quiet") => {
-    const p = el("p", cls, text);
-    p.style.marginTop = "8px";
-    p.style.fontSize = "13.5px";
-    box.append(p);
-  };
-  say(`This computer stops trusting it: it can no longer connect or sync here. It keeps ` +
-    `its key and everything already on it — removing it deletes nothing there.`);
-  if (plan.waiting > 0) say(`${count(plan.waiting, "file")} waiting for it to collect will be cancelled.`);
-  if (plan.holds_ours) say("It keeps this computer's private files. After this, it won't.");
-  if (plan.only_there.length > 0) {
-    const n = plan.only_there.length;
-    say(`${count(n, "file")} freed from this computer ${n === 1 ? "is" : "are"} kept only on ` +
-      `${plan.name}. Once it's removed, ${n === 1 ? "it" : "they"} can't be downloaded again.`, "warn");
-    const fetchFirst = button("Keep them here first", "btn small", "download");
-    fetchFirst.addEventListener("click", async () => {
-      for (const path of plan.only_there) {
-        try { await invoke("fetch", { path }); wanted.add(path); } catch (e) { /* in qurbFailures */ }
-      }
-      fetchFirst.replaceWith(el("p", "quiet", "Asked for. They come back the next time it's reachable; remove it after that."));
-    });
-    box.append(fetchFirst);
+/** What removing does, said before it is done (brief §35): trust ends here,
+ * nothing on the device is touched, and what this computer could no longer
+ * get back is named. */
+async function askToRemove(d, called) {
+  let plan;
+  try { plan = await invoke("removal_plan", { device: d.fingerprint }); } catch (e) { toast(String(e), true); return; }
+  const box = sheet({ ic: circle(d, "circle-lg"), title: `Remove ${called ?? plan.name}?`, sub: "It can't sync here any more. Nothing on it is deleted" });
+  const lines = [];
+  if (plan.waiting > 0) lines.push(row({ ic: "send", name: `${count(plan.waiting, "send")} cancelled` }));
+  if (plan.holds_ours) lines.push(row({ ic: "lock-keyhole", name: "It stops keeping your Vault" }));
+  if (plan.only_there.length) {
+    lines.push(row({
+      ic: tile("triangle-alert", "tile-warn"), cls: "row-warn",
+      name: `${count(plan.only_there.length, "file")} only on it`,
+      end: h("button", { class: "btn btn-quiet btn-sm", onclick: async (e) => {
+        for (const path of plan.only_there) { try { await invoke("fetch", { path }); wanted.add(path); } catch (er) { /* said in Activity */ } }
+        e.currentTarget.replaceWith(h("small", { class: "note" }, "Asked for"));
+      } }, "Keep here first"),
+    }));
   }
   let deleteKept = null;
   if (plan.kept > 0) {
-    const label = el("label");
-    label.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13.5px";
-    deleteKept = el("input");
-    deleteKept.type = "checkbox";
-    label.append(deleteKept, `Also delete the ${count(plan.kept, "file")} (${size(plan.kept_bytes)}) this computer keeps for it`);
-    box.append(label);
+    deleteKept = false;
+    lines.push(setting({ ic: "trash-2", name: `Also delete what's kept for it (${size(plan.kept_bytes)})`, end: toggle(false, (on) => { deleteKept = on; }, "Also delete what's kept for it") }));
   }
-  say("Only on this computer: your other devices go on trusting it until you remove it there too.", "meta");
-
-  const buttons = el("div", "actions end");
-  const cancel = button("Cancel", "btn");
-  const confirm = button("Remove device", "btn danger");
-  cancel.addEventListener("click", () => { removing = null; box.remove(); });
-  confirm.addEventListener("click", async () => {
-    confirm.disabled = true;
-    try {
-      await invoke("remove_device", { device: device.fingerprint, deleteKept: deleteKept?.checked ?? false });
-    } catch (e) {
-      confirm.disabled = false;
-      say(String(e), "warn");
-      return;
-    }
-    removing = null;
-    closePanel();
-    toast(`Removed ${plan.name}`);
-    drawDevices();
-  });
-  buttons.append(cancel, confirm);
-  box.append(buttons);
-  where.append(box);
-  // The panel's body scrolls, never the panel: scrolling the panel itself
-  // would slide the body up under its heading.
-  where.scrollTo({ top: where.scrollHeight, behavior: calm() ? "auto" : "smooth" });
+  box.append(...lines,
+    h("p", { class: "note" }, "Only on this computer"),
+    actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Remove", async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        await invoke("remove_device", { device: d.fingerprint, deleteKept: deleteKept ?? false });
+        box.close();
+        toast(`Removed ${plan.name}`);
+        go("home");
+      } catch (er) { e.currentTarget.disabled = false; toast(String(er), true); }
+    }, "btn-danger")));
 }
 
-// -------------------------------------------------------------- adding one
+// ---------- Adding a device ----------
 
-let watching = null;
+let pairingWatch = null;
 
-/**
- * Add a device: show a code for it to scan or type, or enter the code it is
- * showing. The QR is the way most people will do it; the text is for a
- * device with no camera, and for reading out.
- */
-function openAddDevice() {
-  const box = sheet({
-    onClose: async () => {
-      clearInterval(watching);
-      watching = null;
-      // Stopped at both ends: off the screen, and no longer answered. A
-      // closed code that still worked would be the opposite of what was asked.
-      try { await invoke("stop_pairing"); } catch (e) { /* already gone */ }
-      drawDevices();
-    },
-  });
-  const body = el("div");
-  box.append(body);
-  choose();
+function stopPairing() {
+  if (!pairingWatch) return;
+  clearInterval(pairingWatch);
+  pairingWatch = null;
+  // Stopped at both ends: off the screen, and no longer answered.
+  invoke("stop_pairing").catch(() => {});
+}
 
-  function choose() {
-    clearInterval(watching);
-    body.replaceChildren(el("h2", null, "Add a device"), el("p", "lead", "Your phone or another computer. It joins with a code, once."));
-    const choices = el("div", "choices");
-    const option = (id, iconName, title, words, act) => {
-      const c = el("button", "choice");
-      c.id = id;
-      const t = el("span", "tile");
-      t.append(icon(iconName));
-      const text = el("span");
-      text.append(el("strong", null, title), el("span", null, words));
-      c.append(t, text, icon("chevron-right"));
-      c.addEventListener("click", act);
-      choices.append(c);
-    };
-    option("pair-show", "qr-code", "Show a code", "Scan it with your phone, or type its six digits there.", () => show(false));
-    option("pair-enter", "keyboard", "Enter a code", "The six digits a device on this network is showing.", enter);
-    // Another person, as a guest of this computer (decision 0060).
-    option("pair-guest", "user-plus", "Add a person", "Someone else's phone, as a guest. It keeps its own key and sees only what you send it.", () => show(true));
-    body.append(choices);
-  }
+function drawAdd(main) {
+  const choice = (ic, words, sub, act) => h("button", { class: "choice", onclick: act },
+    h("span", { class: "choice-c" }, icon(ic)), h("b", {}, words), h("small", {}, sub));
+  main.append(h("div", { class: "pg pg-narrow" },
+    pageHead("Add a device", { words: "Home", go: () => go("home") }),
+    h("div", { class: "choices" },
+      choice("qr-code", "Show a code", "Scan it with your phone", () => go("pair-show", { guest: false })),
+      choice("keyboard", "Enter a code", "Six digits from the other device", () => go("pair-enter")),
+      choice("users", "Add a person", "Someone else's phone, as a guest", () => go("pair-show", { guest: true })))));
+}
 
-  async function show(guest) {
-    body.replaceChildren(el("h2", null, guest ? "Scan or type this on their phone" : "Scan or type this on the other device"));
-    if (guest) body.append(el("p", "lead", "In Qurb on their phone: Devices → Add → Visit a computer."));
-    const says = el("p", "countdown", "Opening a port…");
-    body.append(says);
-    let invitation;
-    try {
-      invitation = await invoke("start_pairing", { guest });
-    } catch (e) {
-      body.replaceChildren(el("h2", null, "Couldn't show a code"), el("p", "says warn", String(e)));
-      const back = button("Back", "btn");
-      back.addEventListener("click", choose);
-      const actions = el("div", "actions end");
-      actions.append(back);
-      body.append(actions);
-      return;
-    }
-    // The SVG comes from our own renderer, not from anything a peer sent, and
-    // the only variable in it is the code this device just made. Hidden when
-    // there is none: a blank square reads as a code still loading.
-    const qr = el("div", "qr");
-    qr.id = "qr";
-    // With no code drawn, the countdown it captions starts on the left edge
-    // under the heading, rather than centred under nothing.
-    if (invitation.qr) qr.innerHTML = invitation.qr;
-    else {
-      qr.classList.add("hidden");
-      if (!invitation.digits) says.style.textAlign = "left";
-    }
-    body.insertBefore(qr, says);
-    // Six digits, typed on a device on the same network (decision 0066):
-    // what the owner asked for in place of the long code, as WhatsApp's.
-    const digitsSay = el("p", "meta digits-say", guest
-      ? "Or type these on their phone, on this Wi-Fi"
-      : "Or type these on your phone, on this Wi-Fi");
-    const digits = el("p", "digits num", invitation.digits ?? "");
-    digits.id = "pair-digits";
-    if (!invitation.digits) { digitsSay.classList.add("hidden"); digits.classList.add("hidden"); }
-    body.insertBefore(digitsSay, says);
-    body.insertBefore(digits, says);
-    const code = el("details");
-    code.append(el("summary", "meta", "Type the whole code or read it out instead"));
-    code.append(el("p", "meta", guest ? "On their computer:" : "On another computer:"));
-    const typed = el("pre", "code", guest ? `qurb visit ${invitation.code}` : `qurb join <folder> ${invitation.code}`);
-    typed.id = "pair-code";
-    code.append(typed, el("p", "meta", "Or read this out:"));
-    const spoken = el("pre", "code", invitation.spoken);
-    spoken.id = "pair-spoken";
-    code.append(spoken);
-    code.style.marginTop = "12px";
-    body.append(code);
-    body.append(el("p", "note", "The code carries this computer's identity, which is why it travels outside the network; the six digits fetch it, for whoever knows them. It works once."));
-    const actions = el("div", "actions end");
-    const stop = button("Stop showing it", "btn");
-    stop.addEventListener("click", async () => {
-      clearInterval(watching);
-      try { await invoke("stop_pairing"); } catch (e) { /* already gone */ }
-      choose();
-    });
-    actions.append(stop);
-    body.append(actions);
+async function drawShowCode(main, { guest }) {
+  const stage = h("div", { class: "pair" }, h("span", { class: "empty-orb asking" }, icon("qr-code")));
+  main.append(h("div", { class: "pg pg-narrow" },
+    pageHead(guest ? "Add a person" : "Show a code", { words: "Add a device", go: () => { stopPairing(); go("add"); } }),
+    stage));
+  let inv;
+  try { inv = await invoke("start_pairing", { guest }); } catch (e) { put(stage, oops(e)); return; }
+  const qr = h("div", { class: "qr" });
+  if (inv.qr) qr.innerHTML = inv.qr;
+  else qr.append(icon("qr-code"));
+  const digits = h("p", { class: "digits" }, inv.digits ?? "");
+  const left = h("p", { class: "count" });
+  const answer = h("div", {});
+  const whole = h("details", { class: "tech" }, h("summary", {}, "The whole code"),
+    h("pre", { class: "code" }, guest ? `qurb visit ${inv.code}` : `qurb join <folder> ${inv.code}`),
+    h("pre", { class: "code" }, inv.spoken));
+  put(stage, qr, h("p", { class: "note" }, guest ? "On their phone, on this Wi-Fi" : "Or type these on your phone, on this Wi-Fi"), digits, left, answer, whole);
 
-    // A device that used the code waits for the person here (decision 0053):
-    // who it is, the number it should be showing, and a yes or no. A device
-    // showing a different number has somebody else's copy of the code.
-    const asking = el("div", "asking glass-frosted hidden");
-    asking.id = "pair-asking";
-    asking.style.cssText = "margin-top: 16px; padding: 16px; border-radius: 16px";
-    body.insertBefore(asking, code);
-    let asked = null;
-    const ask = (state) => {
-      const key = `${state.name}|${state.number}`;
+  let asked = null;
+  const follow = async () => {
+    let s;
+    try { s = await invoke("pairing_state"); } catch (e) { left.textContent = String(e); return; }
+    if (place !== "pair-show") { stopPairing(); return; }
+    if (s.state === "asking") {
+      const key = `${s.name}|${s.number}`;
       if (asked === key) return;
       asked = key;
-      const what = state.guest
-        ? "wants to visit this computer as a guest, with their own key, seeing only what you send them"
-        : state.wants_key ? "wants to join and take this computer's key" : "wants to pair";
-      const number = el("p", "number", state.number);
-      number.id = "pair-number";
-      number.style.cssText = "font-size: 32px; font-weight: 600; letter-spacing: 2px; margin: 8px 0; font-variant-numeric: tabular-nums";
-      const decline = button("Decline", "btn");
-      const approve = button("Approve", "btn primary");
-      approve.id = "pair-approve";
-      const answer = async (yes) => {
-        decline.disabled = approve.disabled = true;
-        try { await invoke("answer_pairing", { approve: yes }); } catch (e) { says.textContent = String(e); }
-        asked = null;
-        asking.classList.add("hidden");
-      };
-      decline.addEventListener("click", () => answer(false));
-      approve.addEventListener("click", () => answer(true));
-      const buttons = el("div", "actions end");
-      buttons.append(decline, approve);
-      asking.replaceChildren(
-        el("strong", null, `${state.name} ${what}.`),
-        el("p", "meta", "Approve only if it shows this number:"),
-        number,
-        el("p", "meta", "A different number means someone else has this code: decline."),
-        buttons,
-      );
-      asking.classList.remove("hidden");
-    };
+      qr.classList.add("dim");
+      put(answer, h("div", { class: "asking-box" },
+        h("b", {}, s.guest ? `${s.name} wants to visit` : `${s.name} wants to join`),
+        h("small", {}, "Approve only if it shows"),
+        h("p", { class: "digits" }, s.number),
+        actions(btn("Decline", () => reply(false), "btn-quiet"), btn("Approve", () => reply(true), "btn-main"))));
+      return;
+    }
+    if (s.state === "waiting") {
+      if (asked) { asked = null; put(answer); qr.classList.remove("dim"); }
+      if (s.digits_withdrawn) digits.classList.add("withdrawn");
+      const secs = Math.max(0, inv.expires_at - Math.floor(Date.now() / 1000));
+      left.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+      return;
+    }
+    clearInterval(pairingWatch);
+    pairingWatch = null;
+    if (s.state === "paired") paired(main, s);
+    else left.textContent = s.state === "expired" ? "Expired. Show a new one" : (s.message ?? "Didn't work");
+  };
+  const reply = async (yes) => {
+    answer.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try { await invoke("answer_pairing", { approve: yes }); } catch (e) { toast(String(e), true); }
+  };
+  clearInterval(pairingWatch);
+  pairingWatch = setInterval(follow, 700);
+  follow();
+}
 
-    clearInterval(watching);
-    const follow = async () => {
-      let state;
-      try {
-        state = await invoke("pairing_state");
-      } catch (e) {
-        says.textContent = String(e);
-        return;
-      }
-      if (state.state === "asking") {
-        says.textContent = state.guest ? "Someone is asking to visit." : "A device is asking to join.";
-        ask(state);
-        return;
-      }
-      if (state.state === "waiting") {
-        if (asked !== null) { asked = null; asking.classList.add("hidden"); }
-        // Tried wrongly too often, the digits stop working; the QR still does.
-        if (state.digits_withdrawn && !digits.classList.contains("withdrawn")) {
-          digits.classList.add("withdrawn");
-          digitsSay.textContent = "These were typed wrongly too often. Scan the code instead.";
-        }
-        // Counted down rather than left saying "waiting". A code that stopped
-        // working minutes ago, under a screen that says it is waiting, is
-        // worse than no screen: somebody reads it out and is told it is wrong.
-        const left = Math.max(0, invitation.expires_at - Math.floor(Date.now() / 1000));
-        says.textContent = `Waiting — this code works for ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
-        return;
-      }
-      clearInterval(watching);
-      watching = null;
-      if (state.state === "paired") done(state);
-      else if (state.state === "expired") says.textContent = "That code has expired. Show a new one.";
-      else if (state.state === "failed") says.textContent = state.message ?? "Pairing didn't work.";
-    };
-    watching = setInterval(follow, 700);
-    follow();
-  }
+function drawEnterCode(main) {
+  const says = h("p", { class: "note" }, "On the same Wi-Fi");
+  const input = h("input", { class: "digits-in", inputmode: "numeric", autocomplete: "off", spellcheck: "false", placeholder: "000000", "aria-label": "The code" });
+  const join = async () => {
+    if (input.disabled || !input.value.trim()) return;
+    input.disabled = true;
+    try {
+      says.textContent = "Looking for it";
+      const number = await invoke("pairing_number", { code: input.value });
+      put(says, "Approve it there. It shows ", h("b", {}, number));
+      paired(main, await invoke("join_device", { code: input.value }));
+    } catch (e) {
+      says.textContent = String(e);
+      says.classList.add("warn");
+      input.disabled = false;
+      input.focus();
+    }
+  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") join(); });
+  // As the sixth digit is typed, as on the phone.
+  input.addEventListener("input", () => { says.classList.remove("warn"); if (/^\d{6}$/.test(input.value.trim())) join(); });
+  main.append(h("div", { class: "pg pg-narrow" },
+    pageHead("Enter a code", { words: "Add a device", go: () => go("add") }),
+    h("div", { class: "pair" }, input, says)));
+  input.focus();
+}
 
-  function enter() {
-    body.replaceChildren(el("h2", null, "Enter a code"), el("p", "lead", "The six digits the other device is showing, on the same network. The whole code works too."));
-    const input = el("input", "input digits-input num");
-    input.id = "pair-input";
-    input.spellcheck = false;
-    input.autocomplete = "off";
-    input.inputMode = "numeric";
-    input.placeholder = "000000";
-    input.style.marginTop = "16px";
-    const says = el("p", "says warn hidden");
-    const actions = el("div", "actions end");
-    const back = button("Back", "btn");
-    back.addEventListener("click", choose);
-    const go = button("Join", "btn primary");
-    go.id = "pair-go";
-    const join = async () => {
-      if (go.disabled) return;
-      go.disabled = true;
-      go.querySelector("span").textContent = "Joining…";
-      try {
-        // Six digits are looked for on this network first (decision 0066).
-        says.classList.remove("warn", "hidden");
-        says.textContent = "Looking for it on this network…";
-        // The other device asks its person to approve this one: show the
-        // number it will be comparing (decision 0053).
-        const number = await invoke("pairing_number", { code: input.value });
-        says.classList.remove("warn", "hidden");
-        says.textContent = `Approve it on the other device. It should show ${number}.`;
-        const state = await invoke("join_device", { code: input.value });
-        input.value = "";
-        done(state);
-      } catch (e) {
-        says.textContent = String(e);
-        says.classList.add("warn");
-        says.classList.remove("hidden");
-        go.disabled = false;
-        go.querySelector("span").textContent = "Join";
-      }
-    };
-    go.addEventListener("click", join);
-    input.addEventListener("keydown", (event) => { if (event.key === "Enter") join(); });
-    // Joining starts as the sixth digit is typed, as on the phone.
-    input.addEventListener("input", () => { if (/^\d{6}$/.test(input.value.trim())) join(); });
-    actions.append(back, go);
-    body.append(input, says, actions);
-    input.focus();
-  }
-
-  // §34: the new device materialises -- on this sheet, and again as its card
-  // appears in the list behind it.
-  function done(state) {
-    justPaired = state.fingerprint;
-    body.replaceChildren();
-    const card = el("div", "device glass-frosted arrived");
-    card.id = "pair-done";
-    card.style.cssText = "margin: 8px auto 0; max-width: 280px; align-items: center; text-align: center";
-    const t = el("span", "tile");
-    t.append(icon(deviceIcon(state.name, state.kind)));
-    const words = el("div");
-    const named = el("strong", null, state.name);
-    named.id = "pair-with";
-    named.dataset.fingerprint = state.fingerprint;
-    words.append(named, el("span", "presence on", "Connected to your Qurb space"));
-    card.append(t, words);
-    body.append(el("h2", null, "Device added"), card);
-    const actions = el("div", "actions end");
-    const finish = button("Done", "btn primary");
-    finish.id = "pair-finish";
-    finish.addEventListener("click", () => box.close());
-    actions.append(finish);
-    body.append(actions);
-    drawDevices();
-  }
+/** The new device, arrived: its circle, as it will be in the panel. */
+function paired(main, s) {
+  put(main, h("div", { class: "pg pg-narrow" },
+    h("div", { class: "pair arrived" },
+      circle({ name: s.name, route: "direct" }, "circle-xl"),
+      h("h1", {}, s.name),
+      h("p", { class: "note" }, "Added"),
+      btn("Done", () => go("home"), "btn-main"))));
+  listsHome();
 }

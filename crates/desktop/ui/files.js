@@ -1,965 +1,564 @@
-// Files, Private Vault, a file's details, Recently deleted, and sending.
-//
-// Files should feel like a familiar file browser, not a dashboard (direction
-// §18): search, where you are, folders standing apart, then files -- each with
-// its name, a little metadata and where its bytes are. Freeing local space
-// never looks like deleting (§12), and the only copy is protected (§13).
+// Files: one search across the shared folder and the Vault, then this
+// computer's places as cards two to a row — Shared, Vault, Received,
+// Recently deleted — and a folder for each person this computer keeps files
+// for. Inside, folders as cards, files as plain rows, or as a gallery where
+// a folder is mostly pictures. A file's sheet has its actions as round
+// buttons, as on the phone; Space looks at the file under the pointer.
 
-/** The synced folder on this computer, from `situation`, for sending. */
+/** The synced folder on this computer, from `situation`: sending a shared
+ * file sends it from there. */
 let rootPath = "";
 
-/** Paths asked for with Keep on this device and not here yet: drawn as
- *  Downloading until a redraw finds them here (§30). */
+/** Paths asked for with Keep here and not here yet. */
 const wanted = new Set();
 
-/**
- * One file browser: the shared area (Files) or this computer's own vault
- * (Private Vault). Same query, same rows; only the area differs.
- *
- * Files has a level above the shared folder (decision 0067): *Shared*, and a
- * folder for each person this computer keeps files for. `area` is null
- * there, "shared" in the shared folder, or a person's id in theirs; `dir`
- * is the place inside it.
- */
-function makeBrowser({ isPrivate, rootName, find, crumbs, folders, list }) {
-  const b = { dir: "", searching: "", area: isPrivate ? "shared" : null };
-  /** The people, as last listed: their names, for the crumbs. */
-  let people = [];
+/** What Files is showing: an area (null at the top, "shared", "vault", or a
+ * person's id), the folder inside it, and the files drawn, for Space. */
+const FILES = { area: null, dir: "", query: "", people: [], shown: [], hover: -1, conflicts: [], asking: null };
 
-  b.draw = async () => {
-    const out = $(list);
-    try {
-      if (!b.searching && b.area === null) return await drawTop();
-      if (!b.searching && b.area !== "shared") return await drawPerson();
-      if (b.searching) {
-        const found = await invoke("find", { text: b.searching, private: isPrivate });
-        $(crumbs).replaceChildren(el("span", "quiet", `${count(found.length, "result")} for “${b.searching}”`));
-        $(folders).replaceChildren();
-        out.replaceChildren();
-        if (!isPrivate) drawDeletedLink();
-        if (found.length === 0) out.append(empty("search", "Nothing matches that name."));
-        for (const f of found) out.append(fileRow(f, b, true));
-        return;
-      }
-      const d = await invoke("browse", { dir: b.dir, private: isPrivate });
-      drawCrumbs();
-      $(folders).replaceChildren();
-      // Each kind labelled whenever it is there, as on the phone.
-      if (d.folders.length > 0) $(folders).append(el("div", "list-label", "Folders"));
-      for (const name of d.folders) $(folders).append(folderTile(name));
-      out.replaceChildren();
-      if (d.files.length > 0) out.append(el("div", "list-label", "Files"));
-      for (const f of d.files) out.append(fileRow(f, b, false));
-      if (!isPrivate) drawDeletedLink();
-      if (d.files.length === 0 && d.folders.length === 0) {
-        out.append(isPrivate
-          ? empty("lock-keyhole", b.dir ? "This folder is empty."
-            : "Nothing here yet. Turn on Keep new files private in Settings, and files you add on this computer come here.")
-          : empty("folder-open", b.dir ? "This folder is empty."
-            : "Your Qurb folder is empty. Put files in it, and they appear on your other devices."));
-      }
-    } catch (e) {
-      oops(out, e);
-    }
-  };
+function drawFiles(main, at = {}) {
+  FILES.area = at.area ?? null;
+  FILES.dir = at.dir ?? "";
+  FILES.shown = [];
+  FILES.hover = -1;
+  clearInterval(FILES.asking);
+  if (FILES.area === null) return drawFilesTop(main);
+  if (FILES.area === "shared" || FILES.area === "vault") return drawArea(main);
+  return drawPerson(main);
+}
 
-  function drawCrumbs() {
-    const nav = $(crumbs);
-    nav.replaceChildren();
-    const parts = b.dir ? b.dir.split("/") : [];
-    const go = (dir) => { b.dir = dir; closePanel(); b.draw(); };
-    const root = el("button", null, rootName);
-    root.addEventListener("click", () => {
-      if (!isPrivate) b.area = null;
-      go("");
-    });
-    nav.append(root);
-    // The area, between the top and the place in it.
-    if (!isPrivate && b.area !== null) {
-      nav.append(icon("chevron-right"));
-      const named = b.area === "shared" ? "Shared" : (people.find((p) => p.id === b.area)?.name ?? "Folder");
-      const crumb = el("button", null, named);
-      crumb.addEventListener("click", () => go(""));
-      nav.append(crumb);
-    }
-    parts.forEach((part, i) => {
-      nav.append(icon("chevron-right"));
-      const crumb = el("button", null, part);
-      crumb.addEventListener("click", () => go(parts.slice(0, i + 1).join("/")));
-      nav.append(crumb);
-    });
-  }
+const inFiles = (area, dir = "") => go("files", { area, dir });
 
-  function folderTile(name) {
-    const tile = el("button", "folder");
-    tile.append(icon("folder"), el("span", null, name));
-    const path = b.dir ? `${b.dir}/${name}` : name;
-    tile.addEventListener("click", () => { b.dir = path; closePanel(); b.draw(); });
-    // Who has a folder, and whether this computer keeps it, from its own
-    // menu: set once and rarely looked at again.
-    if (!isPrivate) {
-      tile.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        menu(tile, [["Folder options", "settings", () => openFolderOptions(path.split("/")[0])]]);
-      });
-    }
-    return tile;
-  }
+// ---------- The top ----------
 
-  /** Files' top: *Shared*, then a folder for each person, locked or open. */
-  async function drawTop() {
-    drawCrumbs();
-    try { people = await invoke("people"); } catch (e) { people = []; }
-    const box = $(folders);
-    box.replaceChildren(el("div", "list-label", "Folders"));
-    const tile = (name, iconName, meta, open, state) => {
-      const t = el("button", "folder area");
-      // Locked or open is the icon's to say, which leaves the line room for
-      // what is in it; said in words to whoever cannot see the icon.
-      if (state) t.setAttribute("aria-label", `${name}, ${state}: ${meta}`);
-      const words = el("div", "area-words");
-      words.append(el("span", null, name), el("small", null, meta));
-      t.append(icon(iconName), words);
-      t.addEventListener("click", open);
-      box.append(t);
-    };
-    tile("Shared", "folder", "On all your devices", () => { b.area = "shared"; b.dir = ""; b.draw(); });
-    for (const p of people) {
-      const phones = p.relation === "owner" && p.phones ? count(p.phones, "phone") : null;
-      tile(p.name, p.state === "open" ? "folder-open" : "lock-keyhole",
-        [phones, Number(p.size) > 0 ? size(p.size) : null].filter(Boolean).join(" · ") || "Nothing kept yet",
-        () => { b.area = p.id; b.dir = ""; closePanel(); b.draw(); },
-        p.state === "open" ? "open" : "locked");
-    }
-    $(list).replaceChildren();
-    drawDeletedLink();
-  }
-
-  /** While a person's folder is being asked for: looked at again until it
-   *  opens, or until somebody goes elsewhere. */
-  let asking = null;
-
-  /** A person's folder: locked, asking their phone, or open (decision 0067). */
-  async function drawPerson() {
-    const person = b.area;
-    if (!people.some((p) => p.id === person)) {
-      try { people = await invoke("people"); } catch (e) { /* named Folder */ }
-    }
-    const p = people.find((x) => x.id === person) ?? { id: person, name: "Folder", relation: "guest", devices: [] };
-    drawCrumbs();
-    const answer = await invoke("person_folder", { person, dir: b.dir });
-    if (b.area !== person) return;
-    const box = $(folders);
-    const out = $(list);
-    box.replaceChildren();
-    out.replaceChildren();
-    $("deleted-link").replaceChildren();
-    clearInterval(asking);
-    asking = null;
-
-    if (answer.state !== "open") {
-      out.append(lockedFolder(p, answer.state));
-      if (answer.state === "asking") {
-        asking = setInterval(() => {
-          if (b.area !== person || screen !== "files") { clearInterval(asking); asking = null; return; }
-          b.draw();
-        }, 1500);
-      }
-      return;
-    }
-
-    // Open: how long for, and a way to lock it now.
-    const bar = el("div", "person-bar");
-    const said = el("p", "meta", "Open on this computer. It locks itself after ten minutes unused.");
-    const lock = button("Lock", "btn small", "lock-keyhole");
-    lock.addEventListener("click", async () => {
-      try { await invoke("lock_person_folder", { person }); } catch (e) { toast(String(e), true); }
-      b.dir = "";
-      b.draw();
-    });
-    bar.append(said, lock);
-    box.append(bar);
-    if (answer.folders.length > 0) box.append(el("div", "list-label", b.dir ? "Folders" : (p.relation === "owner" ? "Phones" : "Folders")));
-    for (const name of answer.folders) {
-      const t = el("button", "folder");
-      t.append(icon(!b.dir && p.relation === "owner" ? "smartphone" : "folder"), el("span", null, name));
-      t.addEventListener("click", () => { b.dir = b.dir ? `${b.dir}/${name}` : name; closePanel(); b.draw(); });
-      box.append(t);
-    }
-    if (answer.files.length > 0) out.append(el("div", "list-label", "Files"));
-    for (const f of answer.files.slice(0, 1000)) {
-      out.append(row({
-        iconName: KIND_ICON[kindOf(f.name)],
-        name: f.name,
-        sub: [size(f.size), when(f.modified_at)],
-        onClick: async () => {
-          try {
-            await invoke("open_person_file", { person, device: f.device, path: f.path });
-          } catch (e) {
-            toast(String(e), true);
-          }
-        },
-      }));
-    }
-    if (answer.files.length > 1000) out.append(el("p", "note", `The first 1,000 of ${count(answer.files.length, "file")}.`));
-    if (answer.files.length === 0 && answer.folders.length === 0) {
-      out.append(empty("folder-open", b.dir ? "This folder is empty." : "Nothing is kept here yet."));
-    }
-  }
-
-  /** A person's folder before their phone says yes. */
-  function lockedFolder(p, state) {
-    const own = p.relation === "owner";
-    const box = el("div", "empty locked-folder");
-    const orb = el("span", "orb");
-    orb.append(icon(state === "asking" ? "smartphone" : "lock-keyhole"));
-    box.append(orb);
-    if (state === "asking") {
-      box.append(el("p", null, own
-        ? "Waiting for your phone. Open Qurb on it and approve: it asks as soon as it next syncs with this computer."
-        : `Waiting for ${p.name}. They approve on their phone, which asks when it next syncs with this computer.`));
-      return box;
-    }
-    box.append(el("p", null, own
-      ? "Your folder opens with a yes on your phone: its backups, its WhatsApp and its Private Vault, as this computer keeps them."
-      : `${p.name}'s folder is sealed. It opens only when they approve on their phone.`));
-    const ask = button(own ? "Ask your phone" : `Ask ${p.name}`, "btn primary", "smartphone");
-    ask.addEventListener("click", async () => {
-      ask.disabled = true;
-      try {
-        await invoke("ask_person_folder", { person: p.id });
-      } catch (e) {
-        toast(String(e), true);
-      }
-      b.draw();
-    });
-    box.append(ask);
-    // Said where it matters (decision 0067): the owner's is Qurb's rule.
-    if (own) box.append(el("p", "note", "This computer holds the same key as your phone, so this is Qurb's rule rather than a lock on the files themselves."));
-    return box;
-  }
-
-  b.openPerson = (person, dir = "") => { b.area = person; b.dir = dir; b.searching = ""; b.draw(); };
-  b.openShared = () => { b.area = "shared"; b.dir = ""; b.searching = ""; b.draw(); };
-
-  // Debounced, because every keystroke is a query and a list that redraws
-  // under the cursor while somebody is still typing is worse than one that
-  // waits.
+function drawFilesTop(main) {
+  const field = h("input", { class: "find-in", type: "search", placeholder: "Search", spellcheck: "false", "aria-label": "Search your files" });
+  const body = h("div", { id: "files-body" });
+  main.append(h("div", { class: "pg" },
+    pageHead("Files", null),
+    h("label", { class: "find" }, icon("search"), field),
+    body));
   let typing = null;
-  $(find).addEventListener("input", (event) => {
+  field.addEventListener("input", () => {
     clearTimeout(typing);
-    typing = setTimeout(() => { b.searching = event.target.value.trim(); b.draw(); }, 180);
+    typing = setTimeout(() => { FILES.query = field.value.trim(); drawTopBody(body); }, 180);
   });
-
-  return b;
+  field.value = FILES.query;
+  drawTopBody(body);
 }
 
-const filesBrowser = makeBrowser({
-  isPrivate: false, rootName: "Qurb",
-  find: "find", crumbs: "crumbs", folders: "folders", list: "file-list",
-});
-const vaultBrowser = makeBrowser({
-  isPrivate: true, rootName: "Private Vault",
-  find: "vault-find", crumbs: "vault-crumbs", folders: "vault-folders", list: "vault-list",
-});
+async function drawTopBody(body) {
+  if (FILES.query) return drawFound(body, FILES.query);
+  const [people, conflicts, deleted] = await Promise.all([
+    invoke("people").catch(() => []),
+    invoke("conflicts").catch(() => []),
+    invoke("recently_deleted").catch(() => []),
+  ]);
+  FILES.people = people;
+  FILES.conflicts = conflicts;
+  if (FILES.query || place !== "files") return;
+  put(body, 
+    conflicts.length ? row({ ic: tile("git-compare", "tile-warn"), name: conflicts.length === 1 ? `${base(conflicts[0].path)} has two versions` : `${conflicts.length} files have two versions`, cls: "row-warn", onclick: () => go("conflicts"), end: icon("chevron-right", "row-go") }) : null,
+    label("This computer"),
+    h("div", { class: "cards" },
+      card("folder", "Shared", "On all your devices", () => inFiles("shared")),
+      card("lock-keyhole", "Vault", "Only here", () => inFiles("vault")),
+      card("download", "Received", "Sent to this computer", () => go("received")),
+      card("trash-2", "Recently deleted", deleted.length ? count(deleted.length, "file") : "Kept 30 days", () => go("deleted"))),
+    people.length ? label("People") : null,
+    people.length ? h("div", { class: "cards" }, ...people.map((p) => card(
+      p.state === "open" ? "folder-open" : "lock-keyhole",
+      p.name,
+      Number(p.size) > 0 ? size(p.size) : "Nothing kept yet",
+      () => inFiles(p.id)))) : null);
+}
 
-/** The state a file is in right now, including one being downloaded. */
-function liveState(f) {
-  if (f.availability !== "elsewhere") wanted.delete(f.path);
-  if (wanted.has(f.path)) {
-    const tag = el("span", "state moving");
-    tag.append(icon("download"), el("span", null, "Downloading"));
-    return tag;
+function card(ic, name, sub, onclick) {
+  return h("button", { class: "card", onclick }, tile(ic), h("span", { class: "card-words" }, h("b", {}, name), h("small", {}, sub)));
+}
+
+/** Search: the shared folder and the Vault at once. */
+async function drawFound(body, text) {
+  let shared, vault;
+  try {
+    [shared, vault] = await Promise.all([invoke("find", { text, private: false }), invoke("find", { text, private: true })]);
+  } catch (e) {
+    put(body, oops(e));
+    return;
   }
-  return stateTag(f.availability);
+  if (text !== FILES.query) return;
+  const found = [...shared, ...vault];
+  FILES.shown = found.map(sharedItem);
+  put(body, 
+    label(count(found.length, "result")),
+    found.length ? h("div", { class: "rows" }, ...found.map((f, i) => fileRow(f, i, true))) : empty("search", "Nothing by that name"));
 }
 
-function fileRow(f, browser, showFolder) {
-  const more = el("button", "icon-btn reveal");
-  more.setAttribute("aria-label", `More for ${base(f.path)}`);
-  more.append(icon("ellipsis"));
-  more.addEventListener("click", (event) => {
-    event.stopPropagation();
-    menu(more, fileActions(f, () => browser.draw()));
-  });
+// ---------- The shared folder and the Vault ----------
 
-  const trail = [];
-  // The one contextual action worth a button of its own: getting back a file
-  // that is not here.
-  if (f.availability === "elsewhere" && !wanted.has(f.path)) {
-    const keep = button("Keep here", "btn small reveal", "download");
-    keep.addEventListener("click", (event) => { event.stopPropagation(); keepHere(f.path, li); });
-    trail.push(keep);
+async function drawArea(main) {
+  const vault = FILES.area === "vault";
+  const top = vault ? "Vault" : "Shared";
+  const parts = FILES.dir ? FILES.dir.split("/") : [];
+  const up = parts.length ? { words: parts.length > 1 ? parts[parts.length - 2] : top, go: () => inFiles(FILES.area, parts.slice(0, -1).join("/")) }
+    : { words: "Files", go: () => go("files") };
+  const more = h("button", { class: "icon-btn", "aria-label": "More", onclick: () => areaSheet() }, icon("ellipsis"));
+  const body = h("div", {});
+  main.append(h("div", { class: "pg" }, pageHead(parts.length ? parts[parts.length - 1] : top, up, more), body));
+  let d;
+  try {
+    d = await invoke("browse", { dir: FILES.dir, private: vault });
+  } catch (e) {
+    put(body, oops(e));
+    return;
   }
-  trail.push(more);
-
-  const li = row({
-    iconName: KIND_ICON[kindOf(f.path)],
-    name: base(f.path),
-    sub: [
-      liveState(f),
-      size(f.size),
-      showFolder ? (folderOf(f.path) || "Qurb") : when(f.modified),
-    ],
-    trail,
-    cls: wanted.has(f.path) ? "arriving" : "",
-    onClick: () => openDetails(f.path),
+  FILES.shown = d.files.map(sharedItem);
+  const folders = d.folders.map((name) => {
+    const path = FILES.dir ? `${FILES.dir}/${name}` : name;
+    const c = card("folder", name, null, () => inFiles(FILES.area, path));
+    c.querySelector("small").remove();
+    // Who has a top folder, and whether it is kept here: its own sheet,
+    // from a right click, set once and rarely looked at again.
+    if (!vault && !FILES.dir) c.addEventListener("contextmenu", (e) => { e.preventDefault(); folderSheet(name); });
+    return c;
   });
-  li.dataset.path = f.path;
-  li.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-    menu(more, fileActions(f, () => browser.draw()));
-  });
-  return li;
+  put(body, 
+    folders.length ? h("div", { class: "cards" }, ...folders) : null,
+    d.files.length ? filesOf(d.files, (f, i) => fileRow(f, i, false), sharedItem) : null,
+    !d.files.length && !d.folders.length
+      ? empty(vault ? "lock-keyhole" : "folder-open", FILES.dir ? "Empty" : vault ? "Files kept only on this computer come here" : "Put files in your QurbSpace folder")
+      : null);
 }
 
-/** Whether a file's bytes are on this computer. */
+/** The area's own sheet: its folder's options, or showing it on disk. */
+function areaSheet() {
+  const box = sheet({ ic: FILES.area === "vault" ? "lock-keyhole" : "folder", title: FILES.area === "vault" ? "Vault" : "Shared" });
+  const top = FILES.area === "shared" ? FILES.dir.split("/")[0] : "";
+  rounds(box, [
+    { ic: "external-link", words: "Show", act: () => invoke("show_root").catch((e) => toast(String(e), true)) },
+    top ? { ic: "sliders-horizontal", words: "Who has it", act: () => folderSheet(top) } : null,
+    { ic: "trash-2", words: "Deleted", act: () => go("deleted") },
+  ]);
+}
+
 const isHere = (f) => f.availability === "here" || f.availability === "only here";
 
-/** What can be done to a file, in the order people reach for them. A file on
- *  no device can be looked at and deleted, and nothing else: there is nothing
- *  to open and nowhere to fetch it from (decision 0055). */
-function fileActions(f, redraw) {
+/** Where a file's bytes are, as an icon at its row's end: nothing when it is
+ * here, as nearly every file is. */
+function whereIcon(f) {
+  if (wanted.has(f.path) && f.availability === "elsewhere") return h("span", { class: "where moving", title: "Downloading" }, icon("download"));
+  if (f.availability !== "elsewhere") wanted.delete(f.path);
+  if (f.availability === "elsewhere") return h("span", { class: "where", title: "On your other devices" }, icon("cloud"));
+  if (f.availability === "nowhere") return h("span", { class: "where warn", title: "On no device" }, icon("circle-alert"));
+  if (f.availability === "only here") return h("span", { class: "where", title: "Only on this computer" }, icon("laptop"));
+  return null;
+}
+
+function fileRow(f, i, found) {
+  const r = row({
+    ic: fileIcon(f.path),
+    name: base(f.path),
+    sub: [size(f.size), found ? (folderOf(f.path) || (f.private ? "Vault" : "Shared")) : ago(f.modified)],
+    end: [found && f.private ? h("span", { class: "chip chip-quiet" }, "Vault") : null, whereIcon(f)],
+    onclick: () => fileSheet(f),
+  });
+  hoverable(r, i);
+  r.addEventListener("contextmenu", (e) => { e.preventDefault(); fileSheet(f); });
+  return r;
+}
+
+/** A row or a picture that Space looks at, while the pointer or focus is on it. */
+function hoverable(el, i) {
+  el.addEventListener("mouseenter", () => { FILES.hover = i; });
+  el.addEventListener("focus", () => { FILES.hover = i; });
+  el.addEventListener("mouseleave", () => { if (FILES.hover === i) FILES.hover = -1; });
+}
+
+/**
+ * Files as rows, or as a gallery when most of them are pictures — a phone's
+ * camera folder, a holiday. The gallery's pictures are the small ones a
+ * camera keeps inside each photo, asked for as they scroll into view.
+ */
+function filesOf(files, asRow, source) {
+  const name = (f) => f.name ?? base(f.path);
+  const pictures = files.filter((f) => kindOf(name(f)) === "image").length;
+  if (pictures < 4 || pictures < files.length / 2) {
+    return h("div", { class: "rows" }, label("Files"), ...files.slice(0, 1000).map(asRow),
+      files.length > 1000 ? h("p", { class: "note" }, `First 1,000 of ${files.length.toLocaleString()}`) : null);
+  }
+  const grid = h("div", { class: "gallery" });
+  const seen = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      seen.unobserve(e.target);
+      thumbs.push(e.target);
+      pump();
+    }
+  }, { root: $("main"), rootMargin: "400px" });
+  const thumbs = [];
+  let loading = 0;
+  // Three at a time: a gallery scrolled quickly asks for what is in view,
+  // not for everything it passed.
+  const pump = () => {
+    while (loading < 3 && thumbs.length) {
+      const el = thumbs.shift();
+      if (!el.isConnected) continue;
+      loading++;
+      el.load().then((p) => {
+        if (p?.kind === "image") put(el, h("img", { src: p.data, alt: "", loading: "lazy" }));
+      }).catch(() => {}).finally(() => { loading--; pump(); });
+    }
+  };
+  files.slice(0, 3000).forEach((f, i) => {
+    const s = source(f);
+    const cell = h("button", { class: "pic", title: name(f), onclick: () => peek(i) }, icon(fileIcon(name(f))));
+    cell.load = () => (kindOf(name(f)) === "image" && s.here !== false ? s.small() : Promise.resolve(null));
+    hoverable(cell, i);
+    grid.append(cell);
+    seen.observe(cell);
+  });
+  return h("div", {}, label(count(files.length, "file")), grid,
+    files.length > 3000 ? h("p", { class: "note" }, `First 3,000 of ${files.length.toLocaleString()}`) : null);
+}
+
+/** A shared or Vault file as quick preview and the gallery see it. */
+function sharedItem(f) {
+  return {
+    name: base(f.path),
+    here: isHere(f),
+    small: () => invoke("preview", { path: f.path, small: true }),
+    large: () => invoke("preview", { path: f.path }),
+    open: () => invoke("open_file", { path: f.path }),
+    sheet: () => fileSheet(f),
+  };
+}
+
+// ---------- A file's sheet ----------
+
+async function fileSheet(f) {
+  const name = base(f.path);
   const here = isHere(f);
-  const items = [];
-  if (here) {
-    items.push(["Open", "external-link", () => openFile(f.path)]);
-    items.push(["Show in folder", "folder-search", () => showFile(f.path)]);
-  } else if (f.availability === "elsewhere") {
-    items.push(["Keep on this device", "download", () => keepHere(f.path, rowFor(f.path))]);
-  }
-  if (f.availability === "here") {
-    items.push(["Free local space", "cloud-off", () => freeLocal(f.path, rowFor(f.path), redraw)]);
-  }
-  if (here) items.push(["Send to device…", "send", () => openSend([`${rootPath}/${f.path}`])]);
-  if (here) {
-    items.push(f.private
-      ? ["Move to shared", "folder", () => moveArea(f, false, redraw)]
-      : ["Move to Private Vault…", "lock-keyhole", () => moveArea(f, true, redraw)]);
-  }
-  items.push(["Details", "info", () => openDetails(f.path)]);
-  items.push("-");
-  items.push(["Delete", "trash-2", () => deleteFile(f.path, redraw), true]);
-  return items;
+  const where = h("span", { class: "chip chip-quiet" }, f.private ? "Vault" : "Shared", folderOf(f.path) ? h("span", {}, folderOf(f.path)) : null);
+  const box = sheet({ ic: fileIcon(name), title: name, sub: h("div", { class: "chips" }, where, h("span", { class: "chip chip-quiet" }, size(f.size))) });
+  const elsewhere = f.availability === "elsewhere" && !wanted.has(f.path);
+  rounds(box, [
+    here && peekable(name) ? { ic: "image", words: "Preview", act: () => peekOne(sharedItem(f)) } : null,
+    here ? { ic: "external-link", words: "Open", act: () => invoke("open_file", { path: f.path }).catch((e) => toast(String(e), true)) } : null,
+    here ? { ic: "folder-open", words: "Show", act: () => invoke("show_file", { path: f.path }).catch((e) => toast(String(e), true)) } : null,
+    elsewhere ? { ic: "download", words: "Keep here", act: () => keepHere(f.path) } : null,
+    here ? { ic: "send", words: "Send", act: () => send([`${rootPath}/${f.path}`]) } : null,
+    f.availability === "here" ? { ic: "cloud-off", words: "Free up", act: () => freeUp(f.path) } : null,
+    here ? (f.private
+      ? { ic: "folder", words: "To Shared", act: () => moveArea(f, false) }
+      : { ic: "lock-keyhole", words: "To Vault", act: () => moveArea(f, true) }) : null,
+    { ic: "trash-2", words: "Delete", danger: true, act: () => deleteFile(f.path) },
+  ]);
+  // Where its bytes are, under the actions: the devices that have it.
+  const holders = h("div", { class: "holders" });
+  box.append(holders);
+  try {
+    const d = await invoke("details", { path: f.path });
+    const on = [...(here ? ["This computer"] : []), ...d.holders];
+    holders.append(label("On"), h("div", { class: "chips" }, ...(on.length ? on : ["No device yet"]).map((n) => h("span", { class: "chip chip-quiet" }, n))));
+    if (f.availability === "only here") holders.append(h("p", { class: "note" }, "The only copy. It reaches your other devices when one is online."));
+    if (f.availability === "nowhere") holders.append(h("p", { class: "note" }, "No device has it any more."));
+    const conflict = FILES.conflicts.find((c) => c.path === f.path || c.other.path === f.path);
+    if (conflict) holders.append(row({ ic: tile("git-compare", "tile-warn"), name: "Two versions", cls: "row-warn", onclick: () => { box.close(); go("conflicts"); }, end: icon("chevron-right", "row-go") }));
+  } catch (e) { /* the actions are enough */ }
 }
 
-const rowFor = (path) => document.querySelector(`.screen.on li[data-path="${CSS.escape(path)}"]`);
+const redraw = () => { if (place === "files") go("files", { area: FILES.area, dir: FILES.dir }); };
 
-async function openFile(path) {
-  try { await invoke("open_file", { path }); } catch (e) { toast(String(e), true); }
-}
-
-async function showFile(path) {
-  try { await invoke("show_file", { path }); } catch (e) { toast(String(e), true); }
-}
-
-/** Keep on this device (§30): asked for now, fetched at the next sync with a
- *  device that has it -- which is also what makes asking while offline work. */
-async function keepHere(path, li) {
+async function keepHere(path) {
   try {
     await invoke("fetch", { path });
     wanted.add(path);
-    if (li) {
-      li.classList.add("arriving");
-      li.querySelector(".sub > :first-child")?.replaceWith(liveState({ path, availability: "elsewhere" }));
-      li.querySelector(".trail .btn")?.remove();
-    }
-    toast(`Downloading ${base(path)} to this computer`);
-  } catch (e) {
-    toast(String(e), true);
-  }
+    toast(`Downloading ${base(path)}`);
+    redraw();
+  } catch (e) { toast(String(e), true); }
 }
 
-/** Free local space (§12, §31): the file stays; only its local bytes go. */
-async function freeLocal(path, li, redraw) {
+async function freeUp(path) {
   try {
     const freed = await invoke("free_file", { path });
-    if (li && !calm()) {
-      li.classList.add("freeing");
-      setTimeout(() => {
-        li.querySelector(".sub > :first-child")?.replaceWith(stateTag("elsewhere"));
-      }, 240);
-    }
-    toast(`Freed ${size(freed)}. ${base(path)} stays in Qurb.`);
-    setTimeout(() => redraw?.(), calm() ? 0 : 700);
+    toast(`Freed ${size(freed)}`);
+    redraw();
   } catch (e) {
-    toast(onlyCopy(e), true);
+    toast(/no other device is known to hold|only holder/.test(String(e)) ? "The only copy can't be freed" : String(e), true);
   }
 }
 
-/** §13, in the words the direction gives, whatever the engine called it. */
-function onlyCopy(e) {
-  return /no other device is known to hold|only holder/.test(String(e))
-    ? "This is the only copy currently stored in Qurb, so it can't be freed."
-    : String(e);
+async function deleteFile(path) {
+  try {
+    await invoke("delete_file", { path });
+    toast("Deleted. In Recently deleted for 30 days");
+    redraw();
+  } catch (e) { toast(String(e), true); }
 }
 
-/** Into this computer's Private Vault, or out of it to every device
- *  (decision 0057). Into it, says first what happens to the other devices'
- *  copies, and whether any device still keeps one. */
-async function moveArea(f, intoVault, redraw) {
-  const name = base(f.path);
+/** Into the Vault (decision 0057): the other devices' copies go, so it says
+ * so first, and whether any device still keeps the Vault. */
+async function moveArea(f, intoVault) {
   const move = async () => {
     try {
       await invoke("move_file_area", { path: f.path, private: intoVault });
-      toast(intoVault ? `${name} is in Private Vault.` : `${name} goes to all your devices.`);
-      redraw?.();
-    } catch (e) {
-      toast(String(e), true);
-    }
+      toast(intoVault ? "In your Vault" : "On all your devices");
+      redraw();
+    } catch (e) { toast(String(e), true); }
   };
   if (!intoVault) return move();
-
-  let keepers = [];
-  try { keepers = await invoke("vault_keepers"); } catch (e) { /* said below as none */ }
-  const box = sheet();
-  box.append(el("h2", null, `Move ${name} to Private Vault?`));
-  box.append(el("p", "lead",
-    "It stays on this computer, and your other devices remove their copies at their next sync — " +
-    "each keeps it in Recently deleted for 30 days, as with any deletion."));
-  box.append(el("p", keepers.length ? "lead" : "caution", keepers.length
-    ? `${keepers.join(", ")} keeps a backup of this computer's Private Vault, so it keeps this file too.`
-    : "No device keeps a backup of this computer's Private Vault, so this computer will have the only copy."));
-  const actions = el("div", "actions end");
-  const cancel = button("Cancel", "btn");
-  cancel.addEventListener("click", () => box.close());
-  const go = button("Move", "btn primary", "lock-keyhole");
-  go.id = "move-private-go";
-  go.addEventListener("click", () => { box.close(); move(); });
-  actions.append(cancel, go);
-  box.append(actions);
+  const keepers = await invoke("vault_keepers").catch(() => []);
+  const box = sheet({ ic: "lock-keyhole", title: "Move to Vault?", sub: "Your other devices remove their copies" });
+  box.append(
+    h("p", { class: keepers.length ? "note" : "note warn" }, keepers.length ? `${keepers.join(", ")} keeps your Vault too` : "This computer will have the only copy"),
+    actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Move", () => { box.close(); move(); }, "btn-main")));
 }
 
-async function deleteFile(path, redraw) {
-  try {
-    await invoke("delete_file", { path });
-    closePanel();
-    toast(`Deleted ${base(path)} from your devices. It's in Recently deleted for 30 days.`);
-    redraw?.();
-    drawDeletedLink();
-  } catch (e) {
-    toast(String(e), true);
-  }
-}
-
-// ---------------------------------------------------------- details §19
-
-async function openDetails(path) {
-  let d;
-  try {
-    d = await invoke("details", { path });
-  } catch (e) {
-    toast(String(e), true);
-    return;
-  }
-  const f = d.file;
-  const box = panel();
-  const head = el("div", "panel-head");
-  const tile = el("span", "tile");
-  tile.append(icon(KIND_ICON[kindOf(f.path)], "large"));
-  const names = el("div");
-  names.style.paddingRight = "32px";
-  names.append(el("h2", null, base(f.path)));
-  names.append(el("p", "meta", `${f.private ? "Private Vault" : "Qurb"}${folderOf(f.path) ? ` / ${folderOf(f.path)}` : ""}`));
-  head.append(tile, names);
-
-  const body = el("div", "panel-body");
-  const s = stateOf(f.availability);
-  const tone = { "only here": "attention", nowhere: "attention", here: "healthy" }[f.availability] ?? "neutral";
-  const badge = el("span", `badge ${tone}`);
-  badge.append(icon(wanted.has(f.path) ? "download" : s.icon), el("span", null, wanted.has(f.path) ? "Downloading" : s.words));
-  body.append(badge);
-  if (f.private) {
-    const p = el("span", "badge neutral");
-    p.style.marginLeft = "6px";
-    p.append(icon("lock-keyhole"), el("span", null, "Private"));
-    body.append(p);
-  }
-
-  if (f.availability === "only here") {
-    body.append(el("p", "note", "This is the only copy currently stored in Qurb. It reaches your other devices the next time one is online."));
-  }
-  if (f.availability === "nowhere") {
-    body.append(el("p", "note", "No device this computer syncs with has this file. It was freed here while another device kept it, and that device no longer has it or is no longer paired. It stays listed so you know it existed; deleting it removes it from your devices' lists."));
-  }
-
-  const holders = [
-    ...(isHere(f) ? ["This computer"] : []),
-    ...d.holders,
-  ];
-  const facts = el("dl", "facts");
-  for (const [term, value] of [
-    ["Type", KIND_WORD[kindOf(f.path)]],
-    ["Size", size(f.size)],
-    ["Location", `${f.private ? "Private Vault" : "Qurb"}${folderOf(f.path) ? ` / ${folderOf(f.path)}` : ""}`],
-    ["On", holders.length ? holders.join(", ") : f.availability === "nowhere" ? "No device" : "No device has told this one yet"],
-    ["Modified", `${when(f.modified)} · ${new Date(f.modified * 1000).toLocaleString()}`],
-  ]) {
-    facts.append(el("dt", null, term), el("dd", null, value));
-  }
-  body.append(facts);
-
-  // Versions only exist for a conflict (brief §2).
-  const conflict = conflictsSeen.find((c) => c.path === f.path || c.other.path === f.path || c.this?.path === f.path);
-  if (conflict) {
-    const review = button("Review", "btn small");
-    review.addEventListener("click", () => openConflicts());
-    body.append(attention({ iconName: "git-compare", title: "Has another version", says: "Two devices changed it at once.", action: review }));
-  }
-
-  const actions = el("div", "actions");
-  actions.style.flexDirection = "column";
-  actions.style.alignItems = "stretch";
-  const add = (label, cls, iconName, act) => {
-    const b = button(label, cls, iconName);
-    b.style.justifyContent = "flex-start";
-    b.addEventListener("click", act);
-    actions.append(b);
-    return b;
-  };
-  const redraw = () => refreshScreen();
-  if (f.availability === "elsewhere") {
-    if (!wanted.has(f.path)) add("Keep on this device", "btn primary", "download", () => { keepHere(f.path, rowFor(f.path)); closePanel(); });
-  } else if (isHere(f)) {
-    add("Open", "btn primary", "external-link", () => openFile(f.path));
-    add("Show in folder", "btn", "folder-search", () => showFile(f.path));
-  }
-  if (f.availability === "here") {
-    add("Free local space", "btn", "cloud-off", () => { closePanel(); freeLocal(f.path, rowFor(f.path), redraw); });
-  }
-  if (isHere(f)) add("Send to device…", "btn", "send", () => openSend([`${rootPath}/${f.path}`]));
-  if (isHere(f)) {
-    if (f.private) add("Move to shared", "btn", "folder", () => { closePanel(); moveArea(f, false, redraw); });
-    else add("Move to Private Vault…", "btn", "lock-keyhole", () => { closePanel(); moveArea(f, true, redraw); });
-  }
-  add("Delete", "btn ghost quiet-danger", "trash-2", () => deleteFile(f.path, redraw));
-  body.append(actions);
-
-  // What happened to it: each row names the event, since the file is known.
-  if (d.history.length) {
-    body.append(el("div", "list-label", "History"));
-    const list = el("ul", "rows");
-    for (const r of d.history.slice(0, 5)) {
-      const [iconName, words] = HAPPENED[r.kind] ?? ["info", r.kind];
-      list.append(row({ iconName, name: words, sub: [otherDevice(r), when(r.at)] }));
-    }
-    body.append(list);
-  }
-
-  box.append(head, body);
-}
-
-// ------------------------------------------------------ recently deleted §22
-
-const RETENTION_DAYS = 30;
-
-async function drawDeleted() {
-  const list = $("deleted-list");
-  let entries;
-  try {
-    entries = await invoke("recently_deleted");
-  } catch (e) {
-    oops(list, e);
-    return;
-  }
-  list.replaceChildren();
-  if (entries.length === 0) {
-    list.append(empty("trash-2", "Nothing deleted recently."));
-    return;
-  }
-  for (const d of entries) {
-    const days = Math.max(0, RETENTION_DAYS - Math.floor((Date.now() / 1000 - d.at) / 86400));
-    const restore = button("Restore", "btn small", "rotate-ccw");
-    const forget = twoPress(button("Delete now", "btn small ghost quiet-danger reveal"), "Delete for good?", async () => {
-      try {
-        await invoke("forget_deleted", { id: d.id });
-        drawDeleted();
-      } catch (e) {
-        toast(String(e), true);
-      }
-    });
-    const li = row({
-      iconName: KIND_ICON[kindOf(d.path)],
-      name: base(d.path),
-      sub: [
-        `${d.of ? `${d.of}'s Private Vault · ` : d.private ? "Private Vault · " : ""}Deleted ${when(d.at)}${d.by ? ` on ${d.by}` : ""}`,
-        days === 0 ? "Expires today" : `Expires in ${count(days, "day")}`,
-      ],
-      trail: [forget, restore],
-    });
-    if (d.why) li.title = d.why;
-    restore.addEventListener("click", async () => {
-      restore.disabled = true;
-      try {
-        const at = await invoke("restore_deleted", { id: d.id });
-        toast(d.of
-          ? `${base(at)} is back in ${d.of}'s folder. ${d.of} takes it back at its next sync.`
-          : at !== d.path
-          ? `Restored as ${base(at)}: something else is at ${base(d.path)} now.`
-          : d.private
-            ? `${base(at)} is back in Private Vault.`
-            : `${base(at)} is back, on all your devices.`);
-        drawDeleted();
-        drawDeletedLink();
-      } catch (e) {
-        restore.disabled = false;
-        toast(String(e), true);
-      }
-    });
-    list.append(li);
-  }
-}
-
-/** A quiet way to Recently deleted, under the file list: always there, as
- *  on the phone, so it is where you expect it before you need it. */
-async function drawDeletedLink() {
-  const box = $("deleted-link");
-  try {
-    const entries = await invoke("recently_deleted");
-    box.replaceChildren();
-    // At the top of Files only, as on the phone: not inside a folder, and
-    // not among a search's results.
-    if (filesBrowser.dir || filesBrowser.searching || (filesBrowser.area !== null && filesBrowser.area !== "shared")) return;
-    const li = row({
-      iconName: "trash-2",
-      name: "Recently deleted",
-      sub: [entries.length ? `${count(entries.length, "file")} · kept for 30 days` : "Kept for 30 days"],
-      trail: [icon("chevron-right")],
-      onClick: () => showScreen("deleted"),
-    });
-    li.style.marginTop = "16px";
-    box.append(li);
-  } catch (e) {
-    box.replaceChildren();
-  }
-}
-
-$("files-more").addEventListener("click", () => {
-  const items = [["Recently deleted", "trash-2", () => showScreen("deleted")]];
-  const top = filesBrowser.area === "shared" ? filesBrowser.dir.split("/")[0] : "";
-  if (top) items.push(["Options for “" + top + "”", "settings", () => openFolderOptions(top)]);
-  items.push(["Show the Qurb folder", "folder-search", () => invoke("show_root").catch((e) => toast(String(e), true))]);
-  menu($("files-more"), items);
-});
-
-// ------------------------------------------------------------ folder options
-
-/**
- * Who has a folder (decision 0044), and whether this computer keeps it or
- * only lists it (0045). A folder is on every device unless you choose; a
- * device left out keeps what it has and gets nothing new -- said, not hidden.
- */
-async function openFolderOptions(folder) {
+/** Who has a top folder (decision 0044), and whether this computer keeps its
+ * files or only lists them (0045). Switches apply at once. */
+async function folderSheet(folder) {
   let sharing;
-  try {
-    sharing = await invoke("sharing");
-  } catch (e) {
-    toast(String(e), true);
-    return;
-  }
+  try { sharing = await invoke("sharing"); } catch (e) { toast(String(e), true); return; }
   const f = sharing.folders.find((x) => x.folder === folder);
-  if (!f) { toast(`“${folder}” has no options yet: put a file in it first.`, true); return; }
-
-  const box = sheet({ onClose: () => refreshScreen() });
-  box.append(el("h2", null, folder));
-  box.append(el("p", "lead", "Which devices have this folder, and whether this computer keeps its files."));
-
-  box.append(el("div", "list-label", "On these devices"));
-  const picks = el("div", "group glass-frosted");
-  for (const d of sharing.devices) {
-    const item = el("label", "item");
-    const label = el("div", "label");
-    label.append(el("strong", null, d.name));
-    const sw = el("span", "switch");
-    const input = el("input");
-    input.type = "checkbox";
-    input.value = d.id;
-    input.checked = f.everyone || f.members.includes(d.id);
-    sw.append(input, el("span"));
-    item.append(icon(deviceIcon(d.name, d.kind)), label, sw);
-    picks.append(item);
-  }
-  box.append(picks);
-  box.append(el("p", "note", "A device you leave out keeps what it already has, and gets nothing new."));
-  const says = el("p", "says warn hidden");
-  const save = button("Save", "btn primary");
-  save.addEventListener("click", async () => {
-    const ticked = [...picks.querySelectorAll("input:checked")].map((i) => i.value);
-    save.disabled = true;
-    try {
-      // Every device ticked is the same as no rule: said that way, so a device
-      // paired later is included too.
-      await invoke("set_sharing", { folder, members: ticked.length === sharing.devices.length ? [] : ticked });
-      toast(ticked.length === sharing.devices.length ? `${folder} is on all your devices` : `Saved who has ${folder}`);
-      box.close();
-    } catch (e) {
-      save.disabled = false;
-      says.textContent = String(e);
-      says.classList.remove("hidden");
-    }
-  });
-
-  box.append(el("div", "list-label", "On this computer"));
-  const where = el("div", "group glass-frosted");
-  const item = el("div", "item");
-  const label = el("div", "label");
-  label.append(el("strong", null, f.remote ? "Downloaded when opened" : "Kept on this computer"));
-  label.append(el("span", null, f.remote
-    ? "Its files are listed here and download when you keep one."
-    : "Free local space to list its files here without keeping them. Nothing is deleted."));
-  const change = button(f.remote ? "Keep here" : "Free local space", "btn small", f.remote ? "download" : "cloud-off");
-  change.addEventListener("click", async () => {
-    change.disabled = true;
-    try {
-      if (f.remote) {
+  if (!f) { toast("Put a file in it first", true); return; }
+  const box = sheet({ ic: "folder", title: folder, onclose: redraw });
+  let members = f.everyone ? sharing.devices.map((d) => d.id) : [...f.members];
+  const save = async () => {
+    await invoke("set_sharing", { folder, members: members.length === sharing.devices.length ? [] : members });
+  };
+  box.append(group("On", ...sharing.devices.map((d) => setting({
+    ic: d.here ? "laptop" : "smartphone",
+    name: d.name,
+    end: toggle(members.includes(d.id), async (on) => {
+      members = on ? [...members, d.id] : members.filter((m) => m !== d.id);
+      await save();
+    }, d.name),
+  }))));
+  box.append(group("This computer", setting({
+    ic: f.remote ? "cloud" : "hard-drive",
+    name: "Keep its files here",
+    end: toggle(!f.remote, async (on) => {
+      if (on) {
         const asked = await invoke("keep_locally", { folder });
-        toast(asked ? `${count(asked, "file")} on the way back` : `${folder} is kept here`);
+        toast(asked ? `${count(asked, "file")} on the way` : "Kept here");
       } else {
         const r = await invoke("keep_remotely", { folder });
-        const kept = r.kept.length ? ` ${count(r.kept.length, "file")} stayed: this computer has the only copy.` : "";
-        toast(`Freed ${size(r.bytes)} from ${folder}.${kept}`);
+        toast(`Freed ${size(r.bytes)}`);
       }
-      box.close();
-    } catch (e) {
-      change.disabled = false;
-      toast(onlyCopy(e), true);
-    }
-  });
-  item.append(label, change);
-  where.append(item);
-  box.append(where, says);
-  const actions = el("div", "actions end");
-  actions.append(save);
-  box.append(actions);
+    }, "Keep its files here"),
+  })));
+  box.append(h("p", { class: "note" }, "A device left out keeps what it has, and gets nothing new"));
 }
 
-// --------------------------------------------------------------- send §17
+// ---------- A person's folder ----------
 
-/**
- * Send: what, to which device, what is happening, when it is complete.
- *
- * Paths of files and folders, never contents: reading them is the Rust
- * side's job, and a window that loaded a 4 GB file into a JavaScript variable
- * to hand it back would be a poor way to move it four inches.
- */
-let sending = null;
+async function drawPerson(main) {
+  const person = FILES.area;
+  if (!FILES.people.some((p) => p.id === person)) FILES.people = await invoke("people").catch(() => []);
+  const p = FILES.people.find((x) => x.id === person) ?? { id: person, name: "Folder", relation: "guest" };
+  const own = p.relation === "owner";
+  const parts = FILES.dir ? FILES.dir.split("/") : [];
+  const up = parts.length ? { words: parts.length > 1 ? parts[parts.length - 2] : p.name, go: () => inFiles(person, parts.slice(0, -1).join("/")) }
+    : { words: "Files", go: () => go("files") };
+  const end = h("span", {});
+  const body = h("div", {});
+  main.append(h("div", { class: "pg" }, pageHead(parts.length ? parts[parts.length - 1] : p.name, up, end), body));
 
-function openSend(paths = [], device = null) {
-  if (sending) { sending.pick(paths); return; }
-  const box = sheet({ onClose: () => { sending = null; } });
-  const state = { paths: [...paths], device };
-  sending = { pick: (more) => { if (more.length) { state.paths = more; drawWhat(); } } };
+  let answer;
+  try { answer = await invoke("person_folder", { person, dir: FILES.dir }); } catch (e) { put(body, oops(e)); return; }
+  if (place !== "files" || FILES.area !== person) return;
 
-  box.append(el("h2", null, "Send to device"));
-  box.append(el("p", "lead", "To one device, and nowhere else. It isn't added to your other devices."));
-
-  const what = el("div");
-  const to = el("div");
-  const says = el("p", "says");
-  const actions = el("div", "actions end");
-  const go = button("Send", "btn primary", "send");
-  actions.append(go);
-  box.append(what, to, says, actions);
-
-  function drawWhat() {
-    what.replaceChildren();
-    const drop = el("div", "drop");
-    const t = el("span", "tile");
-    t.append(icon("upload"));
-    drop.append(t);
-    if (state.paths.length === 0) {
-      drop.append(el("strong", null, "Drop files or folders here"));
-    } else {
-      const names = state.paths.map(base);
-      drop.append(el("strong", null, names.length <= 3 ? names.join(", ") : `${names.slice(0, 2).join(", ")} and ${names.length - 2} more`));
+  if (answer.state !== "open") {
+    const asking = answer.state === "asking";
+    put(body, h("div", { class: "locked" },
+      h("span", { class: `empty-orb${asking ? " asking" : ""}` }, icon(asking ? "smartphone" : "lock-keyhole")),
+      h("p", {}, asking ? (own ? "Approve on your phone" : `Waiting for ${p.name}`) : (own ? "Opens with a yes on your phone" : `Sealed. Opens with ${p.name}'s yes`)),
+      asking ? null : h("button", { class: "btn btn-main", onclick: async (e) => {
+        e.currentTarget.disabled = true;
+        try { await invoke("ask_person_folder", { person }); } catch (er) { toast(String(er), true); }
+        inFiles(person, FILES.dir);
+      } }, own ? "Ask your phone" : `Ask ${p.name}`)));
+    if (asking) {
+      FILES.asking = setInterval(() => {
+        if (place !== "files" || FILES.area !== person) { clearInterval(FILES.asking); return; }
+        invoke("person_folder", { person, dir: FILES.dir }).then((a) => { if (a.state !== "asking") inFiles(person, FILES.dir); }).catch(() => {});
+      }, 1500);
     }
-    const choose = el("div", "actions");
-    choose.style.marginTop = "4px";
-    const files = button("Choose files…", "btn small");
-    const folder = button("Choose a folder…", "btn small");
-    files.addEventListener("click", () => pickFromDisk(false));
-    folder.addEventListener("click", () => pickFromDisk(true));
-    choose.append(files, folder);
-    drop.append(choose);
-    what.append(drop);
-    go.disabled = state.paths.length === 0 || !state.device;
+    return;
   }
 
-  // The platform's own dialog: two buttons because no platform's dialog picks
-  // files and folders at once.
-  async function pickFromDisk(folder) {
-    const dialog = window.__TAURI__?.dialog;
-    if (!dialog) { says.textContent = "No file chooser here — drag them in instead."; return; }
-    const chosen = await dialog.open({ multiple: !folder, directory: folder });
-    if (!chosen) return;
-    const list = Array.isArray(chosen) ? chosen : [chosen];
-    state.paths = list.map((c) => (typeof c === "string" ? c : c.path));
-    drawWhat();
-  }
-
-  async function drawTo() {
-    to.replaceChildren(el("div", "list-label", "To"));
-    let devices;
-    try {
-      // Not one set up again since: what it was is not there to send to.
-      devices = (await invoke("devices")).filter((d) => !d.replaced_by);
-    } catch (e) {
-      to.append(el("p", "says warn", String(e)));
-      return;
-    }
-    if (devices.length === 0) {
-      const add = button("Add a device", "btn small", "plus");
-      add.addEventListener("click", () => { box.close(); openAddDevice(); });
-      to.append(empty("monitor-smartphone", "No devices yet.", add, true));
-      return;
-    }
-    const choices = el("div", "choices");
-    choices.style.marginTop = "0";
-    for (const d of devices) {
-      const c = el("button", "choice");
-      const t = el("span", "tile");
-      t.append(icon(deviceIcon(d.name, d.kind)));
-      const words = el("span");
-      words.append(el("strong", null, d.name));
-      words.append(el("span", null, d.route ? "Connected now" : d.last_seen ? `Last seen ${when(d.last_seen)}` : "Not connected yet"));
-      c.append(t, words, icon(state.device?.fingerprint === d.fingerprint ? "circle-check" : "chevron-right"));
-      if (state.device?.fingerprint === d.fingerprint) c.style.borderColor = "var(--green)";
-      c.addEventListener("click", () => { state.device = d; drawTo(); drawWhat(); });
-      choices.append(c);
-    }
-    to.append(choices);
-    if (!state.device && devices.length === 1) { state.device = devices[0]; drawTo(); drawWhat(); }
-  }
-
-  go.addEventListener("click", async () => {
-    const d = state.device;
-    if (!d || state.paths.length === 0) return;
-    go.disabled = true;
-    // Sent there before: say so, and let the person choose, rather than send
-    // a second copy unasked or drop it unsaid (decision 0059).
-    let earlier = [];
-    try { earlier = await invoke("sent_before", { paths: state.paths, to: d.fingerprint }); } catch (e) { /* send as asked */ }
-    if (earlier.length) { askAgain(earlier, d); return; }
-    send(d, []);
+  end.append(h("button", { class: "btn btn-quiet btn-sm", onclick: async () => {
+    try { await invoke("lock_person_folder", { person }); } catch (e) { toast(String(e), true); }
+    inFiles(person);
+  } }, icon("lock-keyhole"), "Lock"));
+  const item = (f) => ({
+    name: f.name,
+    here: true,
+    small: () => (own ? invoke("backed_up_preview", { phone: f.device, path: f.path, small: true }) : Promise.resolve(null)),
+    large: () => (own ? invoke("backed_up_preview", { phone: f.device, path: f.path, small: false }) : Promise.resolve({ kind: "none" })),
+    open: () => invoke("open_person_file", { person, device: f.device ?? null, path: f.path }),
   });
+  FILES.shown = answer.files.map(item);
+  put(body, 
+    answer.folders.length ? h("div", { class: "cards" }, ...answer.folders.map((name) => {
+      const c = card(!FILES.dir && own ? "smartphone" : "folder", name, null, () => inFiles(person, FILES.dir ? `${FILES.dir}/${name}` : name));
+      c.querySelector("small").remove();
+      return c;
+    })) : null,
+    answer.files.length ? filesOf(answer.files, (f, i) => {
+      const r = row({ ic: fileIcon(f.name), name: f.name, sub: [size(f.size), ago(f.modified_at)], onclick: () => item(f).open().catch((e) => toast(String(e), true)) });
+      hoverable(r, i);
+      return r;
+    }, item) : null,
+    !answer.files.length && !answer.folders.length ? empty("folder-open", "Nothing kept here yet") : null,
+    h("p", { class: "note" }, "Locks itself after ten minutes unused"));
+}
 
-  async function send(d, leaveOut) {
-    go.disabled = true;
-    // Storing a large folder takes a while, and the button would otherwise
-    // look as though it did nothing.
-    says.textContent = `Getting ready to send to ${d.name}…`;
+// ---------- Quick preview ----------
+
+/** Space, on a file under the pointer: the picture or the text, large, with
+ * the arrow keys to the next and the one before. */
+function peek(i) {
+  const list = FILES.shown;
+  if (!list[i]) return;
+  let at = i;
+  const stage = h("div", { class: "peek-stage" });
+  const name = h("b", {});
+  const shade = h("div", { class: "peek", role: "dialog", "aria-modal": "true" },
+    h("div", { class: "peek-bar" }, name,
+      h("button", { class: "btn btn-sm btn-onpeek", onclick: () => list[at].open().catch((e) => toast(String(e), true)) }, icon("external-link"), "Open"),
+      h("button", { class: "icon-btn", "aria-label": "Close", onclick: () => close() }, icon("x"))),
+    stage,
+    list.length > 1 ? h("button", { class: "peek-nav prev", "aria-label": "Previous", onclick: () => step(-1) }, icon("arrow-left")) : null,
+    list.length > 1 ? h("button", { class: "peek-nav next", "aria-label": "Next", onclick: () => step(1) }, icon("arrow-left")) : null);
+  shade.addEventListener("mousedown", (e) => { if (e.target === shade || e.target === stage) close(); });
+  const keys = (e) => {
+    if (e.key === "Escape" || e.key === " ") { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (e.key === "ArrowRight") step(1);
+    else if (e.key === "ArrowLeft") step(-1);
+  };
+  function close() { document.removeEventListener("keydown", keys, true); shade.remove(); }
+  function step(by) { at = (at + by + list.length) % list.length; show(); }
+  async function show() {
+    const it = list[at];
+    const mine = at;
+    name.textContent = it.name;
+    put(stage, h("span", { class: "peek-icon" }, icon(fileIcon(it.name))));
+    if (!it.here) { stage.append(h("p", {}, "Not on this computer")); return; }
+    if (!peekable(it.name)) return;
     try {
-      const r = await invoke("send_files", { paths: state.paths, to: d.fingerprint, leaveOut });
-      showJourney(r, d);
-    } catch (e) {
-      says.textContent = String(e);
-      says.classList.add("warn");
-      go.disabled = false;
-    }
+      const p = await it.large();
+      if (mine !== at) return;
+      if (p.kind === "image") put(stage, h("img", { src: p.data, alt: it.name }));
+      else if (p.kind === "text") put(stage, h("pre", {}, p.data));
+    } catch (e) { stage.append(h("p", {}, String(e))); }
   }
+  document.addEventListener("keydown", keys, true);
+  document.body.append(shade);
+  show();
+}
 
-  /** Files that went to this device before, and whether to send them again. */
-  function askAgain(earlier, d) {
-    what.replaceChildren();
-    to.replaceChildren();
-    actions.replaceChildren();
-    says.textContent = "";
-    const one = earlier.length === 1;
-    what.append(el("div", "list-label", `Sent to ${d.name} before`));
-    const list = el("ul", "rows");
-    for (const e of earlier) {
-      list.append(row({ iconName: "send", name: base(e.path), sub: [`as ${e.sent_as}`, when(e.at)] }));
-    }
-    what.append(list);
-    says.textContent = one
-      ? `${d.name} may still have it. Sending it again puts another copy there.`
-      : `${d.name} may still have them. Sending them again puts another copy there.`;
-    const all = earlier.length === state.paths.length && earlier.every((e) => state.paths.includes(e.path));
-    const again = button(one ? "Send it again" : "Send them again", "btn primary", "send");
-    const leave = button(all ? "Don't send" : (one ? "Leave it out" : "Leave them out"), "btn");
-    again.addEventListener("click", () => send(d, []));
-    leave.addEventListener("click", () => {
-      if (all) { box.close(); return; }
-      send(d, earlier.map((e) => e.path));
+function peekOne(item) {
+  FILES.shown = [item];
+  peek(0);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== " " || FILES.hover < 0 || place !== "files") return;
+  if (e.target.closest?.("input, textarea") || document.querySelector(".scrim, .peek")) return;
+  e.preventDefault();
+  peek(FILES.hover);
+});
+
+// ---------- Received, Recently deleted, two versions ----------
+
+async function drawReceived(main) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg" },
+    pageHead("Received", { words: "Files", go: () => go("files") },
+      h("button", { class: "btn btn-quiet btn-sm", onclick: () => invoke("open_downloads").catch((e) => toast(String(e), true)) }, icon("folder-open"), "Open folder")),
+    body));
+  try {
+    const rows = (await invoke("activity", { path: null, limit: 300, before: null }))
+      .filter((r) => r.kind === "received" && (r.detail ?? "").startsWith("sent to this device"));
+    put(body, rows.length
+      ? h("div", { class: "rows" }, ...rows.map((r) => row({
+        ic: fileIcon(r.path), name: base(r.path), sub: [r.device ?? "Another device", ago(r.at)],
+        onclick: () => invoke("show_received", { id: r.id }).catch((e) => toast(String(e), true)),
+      })))
+      : empty("download", "Files sent to this computer come here"));
+  } catch (e) { put(body, oops(e)); }
+}
+
+async function drawDeleted(main) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg" }, pageHead("Recently deleted", { words: "Files", go: () => go("files") }), body));
+  let entries;
+  try { entries = await invoke("recently_deleted"); } catch (e) { put(body, oops(e)); return; }
+  if (!entries.length) { put(body, empty("trash-2", "Nothing deleted lately")); return; }
+  put(body, h("div", { class: "rows" }, ...entries.map((d) => {
+    const left = Math.max(0, 30 - Math.floor((Date.now() / 1000 - d.at) / 86400));
+    const forget = h("button", { class: "icon-btn", title: "Delete now", "aria-label": `Delete ${base(d.path)} now` }, icon("x"));
+    // Twice: the first press asks, in red, and the second deletes for good.
+    forget.addEventListener("click", async () => {
+      if (!forget.classList.contains("armed")) { forget.classList.add("armed"); put(forget, "Delete"); return; }
+      try { await invoke("forget_deleted", { id: d.id }); go("deleted"); } catch (e) { toast(String(e), true); }
     });
-    actions.append(leave, again);
-  }
-
-  /** §29: what moved where, and when it landed. */
-  function showJourney(r, d) {
-    what.replaceChildren();
-    to.replaceChildren();
-    actions.replaceChildren();
-    says.classList.remove("warn");
-    const trip = el("div", "journey");
-    const end = (name, iconName, cls) => {
-      const e = el("div", `end ${cls}`);
-      const t = el("span", "tile");
-      t.append(icon(iconName));
-      e.append(t, el("span", null, name));
-      return e;
-    };
-    trip.append(end("This computer", "laptop", "from"), el("div", "path"), end(d.name, deviceIcon(d.name, d.kind), "to"));
-    what.append(trip);
-
-    if (r.sent === 0) {
-      says.textContent = "Nothing was sent.";
-    }
-    const what1 = r.only ? base(r.only) : count(r.sent, "file");
-    // This send's files: each was stored under the name of what was picked,
-    // a folder's under the folder's name.
-    const picked = new Set(state.paths.map(base));
-    const watch = async () => {
-      if (!box.isConnected) return;
-      let out = [];
-      try { out = await invoke("outgoing"); } catch (e) { /* try again */ }
-      const mine = out.filter((o) => o.to_id === d.id && picked.has(o.path.split("/")[0]));
-      const moving = movingNow.outgoing.some((t) => t.device === d.name);
-      if (r.sent > 0 && mine.length === 0) {
-        trip.className = "journey landed";
-        says.textContent = `Sent. ${d.name} has ${what1}.`;
-        return;
-      }
-      trip.className = moving ? "journey moving" : "journey waiting";
-      says.textContent = moving
-        ? `Sending ${what1} to ${d.name}…`
-        // Read from where it is when collected, as the phone says: nothing is
-        // copied (decision 0060).
-        : `${what1[0].toUpperCase()}${what1.slice(1)} ${r.sent === 1 ? "is" : "are"} ready for ${d.name}. It collects ${r.sent === 1 ? "it" : "them"} the next time it's online — keep ${r.sent === 1 ? "it as it is" : "them as they are"} until then. You can close this.`;
-      setTimeout(watch, 1500);
-    };
-    watch();
-    // What was not sent is said, with why, rather than only counted: "2 files
-    // were skipped" leaves somebody guessing which.
-    if (r.skipped.length > 0) {
-      const skipped = el("p", "note");
-      skipped.textContent = `Not sent: ${r.skipped.map((s) => `${base(s.path)} (${s.why})`).join("; ")}.`;
-      box.append(skipped);
-    }
-    const done = button("Done", "btn primary");
-    done.addEventListener("click", () => box.close());
-    actions.append(done);
-    drawChip();
-  }
-
-  drawWhat();
-  drawTo();
+    return row({
+      ic: fileIcon(d.path), name: base(d.path), title: d.why ?? undefined,
+      sub: [d.of ? d.of : d.private ? "Vault" : null, named(d.by) ?? null, ago(d.at), left ? `${count(left, "day")} left` : "Goes today"],
+      end: [h("button", { class: "icon-btn", title: "Restore", "aria-label": `Restore ${base(d.path)}`, onclick: async () => {
+        try {
+          const at = await invoke("restore_deleted", { id: d.id });
+          toast(at !== d.path ? `Restored as ${base(at)}` : "Restored");
+          go("deleted");
+        } catch (e) { toast(String(e), true); }
+      } }, icon("rotate-ccw")), forget],
+    });
+  })));
 }
 
-// Dragging onto the window, from anywhere in it. Tauri reports these as
-// window events rather than DOM ones, because the drag is happening to the
-// *window* -- the page never sees the file, and that is the point: a path
-// crosses, not the contents.
-if (window.__TAURI__?.event) {
-  const { listen } = window.__TAURI__.event;
-  listen("tauri://drag-over", () => document.querySelector(".drop")?.classList.add("over"));
-  listen("tauri://drag-leave", () => document.querySelector(".drop")?.classList.remove("over"));
-  listen("tauri://drag-drop", (event) => {
-    document.querySelector(".drop")?.classList.remove("over");
-    const paths = event.payload?.paths ?? [];
-    if (paths.length === 0 || settingUp) return;
-    // Everything dropped, files and folders alike. Which device is still the
-    // person's choice, so this picks and does not send.
-    openSend(paths);
-  });
+/** Two versions of a file (brief §14): both kept, side by side, and a choice. */
+async function drawConflicts(main) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg" }, pageHead("Two versions", { words: "Files", go: () => go("files") }), body));
+  let found;
+  try { found = await invoke("conflicts"); } catch (e) { put(body, oops(e)); return; }
+  if (!found.length) { put(body, empty("circle-check", "Every file has one version")); return; }
+  put(body, h("p", { class: "note" }, "Changed on two devices at once. Nothing is lost whichever you keep"),
+    ...found.map(conflictBlock));
+}
+
+function conflictBlock(c) {
+  const side = (words, v) => {
+    const col = h("div", { class: "ver" }, label(words));
+    if (!v) { col.append(h("p", { class: "note" }, "Gone since")); return col; }
+    col.append(h("div", { class: "ver-by" }, icon(v.kind === "phone" ? "smartphone" : "laptop"), h("b", {}, named(v.by))),
+      h("small", { class: "ver-sub" }, h("span", {}, ago(v.at)), h("span", {}, size(v.size))));
+    const look = h("div", { class: "ver-look" });
+    col.append(look);
+    if (!v.here) { look.append(h("p", { class: "note" }, "Not on this computer yet")); return col; }
+    invoke("preview", { path: v.path }).then((p) => {
+      if (p.kind === "image") look.append(h("img", { src: p.data, alt: "" }));
+      else if (p.kind === "text") look.append(h("pre", {}, p.data));
+      else look.append(icon(fileIcon(v.path), "ver-ic"));
+    }, () => {});
+    return col;
+  };
+  const block = h("section", { class: "conflict" },
+    h("div", { class: "conflict-hd" }, tile(fileIcon(c.path)), h("span", { class: "row-main" }, h("b", {}, base(c.path)), h("small", {}, folderOf(c.path) || "Shared"))),
+    h("div", { class: "vers" }, side("This one", c.this), side("The other", c.other)));
+  const keep = (words, how, needsOther) => {
+    const b = btn(words, async () => {
+      block.querySelectorAll(".acts button").forEach((x) => (x.disabled = true));
+      try {
+        const kept = await invoke("settle_conflict", { other: c.other.path, keep: how });
+        block.replaceWith(row({ ic: tile("circle-check", "tile-ok"), name: how === "both" ? "Kept both" : `Kept ${base(kept)}`, sub: how === "both" ? `The other is ${base(kept)}` : "The other is in Recently deleted" }));
+      } catch (e) { block.querySelectorAll(".acts button").forEach((x) => (x.disabled = false)); toast(String(e), true); }
+    }, how === "this" ? "btn-main" : "btn-quiet");
+    if (needsOther && !c.other.here) { b.disabled = true; b.title = "Not on this computer yet"; }
+    return b;
+  };
+  block.append(actions(keep("Keep both", "both", true), keep("Keep the other", "other", true), keep("Keep this one", "this", false)));
+  return block;
 }

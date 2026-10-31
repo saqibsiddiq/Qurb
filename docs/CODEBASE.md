@@ -886,15 +886,11 @@ qurb/
 │   │   ├── tauri.release.conf.json
 │   │   │                    what a release adds to the deb, rpm and AppImage:
 │   │   │                    qurb and qurb-tray beside the window, the icon
-│   │   └── ui/              the window: index.html, app.css (the design),
-│   │                        theme.js (light or dark, before anything draws),
-│   │                        a script per place (core, setup, home, files,
-│   │                        devices, settings, app), icons.js (generated),
-│   │                        fonts/ (Inter, bundled)
-│   │   └── ui-next/         the window redesigned (design/desktop.md), on the
-│   │                        same commands, beside the one it will replace:
-│   │                        not shipped yet; looked at with the fixtures in
-│   │                        experiments/desktop-fixtures/next.html
+│   │   └── ui/              the window (design/desktop.md): index.html,
+│   │                        app.css (the design), theme.js (light or dark,
+│   │                        before anything draws), a script per place
+│   │                        (core, setup, home, devices, files, settings,
+│   │                        app), icons.js (generated), fonts/ (Inter)
 │   │
 │   └── tray/              An icon in the corner: the daemon with a face.
 │       ├── src/main.rs      the daemon, with an icon or a window to show
@@ -1094,8 +1090,7 @@ qurb/
 │   ├── android-icons.py   the Phosphor icons the app uses, as vector drawables
 │   ├── android-test.sh    run the test suite on a device, over adb: arm64,
 │   │                      x86_64, or 32-bit x86 on an x86_64 emulator
-│   ├── desktop-icons.py   the Lucide icons the window uses, as a sprite
-│   ├── desktop-next-icons.py the phone's icons, for the redesigned window
+│   ├── desktop-icons.py   the phone's icons, for the desktop window
 │   ├── desktop-smoke.sh   drive the real desktop window end to end, on a
 │   │                      display of its own (with desktop_smoke.py)
 │   ├── smoke_portal.py    a stand-in desktop settings portal, for the
@@ -1621,7 +1616,7 @@ network. iOS needs Xcode, which needs a Mac. See
 
 | thing | status |
 |---|---|
-| A window | Tauri 2, no framework and no build step; designed from the owner's direction ([design/direction.md](design/direction.md)): a translucent sidebar — Home, Files, Devices, Storage, Private Vault set apart, Settings — glass materials over a quiet environment, Inter, Lucide icons, motion that shows what moved |
+| A window | Tauri 2, no framework and no build step; since 2026-10-31 in the phone's and the website's language ([design/desktop.md](design/desktop.md)): a sidebar of three places — Home, Files, Settings — devices and people reached through Home's circle, the deep green the only colour, light and dark, Inter, the phone's Phosphor icons. The rows below were written for the window before it, and say what it does; where each now is, is in the design record |
 | It hosts the daemon | the same one `qurb run` starts, on its own threads |
 | Home | one state — synced, syncing, devices away, add your first device, needs attention — then *Sync now* and *Send*, of one size (*Add a device* alone until there is one); attention only when something needs a decision; *Waiting*: files made here no other device has yet, sends not collected, a phone's folders still to come; *Backups*: WhatsApp and the folders kept here for each of your phones. What happened lately is a clock button away (Activity), not on Home. *Sync now* tells the daemon (`Daemon::sync_when_asked`) to drop every backoff, tell each device there is news — which wakes a phone that is asleep — and sync with all of them |
 | Files | at the top, *Shared* and a folder for each person the computer keeps files for, the owner's included, each opened only with a yes from that person's phone ([0067](decisions/0067-a-folder-for-each-person.md)); inside *Shared*, a file browser from the index: search, breadcrumbs, folders apart from files, and where each file's bytes are — *On this device*, *Available elsewhere*, *Only copy here*, *On no device* ([0055](decisions/0055-a-file-on-no-device-says-so.md)); keep a file here, free its local space, send it, move it into Private Vault, delete it; a details panel naming the devices that hold it |
@@ -1643,7 +1638,7 @@ network. iOS needs Xcode, which needs a Mac. See
 | Security | in Settings: how the key is kept and changing it, under This device; pairings and removals, under Devices; this device's identity, under Advanced |
 | One qurb per person | closing the window keeps it syncing; launching again shows the running one |
 | Pictures, small | `preview` with `small` and `backed_up_preview` answer a camera's JPEG with the thumbnail it carries in its EXIF block, read from the file's first 128 KB (`exif_thumbnail`), for a gallery; used by the redesign only so far |
-| The redesign | `ui-next/`, every place of the window above rebuilt in the phone's and the website's language ([design/desktop.md](design/desktop.md)); not yet the window that ships |
+| Gallery and quick preview | a folder mostly of pictures, the phone's camera folder included, as a grid of the pictures' own thumbnails; Space shows the picture or text under the pointer, large, the arrow keys moving through the folder |
 
 ### Designed but not built
 

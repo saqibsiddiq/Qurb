@@ -1,555 +1,327 @@
-// Storage, and Settings.
-//
-// Storage is where Qurb explains its one unusual idea: freeing space without
-// losing files (direction §20). Settings is grouped lists, quieter than
-// everything else (§23).
+// Settings, as the phone groups them — This computer, Files, App,
+// Connection — each a row with its value, a switch, or an arrow to its own
+// page: Storage, the key, Activity, Advanced.
 
-// --------------------------------------------------------------- storage
+/** The settings as last read: saving one sends them all back. */
+let SETTINGS = null;
+
+async function drawSettings(main) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Settings", null), body));
+  let s, st, atLogin;
+  try {
+    [s, st, atLogin] = await Promise.all([invoke("settings"), invoke("storage").catch(() => null), invoke("starts_at_login").catch(() => false)]);
+  } catch (e) { put(body, oops(e)); return; }
+  SETTINGS = s;
+  const others = s.key_also_on ?? [];
+  const theme = { system: "System", light: "Light", dark: "Dark" }[window.qurbTheme?.chosen?.() ?? "system"];
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  put(body, 
+    h("div", { class: "me" }, circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-xl"), h("h2", {}, s.name)),
+    group("This computer",
+      setting({ ic: "laptop", name: "Name", value: s.name, onclick: askName }),
+      setting({ ic: "image", name: "Picture", end: circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-md circle-plain"), onclick: () => pictureSheet(s) }),
+      setting({ ic: "shield-check", name: "Key", value: others.length ? "Safe" : "Only here", onclick: () => go("key") }),
+      setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") })),
+    group("Files",
+      setting({ ic: "lock-keyhole", name: "New files go to the Vault", end: toggle(s.own_files_private, (on) => invoke("set_privacy", { private: on }), "New files go to the Vault") }),
+      setting({ ic: "download", name: "Received files", value: downloadsWords(s), onclick: askDownloads }),
+      setting({ ic: "hard-drive", name: "Storage", value: st ? size(st.used) : null, onclick: () => go("storage") }),
+      setting({ ic: "trash-2", name: "Recently deleted", onclick: () => go("deleted") })),
+    group("App",
+      setting({ ic: "clock", name: "Activity", onclick: () => go("activity") }),
+      setting({ ic: "bell", name: "Notifications", end: toggle(s.notifications, (on) => invoke("set_notifications", { on }), "Notifications") }),
+      setting({ ic: "palette", name: "Theme", value: theme, onclick: themeSheet }),
+      setting({ ic: "sliders-horizontal", name: "Motion", value: calm ? "Reduced" : "Full" })),
+    group("Connection",
+      setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") })),
+    group(null, setting({ ic: "x", name: "Quit QurbSpace", danger: true, onclick: () => invoke("quit") })));
+}
+
+function downloadsWords(s) {
+  const at = s.downloads_at ?? {};
+  if ("Err" in at) return "Refused";
+  return at.Ok ? base(at.Ok) : "In your QurbSpace folder";
+}
+
+/** Saves the settings with one changed. */
+async function saveSettings(change) {
+  const s = { ...SETTINGS, ...change };
+  await invoke("save_settings", { name: s.name, signal: s.signal, relay: s.relay ?? "", port: Number(s.port) || 0, downloads: s.downloads });
+}
+
+/** One field in a sheet, saved by Enter or Save. */
+function askField({ ic, title, value, placeholder, note, save }) {
+  const box = sheet({ ic, title });
+  const input = h("input", { class: "field", value, placeholder, spellcheck: "false" });
+  const says = h("p", { class: "note" }, note ?? "");
+  const done = async () => {
+    try { await save(input.value.trim()); box.close(); if (place === "settings") go("settings"); }
+    catch (e) { says.textContent = String(e); says.classList.add("warn"); }
+  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") done(); });
+  box.append(input, says, actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Save", done, "btn-main")));
+  input.focus();
+  input.select();
+}
+
+function askName() {
+  askField({ ic: "laptop", title: "Name", value: SETTINGS.name, note: "As your other devices show it", save: (name) => saveSettings({ name }) });
+}
+
+function askDownloads() {
+  const at = SETTINGS.downloads_at ?? {};
+  askField({
+    ic: "download", title: "Received files", value: SETTINGS.downloads, placeholder: at.Ok ?? "",
+    note: "Err" in at ? at.Err : "Where files sent to this computer go",
+    save: (downloads) => saveSettings({ downloads }),
+  });
+}
+
+function themeSheet() {
+  const box = sheet({ ic: "palette", title: "Theme" });
+  const now = window.qurbTheme.chosen();
+  rounds(box, [["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([to, words]) => ({
+    ic: to === now ? "check" : "palette", words, act: () => { window.qurbTheme.choose(to); go("settings"); },
+  })));
+}
+
+/** This computer's picture, round, as its other devices show it. */
+function pictureSheet(s) {
+  const file = h("input", { type: "file", accept: "image/*", style: { display: "none" } });
+  file.addEventListener("change", async () => {
+    const f = file.files?.[0];
+    if (!f) return;
+    try { await invoke("set_picture", { picture: await squareJpeg(f) }); go("settings"); } catch (e) { toast(String(e), true); }
+  });
+  document.body.append(file);
+  const box = sheet({ ic: circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-lg circle-plain"), title: "Picture", onclose: () => setTimeout(() => file.remove(), 60000) });
+  rounds(box, [
+    { ic: "image", words: s.picture ? "Change" : "Choose", act: () => file.click() },
+    s.picture ? { ic: "trash-2", words: "Remove", danger: true, act: async () => { await invoke("set_picture", { picture: null }).catch((e) => toast(String(e), true)); go("settings"); } } : null,
+  ]);
+}
+
+/** The middle square of a picture, 256 across, as JPEG bytes: what the phone
+ * makes of one too. */
+async function squareJpeg(file) {
+  const address = await new Promise((done, fail) => {
+    const r = new FileReader();
+    r.onload = () => done(r.result);
+    r.onerror = () => fail(new Error("could not read that picture"));
+    r.readAsDataURL(file);
+  });
+  const img = new Image();
+  await new Promise((done, fail) => { img.onload = done; img.onerror = () => fail(new Error("that isn't a picture")); img.src = address; });
+  const side = Math.min(img.naturalWidth, img.naturalHeight);
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  c.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+  const blob = await new Promise((done, fail) => c.toBlob((b) => (b ? done(b) : fail(new Error("could not make the picture"))), "image/jpeg", 0.85));
+  return Array.from(new Uint8Array(await blob.arrayBuffer()));
+}
+
+// ---------- Storage ----------
 
 const GIB = 1024 ** 3;
-let disk = 0;
 
-async function drawStorage() {
+async function drawStorage(main) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Storage", { words: "Settings", go: () => go("settings") }), body));
   let st, fr, parts;
-  try {
-    [st, fr, parts] = await Promise.all([invoke("storage"), invoke("freeable"), invoke("storage_parts")]);
-  } catch (e) {
-    $("used-says").textContent = String(e);
-    return;
-  }
-  disk = Number(st.disk);
-  const used = Number(st.used);
-  const freeable = Number(fr.bytes);
-  const free = Number(st.free_disk);
-  const limit = Number(st.limit);
-
-  // How much: what Qurb takes on this disk, against what it may take.
-  $("used-big").textContent = size(st.used);
-  $("used-says").textContent = [
-    limit > 0 ? `of ${size(st.limit)} allowed${st.over ? ", over the limit" : ""}` : "with no limit set",
-    `${size(st.free_disk)} free on this disk`,
-  ].join(" · ");
-  $("free-all").classList.toggle("hidden", freeable === 0);
-
-  // One bar, against the allowance when there is one, else the disk: what
-  // Qurb uses, the part of it that could go, and the room left.
+  try { [st, fr, parts] = await Promise.all([invoke("storage"), invoke("freeable"), invoke("storage_parts")]); } catch (e) { put(body, oops(e)); return; }
+  const used = Number(st.used), freeable = Number(fr.bytes), free = Number(st.free_disk), limit = Number(st.limit), disk = Number(st.disk);
   const whole = Math.max(limit > 0 ? limit : Math.max(disk, used + free), used, 1);
-  $("meter-used").style.width = `${(100 * (used - freeable)) / whole}%`;
-  $("meter-freeable").style.left = `${(100 * (used - freeable)) / whole}%`;
-  $("meter-freeable").style.width = `${(100 * freeable) / whole}%`;
-  const legend = $("legend");
-  legend.replaceChildren();
-  const key = (cls, words) => {
-    const k = el("span", cls);
-    k.append(el("i"), words);
-    legend.append(k);
-  };
-  key("used", `Qurb uses ${size(st.used)}`);
-  if (freeable > 0) key("freeable", `${size(fr.bytes)} can be freed`);
-  key("free", limit > 0 ? `${size(String(Math.max(0, limit - used)))} left of the limit` : `${size(st.free_disk)} free on this disk`);
+  const pct = (n) => `${Math.max(0, (100 * n) / whole)}%`;
 
-  drawParts(parts, st, fr);
-  // The cards count files at their size; the disk holds them compressed,
-  // and what files share once, so the two need not add up.
-  $("parts-note").textContent = `Sizes above are the files' own. On this disk Qurb takes ${size(st.used)} for all of it: compressed, and what files share kept once.`;
+  // The limit: a switch, and a track that is square-law, so that the small
+  // amounts people choose get most of it (a 500 GB disk against a 20 GB
+  // allowance would otherwise sit in its first four percent).
+  const maxGib = Math.max(1, Math.floor(disk / GIB));
+  const toTrack = (gib) => Math.round(Math.sqrt(Math.min(gib, maxGib) / maxGib) * 1000);
+  const fromTrack = (v) => Math.max(1, Math.round((v / 1000) ** 2 * maxGib));
+  const track = h("input", { type: "range", min: "0", max: "1000", class: "track", "aria-label": "Limit" });
+  track.value = String(toTrack(limit > 0 ? limit / GIB : maxGib / 10));
+  const amount = h("b", { class: "track-v" });
+  // Said as every other size is, so that the limit chosen and the limit shown
+  // above are the same number.
+  const showAmount = () => { amount.textContent = size(fromTrack(Number(track.value)) * GIB); };
+  track.addEventListener("input", showAmount);
+  showAmount();
+  const limitBox = h("div", { class: "limit", hidden: limit === 0 }, track, amount,
+    btn("Apply", async () => { await invoke("set_limit", { bytes: String(fromTrack(Number(track.value)) * GIB) }).catch((e) => toast(String(e), true)); go("storage"); }, "btn-main btn-sm"));
 
-  $("freeable-says").textContent = freeable > 0
-    ? `${size(fr.bytes)} from ${count(fr.count, "file")}. They stay in Qurb, available from your other devices.`
-    : st.only_here > 0
-      ? `${count(st.only_here, "file")} ${st.only_here === 1 ? "is" : "are"} only on this computer, so ${st.only_here === 1 ? "it stays" : "they stay"} until another device has ${st.only_here === 1 ? "it" : "them"}.`
-      : "Nothing right now: everything here is either needed here or already freed.";
-  const list = $("freeable-list");
-  list.replaceChildren();
-  for (const f of fr.files.slice(0, FREEABLE_SHOWN)) {
-    const go = button("Free local space", "btn small", "cloud-off");
-    const li = row({
-      iconName: KIND_ICON[kindOf(f.path)],
-      name: base(f.path),
-      sub: [stateTag(f.availability), size(f.size), folderOf(f.path) || "Shared"],
-      trail: [go],
-      onClick: () => openDetails(f.path),
-    });
-    li.dataset.path = f.path;
-    go.addEventListener("click", () => freeLocal(f.path, li, drawStorage));
-    list.append(li);
-  }
-  if (fr.count > FREEABLE_SHOWN) {
-    list.append(el("p", "note", `The largest ${FREEABLE_SHOWN} of ${count(fr.count, "file")}. Free local space, above, frees them all.`));
-  }
-
-  $("usage").textContent = limit > 0
-    ? `${size(st.used)} of ${size(st.limit)}${st.over ? " — over the limit" : ""}`
-    : "No limit set";
-
-  // Not touched while somebody is dragging: rewriting the control they are
-  // holding is the single most irritating thing a live-updating screen does.
-  if (document.activeElement !== $("limit")) {
-    $("capped").checked = limit > 0;
-    $("limit-controls").classList.toggle("hidden", limit === 0);
-    $("limit").value = String(toTrack(limit > 0 ? limit / GIB : disk / GIB / 10));
-    showLimitLabel();
-  }
-}
-
-/** Files listed under *Files you can free*; the button frees them all. */
-const FREEABLE_SHOWN = 5;
-
-/** What is kept here, four of one size: the phones' backups, the shared
- *  files, guests' folders and Recently deleted, each with what to do. */
-function drawParts(parts, st, fr) {
-  const box = $("parts");
-  box.replaceChildren();
-  const card = ({ iconName, title, big, lines, action }) => {
-    const c = el("div", "part card glass-frosted");
-    const head = el("div", "part-head");
-    const tile = el("span", "tile");
-    tile.append(icon(iconName));
-    head.append(tile, el("strong", null, title));
-    c.append(head, el("div", "part-size num", big));
-    const said = el("div", "part-lines");
-    for (const line of lines) said.append(el("p", "meta", line));
-    c.append(said);
-    if (action) {
-      const [label, act] = action;
-      const b = button(label, "btn small");
-      b.addEventListener("click", act);
-      const foot = el("div", "part-foot");
-      foot.append(b);
-      c.append(foot);
-    }
-    box.append(c);
-  };
-  const sum = (key) => parts.phones.reduce((n, p) => n + Number(p[key]), 0);
-
-  const phoneBytes = sum("whatsapp") + sum("folders") + sum("vault");
-  card({
-    iconName: "smartphone",
-    title: "Your phones' backups",
-    big: parts.phones.length ? size(String(phoneBytes)) : "None yet",
-    lines: parts.phones.length
-      ? parts.phones.map((p) => `${p.name}: ` + [
-        Number(p.whatsapp) > 0 ? `WhatsApp ${size(p.whatsapp)}` : null,
-        Number(p.folders) > 0 ? `folders ${size(p.folders)}` : null,
-        Number(p.vault) > 0 ? `Private Vault ${size(p.vault)}` : null,
-      ].filter(Boolean).join(" · "))
-      : ["A phone's backups come here once it keeps its Private Vault on this computer."],
-    action: parts.phones.length ? ["Open in Files", () => { showScreen("files"); filesBrowser.openPerson("owner"); }] : null,
-  });
-  card({
-    iconName: "folder",
-    title: "Shared files",
-    big: `${size(parts.shared_here)} here`,
-    lines: [
-      `${count(parts.shared_files, "file")}, on all your devices`,
-      st.evicted > 0 ? `${count(st.evicted, "file")} freed here, fetched when opened` : "Every one of them on this computer",
-    ],
-    action: ["Open in Files", () => { showScreen("files"); filesBrowser.openShared(); }],
-  });
+  const phoneBytes = parts.phones.reduce((n, p) => n + Number(p.whatsapp) + Number(p.folders) + Number(p.vault), 0);
   const guestBytes = parts.guests.reduce((n, g) => n + Number(g.size), 0);
-  card({
-    iconName: "user-plus",
-    title: "Guests' folders",
-    big: parts.guests.length ? size(String(guestBytes)) : "None",
-    lines: parts.guests.length
-      ? parts.guests.map((g) => `${g.name}: ${size(g.size)}, sealed`)
-      : ["Nobody else keeps a folder here. A guest's is sealed: you can't open it."],
-    action: ["Devices", () => showScreen("devices")],
-  });
-  card({
-    iconName: "trash-2",
-    title: "Recently deleted",
-    big: size(parts.deleted),
-    lines: [parts.deleted_files ? `${count(parts.deleted_files, "file")}, each kept 30 days` : "Nothing deleted lately"],
-    action: ["Open", () => showScreen("deleted")],
-  });
+  put(body, 
+    h("div", { class: "used" },
+      h("p", { class: "used-big" }, size(st.used)),
+      h("p", { class: "note" }, limit > 0 ? `of ${size(st.limit)}${st.over ? ", over" : ""}` : `${size(st.free_disk)} free on this disk`),
+      h("div", { class: "meter" }, h("i", { class: "m-used", style: { width: pct(used - freeable) } }), h("i", { class: "m-free", style: { width: pct(freeable) } })),
+      h("div", { class: "chips" },
+        h("span", { class: "chip chip-quiet" }, h("i", { class: "dot d-used" }), "Used"),
+        freeable ? h("span", { class: "chip chip-quiet" }, h("i", { class: "dot d-free" }), `${size(fr.bytes)} can be freed`) : null),
+      freeable ? btn(`Free up ${size(fr.bytes)}`, (e) => freeAll(e.currentTarget), "btn-main") : null),
+    group("Kept here",
+      setting({ ic: "smartphone", name: "Your phones' backups", value: size(phoneBytes), onclick: () => inFiles("owner") }),
+      setting({ ic: "folder", name: "Shared", value: size(parts.shared_here), onclick: () => inFiles("shared") }),
+      parts.guests.length ? setting({ ic: "users", name: "People's folders", value: size(guestBytes) }) : null,
+      setting({ ic: "trash-2", name: "Recently deleted", value: size(parts.deleted), onclick: () => go("deleted") })),
+    group("Limit",
+      setting({ ic: "sliders-horizontal", name: "Limit QurbSpace's space", end: toggle(limit > 0, async (on) => {
+        limitBox.hidden = !on;
+        if (!on) { await invoke("set_limit", { bytes: "0" }); go("storage"); }
+      }, "Limit QurbSpace's space") }),
+      limitBox),
+    fr.files.length ? label("Largest you can free") : null,
+    fr.files.length ? h("div", { class: "rows" }, ...fr.files.slice(0, 5).map((f) => row({
+      ic: fileIcon(f.path), name: base(f.path), sub: [size(f.size), folderOf(f.path) || "Shared"],
+      end: h("button", { class: "btn btn-quiet btn-sm", onclick: async () => { await freeUp(f.path); go("storage"); } }, "Free up"),
+    }))) : null,
+    h("p", { class: "note" }, "Freed files stay in QurbSpace, on your other devices"));
 }
 
-$("free-all").addEventListener("click", async () => {
-  const b = $("free-all");
+async function freeAll(b) {
   b.disabled = true;
-  let freed = 0, n = 0;
+  let freed = 0;
   try {
     // A page at a time, largest first, until nothing more can go.
     for (let round = 0; round < 20; round++) {
       const fr = await invoke("freeable");
-      if (fr.files.length === 0) break;
-      for (const f of fr.files) {
-        try { freed += Number(await invoke("free_file", { path: f.path })); n++; } catch (e) { /* kept, and said below */ }
-      }
+      if (!fr.files.length) break;
+      for (const f of fr.files) { try { freed += Number(await invoke("free_file", { path: f.path })); } catch (e) { /* the only copy */ } }
     }
-    toast(`Freed ${size(String(freed))} from ${count(n, "file")}. They stay in Qurb.`);
-  } finally {
-    b.disabled = false;
-    drawStorage();
-  }
-});
-
-// The track is square-law rather than linear.
-//
-// A 500 GB disk against an allowance somebody actually wants — ten or twenty
-// gigabytes — puts the useful part of a linear slider in its first four
-// percent, where it cannot be aimed at. Squaring gives the small end most of
-// the track and leaves the large end coarse, which is the right way round:
-// nobody needs 380 GB rather than 390.
-const TRACK = 1000;
-
-function toTrack(gib) {
-  if (maxGib() <= 0) return 0;
-  return Math.round(Math.sqrt(Math.min(gib, maxGib()) / maxGib()) * TRACK);
+    toast(`Freed ${size(freed)}`);
+  } finally { go("storage"); }
 }
 
-function fromTrack(position) {
-  const share = position / TRACK;
-  return Math.max(1, Math.round(share * share * maxGib()));
+// ---------- The key ----------
+
+async function drawKey(main) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Key", { words: "Settings", go: () => go("settings") }), body));
+  let s, sec;
+  try { [s, sec] = await Promise.all([invoke("settings"), invoke("security")]); } catch (e) { put(body, oops(e)); return; }
+  const others = s.key_also_on ?? [];
+  const words = h("div", {});
+  const showWords = async (b) => {
+    if (words.childElementCount) { put(words); b.textContent = "Show"; return; }
+    try {
+      const list = await invoke("reveal_phrase");
+      put(words, h("ol", { class: "words" }, ...list.map((w) => h("li", {}, w))));
+      b.textContent = "Hide";
+    } catch (e) { put(words, oops(e)); }
+  };
+  const how = { file: "In a file", keystore: "System keystore", passphrase: "Passphrase" };
+  put(body, 
+    h("div", { class: "locked" },
+      h("span", { class: `empty-orb${others.length ? " ok" : " warn"}` }, icon(others.length ? "shield-check" : "triangle-alert")),
+      h("p", {}, others.length ? `Also on ${others.join(", ")}` : "Only on this computer"),
+      h("p", { class: "note" }, others.length ? "Any of them gives it to a new device with a code" : "Pair your phone: it keeps the key safe")),
+    group("Protected",
+      ...["file", "keystore", "passphrase"].map((to) => setting({
+        ic: { file: "file", keystore: "key-round", passphrase: "lock-keyhole" }[to],
+        name: how[to],
+        end: sec.protection === to ? icon("check", "set-tick") : null,
+        onclick: sec.protection === to && to !== "passphrase" ? null : () => protectSheet(to, sec.protection),
+      }))),
+    group("Your 24 words",
+      setting({ ic: "key-round", name: "Show them", end: btn("Show", (e) => showWords(e.currentTarget), "btn-quiet btn-sm") }),
+      words),
+    group("Identity", setting({ ic: "info", name: sec.identity })),
+    sec.events.length ? label("Paired and removed") : null,
+    sec.events.length ? h("div", { class: "rows" }, ...sec.events.slice(0, 8).map((r) => row({
+      ic: r.kind === "removed" ? "x" : "monitor-smartphone", name: r.device ?? r.detail ?? "", sub: [r.kind === "removed" ? "Removed" : "Paired", ago(r.at)],
+    }))) : null);
 }
 
-function maxGib() {
-  return Math.max(1, Math.floor(disk / GIB));
+/** Changing how the key is kept: the fields that change needs, no more. */
+function protectSheet(to, was) {
+  const box = sheet({ ic: "lock-keyhole", title: to === "passphrase" ? (was === "passphrase" ? "Change passphrase" : "Protect with a passphrase") : to === "keystore" ? "Use the keystore" : "Keep in a file" });
+  const field = (placeholder) => h("input", { class: "field", type: "password", placeholder });
+  const current = was === "passphrase" ? field("Current passphrase") : null;
+  const fresh = to === "passphrase" ? field("New passphrase") : null;
+  const again = to === "passphrase" ? field("Again") : null;
+  const says = h("p", { class: "note" }, to === "passphrase" ? "Asked for when QurbSpace starts. Nothing syncs until it's typed" : to === "keystore" ? "Locked while you're logged out" : "Enough against other people using this computer");
+  box.append(...[current, fresh, again].filter(Boolean), says, actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Change", async () => {
+    if (fresh && fresh.value !== again.value) { says.textContent = "The two aren't the same"; says.classList.add("warn"); return; }
+    try {
+      await invoke("protect_key", { to, current: current?.value || null, new: fresh?.value ?? null });
+      box.close();
+      toast("Changed");
+      go("key");
+    } catch (e) { says.textContent = String(e); says.classList.add("warn"); }
+  }, "btn-main")));
+  (current ?? fresh)?.focus();
 }
 
-function chosenGib() {
-  return fromTrack(Number($("limit").value));
+// ---------- Advanced ----------
+
+async function drawAdvanced(main) {
+  const body = h("div", {});
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Advanced", { words: "Settings", go: () => go("settings") }), body));
+  let s;
+  try { s = await invoke("settings"); } catch (e) { put(body, oops(e)); return; }
+  SETTINGS = s;
+  const field = (name, value, placeholder) => h("label", { class: "fld" }, h("span", {}, name), h("input", { class: "field", value: value ?? "", placeholder, spellcheck: "false" }));
+  const signal = field("Rendezvous", s.signal);
+  const relay = field("Relay", s.relay, "None");
+  const port = field("Port", String(s.port), "Any");
+  const says = h("p", { class: "note" });
+  put(body, 
+    group("Connection", signal, relay, port),
+    actions(btn("Save", async () => {
+      try {
+        await saveSettings({ signal: signal.querySelector("input").value, relay: relay.querySelector("input").value, port: port.querySelector("input").value });
+        toast("Saved");
+      } catch (e) { says.textContent = String(e); says.classList.add("warn"); }
+    }, "btn-main")),
+    says,
+    group("This computer",
+      setting({ ic: "folder-open", name: "Folder", value: s.root, onclick: () => invoke("show_root").catch((e) => toast(String(e), true)) }),
+      setting({ ic: "info", name: "Version", value: s.version.split(" · ")[0].replace("window ", "") })));
 }
 
-function showLimitLabel() {
-  const gib = chosenGib();
-  const share = disk > 0 ? ` — ${Math.round((gib * GIB / disk) * 100)}% of this disk` : "";
-  $("limit-label").textContent = `${gib} GB${share}`;
-}
+// ---------- Activity ----------
 
-$("limit").addEventListener("input", showLimitLabel);
-
-$("capped").addEventListener("change", async (event) => {
-  $("limit-controls").classList.toggle("hidden", !event.target.checked);
-  // Unchecking means no limit, and is worth applying at once: somebody who has
-  // just turned a limit off is asking for the cap to stop, not asking to press
-  // a second button.
-  if (!event.target.checked) await saveLimit("0");
-});
-
-$("apply").addEventListener("click", () => saveLimit(String(chosenGib() * GIB)));
-
-async function saveLimit(bytes) {
-  try {
-    await invoke("set_limit", { bytes });
-    const saved = $("saved");
-    saved.classList.remove("hidden");
-    setTimeout(() => saved.classList.add("hidden"), 1600);
-    await drawStorage();
-  } catch (e) {
-    $("usage").textContent = String(e);
-  }
-}
-
-// ------------------------------------------------------------- security
-
-const PROTECTION = {
-  file: "In a file only you can read. Enough against other people using this computer; " +
-    "not against anyone who can read its disk.",
-  keystore: "In the system keystore, locked while you're logged out. Qurb opens it without " +
-    "asking while you're logged in.",
-  passphrase: "Behind a passphrase only you know. Qurb asks for it when it starts, and nothing " +
-    "syncs until you type it — the only option that protects the key from someone with the disk and your login.",
+const HAPPENED = {
+  stored: ["hard-drive", "Saved here"],
+  received: ["download", "Arrived"],
+  deleted: ["trash-2", "Deleted"],
+  sent: ["send", "Ready to send"],
+  collected: ["circle-check", "Collected"],
+  evicted: ["cloud-off", "Freed here"],
+  restored: ["rotate-ccw", "Restored"],
+  conflicted: ["git-compare", "Two versions"],
+  paired: ["monitor-smartphone", "Paired"],
+  failed: ["circle-alert", "Didn't finish"],
+  cancelled: ["x", "Stopped"],
+  removed: ["x", "Removed"],
 };
 
-/** Which change is being made in the passphrase form, if one is. */
-let protecting = null;
-
-async function drawSecurity() {
-  let s;
-  try {
-    s = await invoke("security");
-  } catch (e) {
-    $("protection-says").textContent = String(e);
-    return;
-  }
-  $("set-identity").textContent = s.identity;
-  $("protection-says").textContent = PROTECTION[s.protection] ?? s.protection;
-
-  const buttons = $("protection-buttons");
-  buttons.replaceChildren();
-  const offer = (label, action) => {
-    const b = el("button", "btn small", label);
-    b.addEventListener("click", action);
-    buttons.append(b);
-  };
-  const was = s.protection;
-  if (was !== "passphrase") offer("Protect with a passphrase…", () => protectForm("passphrase", was));
-  if (was === "passphrase") offer("Change passphrase…", () => protectForm("passphrase", was));
-  if (was !== "keystore") offer("Use the keystore", () => protectForm("keystore", was));
-
-  const events = $("security-events");
-  events.replaceChildren();
-  if (s.events.length === 0) events.append(el("li", "meta", "Nothing yet"));
-  for (const r of s.events.slice(0, 6)) {
-    events.append(row({
-      iconName: r.kind === "removed" ? "x" : "monitor-smartphone",
-      name: r.device ?? r.detail ?? "",
-      sub: [r.kind === "removed" ? "Removed" : "Paired", when(r.at)],
-    }));
-  }
-}
-
-/** The fields a change of protection needs, and nothing else. */
-function protectForm(to, was) {
-  protecting = { to, was };
-  const form = $("protect-form");
-  form.classList.remove("hidden");
-  $("protect-current-wrap").classList.toggle("hidden", was !== "passphrase");
-  const wantsNew = to === "passphrase";
-  $("protect-new-wrap").classList.toggle("hidden", !wantsNew);
-  $("protect-again-wrap").classList.toggle("hidden", !wantsNew);
-  $("protect-says").classList.add("hidden");
-  for (const id of ["protect-current", "protect-new", "protect-again"]) $(id).value = "";
-  $("protect-go").textContent = wantsNew ? "Set the passphrase" : "Use the keystore";
-  (was === "passphrase" ? $("protect-current") : wantsNew ? $("protect-new") : $("protect-go")).focus();
-}
-
-$("protect-cancel").addEventListener("click", () => {
-  protecting = null;
-  $("protect-form").classList.add("hidden");
-});
-
-$("protect-go").addEventListener("click", async () => {
-  if (!protecting) return;
-  const says = $("protect-says");
-  const current = $("protect-current").value || null;
-  const fresh = $("protect-new").value;
-  const again = $("protect-again").value;
-  if (protecting.to === "passphrase" && fresh !== again) {
-    says.textContent = "The two new passphrases aren't the same.";
-    says.classList.remove("hidden");
-    return;
-  }
-  try {
-    await invoke("protect_key", {
-      to: protecting.to,
-      current,
-      new: protecting.to === "passphrase" ? fresh : null,
-    });
-    protecting = null;
-    $("protect-form").classList.add("hidden");
-    toast("Key protection changed");
-    drawSecurity();
-  } catch (e) {
-    says.textContent = String(e);
-    says.classList.remove("hidden");
-  } finally {
-    for (const id of ["protect-current", "protect-new", "protect-again"]) $(id).value = "";
-  }
-});
-
-// -------------------------------------------------------------- settings
-
-async function drawSettings() {
-  drawSecurity();
-  let s;
-  try {
-    s = await invoke("settings");
-  } catch (e) {
-    $("settings-says").textContent = String(e);
-    return;
-  }
-
-  // A computer has nothing like a phone's Google backup: what keeps its key
-  // safe is another device that holds it, best a phone (decision 0053).
-  const others = s.key_also_on ?? [];
-  $("key-safe").textContent = others.length === 0
-    ? "Only on this computer. Pair your phone: it can give the key to a new computer with a code, and keeps it in its Google backup."
-    : `On this computer and on ${others.join(", ")}. Any of them can give it to a new device with a code${s.phone_holds_key ? "; your phone also keeps it in its Google backup" : ". Pair a phone too: it keeps the key in its Google backup"}.`;
-  $("key-safe").classList.toggle("warn", others.length === 0);
-
-  // Not rewritten under somebody who is in the middle of typing.
-  const editing = document.activeElement?.closest?.("#settings .item");
-  if (!editing) {
-    $("set-name").value = s.name;
-    $("set-signal").value = s.signal;
-    $("set-relay").value = s.relay ?? "";
-    $("set-port").value = String(s.port);
-    $("set-downloads").value = s.downloads;
-  }
-  showPicture(s.picture, s.name);
-  $("set-root").textContent = s.root;
-  $("set-version").textContent = s.version;
-  $("set-private").checked = s.own_files_private;
-  $("set-notify").checked = s.notifications;
-  $("motion-says").textContent = calm() ? "Reduced" : "Full";
-  showTheme();
-
-  // Where that actually is, since the setting can be empty or "off". Serde
-  // sends a Result as {Ok} or {Err}.
-  const at = s.downloads_at;
-  $("downloads-at").textContent =
-    "Err" in at ? `Refused: ${at.Err}` :
-    at.Ok === null ? "Kept inside your Qurb folder." :
-    `Now: ${at.Ok}`;
-  $("open-downloads").classList.toggle("hidden", !("Ok" in at) || at.Ok === null);
-
-  try {
-    // A device set up again is one device (item 6).
-    const devices = (await invoke("devices")).filter((d) => !d.replaced_by);
-    $("paired-says").textContent = devices.length === 0 ? "None yet" : devices.map((d) => d.name).join(", ");
-  } catch (e) { /* the row says nothing */ }
-
-  $("at-login").checked = await invoke("starts_at_login");
-}
-
-/**
- * This computer's picture (the owner's list of 2026-10-26, item 7): its
- * circle, as its other devices show it, or the first letter of its name.
- */
-function showPicture(address, name) {
-  const face = $("set-picture");
-  face.replaceChildren();
-  if (address) {
-    const img = el("img");
-    img.src = address;
-    img.alt = "";
-    face.append(img);
-  } else {
-    face.textContent = (name || "?").trim().slice(0, 1).toUpperCase();
-  }
-  $("remove-picture").classList.toggle("hidden", !address);
-}
-
-/**
- * The middle square of a picture, 256 pixels across, as JPEG bytes: what the
- * phone makes of one too. Read as a data: address, which the window's
- * content policy lets an image load from; a blob: one it does not.
- */
-async function squareJpeg(file) {
-  const address = await new Promise((done, fail) => {
-    const reader = new FileReader();
-    reader.onload = () => done(reader.result);
-    reader.onerror = () => fail(new Error("could not read that picture"));
-    reader.readAsDataURL(file);
-  });
-  const image = new Image();
-  await new Promise((done, fail) => {
-    image.onload = done;
-    image.onerror = () => fail(new Error("that isn't a picture"));
-    image.src = address;
-  });
-  const side = Math.min(image.naturalWidth, image.naturalHeight);
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 256;
-  canvas.getContext("2d").drawImage(image,
-    (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
-  const blob = await new Promise((done, fail) => canvas.toBlob(
-    (b) => (b ? done(b) : fail(new Error("could not make the picture"))), "image/jpeg", 0.85));
-  return Array.from(new Uint8Array(await blob.arrayBuffer()));
-}
-
-$("choose-picture").addEventListener("click", () => $("picture-file").click());
-$("picture-file").addEventListener("change", async (event) => {
-  const file = event.target.files?.[0];
-  event.target.value = "";
-  if (!file) return;
-  try {
-    await invoke("set_picture", { picture: await squareJpeg(file) });
-    toast("Picture set");
-    drawSettings();
-  } catch (e) {
-    toast(String(e), true);
-  }
-});
-$("remove-picture").addEventListener("click", async () => {
-  try {
-    await invoke("set_picture", { picture: null });
-    drawSettings();
-  } catch (e) {
-    toast(String(e), true);
-  }
-});
-
-/** A switch that applies at once, and puts itself back if that fails. */
-/** The theme choice (decision 0056): System, Light or Dark, applied at once. */
-function showTheme() {
-  const chosen = window.qurbTheme.chosen();
-  for (const b of $("theme-choice").querySelectorAll("button")) {
-    b.setAttribute("aria-checked", String(b.dataset.theme === chosen));
-  }
-}
-for (const b of $("theme-choice").querySelectorAll("button")) {
-  b.addEventListener("click", () => { window.qurbTheme.choose(b.dataset.theme); showTheme(); });
-}
-
-function applyAtOnce(id, apply, onWords, offWords) {
-  $(id).addEventListener("change", async (event) => {
-    const on = event.target.checked;
+async function drawActivity(main) {
+  const list = h("div", { class: "rows" });
+  const older = btn("Older", () => more(), "btn-quiet");
+  main.append(h("div", { class: "pg" }, pageHead("Activity", { words: "Settings", go: () => go("settings") }), list, h("div", { class: "acts acts-c" }, older)));
+  let oldest = null;
+  const more = async () => {
+    older.disabled = true;
     try {
-      await apply(on);
-      toast(on ? onWords : offWords);
-    } catch (e) {
-      event.target.checked = !on;
-      toast(String(e), true);
-    }
-  });
+      const rows = await invoke("activity", { path: null, limit: 60, before: oldest });
+      if (!rows.length && oldest === null) list.append(empty("history", "Nothing yet"));
+      oldest = rows.length ? rows[rows.length - 1].id : oldest;
+      older.hidden = rows.length < 60;
+      for (const r of rows) {
+        const [ic, words] = HAPPENED[r.kind] ?? ["info", r.kind];
+        list.append(row({
+          ic: tile(ic, r.kind === "failed" ? "tile-warn" : ""),
+          name: r.path ? base(r.path) : (r.device ?? ""),
+          sub: [r.device && r.path ? `${words}, ${r.device}` : words, ago(r.at), r.size ? size(r.size) : null],
+          title: r.detail && r.detail !== r.device ? r.detail : undefined,
+        }));
+      }
+    } catch (e) { list.append(oops(e)); }
+    older.disabled = false;
+  };
+  more();
 }
-
-applyAtOnce("at-login", (on) => invoke("set_starts_at_login", { on }),
-  "Qurb will start when you log in", "Qurb won't start by itself");
-applyAtOnce("set-private", (on) => invoke("set_privacy", { private: on }),
-  "Files you add here now go to your Private Vault", "Files you add here now go to all your devices");
-applyAtOnce("set-notify", (on) => invoke("set_notifications", { on }),
-  "Notifications on", "Notifications off");
-
-$("quit").addEventListener("click", () => invoke("quit"));
-
-$("settings-save").addEventListener("click", async () => {
-  const says = $("settings-says");
-  try {
-    await invoke("save_settings", {
-      name: $("set-name").value,
-      signal: $("set-signal").value,
-      relay: $("set-relay").value,
-      port: Number($("set-port").value) || 0,
-      downloads: $("set-downloads").value,
-    });
-    toast("Settings saved");
-    // So "Now: …" shows what was just saved rather than what was there.
-    document.activeElement?.blur?.();
-    drawSettings();
-  } catch (e) {
-    says.textContent = String(e);
-    says.classList.add("warn");
-  }
-});
-
-// The name and where received files go are the ones people change: saved as
-// soon as the field is left, rather than waiting for a button at the foot.
-for (const id of ["set-name", "set-downloads"]) {
-  $(id).addEventListener("change", () => $("settings-save").click());
-}
-
-$("open-downloads").addEventListener("click", async () => {
-  try { await invoke("open_downloads"); } catch (e) { toast(String(e), true); }
-});
-
-$("show-phrase").addEventListener("click", async () => {
-  const wrap = $("revealed-wrap");
-  const list = $("revealed");
-  const says = $("phrase-says");
-
-  // A second press hides them again, so they are not left on a screen somebody
-  // walks away from.
-  if (!wrap.classList.contains("hidden")) {
-    list.replaceChildren();
-    wrap.classList.add("hidden");
-    $("show-phrase").textContent = "Show";
-    return;
-  }
-
-  try {
-    const words = await invoke("reveal_phrase");
-    list.replaceChildren();
-    for (const word of words) list.append(el("li", null, word));
-    wrap.classList.remove("hidden");
-    says.classList.add("hidden");
-    $("show-phrase").textContent = "Hide";
-  } catch (e) {
-    wrap.classList.remove("hidden");
-    says.textContent = String(e);
-    says.classList.remove("hidden");
-  }
-});

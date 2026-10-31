@@ -1,292 +1,171 @@
-// Setting a device up, and unlocking one (direction §47).
-//
-// Sparse on purpose: setting a device up hands it the key, the highest-trust
-// moment in the product, so these screens carry the visual system and nothing
-// decorative. There is no phrase to write down (decision 0052).
+// Setting this computer up, and unlocking it (direction §47). One thing at
+// a time over the whole window, the sidebar not there yet: a folder, how
+// much of the disk it may take, and a code from the phone if it joins.
+// Nothing decorative: this is the moment the key is made or handed over.
 
-/** Which onboarding step is showing. */
-function step(name) {
-  document.querySelectorAll("#setup .step").forEach((s) => {
-    s.classList.toggle("on", s.dataset.step === name);
-  });
+const SETUP = { joining: false, path: "", looked: null, allowance: null };
+
+function drawSetup(where) {
+  SETUP.path = where.root ?? "";
+  document.body.classList.add("setting-up");
+  if (where.locked) return setupStep(unlockStep);
+  setupStep(welcome);
 }
 
-$("get-started").addEventListener("click", () => step("choose"));
-
-// Unlocking a key protected by a passphrase. The passphrase goes to the
-// command and is not kept: the field is cleared whatever the answer.
-async function unlock() {
-  const field = $("unlock-passphrase");
-  const says = $("unlock-says");
-  const go = $("unlock-go");
-  const passphrase = field.value;
-  field.value = "";
-  if (!passphrase) return;
-  go.disabled = true;
-  says.classList.add("hidden");
-  try {
-    await invoke("unlock", { passphrase });
-    decide();
-  } catch (e) {
-    says.textContent = String(e);
-    says.classList.remove("hidden");
-    field.focus();
-  } finally {
-    go.disabled = false;
-  }
+function setupStep(step) {
+  const box = h("div", { class: "setup-in" });
+  put($("setup"), box);
+  step(box);
+  icons(box);
+  box.querySelector("input")?.focus();
 }
-$("unlock-go").addEventListener("click", unlock);
-$("unlock-passphrase").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
 
-/** The path chosen, and whether the next button may be pressed. */
-let joining = false;
+function welcome(box) {
+  box.append(
+    h("span", { class: "empty-orb" }, icon("folder")),
+    h("h1", {}, "QurbSpace"),
+    h("p", { class: "note" }, "Your files, near you on every device"),
+    h("div", { class: "choices" },
+      h("button", { class: "choice", onclick: () => { SETUP.joining = false; setupStep(folderStep); } },
+        h("span", { class: "choice-c" }, icon("plus")), h("b", {}, "Start here"), h("small", {}, "This is my first device")),
+      h("button", { class: "choice", onclick: () => { SETUP.joining = true; setupStep(folderStep); } },
+        h("span", { class: "choice-c" }, icon("smartphone")), h("b", {}, "Join my phone"), h("small", {}, "With a code from it"))));
+}
 
-$("choose-new").addEventListener("click", () => { joining = false; step("folder"); lookAtFolder(); });
-$("choose-join").addEventListener("click", () => { joining = true; step("folder"); lookAtFolder(); });
+const backTo = (step) => h("button", { class: "back", onclick: () => setupStep(step) }, icon("arrow-left"), "Back");
 
-document.querySelectorAll("#setup [data-back]").forEach((b) => {
-  b.addEventListener("click", () => step(b.dataset.back));
-});
-
-let looking = null;
-
-/** What the folder step last found, for the storage step's free space. */
-let looked = null;
-$("folder-path").addEventListener("input", () => {
-  clearTimeout(looking);
-  looking = setTimeout(lookAtFolder, 200);
-});
-
-async function lookAtFolder() {
-  const next = $("folder-next");
-  const says = $("folder-says");
-  const path = $("folder-path").value.trim();
-  says.classList.remove("warn");
-  if (!path) {
-    says.textContent = "";
+function folderStep(box) {
+  const input = h("input", { class: "field", value: SETUP.path, spellcheck: "false", "aria-label": "Folder" });
+  const says = h("p", { class: "note" });
+  const next = btn("Continue", () => { SETUP.path = input.value.trim(); setupStep(storageStep); }, "btn-main");
+  let wait = null;
+  const look = async () => {
+    const path = input.value.trim();
     next.disabled = true;
-    return;
-  }
-
-  let folder;
-  try {
-    folder = await invoke("inspect_folder", { path });
-    looked = folder;
-  } catch (e) {
-    says.textContent = String(e);
-    says.classList.add("warn");
-    next.disabled = true;
-    return;
-  }
-
-  // Each of these is a reason not to continue, and each says what to do about
-  // it. "Invalid" on its own is the least useful thing an interface can say.
-  const refuse = (words) => {
-    says.textContent = words;
-    says.classList.add("warn");
-    next.disabled = true;
+    says.classList.remove("warn");
+    if (!path) { says.textContent = ""; return; }
+    let f;
+    try { f = await invoke("inspect_folder", { path }); } catch (e) { says.textContent = String(e); says.classList.add("warn"); return; }
+    if (path !== input.value.trim()) return;
+    SETUP.looked = f;
+    const refuse = (w) => { says.textContent = w; says.classList.add("warn"); };
+    if (f.set_up) return refuse("Already set up, with its own key");
+    if (!f.writable) return refuse("Can't be written to");
+    const at = f.path === path ? "" : `${f.path}, `;
+    says.textContent = !f.exists ? `${at}a new folder` : f.existing_files === 0 ? `${at}empty`
+      : `${at}${f.counted_all ? f.existing_files : `over ${f.existing_files}`} things here already, all of them will sync`;
+    next.disabled = false;
   };
-  if (folder.set_up && !joining) return refuse("Qurb is already set up in this folder. Choose another, or open that one instead.");
-  if (folder.set_up && joining) return refuse("Qurb is already set up in this folder, with its own key.");
-  if (!folder.writable) return refuse("This folder can't be written to.");
-
-  const disk = folder.disk === "0" ? "" : ` · ${size(folder.free)} free on this disk`;
-  // Where it is, in full, whenever that is not exactly what was typed: a
-  // folder typed as "home/project/qurb" is in the home folder, and that is
-  // worth seeing before Qurb is set up there rather than after.
-  const at = folder.path === path ? "" : ` at ${folder.path}`;
-  if (!folder.exists) {
-    says.textContent = `A new folder${at}${disk}`;
-  } else if (folder.existing_files === 0) {
-    says.textContent = `Empty${at}${disk}`;
-  } else {
-    // Said plainly: everything already in there is about to appear on every
-    // other device, which is a surprise worth not having.
-    const n = folder.counted_all ? `${folder.existing_files}` : `Over ${folder.existing_files}`;
-    says.textContent = `${n} things already here${at} — all of them will sync${disk}`;
-  }
-  next.disabled = false;
+  input.addEventListener("input", () => { clearTimeout(wait); wait = setTimeout(look, 200); });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !next.disabled) next.click(); });
+  box.append(backTo(welcome), h("h1", {}, "Your QurbSpace folder"), input, says, actions(next));
+  look();
 }
-
-$("folder-next").addEventListener("click", () => {
-  offerAllowances(looked ? Number(looked.free) : 0);
-  step("storage");
-});
-
-// ------------------------------------------------------------------ the allowance
-//
-// Asked before the key is made (decision 0038): how much of this disk qurb may
-// take. The brief's four figures and a custom one; "no limit" is not offered
-// here, and stays what `qurb config <dir> limit=0` sets.
 
 const GB = 1024 ** 3;
-const PRESETS = [50, 100, 250, 500];
 
-/**
- * An amount in the unit the question is asked in. "GB" here is the unit the
- * presets use and `qurb config limit=50G` means, 2^30 bytes, so the screen
- * speaks one unit throughout rather than offering "GB" and answering "GiB".
- */
-function gb(bytes) {
-  const n = Number(bytes) / GB;
-  if (n >= 1024) return `${(n / 1024).toFixed(1)} TB`;
-  return `${n < 10 ? n.toFixed(1) : n.toFixed(0)} GB`;
-}
-
-/** Bytes chosen, as a string, or null while nothing valid is. */
-let allowance = null;
-
-function offerAllowances(free) {
-  const box = $("allowances");
-  box.replaceChildren();
-  allowance = null;
-  $("allowance-custom").classList.add("hidden");
-  $("custom-allowance").value = "";
-
+function storageStep(box) {
+  const free = Number(SETUP.looked?.free ?? 0);
+  const says = h("p", { class: "note" }, free ? `${size(free)} free on this disk` : "");
+  const next = btn("Continue", () => (SETUP.joining ? setupStep(joinStep) : create(next, says)), "btn-main");
+  const custom = h("input", { class: "field", placeholder: "75 or 1.5 TB", hidden: true, "aria-label": "Another amount" });
+  const chips = h("div", { class: "amounts" });
   const pick = (b, bytes) => {
-    box.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-    allowance = bytes;
-    $("storage-next").disabled = allowance === null;
+    chips.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    SETUP.allowance = bytes;
+    next.disabled = bytes === null;
   };
-
-  for (const amount of PRESETS) {
-    const b = el("button", "btn", `${amount} GB`);
-    // Known free space only: a disk that could not be looked at does not
-    // disable anything, rather than disabling everything.
-    if (free > 0 && amount * GB > free) {
-      b.disabled = true;
-      b.title = `More than the ${gb(free)} free on this disk`;
-    }
-    b.addEventListener("click", () => {
-      $("allowance-custom").classList.add("hidden");
-      pick(b, String(amount * GB));
-      tellAboutAllowance(free);
-    });
-    box.append(b);
+  for (const n of [50, 100, 250, 500]) {
+    const b = h("button", { class: "amount", disabled: free > 0 && n * GB > free }, `${n} GB`);
+    b.addEventListener("click", () => { custom.hidden = true; pick(b, String(n * GB)); });
+    chips.append(b);
   }
-
-  const custom = el("button", "btn", "Another amount");
-  custom.addEventListener("click", () => {
-    pick(custom, null);
-    $("allowance-custom").classList.remove("hidden");
-    $("custom-allowance").focus();
-    readCustom(free);
+  const other = h("button", { class: "amount" }, "Other");
+  other.addEventListener("click", () => { pick(other, null); custom.hidden = false; custom.focus(); });
+  chips.append(other);
+  let wait = null;
+  custom.addEventListener("input", () => {
+    clearTimeout(wait);
+    wait = setTimeout(async () => {
+      SETUP.allowance = null;
+      next.disabled = true;
+      says.classList.remove("warn");
+      try {
+        const bytes = await invoke("read_allowance", { text: custom.value });
+        if (free && Number(bytes) > free) { says.textContent = `More than the ${size(free)} free`; says.classList.add("warn"); return; }
+        SETUP.allowance = bytes;
+        says.textContent = size(bytes);
+        next.disabled = false;
+      } catch (e) { says.textContent = String(e); says.classList.add("warn"); }
+    }, 200);
   });
-  box.append(custom);
-
-  // The largest preset that fits, chosen to begin with, so that Continue
-  // works at once for somebody content with a sensible figure.
-  const fits = [...box.querySelectorAll("button")].filter((b) => !b.disabled && b !== custom);
+  box.append(backTo(folderStep), h("h1", {}, "How much space it may take"), chips, custom, says, actions(next));
+  // The largest that fits of the first two, chosen to begin with.
+  const fits = [...chips.querySelectorAll(".amount:not(:disabled)")].filter((b) => b !== other);
   if (fits.length) fits[Math.min(1, fits.length - 1)].click();
-  tellAboutAllowance(free);
+  else pick(other, null);
 }
 
-function tellAboutAllowance(free) {
-  const says = $("storage-says");
-  const disk = free > 0 ? `${gb(free)} free on this disk.` : "";
-  const over = free > 0 && PRESETS.some((amount) => amount * GB > free)
-    ? " Larger amounts are more than it has free." : "";
-  says.textContent = disk + over;
-  says.classList.remove("warn");
-}
-
-let reading = null;
-$("custom-allowance").addEventListener("input", () => {
-  clearTimeout(reading);
-  reading = setTimeout(() => readCustom(looked ? Number(looked.free) : 0), 200);
-});
-
-async function readCustom(free) {
-  const says = $("storage-says");
-  const text = $("custom-allowance").value;
-  allowance = null;
-  $("storage-next").disabled = true;
-  if (!text.trim()) { tellAboutAllowance(free); return; }
-  try {
-    const bytes = await invoke("read_allowance", { text });
-    if (free > 0 && Number(bytes) > free) {
-      says.textContent = `${gb(bytes)} is more than the ${gb(free)} free on this disk.`;
-      says.classList.add("warn");
-      return;
-    }
-    allowance = bytes;
-    says.textContent = `${gb(bytes)}, of ${gb(free)} free.`;
-    says.classList.remove("warn");
-    $("storage-next").disabled = false;
-  } catch (e) {
-    says.textContent = String(e);
-    says.classList.add("warn");
-  }
-}
-
-$("storage-next").addEventListener("click", async () => {
-  if (allowance === null) return;
-  if (joining) { step("join"); return; }
-
-  const next = $("storage-next");
+async function create(next, says) {
   next.disabled = true;
   try {
-    // Made and started in one go: there is no phrase to write down first
-    // (decision 0052). Another device is added with a code, which carries
-    // the key.
-    await invoke("create_device", { path: $("folder-path").value.trim(), allowance });
-    $("ready-says").textContent = "This computer is your first device, and Qurb is watching your folder. Add your phone from Devices, with a code.";
-    step("ready");
-  } catch (e) {
-    $("storage-says").textContent = String(e);
-    $("storage-says").classList.add("warn");
-  } finally {
-    next.disabled = false;
-  }
-});
+    await invoke("create_device", { path: SETUP.path, allowance: SETUP.allowance });
+    setupStep((box) => ready(box, "Add your phone from Home, with a code"));
+  } catch (e) { says.textContent = String(e); says.classList.add("warn"); next.disabled = false; }
+}
 
-/** Whether the join step takes a code (the usual) or the 24 words. */
-let byWords = false;
+function joinStep(box) {
+  let byWords = false;
+  const code = h("input", { class: "digits-in", inputmode: "numeric", placeholder: "000000", autocomplete: "off", "aria-label": "The code" });
+  const words = h("textarea", { class: "field", rows: "4", hidden: true, placeholder: "Your 24 words", spellcheck: "false", "aria-label": "Your 24 words" });
+  const says = h("p", { class: "note" }, "On your phone: Add a device, then Show a code");
+  const title = h("h1", {}, "The code from your phone");
+  const swap = h("button", { class: "link", onclick: () => {
+    byWords = !byWords;
+    code.hidden = byWords;
+    words.hidden = !byWords;
+    title.textContent = byWords ? "Your 24 words" : "The code from your phone";
+    swap.textContent = byWords ? "Use a code instead" : "Use my 24 words";
+    (byWords ? words : code).focus();
+  } }, "Use my 24 words");
+  const next = btn("Join", async () => {
+    next.disabled = true;
+    says.classList.remove("warn");
+    try {
+      if (byWords) {
+        await invoke("enrol_device", { path: SETUP.path, phrase: words.value, allowance: SETUP.allowance });
+        words.value = "";
+        setupStep((b) => ready(b, "Pair it with your other devices from Home"));
+      } else {
+        says.textContent = "Looking for it on this Wi-Fi";
+        const number = await invoke("setup_pairing_number", { path: SETUP.path, code: code.value });
+        put(says, "Approve on your phone. It shows ", h("b", {}, number));
+        const joined = await invoke("join_new_device", { path: SETUP.path, code: code.value, allowance: SETUP.allowance });
+        setupStep((b) => ready(b, `Paired with ${joined}`));
+      }
+    } catch (e) { says.textContent = String(e); says.classList.add("warn"); next.disabled = false; }
+  }, "btn-main");
+  code.addEventListener("input", () => { if (/^\d{6}$/.test(code.value.trim())) next.click(); });
+  box.append(backTo(storageStep), title, code, words, says, swap, actions(next));
+}
 
-$("join-words").addEventListener("click", () => {
-  byWords = !byWords;
-  $("code-field").classList.toggle("hidden", byWords);
-  $("phrase-field").classList.toggle("hidden", !byWords);
-  $("join-title").textContent = byWords ? "Enter your recovery phrase" : "Enter the code from your other device";
-  $("join-lead").textContent = byWords
-    ? "The 24 words of your key. Order matters; spacing and capitals don't."
-    : "On your phone, open Qurb, go to Devices, choose Add a device and then Show a code on this phone. Type its six digits here, on the same Wi-Fi. It brings your key with it, so there's nothing else to type.";
-  $("join-words").textContent = byWords ? "Use a code instead" : "Use my 24 words instead";
-  $("join-says").classList.add("hidden");
-});
+function ready(box, words) {
+  box.append(
+    h("span", { class: "empty-orb ok" }, icon("check")),
+    h("h1", {}, "Ready"),
+    h("p", { class: "note" }, words),
+    actions(btn("Open QurbSpace", () => start(), "btn-main")));
+}
 
-$("join-next").addEventListener("click", async () => {
-  const says = $("join-says");
-  const b = $("join-next");
-  b.disabled = true;
-  try {
-    const path = $("folder-path").value.trim();
-    if (byWords) {
-      await invoke("enrol_device", { path, phrase: $("given-phrase").value, allowance });
-      // Off the screen as soon as it has been used.
-      $("given-phrase").value = "";
-      $("ready-says").textContent = "This computer now shares your key, and Qurb is watching your folder. Pair it with your other devices from Devices.";
-    } else {
-      // The phone asks its person to approve this computer: show the number
-      // it will be comparing (decision 0053).
-      // Six digits are looked for on this network first (decision 0066).
-      says.classList.remove("warn", "hidden");
-      says.textContent = "Looking for it on this network…";
-      const number = await invoke("setup_pairing_number", { path, code: $("given-code").value });
-      says.textContent = `Approve this computer on your phone. It should show ${number}.`;
-      const joined = await invoke("join_new_device", { path, code: $("given-code").value, allowance });
-      $("given-code").value = "";
-      $("ready-says").textContent = `This computer is now one of your devices, paired with ${joined}, and Qurb is watching your folder.`;
-    }
-    says.classList.add("hidden");
-    step("ready");
-  } catch (e) {
-    says.textContent = String(e);
-    says.classList.add("warn");
-    says.classList.remove("hidden");
-  } finally {
-    b.disabled = false;
-  }
-});
-
-$("ready-next").addEventListener("click", () => decide());
+function unlockStep(box) {
+  const field = h("input", { class: "field", type: "password", placeholder: "Passphrase", "aria-label": "Passphrase" });
+  const says = h("p", { class: "note" }, "Nothing syncs until it's typed");
+  const open = async () => {
+    const passphrase = field.value;
+    field.value = "";
+    if (!passphrase) return;
+    try { await invoke("unlock", { passphrase }); start(); } catch (e) { says.textContent = String(e); says.classList.add("warn"); field.focus(); }
+  };
+  field.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
+  box.append(h("span", { class: "empty-orb" }, icon("lock-keyhole")), h("h1", {}, "QurbSpace is locked"), field, says, actions(btn("Unlock", open, "btn-main")));
+}

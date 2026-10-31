@@ -1,11 +1,7 @@
-// What every screen uses: talking to the engine, formatting, and the handful of
-// components the design is built from (docs/design/direction.md §48) -- rows,
-// states, sheets, panels, menus, toasts, empty states.
-//
-// Every number and every row comes from a command in `src/commands.rs`, which
-// is a thin wrapper over the engine. Nothing in these scripts decides anything
-// about syncing; if it looks like it is deciding something, that is a bug in
-// the layering rather than a clever optimisation.
+// What every place uses: talking to the engine, drawing, and saying sizes
+// and times the way people say them. The engine is the one the window has
+// today (src/commands.rs): the same commands, the same answers, so that this
+// interface can replace the old one without the engine changing.
 
 // Every command goes through here, so that a failure is remembered even where
 // the page shows it only briefly or not at all: the last fifty, as
@@ -26,341 +22,204 @@ async function invoke(command, args) {
 }
 
 const $ = (id) => document.getElementById(id);
-const el = (tag, cls, text) => {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text !== undefined) node.textContent = text;
-  return node;
-};
 
-/** An icon from the sprite icons.js puts in the page. */
-function icon(name, cls) {
+/** An element from a tag, attributes and children. */
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) el.append(c.nodeType ? c : String(c));
+  return el;
+}
+
+/** One of the Android app's icons (icons.js), sized by its CSS. */
+function icon(name, cls = "") {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("class", cls ? `i ${cls}` : "i");
+  svg.setAttribute("viewBox", "0 0 256 256");
   svg.setAttribute("aria-hidden", "true");
-  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-  use.setAttribute("href", `#i-${name}`);
-  svg.append(use);
+  svg.setAttribute("class", `ic ${cls}`.trim());
+  for (const d of ICONS[name] ?? []) {
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", d);
+    svg.append(p);
+  }
   return svg;
 }
 
-/** A button with an icon and words. Icons support text; they do not replace it (§10). */
-function button(label, cls = "btn", iconName = null) {
-  const b = el("button", cls);
-  if (iconName) b.append(icon(iconName));
-  b.append(el("span", null, label));
-  return b;
+/** Fill every <i data-icon> placeholder in `root`. */
+function icons(root = document) {
+  root.querySelectorAll("i[data-icon]").forEach((i) => i.replaceWith(icon(i.dataset.icon)));
 }
 
-/** Whether the person asked for less motion (§42). */
-const calm = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-// ------------------------------------------------------------- formatting
-
-/** Bytes as a person would say them. Input is a string: see commands.rs. */
+/** Bytes, as a person reads them: 4.7 GB, 812 MB, 12 KB. */
 function size(bytes) {
-  let n = Number(bytes);
-  if (!isFinite(n)) return "–";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let u = 0;
-  while (n >= 1024 && u < units.length - 1) { n /= 1024; u++; }
-  return `${u === 0 ? n : n.toFixed(n < 10 ? 1 : 0)} ${units[u]}`;
+  const n = Number(bytes) || 0;
+  const units = ["bytes", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
+  return i === 0 ? `${n} bytes` : `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
-/** Unix seconds as a relative time. Matches the wording `qurb status` uses. */
-function when(seconds) {
-  // 0 is a file that never said when it changed, not one from 1970.
-  if (seconds == null || seconds <= 0) return "";
-  const ago = Math.max(0, Math.floor(Date.now() / 1000) - seconds);
-  if (ago <= 90) return "just now";
-  if (ago <= 5400) return plural(Math.floor(ago / 60), "minute");
-  if (ago <= 172800) return plural(Math.floor(ago / 3600), "hour");
-  return plural(Math.floor(ago / 86400), "day");
+/** How long ago a unix time was: just now, 4 min ago, 3 h ago, 2 days ago. */
+function ago(at) {
+  if (!at) return "never";
+  const s = Math.max(0, Math.floor(Date.now() / 1000) - at);
+  if (s < 45) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  const d = Math.round(s / 86400);
+  return d === 1 ? "yesterday" : `${d} days ago`;
 }
 
-function plural(n, unit) {
-  return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
+const count = (n, one, many = `${one}s`) => `${Number(n).toLocaleString()} ${Number(n) === 1 ? one : many}`;
+
+/** A device as the circle the Android app draws it: its first letter. */
+function circle(device, cls = "") {
+  const online = Boolean(device.route);
+  return h("span", { class: `circle ${cls}`.trim(), title: device.name },
+    device.picture ? h("img", { src: device.picture, alt: "" }) : (device.name || "?").trim()[0].toUpperCase(),
+    h("i", { class: `circle-dot ${online ? "on" : "off"}`, "aria-label": online ? "online" : "offline" }));
 }
 
-function count(n, noun) {
-  return `${n.toLocaleString()} ${noun}${n === 1 ? "" : "s"}`;
-}
+const base = (path) => path.split("/").pop();
+const folderOf = (path) => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
 
-/** Seconds as a person would say a wait. */
-function duration(seconds) {
-  if (!isFinite(seconds) || seconds < 0) return "";
-  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
-  return `${(seconds / 3600).toFixed(1)} h`;
-}
-
-const base = (path) => (path ?? "").split("/").pop();
-const folderOf = (path) => (path ?? "").split("/").slice(0, -1).join("/");
-
-// -------------------------------------------------------------- file states
-
+/** What a file is, from its name: enough to choose its icon and whether it
+ * can be looked at here. */
 const KINDS = {
-  image: ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "avif", "bmp", "svg", "tif", "tiff", "raw", "dng"],
-  video: ["mp4", "mov", "mkv", "webm", "avi", "m4v"],
-  audio: ["mp3", "m4a", "flac", "wav", "ogg", "opus", "aac"],
-  archive: ["zip", "tar", "gz", "tgz", "xz", "bz2", "7z", "rar", "zst"],
-  code: ["js", "ts", "rs", "py", "go", "c", "h", "cpp", "java", "kt", "swift", "sh", "json", "toml", "yaml", "yml", "html", "css"],
-  text: ["txt", "md", "pdf", "doc", "docx", "odt", "rtf", "csv", "xls", "xlsx", "ods", "ppt", "pptx", "odp", "epub"],
+  image: ["jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif", "avif", "svg"],
+  video: ["mp4", "mkv", "mov", "webm", "avi", "m4v", "3gp"],
+  audio: ["mp3", "m4a", "aac", "ogg", "opus", "flac", "wav"],
+  text: ["txt", "md", "pdf", "doc", "docx", "odt", "rtf", "xls", "xlsx", "ods", "csv", "ppt", "pptx", "odp", "epub"],
+  archive: ["zip", "tar", "gz", "tgz", "xz", "7z", "rar", "bz2", "zst"],
+  code: ["js", "ts", "rs", "py", "kt", "java", "c", "h", "cpp", "go", "json", "toml", "yaml", "yml", "html", "css", "sh"],
 };
+function kindOf(name) {
+  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+  return Object.keys(KINDS).find((k) => KINDS[k].includes(ext)) ?? "file";
+}
+const KIND_ICON = { image: "file-image", video: "file-video", audio: "file-audio", text: "file-text", archive: "file-archive", code: "file-code", file: "file" };
+const fileIcon = (name) => KIND_ICON[kindOf(name)];
+/** Whether the window can show it itself: pictures, and text it can read. */
+const peekable = (name) => kindOf(name) === "image" || /\.(txt|md|csv|json|toml|ya?ml|log|rs|js|py|sh|html|css)$/i.test(name);
 
-/** What kind of file a name is, for its icon and its details. */
-function kindOf(path) {
-  const ext = base(path).includes(".") ? base(path).split(".").pop().toLowerCase() : "";
-  for (const [kind, exts] of Object.entries(KINDS)) if (exts.includes(ext)) return kind;
-  return "file";
+/** A tile: an icon in a soft rounded square, as on the phone. */
+const tile = (name, cls = "") => h("span", { class: `tile ${cls}`.trim() }, icon(name));
+
+/** A label over a group, as on the phone. */
+const label = (words) => h("p", { class: "label" }, words);
+
+/** A place's heading, with a way back to where it was reached from. */
+function pageHead(title, back, ...end) {
+  return h("div", { class: "pg-hd" },
+    back ? h("button", { class: "back", onclick: back.go }, icon("arrow-left"), back.words) : null,
+    h("div", { class: "pg-title" }, h("h1", {}, title), h("div", { class: "pg-end" }, ...end)));
 }
 
-const KIND_ICON = {
-  image: "file-image", video: "file-video", audio: "file-audio",
-  archive: "file-archive", code: "file-code", text: "file-text", file: "file",
-};
-const KIND_WORD = {
-  image: "Image", video: "Video", audio: "Audio", archive: "Archive",
-  code: "Code", text: "Document", file: "File",
-};
-
-/**
- * The words and icon for where a file's bytes are (§11). Always both: a
- * state is never colour alone. "Only copy here" is the one worth a colour of
- * its own, because losing this device would lose the file.
- */
-function stateOf(availability) {
-  switch (availability) {
-    case "here": return { cls: "here", icon: "hard-drive", words: "On this device" };
-    case "elsewhere": return { cls: "elsewhere", icon: "cloud", words: "Available elsewhere" };
-    case "only here": return { cls: "only", icon: "triangle-alert", words: "Only copy here" };
-    // Decision 0055: listed, and no device this one syncs with has it.
-    case "nowhere": return { cls: "nowhere", icon: "circle-alert", words: "On no device" };
-    default: return { cls: "here", icon: "check", words: availability };
-  }
+/** Nothing here: an icon and a few words, and what to do, if anything. */
+function empty(ic, words, action) {
+  return h("div", { class: "empty" }, h("span", { class: "empty-orb" }, icon(ic)), h("p", {}, words), action ?? null);
 }
 
-function stateTag(availability) {
-  const s = stateOf(availability);
-  const tag = el("span", `state ${s.cls}`);
-  tag.append(icon(s.icon), el("span", null, s.words));
-  return tag;
+/** A row of a list: a tile, a name, a quieter line, and what is at its end. */
+function row({ ic, name, sub, end, onclick, cls = "", title }) {
+  const subs = (Array.isArray(sub) ? sub : [sub]).filter((s) => s != null && s !== "");
+  return h(onclick ? "button" : "div", { class: `row ${cls}`.trim(), onclick, title },
+    typeof ic === "string" ? tile(ic) : ic,
+    h("span", { class: "row-main" },
+      h("b", {}, name),
+      subs.length ? h("small", {}, ...subs.map((s) => h("span", {}, s))) : null),
+    ...(Array.isArray(end) ? end : [end]));
 }
 
-// ------------------------------------------------------------------- rows
-
-/**
- * A row: a tile with an icon, a name, a line under it, and actions at the
- * end that arrive on hover (§18, §38).
- */
-function row({ iconName, name, sub = [], trail = [], onClick = null, cls = "" }) {
-  const li = el("li", `row ${cls}`.trim());
-  const tile = el("span", "tile");
-  tile.append(icon(iconName));
-  const main = el("div", "main");
-  main.append(el("span", "name", name));
-  const line = el("div", "sub");
-  sub.filter(Boolean).forEach((part, i) => {
-    const node = typeof part === "string" ? el("span", null, part) : part;
-    if (i > 0) node.classList.add("dot");
-    line.append(node);
+/** A switch that applies at once, and puts itself back if that fails. */
+function toggle(on, apply, labelled) {
+  const input = h("input", { type: "checkbox", "aria-label": labelled });
+  input.checked = on;
+  input.addEventListener("change", async () => {
+    try { await apply(input.checked); } catch (e) { input.checked = !input.checked; toast(String(e), true); }
   });
-  if (line.childElementCount) main.append(line);
-  const end = el("div", "trail");
-  trail.filter(Boolean).forEach((t) => end.append(t));
-  li.append(tile, main, end);
-  if (onClick) {
-    li.classList.add("clickable");
-    li.tabIndex = 0;
-    li.addEventListener("click", (event) => {
-      if (event.target.closest("button")) return;
-      onClick(event);
-    });
-    li.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && event.target === li) onClick(event);
-    });
-  }
-  return li;
+  return h("label", { class: "switch", onclick: (e) => e.stopPropagation() }, input, h("span"));
 }
 
-/** An outline icon and one line, with the action to take (brief §1). */
-function empty(iconName, words, action = null, small = false) {
-  const box = el("div", small ? "empty small" : "empty");
-  const orb = el("span", "orb");
-  orb.append(icon(iconName));
-  box.append(orb, el("p", null, words));
-  if (action) box.append(action);
-  return box;
+/** One setting: its icon, its name, what it is now, and a switch or an arrow. */
+function setting({ ic, name, value, onclick, end, danger }) {
+  return h(onclick ? "button" : "div", { class: `set${danger ? " set-danger" : ""}`, onclick },
+    icon(ic, "set-ic"),
+    h("span", { class: "set-name" }, name),
+    value != null ? h("span", { class: "set-value" }, value) : null,
+    end ?? (onclick && !danger ? icon("chevron-right", "set-go") : null));
 }
 
-/** A failure where the data would have been, rather than silently blank. */
-function oops(container, error) {
-  container.replaceChildren(empty("circle-alert", String(error), null, true));
-}
-
-/** An attention item (§14): something needs a decision, and its one action. */
-function attention({ iconName = "triangle-alert", title, says, action = null, error = false }) {
-  const box = el("div", error ? "attention error" : "attention");
-  const tile = el("span", "tile");
-  tile.append(icon(iconName));
-  const text = el("div");
-  text.append(el("strong", null, title));
-  if (says) text.append(el("p", null, says));
-  box.append(tile, text);
-  box.append(action ?? el("span"));
-  return box;
-}
-
-// --------------------------------------------------------- sheets, panels
+const group = (words, ...rows) => h("section", { class: "grp" }, words ? label(words) : null, h("div", { class: "grp-box" }, ...rows));
 
 /**
- * An elevated sheet over a dimmed, slightly blurred window (§36). Returns the
- * sheet, and `close()` on it. Escape and a click outside close it too.
+ * A sheet over the window, as the phone's slides up from its edge: what it
+ * is about, then whatever is put in it. Closed by Escape, by a click beside
+ * it, or by `close()`.
  */
-function sheet({ wide = false, onClose = null } = {}) {
-  const scrim = el("div", "scrim");
-  const box = el("div", wide ? "sheet wide glass-elevated" : "sheet glass-elevated");
-  box.setAttribute("role", "dialog");
-  box.setAttribute("aria-modal", "true");
-  const close = el("button", "icon-btn close");
-  close.setAttribute("aria-label", "Close");
-  close.append(icon("x"));
-  box.append(close);
-  scrim.append(box);
+function sheet({ ic, title, sub, wide, onclose } = {}) {
+  const box = h("div", { class: `sheet${wide ? " sheet-wide" : ""}`, role: "dialog", "aria-modal": "true" });
+  const scrim = h("div", { class: "scrim", onmousedown: (e) => { if (e.target === scrim) close(); } }, box);
+  const esc = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+  function close() {
+    if (!scrim.isConnected) return;
+    document.removeEventListener("keydown", esc, true);
+    scrim.classList.add("gone");
+    setTimeout(() => scrim.remove(), 180);
+    onclose?.();
+  }
+  if (title) {
+    box.append(h("div", { class: "sh-hd" },
+      ic ? (typeof ic === "string" ? tile(ic, "tile-lg") : ic) : null,
+      h("div", { class: "sh-words" }, h("h2", {}, title), sub ? (typeof sub === "string" ? h("p", {}, sub) : sub) : null)));
+  }
+  document.addEventListener("keydown", esc, true);
   document.body.append(scrim);
-
-  let closed = false;
-  box.close = () => {
-    if (closed) return;
-    closed = true;
-    document.removeEventListener("keydown", onKey);
-    scrim.classList.add("closing");
-    setTimeout(() => scrim.remove(), calm() ? 0 : 280);
-    onClose?.();
-  };
-  const onKey = (event) => { if (event.key === "Escape") box.close(); };
-  document.addEventListener("keydown", onKey);
-  close.addEventListener("click", () => box.close());
-  scrim.addEventListener("mousedown", (event) => { if (event.target === scrim) box.close(); });
+  box.close = close;
   return box;
 }
 
-/** The one panel open over the stage, if any: details of a file or device. */
-let openPanel = null;
-
-/** An elevated panel sliding in from the right of the stage (§19). */
-function panel(cls = "") {
-  closePanel();
-  const box = el("aside", `panel glass-elevated ${cls}`.trim());
-  const close = el("button", "icon-btn close");
-  close.setAttribute("aria-label", "Close");
-  close.style.cssText = "position:absolute;top:14px;right:14px;z-index:1";
-  close.append(icon("x"));
-  close.addEventListener("click", closePanel);
-  box.append(close);
-  $("stage").append(box);
-  openPanel = box;
-  return box;
-}
-
-function closePanel() {
-  if (!openPanel) return;
-  const box = openPanel;
-  openPanel = null;
-  box.classList.add("closing");
-  setTimeout(() => box.remove(), calm() ? 0 : 280);
-}
-
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !document.querySelector(".scrim")) closePanel();
-});
-
-/** A contextual menu under `anchor`: [label, icon, action, danger?] items. */
-function menu(anchor, items) {
-  document.querySelector(".menu")?.remove();
-  const box = el("div", "menu glass-elevated");
-  box.setAttribute("role", "menu");
-  for (const item of items) {
-    if (item === "-") { box.append(el("hr")); continue; }
-    const [label, iconName, action, danger] = item;
-    const b = el("button", danger ? "danger" : "");
-    b.setAttribute("role", "menuitem");
-    b.append(icon(iconName), el("span", null, label));
-    b.addEventListener("click", () => { box.remove(); action(); });
-    box.append(b);
+/** A sheet's actions as the phone draws a file's: round buttons with a word
+ * under each, the destructive one red. Each closes the sheet first. */
+function rounds(box, items) {
+  const grid = h("div", { class: "rounds" });
+  for (const it of items.filter(Boolean)) {
+    grid.append(h("button", { class: `round${it.danger ? " round-danger" : ""}`, onclick: () => { box.close(); it.act(); } },
+      h("span", { class: "round-c" }, icon(it.ic)), h("span", {}, it.words)));
   }
-  document.body.append(box);
-  const r = anchor.getBoundingClientRect();
-  const width = box.offsetWidth;
-  box.style.left = `${Math.min(window.innerWidth - width - 12, Math.max(12, r.right - width))}px`;
-  const below = r.bottom + 6;
-  box.style.top = below + box.offsetHeight > window.innerHeight - 12
-    ? `${Math.max(12, r.top - box.offsetHeight - 6)}px` : `${below}px`;
-  box.querySelector("button")?.focus();
-  const away = (event) => {
-    if (!box.contains(event.target)) { box.remove(); document.removeEventListener("mousedown", away, true); }
-  };
-  setTimeout(() => document.addEventListener("mousedown", away, true));
-  box.addEventListener("keydown", (event) => { if (event.key === "Escape") box.remove(); });
+  box.append(grid);
+  return grid;
 }
 
-/** A short confirmation at the foot of the window. */
+/** Buttons at a sheet's foot: the quiet one, then the main one. */
+function actions(...buttons) {
+  return h("div", { class: "acts" }, ...buttons.filter(Boolean));
+}
+const btn = (words, onclick, cls = "") => h("button", { class: `btn ${cls}`.trim(), onclick }, words);
+
 function toast(words, warn = false) {
-  document.querySelector(".toast")?.remove();
-  const box = el("div", warn ? "toast warn glass-elevated" : "toast glass-elevated");
-  box.setAttribute("role", "status");
-  box.append(icon(warn ? "circle-alert" : "circle-check"), el("span", null, words));
-  document.body.append(box);
-  setTimeout(() => box.remove(), warn ? 6000 : 3200);
+  const t = h("div", { class: `toast${warn ? " toast-warn" : ""}`, role: "status" }, words);
+  document.body.append(t);
+  setTimeout(() => t.classList.add("gone"), 2800);
+  setTimeout(() => t.remove(), 3300);
 }
 
-/**
- * A button that asks before it acts: the first press says what it will do,
- * the second, within a few seconds, does it. In the page rather than a
- * dialog, for actions that cannot be undone but are too small for a sheet.
- */
-function twoPress(b, asking, act) {
-  const said = b.querySelector("span")?.textContent ?? b.textContent;
-  let armed = 0;
-  b.addEventListener("click", async (event) => {
-    event.stopPropagation();
-    if (Date.now() > armed) {
-      armed = Date.now() + 4000;
-      (b.querySelector("span") ?? b).textContent = asking;
-      setTimeout(() => {
-        if (Date.now() > armed) (b.querySelector("span") ?? b).textContent = said;
-      }, 4100);
-      return;
-    }
-    armed = 0;
-    b.disabled = true;
-    try { await act(); } finally { b.disabled = false; (b.querySelector("span") ?? b).textContent = said; }
-  });
-  return b;
+/** A failure drawn where the thing would have been. */
+const oops = (e) => h("p", { class: "oops" }, String(e));
+
+/** Replace what is in `el`, leaving out the parts that are not there:
+ * `replaceChildren` itself would write a null out as the word "null". */
+function put(el, ...kids) {
+  el.replaceChildren(...kids.flat().filter((k) => k != null && k !== false));
 }
 
-// ------------------------------------------------------------------ devices
-
-/**
- * The other device in a history entry, by name: "another device" for one
- * never paired here (where a file began, reaching this computer through
- * another), as on the phone. Null for an entry no device took part in.
- */
-function otherDevice(r) {
-  if (r.device) return r.device;
-  return ["received", "collected", "sent", "cancelled", "conflicted"].includes(r.kind) ? "another device" : null;
-}
-
-/**
- * A device's icon, from the kind it said it is (decision 0053): when pairing,
- * or for a device paired before that, at its first sync since. Until then its
- * icon is guessed from the name it chose: a wrong guess costs an icon, never
- * a decision.
- */
-function deviceIcon(name, kind) {
-  if (kind === "phone") return "smartphone";
-  if (kind === "computer") return "laptop";
-  if (kind === "replica") return "hard-drive";
-  return /phone|galaxy|pixel|android|iphone|sm-[a-z]\d|oneplus|xiaomi|redmi/i.test(name ?? "")
-    ? "smartphone" : "laptop";
-}
+/** A name as the start of a line: "this computer", from the engine, as
+ * "This computer". */
+const named = (words) => (words ? words[0].toUpperCase() + words.slice(1) : words);

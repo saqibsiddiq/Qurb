@@ -51,17 +51,14 @@ Then open `http://localhost:8731/experiments/desktop-fixtures/`.
 
 `?state=` picks what Home shows: `synced` (the default, and quiet — no
 conflicts, nothing moving), `syncing`, `away`, `alone` (nothing paired) or
-`attention`. `?screen=files` (or `devices`, `storage`, `vault`, `settings`,
-`activity`, `deleted`) opens a place directly. `?locked` shows the unlock
-screen.
-
-Add `?setup` to see the setting-up screens instead of the running window:
-`http://localhost:8731/experiments/desktop-fixtures/?setup`.
-
-Add `&at=storage` as well to be taken straight to the storage question, and
-`&custom=75` to have a custom amount typed into it; `&at=phrase` goes on to
-the 24 words. The fixture disk has about
-188 GiB free, so the two largest presets show as too big.
+`attention`. `?place=files` (or `settings`, `storage`, `key`, `advanced`,
+`activity`, `received`, `deleted`, `conflicts`, `waiting`, `add`) opens a
+place directly. `?locked` shows the unlock screen, `?setup` the setting-up
+screens instead of the running window, `?nofolders` a phone that has not
+listed its folders. The fixture disk has about 188 GiB free, so the two
+largest storage presets show as too big. (`?screen=` and `&at=` drove the
+window before the redesign; the fixtures still read them, and the window
+no longer has what they look for.)
 
 Pairing answers "waiting" for four seconds, then a phone asks to join showing
 232 760 (decision 0053): *Approve* pairs it, *Decline* goes back to waiting.
