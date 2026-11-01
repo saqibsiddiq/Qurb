@@ -4686,6 +4686,14 @@ impl Db {
             {
                 continue;
             }
+            // A device already said to be another -- the passing pairing of a
+            // phone set up again (decision 0079), or one the person named --
+            // is nobody's later self. Without this, the permanent identity,
+            // named alike and last seen before the passing one was paired,
+            // was taken to have become it: each the other's (2026-11-01).
+            if !matches!(self.said_same(&p.device_id)?, Same::Unsaid) {
+                continue;
+            }
             let same_install = old_install.is_some() && old_install == self.peer_install(&p.device_id)?;
             let same_name = p.name == old.name && old_kind.is_some() && old_kind == self.peer_kind(&p.device_id)?;
             if same_install || same_name {
@@ -5712,6 +5720,20 @@ mod tests {
         assert_eq!(db.became(&old).unwrap(), None, "two installs taken for one");
         db.set_same_device(&old, Same::Is(new)).unwrap();
         assert_eq!(db.became(&old).unwrap(), Some(new), "the person's word");
+    }
+
+    /// A phone set up again joins under a passing pairing of the same name,
+    /// which the computer says is the phone it was: the phone's permanent
+    /// identity must not be taken by the name rule to have become that
+    /// passing one -- which made each the other's (2026-11-01).
+    #[test]
+    fn a_passing_pairing_is_nobodys_later_self() {
+        let db = Db::open_in_memory().unwrap();
+        let (permanent, passing) = two_devices(&db, ("SM-S911B", "SM-S911B"), true);
+        db.set_same_device(&passing, Same::Is(permanent)).unwrap();
+        assert_eq!(db.became(&passing).unwrap(), Some(permanent));
+        assert_eq!(db.became(&permanent).unwrap(), None, "the permanent identity became the passing one");
+        assert_eq!(db.earlier_selves(&permanent).unwrap(), vec![passing]);
     }
 
     /// The same name still finds a device from before installs were told;
