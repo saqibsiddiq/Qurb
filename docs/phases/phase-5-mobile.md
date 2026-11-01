@@ -3156,6 +3156,8 @@ fixed together and tested together. As he answered, page by page:
   *Manage storage* with *Devices* (every computer's disk as a bar, tapped for
   what fills it and Recently deleted emptied) and *Clear cache*; SE-4 icons
   alone, without the dark tile behind them; SE-5 *Version* becomes *Update*.
+  SE-6 a computer's storage measured against the space given to QurbSpace
+  on it (its allowance, set on the desktop), not its whole disk.
 
 ## Deliberately left undone
 

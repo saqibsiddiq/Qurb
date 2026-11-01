@@ -327,25 +327,26 @@ add('Changing the picture','The camera: take one, or choose one; or remove it.',
  <div class="scrim"></div><div class="sheet"><div class="grab"></div><h3>Picture</h3>
  <div class="optrow">${ic('camera')}<div class="t">Take a photo</div></div><div class="optrow">${ic('image')}<div class="t">Choose from gallery</div></div><div class="optrow" style="color:var(--error)">${ic('trash')}<div class="t">Remove</div></div></div>`);
 
-add('Manage storage › Devices','Every computer, its disk as one bar: what QurbSpace keeps on it in colour, the rest grey. Tap one for what fills it.',
+add('Manage storage › Devices','Every computer, measured against the space given to QurbSpace on it, not its whole disk. Tap one for what fills it.',
 `${back('Settings')}<div class="titlerow"><div class="title">Devices</div></div>
- <div class="card" style="padding:16px;margin-top:14px"><div style="display:flex;align-items:center;gap:12px"><div class="avatar lap" style="width:40px;height:40px"><div class="dot" style="width:12px;height:12px;border-width:2px"></div></div><div style="flex:1"><div class="devname" style="font-size:16px">saqib</div><div class="sub">37.0 GB in QurbSpace</div></div><span style="color:var(--text3)">${ic('chev','s')}</span></div>
- <div class="dbar"><i style="width:7%;background:#2F6B57"></i><i style="width:3%;background:#3B82F6"></i><i style="width:2%;background:#8B5CF6"></i><i style="width:1%;background:#A3423A"></i><i style="width:55%;background:#c9cbc4"></i></div><div class="legend">212 GB free of 512 GB</div></div>
+ <div class="card" style="padding:16px;margin-top:14px"><div style="display:flex;align-items:center;gap:12px"><div class="avatar lap" style="width:40px;height:40px"><div class="dot" style="width:12px;height:12px;border-width:2px"></div></div><div style="flex:1"><div class="devname" style="font-size:16px">saqib</div><div class="sub">37.0 GB used</div></div><span style="color:var(--text3)">${ic('chev','s')}</span></div>
+ <div class="dbar"><i style="width:7%;background:#2F6B57"></i><i style="width:22%;background:#3B82F6"></i><i style="width:3%;background:#8B5CF6"></i><i style="width:4%;background:#946A24"></i><i style="width:1%;background:#A3423A"></i></div><div class="legend">63 GB free of 100 GB</div></div>
  <div class="card" style="padding:16px;margin-top:10px;opacity:.6"><div style="display:flex;align-items:center;gap:12px"><div class="avatar lap" style="width:40px;height:40px;background:linear-gradient(135deg,#a9c1d9,#3d5f8f)"><div class="dot" style="width:12px;height:12px;border-width:2px;background:var(--offline)"></div></div><div style="flex:1"><div class="devname" style="font-size:16px">office-pc</div><div class="sub">Off, last seen yesterday</div></div><span style="color:var(--text3)">${ic('chev','s')}</span></div>
- <div class="dbar"><i style="width:12%;background:#2F6B57"></i><i style="width:40%;background:#c9cbc4"></i></div><div class="legend">228 GB free of 476 GB</div></div>
+ <div class="dbar"><i style="width:12%;background:#2F6B57"></i><i style="width:20%;background:#3B82F6"></i></div><div class="legend">34 GB free of 50 GB</div></div>
  ${tabbar()}`);
 
-add('One device\'s storage','What fills it, each kind its colour; Recently deleted emptied with one tap. A phone\'s backups and Vault, and other people\'s, each a row.',
+add('One device\'s storage','Of the space given to QurbSpace: what fills it, each kind its colour; Recently deleted emptied with one tap. Nothing of the rest of the disk.',
 `${back('Devices')}<div class="titlerow"><div class="title">saqib</div></div>
- <div class="hero" style="margin-top:6px">212 GB free</div><div class="sub">of 512 GB</div>
- <div class="dbar" style="height:14px;border-radius:7px"><i style="width:7%;background:#2F6B57"></i><i style="width:3%;background:#3B82F6"></i><i style="width:2%;background:#8B5CF6"></i><i style="width:1%;background:#A3423A"></i><i style="width:46%;background:#c9cbc4"></i></div>
+ <div class="hero" style="margin-top:6px">63 GB free</div><div class="sub">of 100 GB given to QurbSpace</div>
+ <div class="dbar" style="height:14px;border-radius:7px"><i style="width:7%;background:#2F6B57"></i><i style="width:22.4%;background:#3B82F6"></i><i style="width:2.4%;background:#8B5CF6"></i><i style="width:4.1%;background:#946A24"></i><i style="width:1%;background:#A3423A"></i></div>
  <div class="card" style="margin-top:16px">
   <div class="srow"><div class="dot8" style="background:#2F6B57"></div><div class="t">Shared</div><span class="v">7.0 GB</span></div>
   <div class="srow"><div class="dot8" style="background:#3B82F6"></div><div class="t">sakib backups</div><span class="v">22.4 GB</span></div>
   <div class="srow"><div class="dot8" style="background:#8B5CF6"></div><div class="t">sakib Vault</div><span class="v">2.4 GB</span></div>
   <div class="srow"><div class="dot8" style="background:#946A24"></div><div class="t">Ammi's phone</div><span class="v">4.1 GB</span></div>
   <div class="srow"><div class="dot8" style="background:#A3423A"></div><div class="t">Recently deleted</div><span class="v g" style="color:var(--error)">Empty</span></div>
-  <div class="srow"><div class="dot8" style="background:#c9cbc4"></div><div class="t">Other files on saqib</div><span class="v">263 GB</span></div></div>
+</div>
+ <div style="font-size:13px;color:var(--text3);margin:10px 6px;line-height:1.5">How much QurbSpace may use is set on saqib.</div>
  ${tabbar()}`);
 
 add('Clear cache','Asked first: what it is, and that nothing of yours goes.',
