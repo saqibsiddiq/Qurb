@@ -985,8 +985,16 @@ qurb/
 │       │                                      search, folder tiles, files; a new
 │       │                                      folder, files added, renamed,
 │       │                                      deleted (0073, Files draft 4)
-│       │                  Clipboard.kt        one copy for every folder, pasted
-│       │                                      into the Vault or a Shared (0080)
+│       │                  FolderPage.kt       the one folder page for the Vault, a
+│       │                                      computer's Shared and the backup
+│       │                                      folder (review of 2026-11-02): list
+│       │                                      or grid, path, select and its bar,
+│       │                                      copy and move by going there; a
+│       │                                      Place behind it says what it allows
+│       │                  Clipboard.kt        what is copied or moved, waiting for
+│       │                                      Copy here / Move here (0080)
+│       │                  Restore.kt          backups put back, skipping what is
+│       │                                      already on the phone
 │       │                  Thumbs.kt           thumbnails, a camera JPEG on a
 │       │                                      computer read from its first bytes;
 │       │                                      Gallery, a folder of photos as a grid

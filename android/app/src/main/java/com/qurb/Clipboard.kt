@@ -36,6 +36,32 @@ object Clipboard {
     @Volatile
     var clip: Clip? = null
 
+    /**
+     * What was chosen to copy or move, waiting for *Copy here* / *Move here*
+     * in another folder (the owner's review of 2026-11-02, S2): each as a
+     * [Clip], the page it came from, its paths there, and how to delete an
+     * original once a move has copied it to another place.
+     */
+    class Pending(
+        val clips: List<Clip>,
+        val move: Boolean,
+        val from: String,
+        val placeKey: String,
+        val paths: List<String>,
+        val deleteSource: ((MainActivity, Int) -> Unit)? = null,
+    )
+
+    @Volatile
+    var pending: Pending? = null
+
+    /** The originals of a move between two places, deleted once copied. */
+    fun deleteSources(app: MainActivity, pending: Pending) {
+        val delete = pending.deleteSource ?: return
+        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+            for (i in pending.paths.indices) delete(app, i)
+        }
+    }
+
     /** A paste under way: a second tap while one runs is not another paste.
      *  On the S23 on 2026-11-01 one tap on *Paste* in the Vault left three
      *  copies, the fetch taking a second or so. */

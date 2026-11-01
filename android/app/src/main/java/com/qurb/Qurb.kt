@@ -154,6 +154,10 @@ object Engine {
      * takes a keystore round trip and a SQLite connection, and two handles on
      * one store would contend on the database lock.
      */
+    /** [open], for code already off the main thread that cannot suspend:
+     *  the folder pages' places (FolderPage.kt). */
+    fun openNow(context: Context): Qurb = handle ?: kotlinx.coroutines.runBlocking { open(context) }
+
     suspend fun open(context: Context): Qurb = withContext(Dispatchers.IO) {
         // Already open: the ordinary case, and it has to cost nothing, because
         // every screen asks. Before this returned early, every refresh fetched

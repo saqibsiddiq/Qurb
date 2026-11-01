@@ -231,7 +231,8 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
                         engine().openKeptFolder(peer.fingerprint, 20u).list("").folders.firstOrNull { !it.endsWith(", earlier") }
                     }
                 }.getOrNull()
-                app.push(KeptScreen(app, peer, top, peer.name))
+                if (top != null) app.push(FolderPage(app, BackupPlace(peer, top), peer.name, top))
+                else app.say("${peer.name} keeps nothing for this phone yet")
             }
         }
         // Each folder backed up, as the computer lists them; WhatsApp and the

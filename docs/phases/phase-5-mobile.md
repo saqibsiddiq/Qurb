@@ -3178,7 +3178,7 @@ fixed together and tested together. As he answered, page by page:
    holding Vault or Received.
 3. ✓ Device page: Switch device; Restore; the Vault switch apart from backups.
 4. ✓ Folder chooser: a page per folder, search, Select all.
-5. The one folder page for Vault, Shared and the backup folder: selection
+5. ✓ The one folder page for Vault, Shared and the backup folder: selection
    and its bar, copy and move by going there, path, ⋮ Sort and View, grid,
    Details, Share, + files or a folder, progress card, sheets, states.
 6. Quick preview of every kind, and thumbnails of every kind (the laptop

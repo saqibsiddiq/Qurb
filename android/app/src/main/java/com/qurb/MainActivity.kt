@@ -184,6 +184,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var folderThen: ((Uri) -> Unit)? = null
+
+    private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val then = folderThen
+        folderThen = null
+        if (then != null && uri != null) then(uri)
+    }
+
+    /** A folder of the phone, chosen in the system's picker, to add whole
+     *  (the owner's review of 2026-11-02, V-2: + adds files or a folder). */
+    fun pickFolder(then: (Uri) -> Unit) {
+        folderThen = then
+        try {
+            folderPicker.launch(null)
+        } catch (e: Exception) {
+            folderThen = null
+            fail("Could not open the folder picker", e)
+        }
+    }
+
+    /** Files handed to another app -- WhatsApp, mail, anything -- through
+     *  Android's share sheet (S7). */
+    fun share(uris: List<Uri>, type: String) {
+        if (uris.isEmpty()) return
+        val intent = if (uris.size == 1) Intent(Intent.ACTION_SEND).apply {
+            putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+        }
+        intent.type = type
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            startActivity(Intent.createChooser(intent, null))
+        } catch (e: Exception) {
+            fail("Nothing on this phone can take that", e)
+        }
+    }
+
     /** Pick a picture with the system's photo picker, for a screen to do `then` with. */
     fun pickPicture(then: (Uri) -> Unit) {
         pictureThen = then
@@ -1317,10 +1355,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun documentUri(path: String): Uri =
+    fun documentUri(path: String): Uri =
         android.provider.DocumentsContract.buildDocumentUri("$packageName.documents", "qurb/$path")
 
-    private fun mimeType(path: String): String {
+    fun mimeType(path: String): String {
         val extension = path.substringAfterLast('.', "").lowercase()
         return android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
             ?: "application/octet-stream"

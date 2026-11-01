@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drawn by hand on 2026-11-02 to match Phosphor's share-network (regular):
+     three rings joined. Not written by scripts/android-icons.py. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:pathData="M64,96a32,32 0,1 0,0.01 0ZM176,32a32,32 0,1 0,0.01 0ZM176,160a32,32 0,1 0,0.01 0ZM90.9,111.3l58.2,-37.4M90.9,144.7l58.2,37.4"
+        android:strokeColor="@color/text_2"
+        android:strokeWidth="16"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
