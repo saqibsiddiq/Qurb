@@ -3158,6 +3158,15 @@ fixed together and tested together. As he answered, page by page:
   alone, without the dark tile behind them; SE-5 *Version* becomes *Update*.
   SE-6 a computer's storage measured against the space given to QurbSpace
   on it (its allowance, set on the desktop), not its whole disk.
+- **Activity**: a log by day, planned against memory. Big jobs -- a backup,
+  a sync, a restore -- one entry each, with count, size, start and end and
+  at most 20 names, not a row per file (a backup of 10,000 photos had filled
+  the 10,000-row cap alone); what the person did one entry each; a failure
+  repeating one entry with a count. Kept 90 days or 2,000 entries (about
+  200 KB), enforced as it writes, not only at cleanup. Read 50 at a time into
+  a recycled list. Chips: All, Backups, Transfers, Problems, each a query.
+  A big job or a failure tapped opens its details; a failure has Try again.
+  The desktop on the same engine.
 
 ## Deliberately left undone
 

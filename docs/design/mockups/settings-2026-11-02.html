@@ -200,6 +200,18 @@ figcaption b{color:var(--text);font-weight:600;display:block;font-size:14px;marg
 .hero{font-size:24px;font-weight:700}
 .sub{font-size:13px;color:var(--text3);margin-top:2px}
 .dot8{width:10px;height:10px;border-radius:50%;flex:none}
+</style><style>
+.chiprow{display:flex;gap:6px;margin-top:12px;overflow:hidden}
+.fchip{font-size:12.5px;padding:6px 11px;border-radius:16px;border:1px solid var(--border);background:#fff;white-space:nowrap;color:var(--text2)}
+.fchip.on{background:var(--green);color:#fff;border-color:var(--green)}
+.ev{display:flex;align-items:center;gap:12px;padding:10px 4px}
+.evi{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none;position:relative}
+.ev .t{flex:1;min-width:0}.ev .t .a{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .t .b{font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev .tm{font-size:12px;color:var(--text3)}
+.cnt{position:absolute;right:-4px;top:-4px;background:var(--error);color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px}
+.stat{display:flex;justify-content:space-between;padding:12px 18px;font-size:15px}.stat span:first-child{color:var(--text2)}
+.stat+.stat{border-top:1px solid var(--border)}
 </style></head><body>
 <header class="page"><h1>Settings: the proposed look</h1>
 <p>Your answers of 2 November: identity and key moved to Advanced; name and picture as one profile, as WhatsApp has it; Manage storage with Devices and Clear cache; icons without the dark tile behind them; Version became Update.</p></header>
@@ -371,6 +383,49 @@ add('Advanced','Identity and Key now here, with the connection settings.',
  <div class="card">${row('link','Rendezvous','saqib.tail86283c.ts.net',{})}${row('refresh','Relay','Default')}</div>
  <div class="label">App</div>
  <div class="card">${row('info','Version','0.2.0-beta.5')}</div>
+ ${tabbar()}`);
+
+
+const frow = (name, size, o={}) => `<div class="row"><div class="ftile ph" style="background:${photo(o.ph||0)}"></div><div class="fname"><div class="a">${name}</div></div><div class="size">${size}</div></div>`;
+const ev = (icon, bg, fg, a, b, tm, o={}) => `<div class="ev"><div class="evi" style="background:${bg};color:${fg}">${ic(icon,'s')}${o.n?`<span class="cnt">${o.n}</span>`:''}</div><div class="t"><div class="a">${a}</div><div class="b">${b}</div></div><span class="tm">${tm}</span>${o.chev?`<span style="color:var(--text3)">${ic('chev','s')}</span>`:''}</div>`;
+const G=['var(--greenSoft)','var(--green)'], B=['#E6EEFB','#3B82F6'], R=['var(--errorBg)','var(--error)'], N=['var(--neutral)','var(--text2)'];
+
+add('Activity','A log by day. Big jobs are one entry (a backup, a restore); what you did is one entry each; a failure repeating is one entry with a count. Read 50 at a time as you scroll; kept 90 days or 2,000 entries, about 200 KB at most.',
+`${back('Settings')}<div class="titlerow"><div class="title">Activity</div></div>
+ <div class="chiprow"><span class="fchip on">All</span><span class="fchip">Backups</span><span class="fchip">Transfers</span><span class="fchip">Problems</span></div>
+ <div class="day">Today</div>
+ ${ev('harddrive',...B,'Backed up to saqib','1,240 files, 3.2 GB','22:41',{chev:true})}
+ ${ev('download',...G,'invoice-oct.pdf','from saqib, 220 KB','21:05')}
+ ${ev('upload',...G,'IMG_2201.jpg','to saqib, 2.4 MB','20:52')}
+ ${ev('trash',...N,'old-notes.txt','deleted in Shared','18:30')}
+ ${ev('x',...R,'wedding.mp4','saqib was off','17:12',{n:12,chev:true})}
+ <div class="day">Yesterday</div>
+ ${ev('harddrive',...B,'Backed up to saqib','86 files, 410 MB','23:02',{chev:true})}
+ ${ev('restore',...G,'Restored 3 files','from saqib','14:20',{chev:true})}
+ ${tabbar()}`);
+
+add('Activity: Problems','A chip filters at once; only what went wrong, each with why, and Try again.',
+`${back('Settings')}<div class="titlerow"><div class="title">Activity</div></div>
+ <div class="chiprow"><span class="fchip">All</span><span class="fchip">Backups</span><span class="fchip">Transfers</span><span class="fchip on">Problems</span></div>
+ <div class="day">Today</div>
+ ${ev('x',...R,'wedding.mp4','saqib was off, last 17:12','',{n:12,chev:true})}
+ <div class="day">30 October</div>
+ ${ev('x',...R,'Backup stopped','The phone ran out of space','09:40',{chev:true})}
+ ${ev('x',...R,'report.pdf','Two versions, kept both','08:15',{chev:true})}
+ ${tabbar()}`);
+
+add('A backup, opened','Tap a big job: when, how many, how much, where to; the first 20 names, then how many more. Nothing more is kept, so nothing more is shown.',
+`${back('Activity')}<div class="titlerow"><div class="title" style="font-size:26px">Backed up to saqib</div></div>
+ <div class="card" style="margin-top:12px"><div class="stat"><span>When</span><span>Today 22:10 to 22:41</span></div><div class="stat"><span>Files</span><span>1,240</span></div><div class="stat"><span>Size</span><span>3.2 GB</span></div><div class="stat"><span>Folders</span><span>DCIM, WhatsApp</span></div></div>
+ <div class="label">Files</div>
+ <div class="rows">${frow('20241202_001024.jpg','3.1 MB',{ph:1})}${frow('20241202_001104.jpg','2.8 MB',{ph:2})}${frow('IMG-20241130-WA0012.jpg','140 KB',{ph:3})}</div>
+ <div style="text-align:center;font-size:13px;color:var(--text3);margin-top:6px">and 1,237 more</div>
+ ${tabbar()}`);
+
+add('A failure, opened','What failed, why, how many times and when; one button to try again.',
+`${back('Activity')}<div class="titlerow"><div class="title" style="font-size:26px">wedding.mp4</div></div>
+ <div class="card" style="margin-top:12px"><div class="stat"><span>What</span><span>Sending to saqib</span></div><div class="stat"><span>Why</span><span>saqib was off</span></div><div class="stat"><span>Tried</span><span>12 times</span></div><div class="stat"><span>Last</span><span>Today 17:12</span></div></div>
+ <div class="btn primary" style="margin-top:18px">Try again</div>
  ${tabbar()}`);
 
 document.getElementById('grid').innerHTML = screens.map(s => `<figure><div class="phone"><div class="screen">
