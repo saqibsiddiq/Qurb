@@ -7,8 +7,14 @@ evening**: with the laptop and phone both on beta.4, the phone reached the
 laptop over Wi-Fi at 20:33:34 and took its permanent identity — the laptop
 kept its device id `E5781F95` and turned its fingerprint from `6385F8CC` to
 `F63A0F05` — and at 20:36:28, restarted, connected as it and synced. **The
-set-up-again case is not yet run on a phone**: that needs the app
-uninstalled and set up again.
+set-up-again case run on it minutes later**: the app uninstalled
+(20:37:43, its data gone) and installed again from the published beta.4,
+joined by code under a passing pairing (`92EA8F5A`), told the laptop which
+identity it was becoming, was answered with its device id, took it, and at
+20:39:42 connected as `E5781F95` again — one device, nothing left behind.
+The run found one bug, fixed after beta.4: the name rule took the permanent
+identity to have become the passing pairing, so each was listed as the
+other's (`a_passing_pairing_is_nobodys_later_self`).
 **Date:** 2026-11-01
 
 ## What was asked
