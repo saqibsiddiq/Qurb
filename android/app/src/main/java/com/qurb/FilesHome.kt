@@ -1,6 +1,7 @@
 package com.qurb
 
 import android.view.View
+import android.widget.LinearLayout
 import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,21 +51,40 @@ class FilesHome(app: MainActivity) : Screen(app) {
     private fun show(name: String, picture: android.graphics.Bitmap?, peers: List<PeerInfo>) {
         val page = views.sections
         page.removeAllViews()
-        // This phone, which is always on: no dot.
+        // Two sections, spaced as Settings' are (the owner's review of
+        // 2026-11-02, FT-1 and FT-2): this phone, then the computers.
+        kit.label(page, "This phone", top = 18)
+        // This phone, which is always on: no dot, and nothing more (FT-3).
         kit.deviceCard(page, R.drawable.ic_smartphone, name, null, null,
             end = R.drawable.ic_chevron_right, lead = kit.avatar(name, null, picture, 48)) {
             app.push(PhoneFolders(app, name))
         }
-        // Each computer: the person's own, and any this phone visits.
+        // Each computer: the person's own, and any this phone visits; under
+        // its name what QurbSpace keeps there, as it said last (FT-3).
         val computers = peers.filter { it.relation == "host" || (it.relation == "own" && it.kind != "phone") }
-        for (computer in computers) {
+        if (computers.isEmpty()) return
+        kit.label(page, "Remote access")
+        for ((i, computer) in computers.withIndex()) {
             val off = Engine.isOff(app, computer)
-            // Its dot on its picture, as Home draws it: once, not again by the name.
-            kit.deviceCard(page, States.device(computer.name, computer.kind), computer.name, null, null,
-                end = R.drawable.ic_chevron_right, lead = kit.avatar(computer.name, off, Devices.picture(computer), 48)) {
+            val card = kit.deviceCard(page, States.device(computer.name, computer.kind), computer.name, null, null,
+                end = R.drawable.ic_chevron_right, lead = kit.avatar(computer.name, off, Devices.picture(computer), 48),
+                under = Used.of[computer.fingerprint]?.let { Words.size(it) } ?: "") {
                 app.push(ComputerFolders(app, computer))
-            }.contentDescription = "${computer.name}, ${if (off) "off" else "on"}"
+            }
+            card.contentDescription = "${computer.name}, ${if (off) "off" else "on"}"
+            if (i > 0) (card.layoutParams as? LinearLayout.LayoutParams)?.topMargin = kit.dp(10)
+            if (computer.relation != "own") continue
+            scope.launch {
+                val told = runCatching { Storage.ask(app, computer) }.getOrNull() ?: return@launch
+                Used.of[computer.fingerprint] = told.used
+                (card.findViewWithTag<android.widget.TextView>(Kit.UNDER))?.text = Words.size(told.used)
+            }
         }
+    }
+
+    /** What QurbSpace uses on each computer, as it said last, this run. */
+    private object Used {
+        val of = java.util.concurrent.ConcurrentHashMap<String, ULong>()
     }
 }
 
@@ -86,10 +106,52 @@ class PhoneFolders(app: MainActivity, private val name: String) : Screen(app) {
     override fun refresh() {
         val page = views.sections
         page.removeAllViews()
-        kit.folderGrid(page, listOf(
-            kit.folderCard("Vault", R.drawable.ic_lock_keyhole) { app.push(FilesScreen(app, private = true, up = name)) },
-            kit.folderCard("Received", R.drawable.ic_download) { app.push(ReceivedScreen(app, name)) },
-        ))
+        // Held, how much each holds (the owner's review of 2026-11-02, P-2).
+        lateinit var vault: View
+        lateinit var received: View
+        vault = kit.folderCard("Vault", R.drawable.ic_lock_keyhole, onHold = { holds(vault, received = false) }) {
+            app.push(FilesScreen(app, private = true, up = name))
+        }
+        received = kit.folderCard("Received", R.drawable.ic_download, onHold = { holds(received, received = true) }) {
+            app.push(ReceivedScreen(app, name))
+        }
+        kit.folderGrid(page, listOf(vault, received))
+    }
+
+    /** Its size and how many files, in a small bubble under the tile. */
+    private fun holds(tile: View, received: Boolean) {
+        scope.launch {
+            val files = runCatching {
+                withContext(Dispatchers.IO) {
+                    val engine = engine()
+                    val all = engine.list()
+                    if (!received) all.filter { it.private }
+                    else {
+                        val here = all.associateBy { it.path }
+                        engine.history(500u, null)
+                            .filter { it.kind == "received" && it.detail?.startsWith("sent to this device") == true }
+                            .mapNotNull { h -> h.path?.let { here[it] } }.distinctBy { it.path }
+                    }
+                }
+            }.getOrNull() ?: return@launch
+            val bubble = android.widget.TextView(app).apply {
+                text = "${Words.size(files.sumOf { it.size })}\n${Words.files(files.size)}"
+                setTextColor(android.graphics.Color.WHITE)
+                setTextAppearance(R.style.Text_Meta)
+                setTextColor(android.graphics.Color.WHITE)
+                setPadding(kit.dp(14), kit.dp(10), kit.dp(14), kit.dp(10))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = kit.dp(14).toFloat()
+                    setColor(0xFF2A2C29.toInt())
+                }
+            }
+            android.widget.PopupWindow(bubble, android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+                isOutsideTouchable = true
+                elevation = kit.dp(8).toFloat()
+                showAsDropDown(tile, kit.dp(12), kit.dp(6))
+            }
+        }
     }
 }
 

@@ -113,7 +113,7 @@ class Kit(private val app: AppCompatActivity) {
 
     /** A file's row, its views kept for binding again (Files' list recycles them). */
     class FileRow(val root: LinearLayout, val tile: FrameLayout, val icon: ImageView,
-                  val badge: ImageView, val name: TextView, val size: TextView)
+                  val badge: ImageView, val name: TextView, val size: TextView, val sub: TextView)
 
     /**
      * A file as the Figma redesign's Files draws one (the owner's list of
@@ -151,7 +151,19 @@ class Kit(private val app: AppCompatActivity) {
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
-        root.addView(name, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        // A second line where a page has one: who sent it, where it is.
+        val sub = TextView(app).apply {
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(color(R.color.text_3))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            visibility = View.GONE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(name)
+        words.addView(sub)
+        root.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val size = TextView(app).apply {
             setTextAppearance(R.style.Text_Meta)
             setTextColor(color(R.color.text_2))
@@ -159,7 +171,7 @@ class Kit(private val app: AppCompatActivity) {
         }
         root.addView(size, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { marginStart = dp(12) })
-        return FileRow(root, tile, icon, badge, name, size)
+        return FileRow(root, tile, icon, badge, name, size, sub)
     }
 
     /** Show a file in `row`: tapped, `onTap`; held, `onHold` -- every option
@@ -177,6 +189,7 @@ class Kit(private val app: AppCompatActivity) {
     ) {
         // A recycled row's thumbnail let go of (item 6): its kind's icon again.
         Thumbs.reset(row.icon, dp(22))
+        row.sub.visibility = View.GONE
         row.icon.setImageResource(icon)
         row.icon.imageTintList = ColorStateList.valueOf(color(R.color.text_2))
         row.name.text = name
@@ -657,6 +670,8 @@ class Kit(private val app: AppCompatActivity) {
         @DrawableRes end: Int? = null,
         /** In the icon's place: a device's circle. */
         lead: View? = null,
+        /** A quiet line under the name: what QurbSpace keeps on a computer. */
+        under: String? = null,
         onTap: (() -> Unit)?,
     ): View {
         val card = cardShell(R.drawable.card, icon, lead)
@@ -682,6 +697,12 @@ class Kit(private val app: AppCompatActivity) {
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { marginStart = dp(8) })
         words.addView(line, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        if (under != null) words.addView(TextView(app).apply {
+            text = under
+            tag = UNDER
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(color(R.color.text_3))
+        })
         if (keeps.isNotEmpty()) {
             val pills = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
             for (k in keeps) {
@@ -1211,10 +1232,13 @@ class Kit(private val app: AppCompatActivity) {
         action: String? = null,
         onAction: (() -> Unit)? = null,
     ) {
+        // In the middle of what is left of the screen, on every page alike
+        // (the owner's review of 2026-11-02, R-1): Received's sat at the top.
         val box = LinearLayout(app).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(24), dp(32), dp(24), dp(24))
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(24), dp(24), dp(24))
+            minimumHeight = (app.resources.displayMetrics.heightPixels * 0.55f).toInt()
         }
         val orb = FrameLayout(app).apply {
             background = ContextCompat.getDrawable(app, R.drawable.mark)
@@ -1288,6 +1312,8 @@ class Kit(private val app: AppCompatActivity) {
     }
 
     companion object {
+        /** The tag of a device card's line under its name, to fill in later. */
+        const val UNDER = "under"
         /** Whether the person asked for less motion (§42): animations off. */
         fun calm(): Boolean = !ValueAnimator.areAnimatorsEnabled()
     }

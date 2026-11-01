@@ -116,18 +116,7 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
         }
     }
 
-    /** Today, Yesterday, or the day's date. */
-    private fun day(at: Long): String {
-        val then = Calendar.getInstance().apply { timeInMillis = at * 1000 }
-        val now = Calendar.getInstance()
-        fun same(a: Calendar, b: Calendar) =
-            a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
-        if (same(then, now)) return "Today"
-        now.add(Calendar.DAY_OF_YEAR, -1)
-        if (same(then, now)) return "Yesterday"
-        return DateUtils.formatDateTime(app, at * 1000,
-            DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_ALL)
-    }
+    private fun day(at: Long): String = Words.day(at)
 
     /** The time of day, as the phone is set: 19:24, or 7:24 PM. */
     private fun time(at: Long): String = android.text.format.DateFormat.getTimeFormat(app).format(java.util.Date(at * 1000))

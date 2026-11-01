@@ -37,6 +37,19 @@ object Words {
     }
 
     /** Unix seconds as a relative time, the way the desktop says it. */
+    /** Today, Yesterday, or the day's date: a log's heading. */
+    fun day(at: Long): String {
+        val then = java.util.Calendar.getInstance().apply { timeInMillis = at * 1000 }
+        val now = java.util.Calendar.getInstance()
+        fun same(a: java.util.Calendar, b: java.util.Calendar) =
+            a.get(java.util.Calendar.YEAR) == b.get(java.util.Calendar.YEAR) &&
+                a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR)
+        if (same(then, now)) return "Today"
+        now.add(java.util.Calendar.DAY_OF_YEAR, -1)
+        if (same(then, now)) return "Yesterday"
+        return java.text.SimpleDateFormat("d MMMM", java.util.Locale.getDefault()).format(java.util.Date(at * 1000))
+    }
+
     fun ago(seconds: Long): String {
         val now = System.currentTimeMillis() / 1000
         val gone = (now - seconds).coerceAtLeast(0)

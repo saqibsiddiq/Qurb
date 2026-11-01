@@ -3174,7 +3174,7 @@ fixed together and tested together. As he answered, page by page:
 1. ✓ Settings: profile row and page, Manage storage (Devices, a device's
    storage against its allowance, Clear cache), icons alone, Update, Identity
    and Key into Advanced, no Motion.
-2. Received as a log; Files top in two sections with a computer's total;
+2. ✓ Received as a log; Files top in two sections with a computer's total;
    holding Vault or Received.
 3. Device page: Switch device; Restore; the Vault switch apart from backups.
 4. Folder chooser: a page per folder, search, Select all.

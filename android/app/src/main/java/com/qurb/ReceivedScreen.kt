@@ -63,31 +63,41 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
         val page = views.sections
         page.removeAllViews()
         if (received.isEmpty()) {
-            kit.empty(page, R.drawable.ic_download, "Nothing sent to this phone yet.")
+            kit.empty(page, R.drawable.ic_download, "Nothing sent to this phone yet")
             return
         }
-        // As Figma's Received: rows, each with who sent it as a badge on
-        // its tile; a tap opens, held, every option (the owner's list of
-        // 2026-11-01, item 5).
+        // A log by day, the newest first, each with who sent it (the owner's
+        // review of 2026-11-02, R-2 and R-3); a tap previews, held, options.
         val rows = android.widget.LinearLayout(app).apply { orientation = android.widget.LinearLayout.VERTICAL }
         page.addView(rows)
         val files = received.map { it.first }
         val looks = files.map { Peek.local(app, it) }
+        var day: String? = null
         for ((i, pair) in received.withIndex()) {
             val (file, h) = pair
+            val heading = Words.day(h.at)
+            if (heading != day) {
+                day = heading
+                rows.addView(android.widget.TextView(app).apply {
+                    text = heading
+                    setTextAppearance(R.style.Text_Label)
+                    setPadding(kit.dp(4), kit.dp(if (i == 0) 8 else 20), 0, kit.dp(4))
+                })
+            }
             val name = file.path.substringAfterLast('/')
             val from = h.device
             val row = kit.fileRow(rows, States.icon(name), name, Words.size(file.size),
-                badge = from?.let { Kit.Badge(States.device(it), R.color.green) },
-                said = from?.let { "from $it" } ?: Words.ago(h.at), onHold = { choose(file, from) }) {
+                said = from?.let { "from $it" }, onHold = { choose(file, from) }) {
                 Peek.show(app, scope, looks, i)
             }
+            row.sub.text = from?.let { "from $it" } ?: Words.ago(h.at)
+            row.sub.visibility = android.view.View.VISIBLE
             Thumbs.local(scope, row.icon, file.path, file.modifiedAt)
         }
     }
 
-    /** A file received: open it, save a copy, send it on, rename, copy or
-     *  delete it. It is in the Vault, so a copy is the Vault's, pasted
+    /** A file received: open it, save a copy, send it on, copy or delete it
+     *  (no Rename: the owner's review of 2026-11-02, R-4). It is in the Vault, so a copy is the Vault's, pasted
      *  anywhere; nothing is pasted into Received, which is what arrived. */
     private fun choose(file: FileEntry, from: String?) {
         val name = file.path.substringAfterLast('/')
@@ -97,20 +107,6 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
             .action(R.drawable.ic_save, "Save") { app.saveCopy(file) }
             .action(R.drawable.ic_send, "Send") {
                 app.chooseDevice("Send $name to") { to -> app.send(file, to) }
-            }
-            .action(R.drawable.ic_pencil, "Rename") {
-                kit.askName("Rename", name, "Rename") { to ->
-                    val parent = file.path.substringBeforeLast('/', "")
-                    scope.launch {
-                        try {
-                            withContext(Dispatchers.IO) { engine().rename(file.path, if (parent.isEmpty()) to else "$parent/$to") }
-                            app.madeChange()
-                        } catch (e: Exception) {
-                            app.fail("Not renamed", e)
-                        }
-                        refresh()
-                    }
-                }
             }
             .action(R.drawable.ic_copy, "Copy") { Clipboard.copy(app, Clip.Vault(file.path)) }
             .action(R.drawable.ic_trash_2, "Delete", danger = true) {
