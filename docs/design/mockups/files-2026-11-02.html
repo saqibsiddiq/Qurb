@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Files mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#F7F7F4;--surface:#FFFFFF;--surface2:#F0F0EC;--text:#171816;--text2:#5F625C;--text3:#8A8D86;
+  --border:#E2E3DD;--green:#2F6B57;--greenSoft:#E8F0EC;--online:#2F7DE1;--offline:#D64545;
+  --error:#A3423A;--errorBg:#F7E9E7;--neutral:#ECEEEC;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:var(--text);padding:32px 16px 64px}
+header.page{max-width:1500px;margin:0 auto 28px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:var(--text2);margin-top:6px;font-size:15px;line-height:1.5;max-width:900px}
+.grid{display:flex;flex-wrap:wrap;gap:36px 28px;justify-content:center;max-width:1500px;margin:0 auto}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px;width:340px}
+figcaption{font-size:13px;color:var(--text2);text-align:center;line-height:1.45;max-width:320px}
+figcaption b{color:var(--text);font-weight:600;display:block;font-size:14px;margin-bottom:2px}
+.phone{width:340px;height:720px;border-radius:44px;background:#111;padding:10px;box-shadow:0 20px 50px rgba(0,0,0,.18)}
+.screen{position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;
+  background:radial-gradient(120% 60% at 0% 0%,#E3EEE8 0%,transparent 60%),radial-gradient(100% 50% at 100% 100%,#F3EEE2 0%,transparent 60%),var(--bg)}
+.status{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:13px;font-weight:600}
+.body{height:calc(100% - 34px);overflow:hidden;padding:0 18px}
+.ic{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.s{width:18px;height:18px}.ic.xs{width:14px;height:14px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-top:8px}.topbar .back{margin-top:0}.icons{display:flex;gap:2px}
+.back{display:flex;align-items:center;gap:8px;color:var(--text2);font-size:16px;margin-top:14px;height:28px}
+.titlerow{display:flex;align-items:center;gap:6px;margin-top:10px;min-height:48px}
+.title{font-size:32px;font-weight:700;letter-spacing:-.02em;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title.top{margin-top:26px}
+.iconbtn{width:40px;height:40px;border-radius:20px;display:grid;place-items:center;color:var(--text)}
+.iconbtn.green{background:var(--greenSoft);color:var(--green)}
+.path{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3);margin-top:4px;white-space:nowrap;overflow:hidden}
+.path span.on{color:var(--green);font-weight:600}
+.label{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;margin:26px 4px 8px}
+.card{background:var(--surface);border-radius:22px;border:1px solid var(--border)}
+.devcard{display:flex;align-items:center;gap:14px;padding:16px}
+.avatar{width:52px;height:52px;border-radius:50%;flex:none;position:relative;background:linear-gradient(135deg,#c9b38f,#6f5a3d)}
+.avatar.lap{background:linear-gradient(160deg,#f4b860 0%,#3d6f8f 55%,#c9a55a 100%)}
+.avatar .dot{position:absolute;right:-1px;bottom:-1px;width:16px;height:16px;border-radius:50%;background:var(--online);border:3px solid #fff}
+.devname{font-size:18px;font-weight:600}
+.devmeta{font-size:13px;color:var(--text2);margin-top:3px}
+.chev{margin-left:auto;color:var(--text3)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:14px;min-height:88px;display:flex;flex-direction:column;justify-content:space-between;color:var(--green);position:relative}
+.tile .n{color:var(--text);font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.locked{opacity:.5}
+.tile.sel{border:2px solid var(--green);background:var(--greenSoft)}
+.tile .ck{position:absolute;top:12px;right:12px}
+.search{display:flex;align-items:center;gap:10px;height:46px;border-radius:23px;background:var(--surface);border:1px solid var(--border);padding:0 16px;color:var(--text3);font-size:15px;margin-top:12px}
+.search.active{border:1.5px solid var(--green);color:var(--text)}
+.rows{margin-top:10px}
+.row{display:flex;align-items:center;gap:12px;height:62px;padding:0 4px}
+.ftile{width:44px;height:44px;border-radius:12px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--text2);flex:none;overflow:hidden}
+.ftile.ph{border:none}
+.fname{flex:1;min-width:0}
+.fname .a{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fname .b{font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.size{font-size:13px;color:var(--text2)}
+.ck{width:22px;height:22px;border-radius:11px;border:2px solid var(--text3);flex:none;display:grid;place-items:center;background:#fff}
+.ck.on{background:var(--green);border-color:var(--green);color:#fff}
+.ck.part{background:var(--green);border-color:var(--green);color:#fff}
+.ggrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.gt{display:flex;flex-direction:column;gap:6px}.gi{aspect-ratio:1;border-radius:14px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--green)}.gn{font-size:12px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:12px}
+.photos div{aspect-ratio:1;border-radius:10px}
+.tabbar{position:absolute;left:14px;right:14px;bottom:14px;height:64px;border-radius:32px;background:rgba(255,255,255,.92);border:1px solid var(--border);display:flex;align-items:center;justify-content:space-around}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--text2);padding:6px 18px;border-radius:18px}
+.tab.on{color:var(--green);font-weight:600;background:var(--greenSoft)}
+.actionbar{position:absolute;left:0;right:0;bottom:0;height:84px;background:#fff;border-top:1px solid var(--border);display:flex;justify-content:space-around;align-items:center;padding-bottom:10px}
+.act{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--text)}
+.act.danger{color:var(--error)}
+.pastebar{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--border);padding:12px 18px 22px}
+.pastebar .what{font-size:13px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.btns{display:flex;gap:10px}
+.btn{flex:1;height:46px;border-radius:23px;display:grid;place-items:center;font-weight:600;font-size:15px;border:1px solid var(--border);background:#fff}
+.btn.primary{background:var(--green);color:#fff;border:none}
+.btn.danger{background:var(--error);color:#fff;border:none}
+.selhead{display:flex;align-items:center;gap:12px;margin-top:18px;height:44px}
+.selhead .n{font-size:22px;font-weight:700;flex:1}
+.selall{display:flex;flex-direction:column;align-items:center;font-size:10px;color:var(--text2);gap:2px}
+.scrim{position:absolute;inset:0;background:rgba(23,24,22,.32)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#FBFBF9;border-radius:28px 28px 0 0;padding:10px 20px 26px}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px}
+.sheet h3{font-size:18px;font-weight:600;margin-bottom:6px}
+.opt{display:flex;align-items:center;gap:14px;height:50px;font-size:15px}
+.opt .r{margin-left:auto;color:var(--green)}
+.facts .opt{justify-content:space-between}
+.facts .opt span:first-child{color:var(--text2)}
+.menu{position:absolute;top:80px;right:16px;width:210px;background:#fff;border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:8px 0}
+.menu .h{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--text3);padding:8px 16px 4px}
+.menu .o{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:14px}
+.menu .o .r{margin-left:auto;color:var(--green)}
+.menu hr{border:none;border-top:1px solid var(--border);margin:6px 0}
+.pop{position:absolute;background:#2A2C29;color:#fff;border-radius:14px;padding:10px 14px;font-size:13px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.pop b{font-size:15px;display:block}
+.day{font-size:13px;font-weight:600;color:var(--text2);margin:18px 4px 2px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);background:var(--surface2);border-radius:10px;padding:2px 8px}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--text2);font-size:15px}
+.empty .ring{width:84px;height:84px;border-radius:50%;border:3px solid #D5E2DA;display:grid;place-items:center;background:#fff;color:var(--text3)}
+.note{max-width:1500px;margin:40px auto 0;font-size:14px;color:var(--text2);line-height:1.6}
+.note li{margin-left:18px}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Files: the proposed look</h1>
+  <p>Every page of the phone app's Files tab, with your answers of 2 November and the ideas from Samsung's My Files (S1–S7). Vault, Shared and your backup folder are one design. The same page, with only the name and what is in it changed.</p>
+</header>
+<div class="grid" id="grid"></div>
+
+<div class="note">
+  <b>Decided</b>
+  <ul>
+    <li>Decided: ⋮ keeps Sort and View (S4); no categories or recent files (S8).</li>
+  </ul>
+</div>
+
+<script>
+const P = {
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  folderPlus:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6M9 13h6"/>',
+  plus:'<path d="M5 12h14M12 5v14"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  more:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+  chev:'<path d="m9 18 6-6-6-6"/>',
+  left:'<path d="m12 19-7-7 7-7M19 12H5"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  phone:'<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>',
+  laptop:'<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+  video:'<path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+  copy:'<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  move:'<path d="M2 12h14M10 6l6 6-6 6"/><path d="M20 4v16"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
+  trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  dash:'<path d="M6 12h12"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  pencil:'<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+  dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  cloud:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  home:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6a2 2 0 0 1 .7 1.5v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+};
+const ic = (n, c='') => `<svg class="ic ${c}" viewBox="0 0 24 24">${P[n]}</svg>`;
+const shades = ['#c7d9cf','#e6cfa7','#a9c1d9','#d9b3a9','#b8cba0','#d3c4e0','#9fb8b0','#e0d3b8','#b0a99f','#cfe0e6','#e8b8a0','#a8b8c8'];
+const photo = (i) => `linear-gradient(${(i*47)%360}deg, ${shades[i%12]}, ${shades[(i+5)%12]})`;
+
+const tabbar = () => `<div class="tabbar">
+  <div class="tab">${ic('home')}Home</div>
+  <div class="tab on">${ic('folder')}Files</div>
+  <div class="tab">${ic('gear')}Settings</div></div>`;
+const back = (t) => `<div class="back">${ic('left')}${t}</div>`;
+const folderHead = (backTo, title, path, opts={}) => `<div class="topbar">${back(backTo)}<div class="icons">
+    <div class="iconbtn">${ic('search')}</div>
+    ${opts.noAdd ? '' : `<div class="iconbtn">${ic('folderPlus')}</div><div class="iconbtn green">${ic('plus')}</div>`}
+    <div class="iconbtn">${ic('more')}</div></div></div>
+  <div class="titlerow"><div class="title">${title}</div></div>
+  <div class="path">${path.map((p,i)=>`<span class="${i==path.length-1?'on':''}">${p}</span>`).join(ic('chev','xs'))}</div>`;
+const tiles = (names, o={}) => `<div class="tiles">${names.map((n,i)=>`<div class="tile ${o.sel&&o.sel.includes(i)?'sel':''}">${ic(o.icon||'folder')}${o.check?`<div class="ck ${o.sel&&o.sel.includes(i)?'on':''}">${o.sel&&o.sel.includes(i)?ic('check','xs'):''}</div>`:''}<div class="n">${n}</div></div>`).join('')}</div>`;
+const frow = (name, size, o={}) => `<div class="row">
+  <div class="ftile ${o.ph!==undefined?'ph':''}" style="${o.ph!==undefined?`background:${photo(o.ph)}`:''}">${o.ph!==undefined?'':ic(o.icon||'file')}</div>
+  <div class="fname"><div class="a">${name}</div>${o.sub?`<div class="b">${o.sub}</div>`:''}</div>
+  ${o.check!==undefined?`<div class="ck ${o.check?'on':''}">${o.check?ic('check','xs'):''}</div>`:`<div class="size">${size}</div>`}</div>`;
+
+const drow = (name, sub, o={}) => `<div class="row"><div class="ftile" style="color:var(--green)">${ic('folder')}</div>
+  <div class="fname"><div class="a">${name}</div>${sub?`<div class="b">${sub}</div>`:''}</div>
+  ${o.check!==undefined?`<div class="ck ${o.check?'on':''}">${o.check?ic('check','xs'):''}</div>`:`<div style="color:var(--text3)">${ic('chev','s')}</div>`}</div>`;
+const gtile = (name, o={}) => `<div class="gt">${o.ph!==undefined?`<div class="gi" style="background:${photo(o.ph)}"></div>`:`<div class="gi">${ic(o.icon||'folder')}</div>`}<div class="gn">${name}</div></div>`;
+const screens = [];
+const add = (title, caption, html) => screens.push({title, caption, html});
+
+// 1. Files top
+add('Files', 'FT-1 two sections. FT-2 the space as in Settings. FT-3 your phone\'s card shows nothing more; a computer\'s shows what QurbSpace keeps on it.',
+`<div class="title top">Files</div>
+ <div class="label">This phone</div>
+ <div class="card devcard"><div class="avatar"></div><div><div class="devname">sakib</div></div><div class="chev">${ic('chev')}</div></div>
+ <div class="label">Remote access</div>
+ <div class="card devcard"><div class="avatar lap"><div class="dot"></div></div><div><div class="devname">saqib</div><div class="devmeta">37.0 GB</div></div><div class="chev">${ic('chev')}</div></div>
+ ${tabbar()}`);
+
+// 2. Phone page, Vault held
+add('Your phone', 'P-2 holding Vault or Received says what it holds.',
+`${back('Files')}<div class="titlerow"><div class="title">sakib</div></div>
+ <div class="tiles"><div class="tile" style="box-shadow:0 0 0 3px var(--greenSoft)">${ic('lock')}<div class="n">Vault</div></div><div class="tile">${ic('download')}<div class="n">Received</div></div></div>
+ <div class="pop" style="top:250px;left:30px"><b>2.4 GB</b>128 files</div>
+ ${tabbar()}`);
+
+// 3. Folder page: Shared
+add('Shared, Vault, your folder', 'One folder page for all three (V-5). 🔍, new folder, + (files or a folder from the phone), ⋮ for Sort and View (S4). The path, tappable (S3). List view: folders and files alike as rows.',
+`${folderHead('saqib','Shared',['Shared'])}
+ <div class="rows">${drow('Trips','12 items')}${drow('hello','3 items')}${drow('qurb-tests','40 items')}${frow('after.xml','26.6 KB',{icon:'file'})}${frow('IMG-20211105-WA0006.jpg','102 KB',{ph:3})}${frow('notes.txt','2 KB',{icon:'file'})}${frow('holiday.mp4','1.6 GB',{icon:'video'})}</div>
+ ${tabbar()}`);
+
+// 4. Deeper, grid view
+add('The same, as a grid', 'S5 Grid view, chosen in ⋮ › View and remembered for that folder: folders and files alike as tiles, a photo as its picture.',
+`${folderHead('2024','Beach',['Shared','Trips','2024','Beach'])}
+ <div class="ggrid">${gtile('Sunset')}${gtile('Videos')}${Array.from({length:10},(_,i)=>gtile('IMG_10'+(40+i)+'.jpg',{ph:i+2})).join('')}${gtile('route.pdf',{icon:'file'})}</div>
+ ${tabbar()}`);
+
+// 5. Menu
+add('⋮ Sort and View', 'S4/S5, if you keep a ⋮: only how the page is sorted and shown.',
+`${folderHead('saqib','Shared',['Shared'])}
+ <div class="rows">${drow('Trips','12 items')}${drow('hello','3 items')}${frow('after.xml','26.6 KB')}${frow('notes.txt','2 KB')}</div>
+ <div class="menu"><div class="h">Sort by</div>
+  <div class="o">Name<span class="r">${ic('check','s')}</span></div><div class="o">Date</div><div class="o">Size</div><div class="o">Type</div>
+  <hr><div class="o">Ascending<span class="r">${ic('check','s')}</span></div><div class="o">Descending</div>
+  <hr><div class="h">View</div><div class="o">${ic('list','s')}List<span class="r">${ic('check','s')}</span></div><div class="o">${ic('grid','s')}Grid</div></div>
+ ${tabbar()}`);
+
+// 6. Selection
+add('Selecting', 'S1 a long press selects; tap more to add; All at the top. The actions at the bottom, for one or many.',
+`<div class="selhead"><div class="iconbtn">${ic('x')}</div><div class="n">2 selected</div><div class="selall"><div class="ck">${''}</div>All</div></div>
+ <div class="path" style="margin-top:8px"><span>Shared</span>${ic('chev','xs')}<span class="on">Trips</span></div>
+ <div class="rows">${drow('2023','8 items',{check:false})}${drow('2024','14 items',{check:true})}${frow('boarding-pass.pdf','',{icon:'file',check:false})}${frow('IMG_1042.jpg','',{ph:5,check:true})}${frow('IMG_1043.jpg','',{ph:7,check:false})}${frow('map.png','',{ph:9,check:false})}</div>
+ <div class="actionbar"><div class="act">${ic('move')}Move</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('share')}Share</div><div class="act danger">${ic('trash')}Delete</div><div class="act">${ic('dots')}More</div></div>`);
+
+// 7. Copy here
+add('Copying: going there', 'S2 after Copy, go to any folder (in Vault, Shared or your folder) and copy there. Move works the same.',
+`${folderHead('sakib','Vault',['Vault','Documents'])}
+ <div class="rows">${drow('Bills','5 items')}${drow('IDs','3 items')}${frow('passport.pdf','1.2 MB')}${frow('lease.pdf','820 KB')}</div>
+ <div class="pastebar"><div class="what">${ic('copy','s')}Copying 2 items from Shared</div>
+ <div class="btns"><div class="btn">Cancel</div><div class="btn primary">Copy here</div></div></div>`);
+
+// 8. More sheet
+add('More', 'S1 what is not in the bar: Rename (one item), Details (S6), Save to the phone, Keep here (a Vault file kept only on a computer).',
+`${folderHead('saqib','Shared',['Shared','Trips'])}
+ <div class="rows">${frow('IMG_1042.jpg','3.1 MB',{ph:5})}</div>
+ <div class="scrim"></div>
+ <div class="sheet"><div class="grab"></div>
+  <div class="opt">${ic('pencil')}Rename</div><div class="opt">${ic('info')}Details</div><div class="opt">${ic('download')}Save to this phone</div><div class="opt">${ic('cloud')}Keep here</div></div>`);
+
+// 9. Details
+add('Details', 'S6 size, when it changed, and where it is.',
+`${folderHead('saqib','Shared',['Shared','Trips'])}
+ <div class="rows">${frow('IMG_1042.jpg','3.1 MB',{ph:5})}</div>
+ <div class="scrim"></div>
+ <div class="sheet facts"><div class="grab"></div><h3>IMG_1042.jpg</h3>
+  <div class="opt"><span>Size</span><span>3.1 MB</span></div><div class="opt"><span>Changed</span><span>12 Mar 2024</span></div>
+  <div class="opt"><span>Where</span><span>Shared › Trips</span></div><div class="opt"><span>On</span><span>saqib</span></div></div>`);
+
+// 10. Search
+add('Searching', 'Tap 🔍: the field takes the title\'s place and looks through every folder below; each result says where it is.',
+`${back('saqib')}<div class="search active" style="margin-top:14px">${ic('search','s')}beach<span style="margin-left:auto;color:var(--text3)">${ic('x','s')}</span></div>
+ <div class="rows">${frow('Beach','',{icon:'folder',sub:'Shared › Trips › 2024'})}${frow('beach-day.jpg','2.8 MB',{ph:11,sub:'Shared › Trips › 2024 › Beach'})}${frow('beach-house-lease.pdf','410 KB',{icon:'file',sub:'Shared › Documents'})}</div>
+ ${tabbar()}`);
+
+// 11. Received
+add('Received', 'R-2 a log by day. R-3 who sent each. R-4 no Rename. R-1 centred when empty.',
+`${back('sakib')}<div class="titlerow"><div class="title">Received</div></div>
+ <div class="day">Today</div>${frow('invoice-oct.pdf','220 KB',{icon:'file',sub:'from saqib'})}${frow('IMG_2201.jpg','2.4 MB',{ph:4,sub:'from saqib'})}
+ <div class="day">Yesterday</div>${frow('slides.pptx','8.1 MB',{icon:'file',sub:'from saqib'})}
+ <div class="day">29 October</div>${frow('song.mp3','6.0 MB',{icon:'file',sub:'from Ammi\'s phone'})}${frow('ticket.pdf','140 KB',{icon:'file',sub:'from saqib'})}
+ ${tabbar()}`);
+
+// 12. Received empty
+add('Received, empty', 'R-1 in the middle, as every empty page.',
+`${back('sakib')}<div class="titlerow"><div class="title">Received</div></div>
+ <div class="empty"><div class="ring">${ic('download')}</div>Nothing sent to this phone yet</div>
+ ${tabbar()}`);
+
+// 13. Laptop page
+add('Your laptop', 'As it is: Shared, your phone\'s folder by its name, other people\'s locked.',
+`${back('Files')}<div class="titlerow"><div class="title">saqib</div></div>
+ <div class="tiles"><div class="tile">${ic('folder')}<div class="n">Shared</div></div><div class="tile">${ic('phone')}<div class="n">sakib</div></div><div class="tile locked">${ic('lock')}<div class="n">Ammi's phone</div></div></div>
+ ${tabbar()}`);
+
+// 14. Folder chooser
+add('Choosing folders to back up', 'F-1 no computer chip. F-3 a folder opens its own page, as in Files. F-2 search, and All for this page. F-4 the same rows as everywhere.',
+`${back('Phone')}<div class="titlerow"><div class="title">Pictures</div></div>
+ <div class="path"><span>Phone</span>${ic('chev','xs')}<span class="on">Pictures</span></div>
+ <div class="search">${ic('search','s')}Search folders</div>
+ <div class="rows">
+  <div class="row"><div class="ftile" style="border:none;background:none"></div><div class="fname"><div class="a">Select all</div></div><div class="ck part">${ic('dash','xs')}</div></div>
+  ${['Screenshots|1.2 GB|1','Instagram|860 MB|1','ChatGPT|42 MB|0','Reddit|310 MB|0','100PINT|95 MB|1'].map(s=>{const [n,z,c]=s.split('|');return `<div class="row"><div class="ftile" style="color:var(--green)">${ic('folder')}</div><div class="fname"><div class="a">${n}</div><div class="b">${z}</div></div><div class="ck ${c=='1'?'on':''}">${c=='1'?ic('check','xs'):''}</div><div style="color:var(--text3)">${ic('chev','s')}</div></div>`}).join('')}
+ </div>
+ <div class="pastebar" style="padding-bottom:18px"><div class="what" style="margin:0;justify-content:space-between"><span><b style="color:var(--text)">2.1 GB</b> chosen</span><span>Wi-Fi only</span></div></div>`);
+
+document.getElementById('grid').innerHTML = screens.map(s => `<figure><div class="phone"><div class="screen">
+  <div class="status"><span>10:26</span><span>5G ▮▮▮</span></div><div class="body">${s.html}</div></div></div>
+  <figcaption><b>${s.title}</b>${s.caption}</figcaption></figure>`).join('');
+</script>
+</body>
+</html>

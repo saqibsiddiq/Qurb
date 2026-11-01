@@ -3092,6 +3092,48 @@ items 6, 8, 11 and 12 await the test with the owner.**
 
 The rest: not built yet.
 
+## The owner's page-by-page review, 2026-11-02
+
+Every page of the phone app, each part talked through with the owner, then
+fixed together and tested together. As he answered, page by page:
+
+- **Home** (H1–H10): fine as it is; no changes.
+- **Device page** (Home's circle):
+  - D-1. A *Switch device* button under *Remove*, doing what holding Home's
+    circle does.
+  - D-2. A *Restore* section under *Backs up*: Everything, WhatsApp, each
+    backed-up folder, and *Choose files* (the backup folder in select mode);
+    progress in Home's *Waiting*. A file already on the phone is skipped.
+    From the computer whose page it is -- the one chosen on Home.
+  - D-3. The *Private Vault* switch is for the Vault folder in Files only:
+    switching it off must not stop WhatsApp or folder backups to that
+    computer. Today both travel inside the vault to the devices keeping it,
+    so this separates them in the engine.
+- **Folder chooser** (device page → Folders): F-1 no computer chip; F-2 a
+  *Search folders* field under the title and a *Select all* row first, for
+  the folder on screen; F-3 no tree: a folder opens its own page, as a file
+  explorer does; F-4 the same rows, header and spacing as every folder page.
+- **Files top**: FT-1 two sections, *This phone* and *Remote access*; FT-2
+  the space from the title to the first section as in Settings; FT-3 the
+  phone's card shows nothing more, a computer's the total QurbSpace keeps on
+  it (37 GB), not split.
+- **Phone page**: P-2 holding Vault or Received says its size and files.
+- **Laptop page**: as it is.
+- **Vault, Shared and the backup folder**: one page, identical (V-5), drawn
+  in [the mockup of 2026-11-02](../design/mockups/files-2026-11-02.html) and
+  modelled on Samsung's My Files. V-1 no Sort/Save ⋮ of its own; V-2 a new
+  folder button and + (files or a folder from the phone); V-3 no floating
+  *Add files*; V-4 no badges; a file kept only on a computer fetched when
+  tapped. From My Files: S1 a long press selects, more taps add, *All*, and
+  Move, Copy, Share, Delete, More in a bar at the bottom; S2 copy and move by
+  going to the folder and *Copy here* / *Move here*; S3 a tappable path; S4 a
+  ⋮ with only Sort and View; S5 sort by name, date, size or type, either way,
+  and a list or a grid, remembered for each folder -- in a list folders and
+  files are both rows, in a grid both tiles; S6 Details; S7 Share to apps.
+  S8, categories and recent files, left out.
+- **Received**: R-1 its empty state centred; R-2 a log by day; R-3 the
+  sender's name on each; R-4 no Rename.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
