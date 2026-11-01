@@ -31,7 +31,7 @@ object Engine {
     /** How long opening waits for the push token. */
     private const val WAKE_WAIT_MS = 3_000L
 
-    private val later = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val later = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
      * The push token to be woken by from now on: the push service issued a

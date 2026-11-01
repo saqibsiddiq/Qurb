@@ -701,6 +701,11 @@ pub struct Qurb {
     /// What this device has handed to devices collecting from it. Read while
     /// a pass runs, from another thread, so it takes no lock.
     serving: Arc<ServingStats>,
+    /// Each computer reached to browse it, kept while its connection lasts
+    /// (the owner's list of 2026-11-01, item 7): opening a computer built
+    /// a whole connection from nothing every time -- an endpoint, the relay,
+    /// discovery -- 1.3 s of the 4.8 s it took on the S23 over Wi-Fi.
+    kept_open: Mutex<std::collections::HashMap<String, Arc<KeptFolder>>>,
     /// The app's way to open again a document it sent from where it is
     /// (decision 0060), given to every store handle opened here.
     documents: Mutex<Option<Arc<dyn qurb_storage::Documents>>>,
@@ -1802,6 +1807,28 @@ impl Qurb {
     /// browse it, within `seconds` (decision 0067, step 4). The computer has
     /// to be on and running Qurb.
     pub fn open_kept_folder(&self, fingerprint: String, seconds: u32) -> Result<Arc<KeptFolder>, QurbError> {
+        // The connection made last time, while it lasts.
+        if let Some(open) = self.kept_open.lock().expect("kept_open poisoned").get(&fingerprint) {
+            if !open.client.is_closed() {
+                return Ok(Arc::clone(open));
+            }
+        }
+        let opened = self.reach_kept_folder(&fingerprint, seconds)?;
+        self.kept_open.lock().expect("kept_open poisoned").insert(fingerprint, Arc::clone(&opened));
+        Ok(opened)
+    }
+
+    /// Reach each of this person's computers now, so that opening one finds
+    /// it connected (item 7): asked when the app shows Files. Those that do
+    /// not answer within `seconds` are left; opening one tries again.
+    pub fn prepare_computers(&self, seconds: u32) {
+        let Ok(peers) = self.peers() else { return };
+        for peer in peers.into_iter().filter(|p| p.kind.as_deref() != Some("phone") && (p.relation == "own" || p.relation == "host")) {
+            let _ = self.open_kept_folder(peer.fingerprint, seconds);
+        }
+    }
+
+    fn reach_kept_folder(&self, fingerprint: &str, seconds: u32) -> Result<Arc<KeptFolder>, QurbError> {
         let budget = std::time::Duration::from_secs(seconds.max(1) as u64);
         let (peer, name, trusted, meetings, me) = {
             let engine = self.engine()?;
@@ -2690,6 +2717,7 @@ impl Qurb {
             wake_token: Mutex::new(settings.wake_token),
             runtime: Mutex::new(None),
             serving: Arc::new(ServingStats::default()),
+            kept_open: Mutex::new(std::collections::HashMap::new()),
             documents: Mutex::new(None),
             open_asks: Mutex::new(std::collections::HashMap::new()),
             approved: Mutex::new(std::collections::HashMap::new()),

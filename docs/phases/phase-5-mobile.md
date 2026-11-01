@@ -3025,7 +3025,16 @@ As he gave it, with his answers to what was asked:
 12. A screen from Home's circle for choosing which folders the phone backs
     up, which the latest build has no way to do.
 
-**None built yet**; recorded here before any of it.
+**Item 7, first half, 2026-11-01.** Measured on the S23 and the laptop on
+one Wi-Fi: from tapping *Shared* to its list, **4.8 s**, of which 1.3 s was
+the phone building a whole connection from nothing — an endpoint, the
+relay, discovery — every time a computer was opened (`open_kept_folder`).
+The phone now keeps each computer's connection while it lasts and reaches
+them when Files is shown (`prepare_computers`): **2.1 s** measured the same
+way, the measuring itself about 0.7 s of each. Next: the listing shown from
+what was last seen while the new one comes.
+
+The rest: not built yet.
 
 ## Deliberately left undone
 

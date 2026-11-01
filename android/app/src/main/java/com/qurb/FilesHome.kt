@@ -42,6 +42,9 @@ class FilesHome(app: MainActivity) : Screen(app) {
             show(peers)
             views.refresh.isRefreshing = false
         }
+        // The computers reached now, in the background, so that opening one
+        // finds it connected (the owner's list of 2026-11-01, item 7).
+        Engine.later.launch { runCatching { engine().prepareComputers(8u) } }
     }
 
     private fun show(peers: List<PeerInfo>) {
