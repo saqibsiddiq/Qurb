@@ -1,0 +1,104 @@
+{
+  "title": "QurbSpace staging",
+  "description": "The staging host (the owner's laptop for now): whether it is up, its traffic, and the rendezvous service's log. docs/staging.md.",
+  "uid": "qurb-staging",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "1m",
+  "tags": ["qurb"],
+  "templating": {
+    "list": [
+      { "name": "metrics", "label": "Metrics", "type": "datasource", "query": "prometheus", "hide": 0 },
+      { "name": "logs", "label": "Logs", "type": "datasource", "query": "loki", "hide": 0 }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Host up",
+      "description": "1 while Alloy on the staging host reports. 0 or no data: the laptop is asleep or offline, and staging with it.",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "${metrics}" },
+      "targets": [{ "refId": "A", "expr": "max(up{job=\"integrations/node_exporter\"})" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "Down", "color": "red" }, "1": { "text": "Up", "color": "green" } } }],
+          "noValue": "Down",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Rendezvous log lines, last hour",
+      "description": "What the rendezvous service wrote: devices connecting, being introduced, errors. None for long while the host is up can mean nobody connected, or the service stopped.",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "loki", "uid": "${logs}" },
+      "targets": [{ "refId": "A", "expr": "sum(count_over_time({job=\"qurb/rendezvous\"}[1h]))", "queryType": "range" }],
+      "fieldConfig": { "defaults": { "noValue": "0", "color": { "mode": "fixed", "fixedColor": "green" } } },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings and errors, last hour",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "loki", "uid": "${logs}" },
+      "targets": [{ "refId": "A", "expr": "sum(count_over_time({job=\"qurb/rendezvous\", level=~\"warning|err|crit|alert|emerg\"}[1h]))", "queryType": "range" }],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "0",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "stat",
+      "title": "Memory free",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 5 },
+      "datasource": { "type": "prometheus", "uid": "${metrics}" },
+      "targets": [{ "refId": "A", "expr": "max(node_memory_MemAvailable_bytes) / max(node_memory_MemTotal_bytes)" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.1 }, { "color": "green", "value": 0.25 }] }
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Traffic: in and out",
+      "description": "Everything the host's network carries, the relay's share among it. Loopback and the container bridges left out.",
+      "gridPos": { "x": 0, "y": 5, "w": 16, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "${metrics}" },
+      "targets": [
+        { "refId": "A", "legendFormat": "in", "expr": "sum(rate(node_network_receive_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\"}[5m]))" },
+        { "refId": "B", "legendFormat": "out", "expr": "sum(rate(node_network_transmit_bytes_total{device!~\"lo|docker.*|veth.*|br-.*\"}[5m]))" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "fillOpacity": 12, "lineWidth": 2 } } }
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU busy",
+      "gridPos": { "x": 16, "y": 5, "w": 8, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "${metrics}" },
+      "targets": [{ "refId": "A", "legendFormat": "busy", "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "fillOpacity": 12, "lineWidth": 2 } } }
+    },
+    {
+      "type": "logs",
+      "title": "Rendezvous service log",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 12 },
+      "datasource": { "type": "loki", "uid": "${logs}" },
+      "targets": [{ "refId": "A", "expr": "{job=\"qurb/rendezvous\"}" }],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
+    }
+  ]
+}
