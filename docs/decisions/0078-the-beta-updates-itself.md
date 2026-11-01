@@ -79,7 +79,20 @@ installs over the last (`scripts/release-manifests.py`, `versionCodeOf` in
   release-signed build once, by reinstalling, which clears the app's data.
   Its files stay on the laptop.
 - **Rolling back** an update is by hand: install the earlier release.
-- **Play Protect's warning** on the APK from GitHub. The way out that keeps
+- **Proven twice more on 2026-11-01 with v0.2.0-beta.3**: the laptop found
+  it 62 s after a restart and had it in place 12 s later; the S23 took it at
+  16:38:15, QurbSpace its recorded installer. The S23 needed a hand once:
+  beta.2 was published before the setup screen looked for updates, and the
+  phone sat there. From beta.3 a phone at setup updates itself.
+- **The move to the release key cost the S23 its link to its own backups**,
+  as staging.md foresaw: the reinstalled app called itself "SM-S911B", and
+  a new signing key gave it a new `ANDROID_ID`, so neither name nor install
+  tied it to "skib phone", under which its backups are kept. Linked by the
+  owner's word (`qurb same "skib phone" 6385f8cc`), the chain of three
+  identities is one phone again; nothing was lost.
+- **Play Protect's warning** on the APK from GitHub — shown again at the
+  beta.3 update: Google scans each new version from outside Play, so a
+  phone's update is not yet without a tap. The way out that keeps
   updates seamless is Google Play's testing tracks: Play installs and updates
   the app, and Play's own policy then forbids the app updating itself, so a
   Play build would leave the updater out. Short of that, the APK can be
