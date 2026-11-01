@@ -982,6 +982,8 @@ qurb/
 │       │                                      moved, deleted, added to, and a
 │       │                                      backup deleted once gone here
 │       │                  SharedScreen.kt     a computer's shared folder, live:
+│       │                  Clipboard.kt        one copy for every folder, pasted
+│       │                                      into the Vault or a Shared (0080)
 │       │                                      search, folder tiles, files; a new
 │       │                                      folder, files added, renamed,
 │       │                                      deleted (0073, Files draft 4)

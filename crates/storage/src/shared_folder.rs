@@ -201,6 +201,60 @@ pub fn move_path(store: &mut Store, device: &DeviceId, from: &str, to: &str) -> 
     Ok(())
 }
 
+/// Copy a file or a folder of the shared folder to `to`, there on this
+/// computer, so a phone's *Paste* sends nothing over the connection (the
+/// owner's list of 2026-11-01, item 5). Numbered when `to` is taken, as an
+/// added file is, never put over another. A folder copies the files of it
+/// whose bytes are here, each indexed as a change made here; one with a
+/// sharing rule in it is copied without the rule. Returns where it went.
+pub fn copy_path(store: &mut Store, device: &DeviceId, from: &str, to: &str) -> Result<String> {
+    let from = checked(store, device, from)?;
+    let to = checked(store, device, to)?;
+    let root = folder(store)?;
+    // Pasted where it is, it is numbered: `beach (2).jpg`.
+    if to.starts_with(&format!("{from}/")) {
+        return Err(Error::Sharing { why: format!("{from} cannot be copied into itself") });
+    }
+    let mut placed = to.clone();
+    let mut n = 1;
+    while taken(store, &root, &placed)? {
+        n += 1;
+        if n > NUMBERED_UP_TO {
+            return Err(Error::Sharing { why: format!("too many files are called {to}") });
+        }
+        placed = numbered(&to, n);
+    }
+    let copy = |store: &mut Store, from: &str, to: &str| -> Result<()> {
+        let source = root.join(from);
+        let target = root.join(to);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| Error::io(parent, e))?;
+        }
+        std::fs::copy(&source, &target).map_err(|e| Error::io(&source, e))?;
+        store.put_file(to, &target)?;
+        Ok(())
+    };
+    if shared_file(store, &from)? {
+        if !root.join(&from).is_file() {
+            return Err(Error::Sharing { why: format!("{from} is not on this computer to copy") });
+        }
+        copy(store, &from, &placed)?;
+        return Ok(placed);
+    }
+    if !root.join(&from).is_dir() {
+        return Err(Error::NotFound { path: from });
+    }
+    std::fs::create_dir_all(root.join(&placed)).map_err(|e| Error::io(root.join(&placed), e))?;
+    for (path, ..) in store.db().shared_entries_here(&from, device)? {
+        if qurb_sync::sharing::is_rule_path(&path) {
+            continue;
+        }
+        let rest = &path[from.len() + 1..];
+        copy(store, &path, &format!("{placed}/{rest}"))?;
+    }
+    Ok(placed)
+}
+
 /// Delete a file or a folder of the shared folder, into this computer's
 /// Recently deleted for 30 days, naming `device` as who did it. A folder
 /// with a sharing rule in it is not deleted from a phone.

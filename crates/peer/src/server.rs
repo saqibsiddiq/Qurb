@@ -363,7 +363,11 @@ async fn serve_request(
         // to hear of one hear now (decision 0073).
         let changed = matches!(
             request,
-            Request::SharedMkdir { .. } | Request::SharedMove { .. } | Request::SharedDelete { .. } | Request::UploadDone { .. }
+            Request::SharedMkdir { .. }
+                | Request::SharedMove { .. }
+                | Request::SharedCopy { .. }
+                | Request::SharedDelete { .. }
+                | Request::UploadDone { .. }
         ) && matches!(answered, Answer::Now(Response::Noted | Response::Placed { .. }));
         if changed {
             generation.bump();
@@ -750,6 +754,13 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             Some(device) if reaches_shared => {
                 made(qurb_storage::shared_folder::move_path(store, device, from, to))?
             }
+            _ => Response::NotFound,
+        },
+        Request::SharedCopy { from, to } => match &owner {
+            Some(device) if reaches_shared => match qurb_storage::shared_folder::copy_path(store, device, from, to) {
+                Ok(path) => Response::Placed { path },
+                Err(e) => refused(e)?,
+            },
             _ => Response::NotFound,
         },
         Request::SharedDelete { path } => match &owner {

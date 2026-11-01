@@ -35,9 +35,19 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
                 val received = withContext(Dispatchers.IO) {
                     val engine = engine()
                     val here = engine.list().associateBy { it.path }
-                    engine.history(HISTORY.toUInt(), null)
+                    val history = engine.history(HISTORY.toUInt(), null)
+                    // Renamed since, from here: followed to its name now.
+                    val renamed = history.filter { it.kind == "moved" && it.detail?.startsWith(RENAMED_FROM) == true }
+                        .mapNotNull { h -> h.path?.let { h.detail!!.removePrefix(RENAMED_FROM) to it } }
+                        .reversed().toMap()
+                    fun now(path: String): String {
+                        var at = path
+                        repeat(renamed.size) { at = renamed[at] ?: return at }
+                        return at
+                    }
+                    history
                         .filter { it.kind == "received" && it.detail?.startsWith("sent to this device") == true }
-                        .mapNotNull { h -> h.path?.let { here[it] }?.let { it to h } }
+                        .mapNotNull { h -> h.path?.let { here[now(it)] }?.let { it to h } }
                         .distinctBy { it.first.path }
                 }
                 show(received)
@@ -57,7 +67,8 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
             return
         }
         // As Figma's Received: rows, each with who sent it as a badge on
-        // its tile, and the sheet a file's tap gives, held or tapped.
+        // its tile; a tap opens, held, every option (the owner's list of
+        // 2026-11-01, item 5).
         val rows = android.widget.LinearLayout(app).apply { orientation = android.widget.LinearLayout.VERTICAL }
         page.addView(rows)
         for ((file, h) in received) {
@@ -65,11 +76,13 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
             val from = h.device
             kit.fileRow(rows, States.icon(name), name, Words.size(file.size),
                 badge = from?.let { Kit.Badge(States.device(it), R.color.green) },
-                said = from?.let { "from $it" } ?: Words.ago(h.at)) { choose(file, from) }
+                said = from?.let { "from $it" } ?: Words.ago(h.at), onHold = { choose(file, from) }) { app.open(file) }
         }
     }
 
-    /** A file received: open it, save a copy, send it on, delete it. */
+    /** A file received: open it, save a copy, send it on, rename, copy or
+     *  delete it. It is in the Vault, so a copy is the Vault's, pasted
+     *  anywhere; nothing is pasted into Received, which is what arrived. */
     private fun choose(file: FileEntry, from: String?) {
         val name = file.path.substringAfterLast('/')
         kit.sheet()
@@ -79,6 +92,21 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
             .action(R.drawable.ic_send, "Send") {
                 app.chooseDevice("Send $name to") { to -> app.send(file, to) }
             }
+            .action(R.drawable.ic_pencil, "Rename") {
+                kit.askName("Rename", name, "Rename") { to ->
+                    val parent = file.path.substringBeforeLast('/', "")
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) { engine().rename(file.path, if (parent.isEmpty()) to else "$parent/$to") }
+                            app.madeChange()
+                        } catch (e: Exception) {
+                            app.fail("Not renamed", e)
+                        }
+                        refresh()
+                    }
+                }
+            }
+            .action(R.drawable.ic_copy, "Copy") { Clipboard.copy(app, Clip.Vault(file.path)) }
             .action(R.drawable.ic_trash_2, "Delete", danger = true) {
                 kit.sheet()
                     .mark(R.drawable.ic_trash_2)
@@ -103,5 +131,8 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
     companion object {
         /** How far back the history is read for sends. */
         private const val HISTORY = 500
+
+        /** How the engine's history says a file was renamed here. */
+        private const val RENAMED_FROM = "renamed from "
     }
 }

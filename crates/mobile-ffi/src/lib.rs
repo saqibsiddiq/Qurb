@@ -444,6 +444,9 @@ pub struct Happening {
     pub detail: Option<String>,
 }
 
+/// The start of a rename's detail in the history, the old path after it.
+const RENAMED_FROM: &str = "renamed from ";
+
 /// What a scan did.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ScanSummary {
@@ -1349,9 +1352,22 @@ impl Qurb {
 
     /// Rename or move a file, keeping it in the area it is in. See
     /// [`qurb_storage::Store::rename_file`].
+    ///
+    /// Recorded in the history as `moved`, its detail `renamed from` the old
+    /// path, so that Received follows a file it lists to its new name (the
+    /// owner's list of 2026-11-01, item 5).
     pub fn rename(&self, from: String, to: String) -> Result<(), QurbError> {
         let (from, to) = (qurb_watcher::normalize(&from), qurb_watcher::normalize(to.trim_matches('/')));
-        Ok(self.engine()?.store_mut().rename_file(&from, &to)?)
+        let mut engine = self.engine()?;
+        engine.store_mut().rename_file(&from, &to)?;
+        let _ = engine.store().db().record(
+            qurb_storage::db::Event::Moved,
+            Some(&to),
+            None,
+            None,
+            Some(&format!("{RENAMED_FROM}{from}")),
+        );
+        Ok(())
     }
 
     /// Make an empty folder, for files to be added or moved into. Nothing to
@@ -4198,6 +4214,17 @@ impl KeptFolder {
     /// Rename or move a file or folder of the computer's shared folder.
     pub fn rename(&self, from: String, to: String) -> Result<(), QurbError> {
         changed(self.runtime.block_on(self.client.shared_move(&from, &to)))
+    }
+
+    /// Copy a file or folder of the computer's shared folder to `to`, done
+    /// there, nothing sent over the connection. Returns where it went,
+    /// numbered when the name was taken.
+    pub fn copy(&self, from: String, to: String) -> Result<String, QurbError> {
+        let placed = self
+            .runtime
+            .block_on(self.client.shared_copy(&from, &to))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        placed.map_err(|why| QurbError::Refused { detail: why })
     }
 
     /// Delete a file or folder of the computer's shared folder, into its

@@ -3061,6 +3061,15 @@ app, shows what it listed last time at once while the computer is asked
 Shared's first version; the final build installed but was not looked at, the
 phone being in use.
 
+**Item 5, built 2026-11-01, not yet tried on the phone.** A tap opens a
+file, and a long press gives every option, in all four places. Copy and
+paste work across them through one clipboard. Copies within a computer's
+*Shared* are made on the computer (`SharedCopy`). Received gains Rename and
+Copy, and Received follows a renamed file. Backups can be copied, not
+renamed. Nothing is pasted into Received, or among the backups.
+[Decision 0080](../decisions/0080-one-clipboard-on-the-phone.md) records
+each of these and its gaps.
+
 The rest: not built yet.
 
 ## Deliberately left undone

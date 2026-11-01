@@ -234,6 +234,17 @@ async fn a_guest_adds_renames_moves_and_deletes_in_the_shared_folder() {
     let placed = client.shared_upload(&file, "Trips/beach.jpg", |_| {}).await.unwrap();
     assert_eq!(placed, Ok("Trips/beach (2).jpg".to_string()));
 
+    // Copied there, on the computer: a file, numbered over a taken name,
+    // and a folder whole; never into itself.
+    assert_eq!(client.shared_copy("Trips/beach.jpg", "Trips/beach.jpg").await.unwrap(), Ok("Trips/beach (3).jpg".to_string()));
+    assert_eq!(fs::read(host.root.join("Trips/beach (3).jpg")).unwrap(), bytes);
+    assert_eq!(client.shared_copy("Trips", "Trips copy").await.unwrap(), Ok("Trips copy".to_string()));
+    let (_, listed) = client.shared("Trips copy").await.unwrap().unwrap();
+    assert_eq!(names(&listed).len(), 3, "a folder copied without all its files");
+    assert!(client.shared_copy("Trips", "Trips/Inner").await.unwrap().is_err(), "copied into itself");
+    assert_eq!(client.shared_delete("Trips copy").await.unwrap(), Ok(()));
+    assert_eq!(client.shared_delete("Trips/beach (3).jpg").await.unwrap(), Ok(()));
+
     assert_eq!(client.shared_move("Trips/beach.jpg", "Trips/sea.jpg").await.unwrap(), Ok(()));
     assert!(host.root.join("Trips/sea.jpg").is_file() && !host.root.join("Trips/beach.jpg").exists());
     assert_eq!(client.shared_move("Trips", "Holidays/Trips").await.unwrap(), Ok(()));
@@ -242,7 +253,7 @@ async fn a_guest_adds_renames_moves_and_deletes_in_the_shared_folder() {
     assert_eq!(client.shared_delete("Holidays").await.unwrap(), Ok(()));
     assert!(!host.root.join("Holidays").exists());
     let trash = host.engine.store().recently_deleted().unwrap();
-    assert_eq!(trash.len(), 2);
+    assert_eq!(trash.len(), 6, "the copies deleted, then the two");
     assert!(trash.iter().all(|t| t.deleted_by == Some(guest.id())), "Recently deleted does not name the guest");
     client.close();
 }

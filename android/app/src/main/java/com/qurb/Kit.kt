@@ -162,7 +162,9 @@ class Kit(private val app: AppCompatActivity) {
         return FileRow(root, tile, icon, badge, name, size)
     }
 
-    /** Show a file in `row`: tapped, `onTap`; held, the same (the owner, 2026-10-26). */
+    /** Show a file in `row`: tapped, `onTap`; held, `onHold` -- every option
+     *  -- or `onTap` where there is none (the owner's list of 2026-11-01,
+     *  item 5: a tap opens, a long press gives all). */
     fun bindFile(
         row: FileRow,
         @DrawableRes icon: Int,
@@ -170,6 +172,7 @@ class Kit(private val app: AppCompatActivity) {
         size: String,
         badge: Badge? = null,
         said: String? = null,
+        onHold: (() -> Unit)? = null,
         onTap: () -> Unit,
     ) {
         row.icon.setImageResource(icon)
@@ -190,7 +193,7 @@ class Kit(private val app: AppCompatActivity) {
         }
         row.root.contentDescription = listOfNotNull(name, said, size.ifEmpty { null }).joinToString(", ")
         row.root.setOnClickListener { onTap() }
-        row.root.setOnLongClickListener { onTap(); true }
+        row.root.setOnLongClickListener { (onHold ?: onTap)(); true }
     }
 
     /** A file's row, added to `parent`, 4 dp under the one before. */
@@ -201,10 +204,11 @@ class Kit(private val app: AppCompatActivity) {
         size: String,
         badge: Badge? = null,
         said: String? = null,
+        onHold: (() -> Unit)? = null,
         onTap: () -> Unit,
     ): FileRow {
         val row = fileRow()
-        bindFile(row, icon, name, size, badge, said, onTap)
+        bindFile(row, icon, name, size, badge, said, onHold, onTap)
         parent.addView(row.root, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64))
             .apply { if (parent.childCount > 0) topMargin = dp(4) })
         return row

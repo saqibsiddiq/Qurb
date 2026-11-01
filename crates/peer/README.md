@@ -210,7 +210,8 @@ pass, every ten seconds.
 And one real exception, since [decision
 0073](../../docs/decisions/0073-the-phone-works-with-its-computer.md): a
 computer changes **its own shared folder** when one of its own person's
-phones or a guest asks. `SharedMkdir`, `SharedMove`, `SharedDelete`, and a
+phones or a guest asks. `SharedMkdir`, `SharedMove`, `SharedCopy` (done on
+the computer, so a phone's *Paste* sends nothing), `SharedDelete`, and a
 file added in pieces of at most 4 MiB (`Upload`, then `UploadDone` with the
 whole file's hash). The computer makes each change itself, as one of its own
 (`qurb_storage::shared_folder`), so every other device takes it as it takes

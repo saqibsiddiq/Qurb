@@ -280,6 +280,18 @@ impl PeerClient {
         self.change(Request::SharedMove { from: from.to_string(), to: to.to_string() }).await
     }
 
+    /// Copy a file or folder of the peer's shared folder to `to`, there on
+    /// the peer. `Ok(Ok(placed))` with where the copy went, numbered when the
+    /// name was taken; `Ok(Err(why))` when not, an older peer included.
+    pub async fn shared_copy(&self, from: &str, to: &str) -> Result<std::result::Result<String, String>> {
+        match self.request(Request::SharedCopy { from: from.to_string(), to: to.to_string() }).await? {
+            Response::Placed { path } => Ok(Ok(path)),
+            Response::Refused { why } => Ok(Err(why)),
+            Response::NotFound => Ok(Err(NOT_TAKEN.to_string())),
+            other => Err(unexpected("copy", &other)),
+        }
+    }
+
     /// Delete a file or folder in the peer's shared folder, into its
     /// Recently deleted.
     pub async fn shared_delete(&self, path: &str) -> Result<std::result::Result<(), String>> {

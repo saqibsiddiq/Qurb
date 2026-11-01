@@ -163,6 +163,21 @@ class KeptScreen(
                 }
             }
         }
+        val rows = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(rows)
+        // Something copied anywhere on the phone, to paste in this folder of
+        // the Private Vault (the owner's list of 2026-11-01, item 5); the
+        // cross forgets it. The rest of the folder is backups, which follow
+        // their originals on the phone, so nothing is pasted among them.
+        val clip = Clipboard.clip
+        if (clip != null && inVault && query.isEmpty()) {
+            kit.row(rows, R.drawable.ic_clipboard, "Paste ${clip.name}", "",
+                trail = kit.iconButton(R.drawable.ic_x, "Forget ${clip.name}") { Clipboard.clip = null; refresh() }) {
+                val into = dir.removePrefix(vault.orEmpty()).trim('/')
+                if (clip is Clip.Remote) app.say("Pasting ${clip.name}…")
+                change("Pasted ${clip.name}") { Clipboard.intoVault(app, it, into) }
+            }
+        }
         if (listing.folders.isEmpty() && listing.files.isEmpty()) {
             kit.empty(page, if (query.isEmpty()) R.drawable.ic_folder_open else R.drawable.ic_search, when {
                 query.isNotEmpty() -> "Nothing called “$query”."
@@ -170,19 +185,6 @@ class KeptScreen(
                 else -> "This folder is empty."
             })
             return
-        }
-        val rows = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        page.addView(rows)
-        // Something copied, to paste in this folder of the Private Vault
-        // (the owner's list of 2026-10-26, item 13); the cross forgets it.
-        val clip = VaultClip.copied
-        if (clip != null && inVault && query.isEmpty()) {
-            val clipName = clip.substringAfterLast('/')
-            kit.row(rows, R.drawable.ic_clipboard, "Paste $clipName", "",
-                trail = kit.iconButton(R.drawable.ic_x, "Forget $clipName") { VaultClip.copied = null; refresh() }) {
-                val into = dir.removePrefix(vault.orEmpty()).trim('/')
-                change("Pasted $clipName") { it.copyKept(clip, if (into.isEmpty()) clipName else "$into/$clipName") }
-            }
         }
         // As Figma draws a folder's contents: folders as cards, two to a
         // row, files as rows, no headings. A folder of the Private Vault,
@@ -193,7 +195,7 @@ class KeptScreen(
             val path = "${dir.removePrefix(vault.orEmpty()).trim('/')}/$name".trim('/')
             kit.folderCard(name, icon,
                 count = if (dir.isEmpty() && name.endsWith(", earlier")) "Before it was set up again" else null,
-                onHold = if (inVault) ({ folderActions(path, name) }) else null) {
+                onHold = if (inVault) ({ folderActions(path, name) }) else ({ backupFolder("$dir/$name".trim('/'), name) })) {
                 dir = if (dir.isEmpty()) name else "$dir/$name"
                 refresh()
             }
@@ -213,7 +215,7 @@ class KeptScreen(
     private fun showFiles(rows: LinearLayout, files: List<KeptFile>, from: Int) {
         val upTo = minOf(files.size, from + PAGE)
         for (file in files.subList(from, upTo)) {
-            kit.fileRow(rows, States.icon(file.name), file.name, Words.size(file.size)) { choose(file) }
+            kit.fileRow(rows, States.icon(file.name), file.name, Words.size(file.size), onHold = { choose(file) }) { open(file) }
         }
         if (upTo < files.size) {
             var more: View? = null
@@ -250,8 +252,7 @@ class KeptScreen(
                     }
                 }
                 sheet.action(R.drawable.ic_copy, "Copy") {
-                    VaultClip.copied = file.path
-                    app.say("Copied $name")
+                    Clipboard.copy(app, Clip.Vault(file.path))
                     refresh()
                 }
                 sheet.action(R.drawable.ic_folder_input, "Move") {
@@ -259,6 +260,15 @@ class KeptScreen(
                         val to = folder.trim('/')
                         change("Moved") { it.rename(file.path, if (to.isEmpty()) name else "$to/$name") }
                     }
+                }
+            }
+            if (backup(file)) {
+                // A backup is copied from the computer, to paste elsewhere;
+                // renamed it would come back under its own name at the next
+                // backup, so it is not.
+                sheet.action(R.drawable.ic_copy, "Copy") {
+                    Clipboard.copy(app, Clip.Remote(computer, false, dir, file))
+                    refresh()
                 }
             }
             sheet.action(R.drawable.ic_trash_2, "Delete", danger = true) {
@@ -297,8 +307,7 @@ class KeptScreen(
                 }
             }
             .action(R.drawable.ic_copy, "Copy") {
-                VaultClip.copied = path
-                app.say("Copied $name")
+                Clipboard.copy(app, Clip.Vault(path))
                 refresh()
             }
             .action(R.drawable.ic_folder_input, "Move") {
@@ -314,6 +323,17 @@ class KeptScreen(
                     .line("Everything in it, in Recently deleted for 30 days")
                     .buttons("Delete", danger = true) { change("Deleted $name") { it.deleteKept(path) } }
                     .show()
+            }
+            .show()
+    }
+
+    /** A folder of backups, held: copied whole, to paste elsewhere. */
+    private fun backupFolder(at: String, name: String) {
+        kit.sheet()
+            .file(R.drawable.ic_folder, name, where(), iconTint = R.color.green)
+            .action(R.drawable.ic_copy, "Copy") {
+                Clipboard.copy(app, Clip.Remote(computer, false, at, null))
+                refresh()
             }
             .show()
     }

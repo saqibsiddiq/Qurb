@@ -231,6 +231,10 @@ pub enum Request {
     SharedMove { from: String, to: String },
     /// A file or folder deleted, into the computer's Recently deleted.
     SharedDelete { path: String },
+    /// A file or folder copied there, on the computer: answered
+    /// [`Response::Placed`] with where the copy went, numbered when the
+    /// name was taken. Older computers answer [`Response::NotFound`].
+    SharedCopy { from: String, to: String },
     /// A piece of a file being added, at `offset`, in order: `id` is the
     /// asker's own name for the upload, and the computer keeps the pieces
     /// apart from the folder until [`Request::UploadDone`].
@@ -414,6 +418,7 @@ const TAG_PROFILE: u8 = 29;
 const TAG_INSTALL: u8 = 30;
 const TAG_BECOME: u8 = 31;
 const TAG_PLACES: u8 = 32;
+const TAG_SHARED_COPY: u8 = 33;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -607,6 +612,11 @@ impl Request {
                 put_path(&mut out, from);
                 put_path(&mut out, to);
             }
+            Request::SharedCopy { from, to } => {
+                out.push(TAG_SHARED_COPY);
+                put_path(&mut out, from);
+                put_path(&mut out, to);
+            }
             Request::SharedDelete { path } => {
                 out.push(TAG_SHARED_DELETE);
                 put_path(&mut out, path);
@@ -689,6 +699,7 @@ impl Request {
             TAG_SHARED => Request::Shared { dir: r.path()? },
             TAG_SHARED_MKDIR => Request::SharedMkdir { path: r.path()? },
             TAG_SHARED_MOVE => Request::SharedMove { from: r.path()?, to: r.path()? },
+            TAG_SHARED_COPY => Request::SharedCopy { from: r.path()?, to: r.path()? },
             TAG_SHARED_DELETE => Request::SharedDelete { path: r.path()? },
             TAG_UPLOAD => {
                 let mut id = [0u8; 16];
@@ -1413,6 +1424,7 @@ mod tests {
             Request::Shared { dir: "Photos/2026".into() },
             Request::SharedMkdir { path: "Photos/2027".into() },
             Request::SharedMove { from: "a.txt".into(), to: "Notes/a.txt".into() },
+            Request::SharedCopy { from: "a.txt".into(), to: "Notes/a.txt".into() },
             Request::SharedDelete { path: "Old".into() },
             Request::Upload { id: [5; 16], offset: 4 << 20, bytes: vec![1, 2, 3] },
             Request::UploadDone { id: [5; 16], path: "Photos/beach.jpg".into(), content: [6; 32] },

@@ -178,12 +178,11 @@ class FilesScreen(app: MainActivity, private val private: Boolean, private val u
                             })
                         }
                     }
-                    // Something copied in the Vault, to paste in this folder
-                    // (as Private on a computer has it); held, forgotten.
-                    val clip = VaultClip.copied
+                    // Something copied anywhere on the phone, to paste in this
+                    // folder (the owner's list of 2026-11-01, item 5).
+                    val clip = Clipboard.clip
                     if (private && clip != null && query.isEmpty()) {
-                        val clipName = clip.substringAfterLast('/')
-                        add(Item.Link(R.drawable.ic_clipboard, "Paste $clipName", "") { paste(clip) })
+                        add(Item.Link(R.drawable.ic_clipboard, "Paste ${clip.name}", "") { paste(clip) })
                     }
                     // As Figma draws a folder: cards, then rows, no headings.
                     addAll(folders.map { Item.Folder(it, prefix + it) })
@@ -342,14 +341,13 @@ class FilesScreen(app: MainActivity, private val private: Boolean, private val u
     }
 
     private fun copy(path: String) {
-        VaultClip.copied = path
-        app.say("Copied ${path.substringAfterLast('/')}")
+        Clipboard.copy(app, Clip.Vault(path))
         refresh()
     }
 
-    private fun paste(clip: String) {
-        val name = clip.substringAfterLast('/')
-        vault("Pasted $name") { it.copyKept(clip, if (dir.isEmpty()) name else "$dir/$name") }
+    private fun paste(clip: Clip) {
+        if (clip is Clip.Remote) app.say("Pasting ${clip.name}…")
+        vault("Pasted ${clip.name}") { Clipboard.intoVault(app, it, dir) }
     }
 
     /** A change to the Vault, said done or why not, and the folder read again. */
@@ -550,7 +548,8 @@ class FilesScreen(app: MainActivity, private val private: Boolean, private val u
         return column
     }
 
-    /** A file as Figma's row, a badge for where it is; tapped or held, its sheet. */
+    /** A file as Figma's row, a badge for where it is: tapped, opened where it
+     *  is here, else its sheet; held, its sheet (item 5). */
     private inner class FileHolder(private val row: Kit.FileRow) : RecyclerView.ViewHolder(row.root) {
         fun bind(entry: FileEntry) {
             val downloading = Downloads.wanted(entry)
@@ -559,7 +558,9 @@ class FilesScreen(app: MainActivity, private val private: Boolean, private val u
             val name = if (query.isNotEmpty()) entry.path else entry.path.substringAfterLast('/')
             val state = States.of(entry, downloading, keptOn)
             kit.bindFile(row, States.icon(entry.path), name, Words.size(entry.size), badge(entry, downloading),
-                state.words) { choose(entry) }
+                state.words, onHold = { choose(entry) }) {
+                if (States.here(entry)) app.open(entry) else choose(entry)
+            }
             row.tile.alpha = if (!States.here(entry) && !downloading) 0.7f else 1f
         }
     }
@@ -605,13 +606,4 @@ object Downloads {
         if (entry.available != Available.ELSEWHERE) asked -= entry.path
         entry.path in asked
     }
-}
-
-/**
- * A file or folder of the Vault copied, by its path there, to paste in
- * another folder: from the phone's own Vault or from Private on a computer,
- * which are the same vault. Kept while the app is.
- */
-object VaultClip {
-    var copied: String? = null
 }

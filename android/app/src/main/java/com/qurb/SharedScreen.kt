@@ -160,14 +160,17 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo, private va
 
     private fun show(listing: KeptListing) {
         listed.removeAllViews()
+        // Something copied anywhere on the phone, to paste here (the owner's
+        // list of 2026-11-01, item 5); the cross forgets it.
+        pasteRow()
         if (listing.folders.isEmpty() && listing.files.isEmpty()) {
             kit.empty(listed, if (query.isEmpty()) R.drawable.ic_folder_open else R.drawable.ic_search,
                 if (query.isNotEmpty()) "Nothing called “$query”." else if (dir.isEmpty()) "Nothing shared yet." else "This folder is empty.")
             return
         }
         // As Figma draws a folder's contents: folders as cards, two to a
-        // row; files as rows. Held, either gives the sheet a tap on a file
-        // gives (the owner, 2026-10-26).
+        // row; files as rows. A tap opens; held, either gives every option
+        // (item 5).
         kit.folderGrid(listed, listing.folders.map { name ->
             kit.folderCard(name, onHold = { folderSheet(place(name), name) }) {
                 dir = place(name)
@@ -175,7 +178,21 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo, private va
             }
         })
         for (file in listing.files.sortedBy { it.name.lowercase() }) {
-            kit.fileRow(listed, States.icon(file.name), file.name, Words.size(file.size)) { choose(file) }
+            kit.fileRow(listed, States.icon(file.name), file.name, Words.size(file.size), onHold = { choose(file) }) {
+                Opened.open(app, scope, folder, file)
+            }
+        }
+    }
+
+    private fun pasteRow() {
+        val clip = Clipboard.clip ?: return
+        if (query.isNotEmpty()) return
+        kit.row(listed, R.drawable.ic_clipboard, "Paste ${clip.name}", "",
+            trail = kit.iconButton(R.drawable.ic_x, "Forget ${clip.name}") { Clipboard.clip = null; refresh() }) {
+            val here = dir
+            val local = !(clip is Clip.Remote && clip.shared && clip.computer.fingerprint == computer.fingerprint)
+            if (local) app.say("Pasting ${clip.name}…")
+            change("Pasted ${clip.name}") { Clipboard.intoShared(app, engine(), it, computer, here) }
         }
     }
 
@@ -185,7 +202,7 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo, private va
     private fun where(): View = kit.chip(R.drawable.ic_laptop, computer.name,
         if (Engine.isOff(app, computer)) R.color.offline else R.color.online)
 
-    /** One file: open it, keep a copy, rename it, delete it. */
+    /** One file: open it, keep a copy, rename, copy or delete it. */
     private fun choose(file: KeptFile) {
         val name = file.path.substringAfterLast('/')
         kit.sheet()
@@ -193,15 +210,17 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo, private va
             .action(R.drawable.ic_external_link, "Open") { Opened.open(app, scope, folder, file) }
             .action(R.drawable.ic_download, "Save") { download(file) }
             .action(R.drawable.ic_pencil, "Rename") { rename(file.path, name) }
+            .action(R.drawable.ic_copy, "Copy") { Clipboard.copy(app, Clip.Remote(computer, true, file.path, file)); refresh() }
             .action(R.drawable.ic_trash_2, "Delete", danger = true) { delete(file.path, name) }
             .show()
     }
 
-    /** A folder held: rename it, delete it. */
+    /** A folder held: rename, copy or delete it. */
     private fun folderSheet(path: String, name: String) {
         kit.sheet()
             .file(R.drawable.ic_folder, name, where(), iconTint = R.color.green)
             .action(R.drawable.ic_pencil, "Rename") { rename(path, name) }
+            .action(R.drawable.ic_copy, "Copy") { Clipboard.copy(app, Clip.Remote(computer, true, path, null)); refresh() }
             .action(R.drawable.ic_trash_2, "Delete", danger = true) { delete(path, name) }
             .show()
     }
@@ -226,7 +245,7 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo, private va
 
     /** A change, made by the computer: said done, or why not, and the folder
      *  read again. */
-    private fun change(done: String, work: (KeptFolder) -> Unit) {
+    private fun change(done: String, work: suspend (KeptFolder) -> Unit) {
         scope.launch {
             try {
                 withContext(Dispatchers.IO) { work(opened()) }
