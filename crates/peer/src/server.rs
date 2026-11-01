@@ -408,6 +408,7 @@ async fn serve_request(
         | Response::Install { .. }
         | Response::Became { .. }
         | Response::Places { .. }
+        | Response::Storage { .. }
         | Response::Noted
         | Response::Paired { .. }
         | Response::Welcome { .. }
@@ -531,6 +532,16 @@ fn piece(store: &Store, device: &qurb_sync::DeviceId, id: &[u8; 16], offset: u64
 enum Answer {
     Now(Response),
     Read { hash: blake3::Hash, places: Vec<qurb_storage::ChunkAt>, reader: qurb_storage::ChunkReader },
+}
+
+/// The asker, when it is one of this computer's owner's phones: the only
+/// device its storage is told to and managed from.
+fn owners_phone(store: &Store, asker: Option<Fingerprint>) -> Result<Option<qurb_storage::db::TrustedPeer>> {
+    let Some(asker) = asker else { return Ok(None) };
+    let db = store.db();
+    let Some(me) = db.peer_by_fingerprint(asker.as_bytes())? else { return Ok(None) };
+    let phone = db.peer_kind(&me.device_id)?.as_deref() == Some("phone");
+    Ok((me.relation == qurb_storage::db::Relation::Own && phone).then_some(me))
 }
 
 fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> Result<Answer> {
@@ -878,6 +889,67 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
                 places.extend(others.into_iter().map(|n| (n, crate::wire::Place::Locked)));
             }
             Response::Places { places }
+        }
+
+        // What this computer keeps, by kind, and its disk, for its owner's
+        // phone's Settings → Storage (the owner's list of 2026-11-01, item 8):
+        // the shared folder, each of the owner's phones' backups and Private
+        // Vault, each other person's, and Recently deleted. Sizes are the
+        // files', as the desktop's Storage gives them.
+        Request::Storage => {
+            if owners_phone(store, asker)?.is_none() {
+                return Ok(Answer::Now(Response::NotFound));
+            }
+            let (disk, free) = store.tree_root().map(crate::disk::space).unwrap_or((0, 0));
+            let mut parts = vec![(crate::wire::Part::Shared, String::new(), store.usage()?.files)];
+            let db = store.db();
+            let outside = qurb_storage::db::OUTSIDE;
+            let mut seen: Vec<qurb_sync::DeviceId> = Vec::new();
+            for p in db.trusted_peers()? {
+                if p.relation != qurb_storage::db::Relation::Own
+                    || db.peer_kind(&p.device_id)?.as_deref() != Some("phone")
+                    || db.became(&p.device_id)?.is_some()
+                {
+                    continue;
+                }
+                for (name, ids) in qurb_storage::person::own_phones(db, &p.device_id)? {
+                    let (mut backups, mut all) = (0u64, 0u64);
+                    for id in ids {
+                        if seen.contains(&id) {
+                            continue;
+                        }
+                        seen.push(id);
+                        all += db.held_for(&id)?.1;
+                        backups += db.held_outside_for(&id, &format!("{outside}/whatsapp"))?.1;
+                        backups += db.held_outside_for(&id, &format!("{outside}/storage"))?.1;
+                    }
+                    if all > 0 {
+                        parts.push((crate::wire::Part::Backups, name.clone(), backups));
+                        parts.push((crate::wire::Part::Vault, name, all.saturating_sub(backups)));
+                    }
+                }
+            }
+            for p in db.trusted_peers()? {
+                if p.relation != qurb_storage::db::Relation::Guest || db.became(&p.device_id)?.is_some() {
+                    continue;
+                }
+                let held = db.held_for(&p.device_id)?.1;
+                if held > 0 {
+                    parts.push((crate::wire::Part::Guest, p.name, held));
+                }
+            }
+            let deleted: u64 = store.recently_deleted()?.iter().map(|d| d.size).sum();
+            parts.push((crate::wire::Part::Deleted, String::new(), deleted));
+            Response::Storage { disk, free, parts }
+        }
+        // Its Recently deleted emptied for good, from the owner's phone's
+        // Storage. Nobody else may.
+        Request::EmptyDeleted => {
+            if owners_phone(store, asker)?.is_none() {
+                return Ok(Answer::Now(Response::NotFound));
+            }
+            store.empty_trash(std::time::Duration::ZERO)?;
+            Response::Noted
         }
 
         // One of this person's own devices becoming its permanent identity

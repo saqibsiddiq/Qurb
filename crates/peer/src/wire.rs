@@ -235,6 +235,14 @@ pub enum Request {
     /// [`Response::Placed`] with where the copy went, numbered when the
     /// name was taken. Older computers answer [`Response::NotFound`].
     SharedCopy { from: String, to: String },
+    /// What this computer keeps, by kind, and its disk: for its owner's
+    /// phone's Settings → Storage (the owner's list of 2026-11-01, item 8).
+    /// Answered [`Response::Storage`] to the owner's phones, else
+    /// [`Response::NotFound`].
+    Storage,
+    /// Its Recently deleted emptied for good, asked from the owner's phone:
+    /// answered [`Response::Noted`].
+    EmptyDeleted,
     /// A piece of a file being added, at `offset`, in order: `id` is the
     /// asker's own name for the upload, and the computer keeps the pieces
     /// apart from the folder until [`Request::UploadDone`].
@@ -373,6 +381,9 @@ pub enum Response {
     /// What a computer's folder holds at its top for the asker, answering
     /// [`Request::Places`]: each by name, and what it is to the asker.
     Places { places: Vec<(String, Place)> },
+    /// [`Request::Storage`]: the disk's size and what is free on it, then
+    /// each part Qurb keeps -- its kind, a name, its bytes.
+    Storage { disk: u64, free: u64, parts: Vec<(Part, String, u64)> },
 
     /// The device id the asker's permanent identity has here, answering
     /// [`Request::Become`].
@@ -419,6 +430,8 @@ const TAG_INSTALL: u8 = 30;
 const TAG_BECOME: u8 = 31;
 const TAG_PLACES: u8 = 32;
 const TAG_SHARED_COPY: u8 = 33;
+const TAG_STORAGE: u8 = 34;
+const TAG_EMPTY_DELETED: u8 = 35;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -472,6 +485,7 @@ const STATUS_PROFILE: u8 = 26;
 const STATUS_INSTALL: u8 = 27;
 const STATUS_BECAME: u8 = 28;
 const STATUS_PLACES: u8 = 29;
+const STATUS_STORAGE: u8 = 30;
 
 /// One place at the top of a computer's folder, as it is to the asker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -494,8 +508,52 @@ impl Place {
     }
 }
 
+/// A kind of what a computer keeps, in [`Response::Storage`]. A kind a newer
+/// computer tells and this build does not know is read as [`Part::Other`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Part {
+    /// The shared folder's files here.
+    Shared,
+    /// One of the owner's phones' backups: its folders and WhatsApp.
+    Backups,
+    /// One of the owner's phones' Private Vault.
+    Vault,
+    /// Another person's, kept for them.
+    Guest,
+    /// Recently deleted, kept thirty days.
+    Deleted,
+    /// Anything else.
+    Other,
+}
+
+impl Part {
+    fn byte(self) -> u8 {
+        match self {
+            Part::Shared => 0,
+            Part::Backups => 1,
+            Part::Vault => 2,
+            Part::Guest => 3,
+            Part::Deleted => 4,
+            Part::Other => 255,
+        }
+    }
+
+    fn from_byte(byte: u8) -> Part {
+        match byte {
+            0 => Part::Shared,
+            1 => Part::Backups,
+            2 => Part::Vault,
+            3 => Part::Guest,
+            4 => Part::Deleted,
+            _ => Part::Other,
+        }
+    }
+}
+
 /// The most places a computer's top may hold.
 const MAX_PLACES: usize = 256;
+/// The most parts a computer's storage is told in.
+const MAX_PARTS: usize = 256;
 
 /// The largest certificate a device may say it is becoming: one of its own
 /// is a few hundred bytes.
@@ -590,6 +648,8 @@ impl Request {
             }
             Request::Install => out.push(TAG_INSTALL),
             Request::Places => out.push(TAG_PLACES),
+            Request::Storage => out.push(TAG_STORAGE),
+            Request::EmptyDeleted => out.push(TAG_EMPTY_DELETED),
             Request::Become { cert } => {
                 out.push(TAG_BECOME);
                 put_u32(&mut out, cert.len());
@@ -684,6 +744,8 @@ impl Request {
             TAG_PROFILE => Request::Profile { since: r.u64()? as i64 },
             TAG_INSTALL => Request::Install,
             TAG_PLACES => Request::Places,
+            TAG_STORAGE => Request::Storage,
+            TAG_EMPTY_DELETED => Request::EmptyDeleted,
             TAG_BECOME => {
                 let len = r.count()?;
                 if len > MAX_CERT {
@@ -861,6 +923,18 @@ impl Response {
                 out.push(STATUS_BECAME);
                 out.extend_from_slice(device_id);
             }
+            Response::Storage { disk, free, parts } => {
+                out.push(STATUS_STORAGE);
+                out.extend_from_slice(&disk.to_le_bytes());
+                out.extend_from_slice(&free.to_le_bytes());
+                let parts = &parts[..parts.len().min(MAX_PARTS)];
+                put_u32(&mut out, parts.len());
+                for (part, name, bytes) in parts {
+                    out.push(part.byte());
+                    put_name(&mut out, name);
+                    out.extend_from_slice(&bytes.to_le_bytes());
+                }
+            }
             Response::Places { places } => {
                 out.push(STATUS_PLACES);
                 let places = &places[..places.len().min(MAX_PLACES)];
@@ -939,6 +1013,21 @@ impl Response {
             STATUS_ABOUT => Response::About { kind: r.name()? },
             STATUS_INSTALL => Response::Install { marker: r.array()? },
             STATUS_BECAME => Response::Became { device_id: r.hash()? },
+            STATUS_STORAGE => {
+                let disk = r.u64()?;
+                let free = r.u64()?;
+                let n = r.count()?;
+                if n > MAX_PARTS {
+                    return Err(Error::Protocol { detail: format!("{n} parts is not a computer's storage") });
+                }
+                let mut parts = Vec::with_capacity(n);
+                for _ in 0..n {
+                    let part = Part::from_byte(r.u8()?);
+                    let name = r.name()?;
+                    parts.push((part, name, r.u64()?));
+                }
+                Response::Storage { disk, free, parts }
+            }
             STATUS_PLACES => {
                 let n = r.count()?;
                 if n > MAX_PLACES {
@@ -1456,6 +1545,8 @@ mod tests {
             Request::Profile { since: 1_792_000_000_123 },
             Request::Install,
             Request::Places,
+            Request::Storage,
+            Request::EmptyDeleted,
             Request::Become { cert: vec![0x30, 0x82, 1, 2] },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
@@ -1478,6 +1569,7 @@ mod tests {
             Response::Profile { name: "S23".into(), picture: vec![], changed_at: 1 },
             Response::Install { marker: [9; 16] },
             Response::Became { device_id: [4; 32] },
+            Response::Storage { disk: 512 << 30, free: 100 << 30, parts: vec![(Part::Shared, String::new(), 4 << 30), (Part::Backups, "skib phone".into(), 20 << 30), (Part::Other, String::new(), 1)] },
             Response::Places { places: vec![("Shared".into(), Place::Shared), ("skib phone".into(), Place::Mine), ("Ammi's phone".into(), Place::Locked)] },
             Response::Refused { why: "something is already called Notes".into() },
             Response::Placed { path: "Photos/beach (2).jpg".into() },

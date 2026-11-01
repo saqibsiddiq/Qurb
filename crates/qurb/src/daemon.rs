@@ -406,6 +406,8 @@ impl Daemon {
     }
 
     pub async fn run(&self) -> Result<()> {
+        // Its disk, told to the owner's phone with its storage (item 8 of 2026-11-01).
+        qurb_peer::disk::set(crate::disk::space);
         // Before anything else, and held for the whole run. Two daemons on one
         // store contend on the write lock, answer as the same device, and both
         // enforce the same storage cap -- and none of that reports an error,

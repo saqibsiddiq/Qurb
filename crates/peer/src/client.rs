@@ -298,6 +298,21 @@ impl PeerClient {
         self.change(Request::SharedDelete { path: path.to_string() }).await
     }
 
+    /// What the peer keeps, by kind, and its disk: `None` from a peer that
+    /// does not tell this device (or is too old to).
+    pub async fn storage(&self) -> Result<Option<(u64, u64, Vec<(crate::wire::Part, String, u64)>)>> {
+        match self.request(Request::Storage).await? {
+            Response::Storage { disk, free, parts } => Ok(Some((disk, free, parts))),
+            Response::NotFound => Ok(None),
+            other => Err(unexpected("storage", &other)),
+        }
+    }
+
+    /// The peer's Recently deleted emptied for good.
+    pub async fn empty_deleted(&self) -> Result<std::result::Result<(), String>> {
+        self.change(Request::EmptyDeleted).await
+    }
+
     async fn change(&self, request: Request) -> Result<std::result::Result<(), String>> {
         match self.request(request).await? {
             Response::Noted => Ok(Ok(())),
@@ -745,6 +760,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Install { .. } => "install marker",
         Response::Became { .. } => "identity taken",
         Response::Places { .. } => "places",
+        Response::Storage { .. } => "storage",
         Response::Refused { .. } => "refusal of a change",
         Response::Placed { .. } => "place of an added file",
         Response::Mismatch => "key mismatch",

@@ -35,6 +35,7 @@
 pub mod base32;
 pub mod client;
 pub mod connect;
+pub mod disk;
 pub mod error;
 pub mod identity;
 pub mod kept;

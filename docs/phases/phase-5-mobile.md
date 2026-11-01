@@ -3070,6 +3070,22 @@ renamed. Nothing is pasted into Received, or among the backups.
 [Decision 0080](../decisions/0080-one-clipboard-on-the-phone.md) records
 each of these and its gaps.
 
+**Items 6, 11, 12 and half of 8, built 2026-11-01, none yet tried on the phone**
+(the owner asked for everything built first, then tested together).
+Item 6: thumbnails on file rows (a camera JPEG on a computer read from its
+first 96 KB, its EXIF thumbnail), a three-column gallery for a computer's
+folder mostly of photos, and quick preview (`Peek.kt`): a picture or a text's
+start, full screen, swiped through, *Open* to an app; anything else opens in
+an app. Item 12: *Folders* always on the own computer's page from Home's
+circle, asking to keep the Private Vault first where it is not kept. Item
+11: the S23 had never been asked for notification permission, so every ask
+waited for the app to be opened; it is now asked once on first opening, and a
+pass looks for asks every second instead of at its end. Item 8: the computer
+answers `Request::Storage` (its disk, and its shared folder, each of the
+owner's phones' backups and Vault, other people's, Recently deleted) and
+`Request::EmptyDeleted`, to the owner's phones only; **the phone's Storage
+screen that shows and uses them is not built.**
+
 The rest: not built yet.
 
 ## Deliberately left undone
