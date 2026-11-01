@@ -103,6 +103,85 @@ figcaption b{color:var(--text);font-weight:600;display:block;font-size:14px;marg
 .empty .ring{width:84px;height:84px;border-radius:50%;border:3px solid #D5E2DA;display:grid;place-items:center;background:#fff;color:var(--text3)}
 .note{max-width:1500px;margin:40px auto 0;font-size:14px;color:var(--text2);line-height:1.6}
 .note li{margin-left:18px}
+
+.dark{position:absolute;inset:0;background:#000;color:#fff}
+.dtop{position:absolute;top:34px;left:0;right:0;display:flex;align-items:center;gap:10px;padding:10px 14px;background:linear-gradient(#000c,#0000)}
+.dtop .n{flex:1;font-size:15px;font-weight:500}
+.dtop .c{font-size:12px;color:#bbb}
+.dbot{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-around;padding:16px 10px 26px;background:linear-gradient(#0000,#000c)}
+.dbot .act{color:#fff}
+.dimg{position:absolute;left:0;right:0;top:170px;height:330px}
+.player{position:absolute;left:0;right:0;top:220px;height:200px;background:linear-gradient(135deg,#334,#556 60%,#223)}
+.seek{position:absolute;left:18px;right:18px;bottom:110px}
+.seek .t{display:flex;justify-content:space-between;font-size:11px;color:#ccc;margin-bottom:6px}
+.bar{height:4px;border-radius:2px;background:#ffffff40;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:#fff}
+.bar.g{background:var(--neutral)}.bar.g i{background:var(--green)}
+.play{position:absolute;left:50%;top:320px;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:50%;background:#ffffff30;display:grid;place-items:center}
+.pdfpage{position:absolute;left:28px;right:28px;background:#fff;border-radius:4px;padding:16px}
+.pdfpage i{display:block;height:6px;border-radius:3px;background:#ddd;margin:8px 0}
+.dialog{position:absolute;left:0;right:0;bottom:0;background:#FBFBF9;border-radius:28px 28px 0 0;padding:10px 20px 26px}
+.field{height:50px;border-radius:16px;border:1.5px solid var(--green);background:#fff;display:flex;align-items:center;padding:0 16px;font-size:16px;margin:14px 0 18px}
+.field .sel{background:#cfe3d8}
+.mark{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;margin:6px auto 12px}
+.center{text-align:center}
+.line{font-size:14px;color:var(--text2);text-align:center;margin:6px 0 18px;line-height:1.45}
+.progress{position:absolute;left:14px;right:14px;bottom:90px;background:#fff;border:1px solid var(--border);border-radius:20px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.progress .top{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;margin-bottom:8px}
+.progress .top .m{margin-left:auto;font-size:12px;color:var(--text2);font-weight:400}
+.skel{height:62px;display:flex;align-items:center;gap:12px;padding:0 4px}
+.skel b{width:44px;height:44px;border-radius:12px;background:#E9EAE5}
+.skel i{height:12px;border-radius:6px;background:#E9EAE5;display:block}
+.thin{height:3px;border-radius:2px;background:var(--neutral);overflow:hidden;margin-top:8px}
+.thin i{display:block;height:100%;width:40%;background:var(--green);border-radius:2px}
+.optrow{display:flex;align-items:center;gap:14px;padding:14px 4px;font-size:16px}
+.optrow .t{flex:1}.optrow .t div{font-size:12px;color:var(--text3);margin-top:2px}
+.cloudmini{display:inline-flex;vertical-align:middle;margin-left:4px;color:var(--text3)}
+.greyed{opacity:.35}
+
+.code{position:absolute;top:84px;left:0;right:0;bottom:0;padding:14px 16px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.6;color:#e8e8e3;white-space:pre;overflow:hidden}
+.code .k{color:#9cd2b4}.code .v{color:#e6c38a}.code .c{color:#8a8d86}.code .n{color:#6d706a;display:inline-block;width:22px}
+.tbl{position:absolute;top:96px;left:12px;right:12px;background:#fff;border-radius:10px;overflow:hidden;font-size:11.5px;color:var(--text)}
+.tbl div{display:grid;grid-template-columns:1.2fr 1fr .8fr .8fr}.tbl span{padding:7px 8px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;overflow:hidden}
+.tbl .h span{background:var(--surface2);font-weight:600}
+.docpage{position:absolute;left:24px;right:24px;background:#fff;border-radius:4px;padding:18px 16px;color:#222;font-size:9px;line-height:1.5}
+.docpage h4{font-size:13px;margin-bottom:6px}.docpage i{display:block;height:5px;border-radius:3px;background:#ddd;margin:6px 0}
+.slide{position:absolute;left:18px;right:18px;height:170px;border-radius:6px;background:linear-gradient(135deg,#2F6B57,#1d3f33);color:#fff;padding:18px;font-size:16px;font-weight:600}
+.slide small{display:block;font-size:10px;font-weight:400;opacity:.8;margin-top:6px}
+.wave{position:absolute;left:24px;right:24px;top:330px;height:70px;display:flex;align-items:center;gap:3px}
+.wave b{flex:1;background:#ffffff50;border-radius:2px}.wave b.p{background:#fff}
+.cover{position:absolute;left:70px;right:70px;top:120px;aspect-ratio:1;border-radius:20px}
+.ctrl{position:absolute;left:0;right:0;top:470px;display:flex;justify-content:center;align-items:center;gap:36px}
+.ctrl .big{width:64px;height:64px;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center}
+.unk{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff}
+.unk .ftile{width:84px;height:84px;border-radius:22px;background:#ffffff18;border:none;color:#fff}
+.unk .n{font-size:17px;font-weight:600}.unk .m{font-size:13px;color:#aaa}
+.unk .btn{flex:none;width:220px;margin-top:14px;background:#fff;color:#000;border:none}
+.chips{position:absolute;top:92px;left:16px;display:flex;gap:6px}
+.chips span{font-size:11px;background:#ffffff20;color:#ddd;border-radius:10px;padding:3px 9px}
+
+.th{position:relative;width:100%;height:100%;overflow:hidden;border-radius:inherit}
+.th .dur{position:absolute;right:3px;bottom:3px;background:#000a;color:#fff;font-size:8px;border-radius:4px;padding:1px 3px}
+.th .pl{position:absolute;inset:0;display:grid;place-items:center;color:#fff}
+.th.txt{background:#fff;padding:4px 3px;font-family:ui-monospace,monospace;font-size:3.6px;line-height:1.35;color:#555;white-space:pre;text-align:left}
+.th.txt .k{color:#2F6B57}
+.th.page{background:#fff;padding:5px}
+.th.page i{display:block;height:2px;background:#ccc;margin:2px 0;border-radius:1px}
+.th.page b{display:block;height:3px;width:60%;background:#888;margin-bottom:3px;border-radius:1px}
+.th.sheet{background:#fff;display:grid;grid-template-columns:repeat(3,1fr)}
+.th.sheet span{border:.5px solid #ddd}
+.th.sheet span.h{background:#E8F0EC}
+.th.slide{background:linear-gradient(135deg,#2F6B57,#1d3f33)}
+.th.slide b{position:absolute;left:5px;top:8px;width:55%;height:3px;background:#fff;border-radius:1px}
+.th.slide i{position:absolute;left:5px;top:14px;width:35%;height:2px;background:#ffffff99;border-radius:1px}
+.th.ext{background:#fff;display:grid;place-items:center;color:var(--text2)}
+.th.ext span{position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:7px;font-weight:700;color:var(--text2)}
+.th.apk{background:#fff;display:grid;place-items:center}
+.th.apk div{width:58%;height:58%;border-radius:28%;background:linear-gradient(135deg,#3DDC84,#1a8f55)}
+.big .th.txt{font-size:6px}.big .th .dur{font-size:10px}.big .th.ext span{font-size:10px;bottom:8px}
+.big .th.page{padding:9px}.big .th.page i{height:3px;margin:4px 0}.big .th.page b{height:5px}
+.big .th.slide b{left:9px;top:16px;height:5px}.big .th.slide i{left:9px;top:26px;height:3px}
+.ftile .th{border-radius:11px}
 </style>
 </head>
 <body>
@@ -121,6 +200,17 @@ figcaption b{color:var(--text);font-weight:600;display:block;font-size:14px;marg
 
 <script>
 const P = {
+  music:'<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  skipb:'<path d="M19 20 9 12l10-8zM5 19V5"/>',
+  skipf:'<path d="m5 4 10 8-10 8zM19 5v14"/>',
+  pause:'<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  archive:'<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
+  play:'<path d="M6 4l14 8-14 8z"/>',
+  cloudoff:'<path d="m2 2 20 20"/><path d="M5.78 5.78A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.31-.2"/><path d="M21.53 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7 7 0 0 0 10 5.05"/>',
+  restore:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  open:'<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  folderopen:'<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
   folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
   folderPlus:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6M9 13h6"/>',
   plus:'<path d="M5 12h14M12 5v14"/>',
@@ -155,6 +245,29 @@ const ic = (n, c='') => `<svg class="ic ${c}" viewBox="0 0 24 24">${P[n]}</svg>`
 const shades = ['#c7d9cf','#e6cfa7','#a9c1d9','#d9b3a9','#b8cba0','#d3c4e0','#9fb8b0','#e0d3b8','#b0a99f','#cfe0e6','#e8b8a0','#a8b8c8'];
 const photo = (i) => `linear-gradient(${(i*47)%360}deg, ${shades[i%12]}, ${shades[(i+5)%12]})`;
 
+// Thumbnails for every kind of file
+const thumbs = {
+  video:(i)=>`<div class="th" style="background:${photo(i)}"><div class="pl">${ic('play','xs')}</div><span class="dur">41:30</span></div>`,
+  pdf:()=>`<div class="th page"><b></b><i></i><i></i><i style="width:70%"></i><i></i><i></i><i style="width:50%"></i></div>`,
+  xml:()=>`<div class="th txt"><span class="k">&lt;manifest</span>
+  <span class="k">&lt;app</span> label=
+    "Qurb"&gt;
+  &lt;activity
+    name=".M"/&gt;
+&lt;/manifest&gt;</div>`,
+  json:()=>`<div class="th txt">{
+  <span class="k">"name"</span>: "qurb",
+  <span class="k">"ver"</span>: "0.2",
+  <span class="k">"beta"</span>: 6,
+  <span class="k">"ok"</span>: true
+}</div>`,
+  docx:()=>`<div class="th page"><b></b><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i><i></i></div>`,
+  xlsx:()=>`<div class="th sheet">${Array.from({length:15},(_,i)=>`<span class="${i<3?'h':''}"></span>`).join('')}</div>`,
+  pptx:()=>`<div class="th slide"><b></b><i></i></div>`,
+  mp3:(i)=>`<div class="th" style="background:${photo(i)}"></div>`,
+  apk:()=>`<div class="th apk"><div></div></div>`,
+  zip:()=>`<div class="th ext">${ic('archive','s')}<span>ZIP</span></div>`,
+};
 const tabbar = () => `<div class="tabbar">
   <div class="tab">${ic('home')}Home</div>
   <div class="tab on">${ic('folder')}Files</div>
@@ -167,10 +280,12 @@ const folderHead = (backTo, title, path, opts={}) => `<div class="topbar">${back
   <div class="titlerow"><div class="title">${title}</div></div>
   <div class="path">${path.map((p,i)=>`<span class="${i==path.length-1?'on':''}">${p}</span>`).join(ic('chev','xs'))}</div>`;
 const tiles = (names, o={}) => `<div class="tiles">${names.map((n,i)=>`<div class="tile ${o.sel&&o.sel.includes(i)?'sel':''}">${ic(o.icon||'folder')}${o.check?`<div class="ck ${o.sel&&o.sel.includes(i)?'on':''}">${o.sel&&o.sel.includes(i)?ic('check','xs'):''}</div>`:''}<div class="n">${n}</div></div>`).join('')}</div>`;
-const frow = (name, size, o={}) => `<div class="row">
-  <div class="ftile ${o.ph!==undefined?'ph':''}" style="${o.ph!==undefined?`background:${photo(o.ph)}`:''}">${o.ph!==undefined?'':ic(o.icon||'file')}</div>
+const kindOf = (name) => { const e=name.split('.').pop().toLowerCase();
+  return ({mp4:'video',mkv:'video',pdf:'pdf',xml:'xml',json:'json',txt:'json',md:'json',docx:'docx',doc:'docx',xlsx:'xlsx',csv:'xlsx',pptx:'pptx',mp3:'mp3',apk:'apk',zip:'zip'})[e]; };
+const frow = (name, size, o={}) => { const k = o.ph===undefined && name.includes('.') ? kindOf(name) : null; return `<div class="row">
+  <div class="ftile ${o.ph!==undefined?'ph':''}" style="${o.ph!==undefined?`background:${photo(o.ph)}`:''}${k?';padding:0':''}">${o.ph!==undefined?'':(k?thumbs[k](name.length):ic(o.icon||'file'))}</div>
   <div class="fname"><div class="a">${name}</div>${o.sub?`<div class="b">${o.sub}</div>`:''}</div>
-  ${o.check!==undefined?`<div class="ck ${o.check?'on':''}">${o.check?ic('check','xs'):''}</div>`:`<div class="size">${size}</div>`}</div>`;
+  ${o.check!==undefined?`<div class="ck ${o.check?'on':''}">${o.check?ic('check','xs'):''}</div>`:`<div class="size">${size}</div>`}</div>`; };
 
 const drow = (name, sub, o={}) => `<div class="row"><div class="ftile" style="color:var(--green)">${ic('folder')}</div>
   <div class="fname"><div class="a">${name}</div>${sub?`<div class="b">${sub}</div>`:''}</div>
@@ -284,6 +399,151 @@ add('Choosing folders to back up', 'F-1 no computer chip. F-3 a folder opens its
   ${['Screenshots|1.2 GB|1','Instagram|860 MB|1','ChatGPT|42 MB|0','Reddit|310 MB|0','100PINT|95 MB|1'].map(s=>{const [n,z,c]=s.split('|');return `<div class="row"><div class="ftile" style="color:var(--green)">${ic('folder')}</div><div class="fname"><div class="a">${n}</div><div class="b">${z}</div></div><div class="ck ${c=='1'?'on':''}">${c=='1'?ic('check','xs'):''}</div><div style="color:var(--text3)">${ic('chev','s')}</div></div>`}).join('')}
  </div>
  <div class="pastebar" style="padding-bottom:18px"><div class="what" style="margin:0;justify-content:space-between"><span><b style="color:var(--text)">2.1 GB</b> chosen</span><span>Wi-Fi only</span></div></div>`);
+
+
+
+// ---- More of Files, 2 November (9 points) ----
+add('Preview: a photo', 'Tap a photo: full screen, black. Swipe for the next. Bottom: Share, Copy, Details, Delete. Top: close, name, 3 of 12, Open in an app.',
+`<div class="dark"><div class="dimg" style="background:${photo(6)}"></div>
+ <div class="dtop">${ic('x')}<div class="n">IMG_1042.jpg</div><div class="c">3 of 12</div>${ic('open')}</div>
+ <div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+add('Preview: a video', 'Point 7: videos play here, streamed from the laptop as they play, with seeking. No app needed; Open still hands it to one.',
+`<div class="dark"><div class="player"></div><div class="play">${ic('play')}</div>
+ <div class="dtop">${ic('x')}<div class="n">holiday.mp4</div><div class="c">1 of 4</div>${ic('open')}</div>
+ <div class="seek"><div class="t"><span>04:12</span><span>41:30</span></div><div class="bar"><i style="width:10%"></i></div></div>
+ <div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+add('Preview: a PDF', 'PDFs page by page, here, scrolled down; text files as text. Anything else (a .zip, a .apk) opens in an app at once.',
+`<div class="dark" style="background:#2b2c2a">
+ <div class="pdfpage" style="top:90px;height:300px"><i style="width:60%;height:10px"></i><i></i><i></i><i style="width:80%"></i><i></i><i style="width:70%"></i><i></i><i></i><i style="width:50%"></i></div>
+ <div class="pdfpage" style="top:405px;height:260px"><i></i><i style="width:75%"></i><i></i><i></i></div>
+ <div class="dtop">${ic('x')}<div class="n">lease.pdf</div><div class="c">Page 1 of 6</div>${ic('open')}</div>
+ <div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+
+const trow = (name, size, t, i) => `<div class="row"><div class="ftile" style="border:1px solid var(--border);padding:0">${thumbs[t](i)}</div>
+  <div class="fname"><div class="a">${name}</div></div><div class="size">${size}</div></div>`;
+const tgt = (name, t, i) => `<div class="gt big"><div class="gi" style="padding:0;overflow:hidden">${thumbs[t](i)}</div><div class="gn">${name}</div></div>`;
+const kinds = [['holiday.mp4','1.6 GB','video',4],['lease.pdf','820 KB','pdf'],['after.xml','26.6 KB','xml'],['package.json','2 KB','json'],['contract.docx','64 KB','docx'],['expenses.xlsx','18 KB','xlsx'],['pitch.pptx','4.2 MB','pptx'],['song.mp3','6.0 MB','mp3',10],['qurb.apk','13 MB','apk'],['photos-2023.zip','1.4 GB','zip']];
+
+add('Thumbnails: every kind, as a list', 'A video a frame and its length; a PDF, a Word file or a slide its first page; XML, JSON or code its first lines; a sheet its grid; a song its cover; an app its icon; anything else its kind written on it.',
+`${folderHead('saqib','Shared',['Shared','Mixed'])}
+ <div class="rows">${kinds.map(k=>trow(k[0],k[1],k[2],k[3])).join('')}</div>`);
+
+add('Thumbnails: every kind, as a grid', 'The same, larger, in the grid view.',
+`${folderHead('saqib','Shared',['Shared','Mixed'])}
+ <div class="ggrid">${kinds.map(k=>tgt(k[0],k[2],k[3])).join('')}${tgt('IMG_1042.jpg','mp3',6)}${tgt('IMG_1043.jpg','mp3',7)}</div>
+ ${tabbar()}`);
+
+// ---- Every kind of file in quick preview ----
+add('Preview: XML, JSON, code', 'Text you read: the whole file, line numbers, colour for tags and keys, wrapped or not. Find inside it from ⋮.',
+`<div class="dark" style="background:#1c1d1b"><div class="dtop">${ic('x')}<div class="n">after.xml</div><div class="c">10 lines</div>${ic('open')}</div>
+<div class="code"><span class="n">1</span><span class="c">&lt;?xml version="1.0"?&gt;</span>
+<span class="n">2</span><span class="k">&lt;manifest</span> <span class="v">package</span>="com.qurb"<span class="k">&gt;</span>
+<span class="n">3</span>  <span class="k">&lt;application</span>
+<span class="n">4</span>    <span class="v">android:label</span>="QurbSpace"
+<span class="n">5</span>    <span class="v">android:icon</span>="@mipmap/ic"<span class="k">&gt;</span>
+<span class="n">6</span>    <span class="k">&lt;activity</span> <span class="v">name</span>=".Main"<span class="k">/&gt;</span>
+<span class="n">7</span>  <span class="k">&lt;/application&gt;</span>
+<span class="n">8</span><span class="k">&lt;/manifest&gt;</span>
+<span class="n">9</span>
+<span class="n">10</span><span class="c">&lt;!-- after.xml, 26.6 KB --&gt;</span></div><div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+add('Preview: a spreadsheet, CSV', 'A table you scroll both ways; the first row kept on top. .csv here; .xlsx the same, its first sheet, with the others as tabs.',
+`<div class="dark" style="background:#2b2c2a"><div class="dtop">${ic('x')}<div class="n">expenses.csv</div><div class="c">7 rows</div>${ic('open')}</div>
+<div class="tbl"><div class="h"><span>Item</span><span>Date</span><span>Paid</span><span>Left</span></div>
+${['Rent|1 Oct|25,000|0','Wi-Fi|3 Oct|999|0','Laptop EMI|5 Oct|4,200|33,600','Electricity|9 Oct|1,840|0','Phone|12 Oct|599|0','Groceries|15 Oct|6,300|0','Insurance|20 Oct|2,100|8,400'].map(r=>`<div>${r.split('|').map(c=>`<span>${c}</span>`).join('')}</div>`).join('')}</div><div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+add('Preview: Word, a .docx', 'Its pages as they print, scrolled; .doc, .odt and .rtf the same. To edit, Open hands it to Word or Docs.',
+`<div class="dark" style="background:#2b2c2a"><div class="dtop">${ic('x')}<div class="n">lease.docx</div><div class="c">Page 1 of 4</div>${ic('open')}</div>
+<div class="docpage" style="top:96px;height:300px"><h4>Rental agreement</h4><i></i><i></i><i style="width:85%"></i><i></i><i style="width:60%"></i><br><i></i><i></i><i style="width:75%"></i><i></i><i></i><i style="width:40%"></i></div>
+<div class="docpage" style="top:410px;height:240px"><i></i><i style="width:70%"></i><i></i><i></i><i style="width:55%"></i></div><div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+add('Preview: slides, a .pptx', 'One slide at a time, swiped; the slide number on top.',
+`<div class="dark" style="background:#2b2c2a"><div class="dtop">${ic('x')}<div class="n">pitch.pptx</div><div class="c">Slide 1 of 12</div>${ic('open')}</div>
+<div class="slide" style="top:150px">QurbSpace<small>Your files, on your devices</small></div>
+<div class="slide" style="top:340px;background:#fff;color:#222">Why not the cloud<small style="color:#555">Privacy, cost, and nobody in between</small></div><div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+add('Preview: a song', 'Plays here, from the laptop as it plays: its cover, a bar to seek, back and forward to the next song in the folder.',
+`<div class="dark" style="background:linear-gradient(#3a2f4a,#111)"><div class="dtop">${ic('x')}<div class="n">song.mp3</div><div class="c">2 of 9</div>${ic('open')}</div>
+<div class="cover" style="background:${photo(8)}"></div>
+<div class="seek" style="bottom:auto;top:400px"><div class="t"><span>1:12</span><span>3:48</span></div><div class="bar"><i style="width:32%"></i></div></div>
+<div class="ctrl"><span>${ic('skipb')}</span><div class="big">${ic('pause')}</div><span>${ic('skipf')}</span></div><div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+add('Preview: anything else', 'A .zip, an .apk, a file nothing here can show: its kind, size and date, and one button to open it in an app on the phone.',
+`<div class="dark" style="background:#1c1d1b"><div class="dtop">${ic('x')}<div class="n">photos-2023.zip</div><div class="c"></div>${ic('open')}</div>
+<div class="unk"><div class="ftile">${ic('archive')}</div><div class="n">photos-2023.zip</div><div class="m">ZIP archive, 1.4 GB, 3 Jan 2024</div><div class="btn">Open in an app</div></div><div class="dbot"><div class="act">${ic('share')}Share</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('info')}Details</div><div class="act">${ic('trash')}Delete</div></div></div>`);
+
+add('2. The + button', 'Point 2: + asks what to add: files, or a whole folder with everything in it.',
+`${folderHead('saqib','Shared',['Shared'])}
+ <div class="rows">${drow('Trips','12 items')}${frow('after.xml','26.6 KB')}</div>
+ <div class="scrim"></div><div class="sheet"><div class="grab"></div><h3>Add to Shared</h3>
+ <div class="optrow">${ic('file')}<div class="t">Files</div></div><div class="optrow">${ic('folder')}<div class="t">A folder</div></div></div>`);
+
+add('2. and 8. Sending', 'Points 2 and 8: adding, copying or moving between the phone and the laptop shows one card above the tab bar: what, how far, Cancel. You can keep browsing.',
+`${folderHead('saqib','Shared',['Shared','Trips'])}
+ <div class="rows">${drow('2023','8 items')}${drow('2024','14 items')}${frow('IMG_1042.jpg','3.1 MB',{ph:5})}${frow('IMG_1043.jpg','2.9 MB',{ph:7})}</div>
+ <div class="progress"><div class="top">${ic('upload','s')}Adding 3 of 12<span class="m">48 MB of 120 MB</span></div><div class="bar g"><i style="width:40%"></i></div></div>
+ ${tabbar()}`);
+
+add('3. New folder', 'Point 3: one field, the keyboard up, Create.',
+`${folderHead('saqib','Shared',['Shared'])}
+ <div class="scrim"></div><div class="dialog"><div class="grab"></div><h3>New folder</h3>
+ <div class="field">Untitled folder</div><div class="btns"><div class="btn">Cancel</div><div class="btn primary">Create</div></div></div>`);
+
+add('3. Rename', 'The name chosen, its ending kept: type and it is replaced.',
+`${folderHead('saqib','Shared',['Shared'])}
+ <div class="scrim"></div><div class="dialog"><div class="grab"></div><h3>Rename</h3>
+ <div class="field"><span class="sel">IMG_1042</span>.jpg</div><div class="btns"><div class="btn">Cancel</div><div class="btn primary">Rename</div></div></div>`);
+
+add('3. Delete', 'Says how many, and where they go: in Shared, the laptop keeps them 30 days; in the Vault, the same.',
+`${folderHead('saqib','Shared',['Shared'])}
+ <div class="scrim"></div><div class="dialog"><div class="grab"></div>
+ <div class="mark" style="background:var(--errorBg);color:var(--error)">${ic('trash')}</div>
+ <h3 class="center">Delete 2 items?</h3><div class="line">saqib keeps them in Recently deleted for 30 days</div>
+ <div class="btns"><div class="btn">Cancel</div><div class="btn danger">Delete</div></div></div>`);
+
+add('4. Your backup folder', 'Point 4: the same page. No new folder or + here: it mirrors the phone. Its Private Vault folder is your Vault, and there they come back.',
+`${folderHead('saqib','sakib',['sakib'],{noAdd:true})}
+ <div class="rows">${drow('DCIM','4,210 items')}${drow('Download','312 items')}${drow('Pictures','980 items')}${drow('Private Vault','128 items')}${drow('WhatsApp','9,870 items')}</div>
+ ${tabbar()}`);
+
+add('4. Backups selected', 'A backup is restored, copied, shared or saved; not renamed or moved. Delete greyed while its original is on the phone.',
+`<div class="selhead"><div class="iconbtn">${ic('x')}</div><div class="n">3 selected</div><div class="selall"><div class="ck"></div>All</div></div>
+ <div class="path" style="margin-top:8px"><span>sakib</span>${ic('chev','xs')}<span>DCIM</span>${ic('chev','xs')}<span class="on">Camera</span></div>
+ <div class="rows">${frow('20241202_001024.jpg','',{ph:1,check:true})}${frow('20241202_001104.jpg','',{ph:2,check:true})}${frow('20241202_001234.jpg','',{ph:3,check:true})}${frow('20241203_090112.jpg','',{ph:4,check:false})}</div>
+ <div class="actionbar"><div class="act">${ic('restore')}Restore</div><div class="act">${ic('copy')}Copy</div><div class="act">${ic('share')}Share</div><div class="act">${ic('download')}Save</div><div class="act greyed">${ic('trash')}Delete</div></div>`);
+
+add('5. Loading', 'Point 5: grey rows where the list will be, not words. Seen only the first time; after that the last listing shows at once (9).',
+`${folderHead('saqib','Shared',['Shared'])}
+ <div class="rows">${Array.from({length:7},(_,i)=>`<div class="skel"><b></b><div style="flex:1"><i style="width:${50+i*7%40}%"></i><i style="width:30%;margin-top:8px;height:9px"></i></div></div>`).join('')}</div>
+ ${tabbar()}`);
+
+add('5. Laptop off', 'Off or asleep: what was last seen stays, dimmed, with one line on top. Opening a file says it needs the laptop on.',
+`${folderHead('saqib','Shared',['Shared'])}
+ <div style="display:flex;align-items:center;gap:8px;background:var(--errorBg);color:var(--error);border-radius:14px;padding:10px 12px;font-size:13px;margin-top:10px">${ic('cloudoff','s')}saqib is off<span style="margin-left:auto;font-weight:600">Try again</span></div>
+ <div class="rows" style="opacity:.5">${drow('Trips','12 items')}${drow('hello','3 items')}${frow('after.xml','26.6 KB')}${frow('notes.txt','2 KB')}</div>
+ ${tabbar()}`);
+
+add('5. Empty, and nothing found', 'Centred, as every empty page: an empty folder; a search with no results.',
+`${folderHead('Trips','2025',['Shared','Trips','2025'])}
+ <div class="empty"><div class="ring">${ic('folderopen')}</div>This folder is empty</div>
+ ${tabbar()}`);
+
+add('6. A Vault file on the laptop only', 'Point 6: no badges, but a small cloud after its size, so you know a tap will fetch it.',
+`${folderHead('sakib','Vault',['Vault'])}
+ <div class="rows">${drow('Documents','14 items')}${frow('passport.pdf','1.2 MB')}${frow('lease.pdf','820 KB')}
+ <div class="row"><div class="ftile">${ic('video')}</div><div class="fname"><div class="a">wedding.mp4</div></div><div class="size">2.1 GB<span class="cloudmini">${ic('cloud','xs')}</span></div></div>
+ ${frow('notes.txt','2 KB')}</div>
+ ${tabbar()}`);
+
+add('9. Speed: opening again', 'Point 9: a folder opened before shows at once from last time; a thin line under the path while it checks. Photos fade in as they come; a folder of thousands shows the first hundred at once.',
+`${folderHead('Shared','Trips',['Shared','Trips'])}
+ <div class="thin"><i></i></div>
+ <div class="rows">${drow('2023','8 items')}${drow('2024','14 items')}${frow('IMG_1042.jpg','3.1 MB',{ph:5})}${frow('IMG_1043.jpg','2.9 MB',{ph:7})}
+ <div class="row"><div class="ftile" style="background:${photo(9)};opacity:.4;border:none"></div><div class="fname"><div class="a">IMG_1044.jpg</div></div><div class="size">3.0 MB</div></div></div>
+ ${tabbar()}`);
 
 document.getElementById('grid').innerHTML = screens.map(s => `<figure><div class="phone"><div class="screen">
   <div class="status"><span>10:26</span><span>5G ▮▮▮</span></div><div class="body">${s.html}</div></div></div>

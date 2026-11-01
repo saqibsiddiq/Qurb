@@ -3133,6 +3133,22 @@ fixed together and tested together. As he answered, page by page:
   S8, categories and recent files, left out.
 - **Received**: R-1 its empty state centred; R-2 a log by day; R-3 the
   sender's name on each; R-4 no Rename.
+- **Files, further** (all in the mockup): quick preview for every kind --
+  photo, video and song played here as they stream, PDF by page, text and
+  code with line numbers, CSV and spreadsheets as a table, Word and slides by
+  page; Office files **converted to PDF by the laptop** (LibreOffice there;
+  without it, the text, or *Open in an app*); anything else, *Open in an app*.
+  A thumbnail for every kind in list and grid: a video's frame and length, a
+  document's first page, code's first lines, a sheet's grid, a song's cover,
+  an app's icon, else its kind written on it -- made by the laptop for its
+  files, by the phone for the Vault's. *+* asks files or a folder; one
+  progress card above the tab bar for adding, copying and moving between
+  devices; new-folder, rename and delete sheets; the backup folder without
+  new folder and *+*, its backups restored, copied, shared or saved, Delete
+  greyed while the original is on the phone; loading as grey rows, a computer
+  off as the last listing dimmed under one line, empty and nothing-found
+  centred; a Vault file only on a computer marked by a small cloud after its
+  size; a folder opened before shown at once, a thin line while it checks.
 
 ## Deliberately left undone
 
