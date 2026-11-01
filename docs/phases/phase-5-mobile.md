@@ -3149,6 +3149,13 @@ fixed together and tested together. As he answered, page by page:
   off as the last listing dimmed under one line, empty and nothing-found
   centred; a Vault file only on a computer marked by a small cloud after its
   size; a folder opened before shown at once, a thin line while it checks.
+- **Settings** ([mockup](../design/mockups/settings-2026-11-02.html)):
+  SE-1 *Identity* and *Key* moved to Advanced; SE-2 name and picture one
+  profile row at the top, opening a profile page as WhatsApp's (the picture
+  large with a camera, the name with a pencil); SE-3 *Storage* becomes
+  *Manage storage* with *Devices* (every computer's disk as a bar, tapped for
+  what fills it and Recently deleted emptied) and *Clear cache*; SE-4 icons
+  alone, without the dark tile behind them; SE-5 *Version* becomes *Update*.
 
 ## Deliberately left undone
 

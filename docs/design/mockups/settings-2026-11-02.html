@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#F7F7F4;--surface:#FFFFFF;--surface2:#F0F0EC;--text:#171816;--text2:#5F625C;--text3:#8A8D86;
+  --border:#E2E3DD;--green:#2F6B57;--greenSoft:#E8F0EC;--online:#2F7DE1;--offline:#D64545;
+  --error:#A3423A;--errorBg:#F7E9E7;--neutral:#ECEEEC;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:var(--text);padding:32px 16px 64px}
+header.page{max-width:1500px;margin:0 auto 28px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:var(--text2);margin-top:6px;font-size:15px;line-height:1.5;max-width:900px}
+.grid{display:flex;flex-wrap:wrap;gap:36px 28px;justify-content:center;max-width:1500px;margin:0 auto}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px;width:340px}
+figcaption{font-size:13px;color:var(--text2);text-align:center;line-height:1.45;max-width:320px}
+figcaption b{color:var(--text);font-weight:600;display:block;font-size:14px;margin-bottom:2px}
+.phone{width:340px;height:720px;border-radius:44px;background:#111;padding:10px;box-shadow:0 20px 50px rgba(0,0,0,.18)}
+.screen{position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;
+  background:radial-gradient(120% 60% at 0% 0%,#E3EEE8 0%,transparent 60%),radial-gradient(100% 50% at 100% 100%,#F3EEE2 0%,transparent 60%),var(--bg)}
+.status{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:13px;font-weight:600}
+.body{height:calc(100% - 34px);overflow:hidden;padding:0 18px}
+.ic{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.s{width:18px;height:18px}.ic.xs{width:14px;height:14px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-top:8px}.topbar .back{margin-top:0}.icons{display:flex;gap:2px}
+.back{display:flex;align-items:center;gap:8px;color:var(--text2);font-size:16px;margin-top:14px;height:28px}
+.titlerow{display:flex;align-items:center;gap:6px;margin-top:10px;min-height:48px}
+.title{font-size:32px;font-weight:700;letter-spacing:-.02em;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title.top{margin-top:26px}
+.iconbtn{width:40px;height:40px;border-radius:20px;display:grid;place-items:center;color:var(--text)}
+.iconbtn.green{background:var(--greenSoft);color:var(--green)}
+.path{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--text3);margin-top:4px;white-space:nowrap;overflow:hidden}
+.path span.on{color:var(--green);font-weight:600}
+.label{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;margin:26px 4px 8px}
+.card{background:var(--surface);border-radius:22px;border:1px solid var(--border)}
+.devcard{display:flex;align-items:center;gap:14px;padding:16px}
+.avatar{width:52px;height:52px;border-radius:50%;flex:none;position:relative;background:linear-gradient(135deg,#c9b38f,#6f5a3d)}
+.avatar.lap{background:linear-gradient(160deg,#f4b860 0%,#3d6f8f 55%,#c9a55a 100%)}
+.avatar .dot{position:absolute;right:-1px;bottom:-1px;width:16px;height:16px;border-radius:50%;background:var(--online);border:3px solid #fff}
+.devname{font-size:18px;font-weight:600}
+.devmeta{font-size:13px;color:var(--text2);margin-top:3px}
+.chev{margin-left:auto;color:var(--text3)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:14px;min-height:88px;display:flex;flex-direction:column;justify-content:space-between;color:var(--green);position:relative}
+.tile .n{color:var(--text);font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.locked{opacity:.5}
+.tile.sel{border:2px solid var(--green);background:var(--greenSoft)}
+.tile .ck{position:absolute;top:12px;right:12px}
+.search{display:flex;align-items:center;gap:10px;height:46px;border-radius:23px;background:var(--surface);border:1px solid var(--border);padding:0 16px;color:var(--text3);font-size:15px;margin-top:12px}
+.search.active{border:1.5px solid var(--green);color:var(--text)}
+.rows{margin-top:10px}
+.row{display:flex;align-items:center;gap:12px;height:62px;padding:0 4px}
+.ftile{width:44px;height:44px;border-radius:12px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--text2);flex:none;overflow:hidden}
+.ftile.ph{border:none}
+.fname{flex:1;min-width:0}
+.fname .a{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fname .b{font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.size{font-size:13px;color:var(--text2)}
+.ck{width:22px;height:22px;border-radius:11px;border:2px solid var(--text3);flex:none;display:grid;place-items:center;background:#fff}
+.ck.on{background:var(--green);border-color:var(--green);color:#fff}
+.ck.part{background:var(--green);border-color:var(--green);color:#fff}
+.ggrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}.gt{display:flex;flex-direction:column;gap:6px}.gi{aspect-ratio:1;border-radius:14px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--green)}.gn{font-size:12px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:12px}
+.photos div{aspect-ratio:1;border-radius:10px}
+.tabbar{position:absolute;left:14px;right:14px;bottom:14px;height:64px;border-radius:32px;background:rgba(255,255,255,.92);border:1px solid var(--border);display:flex;align-items:center;justify-content:space-around}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--text2);padding:6px 18px;border-radius:18px}
+.tab.on{color:var(--green);font-weight:600;background:var(--greenSoft)}
+.actionbar{position:absolute;left:0;right:0;bottom:0;height:84px;background:#fff;border-top:1px solid var(--border);display:flex;justify-content:space-around;align-items:center;padding-bottom:10px}
+.act{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--text)}
+.act.danger{color:var(--error)}
+.pastebar{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--border);padding:12px 18px 22px}
+.pastebar .what{font-size:13px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.btns{display:flex;gap:10px}
+.btn{flex:1;height:46px;border-radius:23px;display:grid;place-items:center;font-weight:600;font-size:15px;border:1px solid var(--border);background:#fff}
+.btn.primary{background:var(--green);color:#fff;border:none}
+.btn.danger{background:var(--error);color:#fff;border:none}
+.selhead{display:flex;align-items:center;gap:12px;margin-top:18px;height:44px}
+.selhead .n{font-size:22px;font-weight:700;flex:1}
+.selall{display:flex;flex-direction:column;align-items:center;font-size:10px;color:var(--text2);gap:2px}
+.scrim{position:absolute;inset:0;background:rgba(23,24,22,.32)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#FBFBF9;border-radius:28px 28px 0 0;padding:10px 20px 26px}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px}
+.sheet h3{font-size:18px;font-weight:600;margin-bottom:6px}
+.opt{display:flex;align-items:center;gap:14px;height:50px;font-size:15px}
+.opt .r{margin-left:auto;color:var(--green)}
+.facts .opt{justify-content:space-between}
+.facts .opt span:first-child{color:var(--text2)}
+.menu{position:absolute;top:80px;right:16px;width:210px;background:#fff;border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:8px 0}
+.menu .h{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--text3);padding:8px 16px 4px}
+.menu .o{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:14px}
+.menu .o .r{margin-left:auto;color:var(--green)}
+.menu hr{border:none;border-top:1px solid var(--border);margin:6px 0}
+.pop{position:absolute;background:#2A2C29;color:#fff;border-radius:14px;padding:10px 14px;font-size:13px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.pop b{font-size:15px;display:block}
+.day{font-size:13px;font-weight:600;color:var(--text2);margin:18px 4px 2px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);background:var(--surface2);border-radius:10px;padding:2px 8px}
+.empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--text2);font-size:15px}
+.empty .ring{width:84px;height:84px;border-radius:50%;border:3px solid #D5E2DA;display:grid;place-items:center;background:#fff;color:var(--text3)}
+.note{max-width:1500px;margin:40px auto 0;font-size:14px;color:var(--text2);line-height:1.6}
+.note li{margin-left:18px}
+
+.dark{position:absolute;inset:0;background:#000;color:#fff}
+.dtop{position:absolute;top:34px;left:0;right:0;display:flex;align-items:center;gap:10px;padding:10px 14px;background:linear-gradient(#000c,#0000)}
+.dtop .n{flex:1;font-size:15px;font-weight:500}
+.dtop .c{font-size:12px;color:#bbb}
+.dbot{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-around;padding:16px 10px 26px;background:linear-gradient(#0000,#000c)}
+.dbot .act{color:#fff}
+.dimg{position:absolute;left:0;right:0;top:170px;height:330px}
+.player{position:absolute;left:0;right:0;top:220px;height:200px;background:linear-gradient(135deg,#334,#556 60%,#223)}
+.seek{position:absolute;left:18px;right:18px;bottom:110px}
+.seek .t{display:flex;justify-content:space-between;font-size:11px;color:#ccc;margin-bottom:6px}
+.bar{height:4px;border-radius:2px;background:#ffffff40;position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:#fff}
+.bar.g{background:var(--neutral)}.bar.g i{background:var(--green)}
+.play{position:absolute;left:50%;top:320px;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:50%;background:#ffffff30;display:grid;place-items:center}
+.pdfpage{position:absolute;left:28px;right:28px;background:#fff;border-radius:4px;padding:16px}
+.pdfpage i{display:block;height:6px;border-radius:3px;background:#ddd;margin:8px 0}
+.dialog{position:absolute;left:0;right:0;bottom:0;background:#FBFBF9;border-radius:28px 28px 0 0;padding:10px 20px 26px}
+.field{height:50px;border-radius:16px;border:1.5px solid var(--green);background:#fff;display:flex;align-items:center;padding:0 16px;font-size:16px;margin:14px 0 18px}
+.field .sel{background:#cfe3d8}
+.mark{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;margin:6px auto 12px}
+.center{text-align:center}
+.line{font-size:14px;color:var(--text2);text-align:center;margin:6px 0 18px;line-height:1.45}
+.progress{position:absolute;left:14px;right:14px;bottom:90px;background:#fff;border:1px solid var(--border);border-radius:20px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.progress .top{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;margin-bottom:8px}
+.progress .top .m{margin-left:auto;font-size:12px;color:var(--text2);font-weight:400}
+.skel{height:62px;display:flex;align-items:center;gap:12px;padding:0 4px}
+.skel b{width:44px;height:44px;border-radius:12px;background:#E9EAE5}
+.skel i{height:12px;border-radius:6px;background:#E9EAE5;display:block}
+.thin{height:3px;border-radius:2px;background:var(--neutral);overflow:hidden;margin-top:8px}
+.thin i{display:block;height:100%;width:40%;background:var(--green);border-radius:2px}
+.optrow{display:flex;align-items:center;gap:14px;padding:14px 4px;font-size:16px}
+.optrow .t{flex:1}.optrow .t div{font-size:12px;color:var(--text3);margin-top:2px}
+.cloudmini{display:inline-flex;vertical-align:middle;margin-left:4px;color:var(--text3)}
+.greyed{opacity:.35}
+
+.code{position:absolute;top:84px;left:0;right:0;bottom:0;padding:14px 16px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.6;color:#e8e8e3;white-space:pre;overflow:hidden}
+.code .k{color:#9cd2b4}.code .v{color:#e6c38a}.code .c{color:#8a8d86}.code .n{color:#6d706a;display:inline-block;width:22px}
+.tbl{position:absolute;top:96px;left:12px;right:12px;background:#fff;border-radius:10px;overflow:hidden;font-size:11.5px;color:var(--text)}
+.tbl div{display:grid;grid-template-columns:1.2fr 1fr .8fr .8fr}.tbl span{padding:7px 8px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);white-space:nowrap;overflow:hidden}
+.tbl .h span{background:var(--surface2);font-weight:600}
+.docpage{position:absolute;left:24px;right:24px;background:#fff;border-radius:4px;padding:18px 16px;color:#222;font-size:9px;line-height:1.5}
+.docpage h4{font-size:13px;margin-bottom:6px}.docpage i{display:block;height:5px;border-radius:3px;background:#ddd;margin:6px 0}
+.slide{position:absolute;left:18px;right:18px;height:170px;border-radius:6px;background:linear-gradient(135deg,#2F6B57,#1d3f33);color:#fff;padding:18px;font-size:16px;font-weight:600}
+.slide small{display:block;font-size:10px;font-weight:400;opacity:.8;margin-top:6px}
+.wave{position:absolute;left:24px;right:24px;top:330px;height:70px;display:flex;align-items:center;gap:3px}
+.wave b{flex:1;background:#ffffff50;border-radius:2px}.wave b.p{background:#fff}
+.cover{position:absolute;left:70px;right:70px;top:120px;aspect-ratio:1;border-radius:20px}
+.ctrl{position:absolute;left:0;right:0;top:470px;display:flex;justify-content:center;align-items:center;gap:36px}
+.ctrl .big{width:64px;height:64px;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center}
+.unk{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff}
+.unk .ftile{width:84px;height:84px;border-radius:22px;background:#ffffff18;border:none;color:#fff}
+.unk .n{font-size:17px;font-weight:600}.unk .m{font-size:13px;color:#aaa}
+.unk .btn{flex:none;width:220px;margin-top:14px;background:#fff;color:#000;border:none}
+.chips{position:absolute;top:92px;left:16px;display:flex;gap:6px}
+.chips span{font-size:11px;background:#ffffff20;color:#ddd;border-radius:10px;padding:3px 9px}
+
+.th{position:relative;width:100%;height:100%;overflow:hidden;border-radius:inherit}
+.th .dur{position:absolute;right:3px;bottom:3px;background:#000a;color:#fff;font-size:8px;border-radius:4px;padding:1px 3px}
+.th .pl{position:absolute;inset:0;display:grid;place-items:center;color:#fff}
+.th.txt{background:#fff;padding:4px 3px;font-family:ui-monospace,monospace;font-size:3.6px;line-height:1.35;color:#555;white-space:pre;text-align:left}
+.th.txt .k{color:#2F6B57}
+.th.page{background:#fff;padding:5px}
+.th.page i{display:block;height:2px;background:#ccc;margin:2px 0;border-radius:1px}
+.th.page b{display:block;height:3px;width:60%;background:#888;margin-bottom:3px;border-radius:1px}
+.th.sheet{background:#fff;display:grid;grid-template-columns:repeat(3,1fr)}
+.th.sheet span{border:.5px solid #ddd}
+.th.sheet span.h{background:#E8F0EC}
+.th.slide{background:linear-gradient(135deg,#2F6B57,#1d3f33)}
+.th.slide b{position:absolute;left:5px;top:8px;width:55%;height:3px;background:#fff;border-radius:1px}
+.th.slide i{position:absolute;left:5px;top:14px;width:35%;height:2px;background:#ffffff99;border-radius:1px}
+.th.ext{background:#fff;display:grid;place-items:center;color:var(--text2)}
+.th.ext span{position:absolute;bottom:4px;left:0;right:0;text-align:center;font-size:7px;font-weight:700;color:var(--text2)}
+.th.apk{background:#fff;display:grid;place-items:center}
+.th.apk div{width:58%;height:58%;border-radius:28%;background:linear-gradient(135deg,#3DDC84,#1a8f55)}
+.big .th.txt{font-size:6px}.big .th .dur{font-size:10px}.big .th.ext span{font-size:10px;bottom:8px}
+.big .th.page{padding:9px}.big .th.page i{height:3px;margin:4px 0}.big .th.page b{height:5px}
+.big .th.slide b{left:9px;top:16px;height:5px}.big .th.slide i{left:9px;top:26px;height:3px}
+.ftile .th{border-radius:11px}
+</style><style>
+.srow{display:flex;align-items:center;gap:16px;min-height:56px;padding:6px 18px;font-size:16px}
+.srow .ic{color:var(--text2)}
+.srow .t{flex:1}.srow .t div{font-size:13px;color:var(--text3);margin-top:2px}
+.srow .v{font-size:14px;color:var(--text2)}
+.srow .v.g{color:var(--green);font-weight:600}
+.srow+.srow{border-top:1px solid var(--border)}
+.switch{width:46px;height:28px;border-radius:14px;background:var(--green);position:relative}
+.switch:after{content:"";position:absolute;right:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff}
+.switch.off{background:#cfd1cb}.switch.off:after{right:auto;left:3px}
+.profile{display:flex;align-items:center;gap:16px;padding:16px 18px}
+.profile .avatar{width:64px;height:64px}
+.profile .nm{font-size:20px;font-weight:600}.profile .sb{font-size:13px;color:var(--text3);margin-top:3px}
+.bigav{width:150px;height:150px;border-radius:50%;margin:24px auto 0;position:relative;background:linear-gradient(135deg,#c9b38f,#6f5a3d)}
+.cam{position:absolute;right:6px;bottom:6px;width:44px;height:44px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;border:3px solid var(--bg)}
+.dbar{height:10px;border-radius:5px;background:var(--neutral);display:flex;overflow:hidden;margin:10px 0 4px}
+.dbar i{height:100%}
+.legend{font-size:12px;color:var(--text3)}
+.hero{font-size:24px;font-weight:700}
+.sub{font-size:13px;color:var(--text3);margin-top:2px}
+.dot8{width:10px;height:10px;border-radius:50%;flex:none}
+</style></head><body>
+<header class="page"><h1>Settings: the proposed look</h1>
+<p>Your answers of 2 November: identity and key moved to Advanced; name and picture as one profile, as WhatsApp has it; Manage storage with Devices and Clear cache; icons without the dark tile behind them; Version became Update.</p></header>
+<div class="grid" id="grid"></div>
+<script>
+const P = {
+  user:'<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  harddrive:'<path d="M22 12H2M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/>',
+  broom:'<path d="m13 11 9-9M14.6 12.6c.8.8.9 2.1.2 3L10 22l-8-8 6.4-4.8c.9-.7 2.2-.6 3 .2Z"/><path d="m6.8 10.4 6.8 6.8"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  palette:'<circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7H16c3.1 0 5.6-2.5 5.6-5.6C21.9 6 17.5 2 12 2z"/>',
+  sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  shield:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  fingerprint:'<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4M14 13.12c0 2.38 0 6.38-1 8.88M17.29 21.02c.12-.6.43-2.3.5-3.02M2 12a10 10 0 0 1 18-6M2 16h.01M21.8 16c.2-2 .131-5.354 0-6M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2M8.65 22c.21-.66.45-1.32.57-2M9 6.8a6 6 0 0 1 9 5.2v2"/>',
+  music:'<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  skipb:'<path d="M19 20 9 12l10-8zM5 19V5"/>',
+  skipf:'<path d="m5 4 10 8-10 8zM19 5v14"/>',
+  pause:'<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  archive:'<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
+  play:'<path d="M6 4l14 8-14 8z"/>',
+  cloudoff:'<path d="m2 2 20 20"/><path d="M5.78 5.78A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.31-.2"/><path d="M21.53 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7 7 0 0 0 10 5.05"/>',
+  restore:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+  open:'<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  folderopen:'<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+  folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  folderPlus:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6M9 13h6"/>',
+  plus:'<path d="M5 12h14M12 5v14"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  more:'<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+  chev:'<path d="m9 18 6-6-6-6"/>',
+  left:'<path d="m12 19-7-7 7-7M19 12H5"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+  phone:'<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>',
+  laptop:'<path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+  video:'<path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+  copy:'<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  move:'<path d="M2 12h14M10 6l6 6-6 6"/><path d="M20 4v16"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
+  trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  dash:'<path d="M6 12h12"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  pencil:'<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+  dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  cloud:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  home:'<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .7-1.5l7-6a2 2 0 0 1 2.6 0l7 6a2 2 0 0 1 .7 1.5v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+};
+const ic = (n, c='') => `<svg class="ic ${c}" viewBox="0 0 24 24">${P[n]}</svg>`;
+const shades = ['#c7d9cf','#e6cfa7','#a9c1d9','#d9b3a9','#b8cba0','#d3c4e0','#9fb8b0','#e0d3b8','#b0a99f','#cfe0e6','#e8b8a0','#a8b8c8'];
+const photo = (i) => `linear-gradient(${(i*47)%360}deg, ${shades[i%12]}, ${shades[(i+5)%12]})`;
+
+// Thumbnails for every kind of file
+const thumbs = {
+  video:(i)=>`<div class="th" style="background:${photo(i)}"><div class="pl">${ic('play','xs')}</div><span class="dur">41:30</span></div>`,
+  pdf:()=>`<div class="th page"><b></b><i></i><i></i><i style="width:70%"></i><i></i><i></i><i style="width:50%"></i></div>`,
+  xml:()=>`<div class="th txt"><span class="k">&lt;manifest</span>
+  <span class="k">&lt;app</span> label=
+    "Qurb"&gt;
+  &lt;activity
+    name=".M"/&gt;
+&lt;/manifest&gt;</div>`,
+  json:()=>`<div class="th txt">{
+  <span class="k">"name"</span>: "qurb",
+  <span class="k">"ver"</span>: "0.2",
+  <span class="k">"beta"</span>: 6,
+  <span class="k">"ok"</span>: true
+}</div>`,
+  docx:()=>`<div class="th page"><b></b><i></i><i></i><i style="width:80%"></i><i></i><i style="width:60%"></i><i></i></div>`,
+  xlsx:()=>`<div class="th sheet">${Array.from({length:15},(_,i)=>`<span class="${i<3?'h':''}"></span>`).join('')}</div>`,
+  pptx:()=>`<div class="th slide"><b></b><i></i></div>`,
+  mp3:(i)=>`<div class="th" style="background:${photo(i)}"></div>`,
+  apk:()=>`<div class="th apk"><div></div></div>`,
+  zip:()=>`<div class="th ext">${ic('archive','s')}<span>ZIP</span></div>`,
+};
+
+const tabbar = () => `<div class="tabbar"><div class="tab">${ic('home')}Home</div><div class="tab">${ic('folder')}Files</div><div class="tab on">${ic('gear')}Settings</div></div>`;
+const back = (t) => `<div class="back">${ic('left')}${t}</div>`;
+const row = (icon, t, v='', o={}) => `<div class="srow">${ic(icon)}<div class="t">${t}${o.sub?`<div>${o.sub}</div>`:''}</div>${o.sw!==undefined?`<div class="switch ${o.sw?'':'off'}"></div>`:`<span class="v ${o.g?'g':''}">${v}</span>`}${o.chev?`<span style="color:var(--text3)">${ic('chev','s')}</span>`:''}</div>`;
+const screens=[]; const add=(title,caption,html)=>screens.push({title,caption,html});
+
+add('Settings','Your profile at the top, as WhatsApp has it. Manage storage: Devices and Clear cache. Update in place of Version. Icons alone, no tile behind them. Identity and Key now in Advanced.',
+`<div class="title top">Settings</div>
+ <div class="card" style="margin-top:18px"><div class="profile"><div class="avatar"></div><div style="flex:1"><div class="nm">sakib</div><div class="sb">This phone</div></div><span style="color:var(--text3)">${ic('chev')}</span></div></div>
+ <div class="label">Manage storage</div>
+ <div class="card">${row('harddrive','Devices','',{chev:true})}${row('broom','Clear cache','86 MB')}</div>
+ <div class="label">App</div>
+ <div class="card">${row('clock','Activity','',{chev:true})}${row('bell','Notifications','',{sw:true})}${row('palette','Theme','System')}${row('sliders','Motion','Full')}${row('download','Update','Up to date')}</div>
+ ${tabbar()}`);
+
+add('Settings, scrolled','Connection last: Background sync and Advanced.',
+`<div style="margin-top:-150px">
+ <div class="card">${row('clock','Activity','',{chev:true})}${row('bell','Notifications','',{sw:true})}${row('palette','Theme','System')}${row('sliders','Motion','Full')}${row('download','Update','beta.6',{g:true})}</div>
+ <div class="label">Connection</div>
+ <div class="card">${row('refresh','Background sync','',{sw:true})}${row('link','Advanced','',{chev:true})}</div></div>
+ ${tabbar()}`);
+
+add('Your profile','Tap the profile: your picture large, the camera to change it; your name below, the pencil to change it. As WhatsApp\'s.',
+`${back('Settings')}<div class="titlerow"><div class="title">Profile</div></div>
+ <div class="bigav"><div class="cam">${ic('camera')}</div></div>
+ <div class="card" style="margin-top:28px"><div class="srow">${ic('user')}<div class="t">Name<div>sakib</div></div><span style="color:var(--green)">${ic('pencil')}</span></div></div>
+ <div style="font-size:13px;color:var(--text3);margin:10px 6px;line-height:1.5">Your computers show this name and picture for this phone.</div>
+ ${tabbar()}`);
+
+add('Changing the name','The pencil: one field, Save.',
+`${back('Settings')}<div class="titlerow"><div class="title">Profile</div></div>
+ <div class="bigav"><div class="cam">${ic('camera')}</div></div>
+ <div class="scrim"></div><div class="dialog"><div class="grab"></div><h3>Your name</h3>
+ <div class="field">sakib</div><div class="btns"><div class="btn">Cancel</div><div class="btn primary">Save</div></div></div>`);
+
+add('Changing the picture','The camera: take one, or choose one; or remove it.',
+`${back('Settings')}<div class="titlerow"><div class="title">Profile</div></div>
+ <div class="bigav"><div class="cam">${ic('camera')}</div></div>
+ <div class="scrim"></div><div class="sheet"><div class="grab"></div><h3>Picture</h3>
+ <div class="optrow">${ic('camera')}<div class="t">Take a photo</div></div><div class="optrow">${ic('image')}<div class="t">Choose from gallery</div></div><div class="optrow" style="color:var(--error)">${ic('trash')}<div class="t">Remove</div></div></div>`);
+
+add('Manage storage › Devices','Every computer, its disk as one bar: what QurbSpace keeps on it in colour, the rest grey. Tap one for what fills it.',
+`${back('Settings')}<div class="titlerow"><div class="title">Devices</div></div>
+ <div class="card" style="padding:16px;margin-top:14px"><div style="display:flex;align-items:center;gap:12px"><div class="avatar lap" style="width:40px;height:40px"><div class="dot" style="width:12px;height:12px;border-width:2px"></div></div><div style="flex:1"><div class="devname" style="font-size:16px">saqib</div><div class="sub">37.0 GB in QurbSpace</div></div><span style="color:var(--text3)">${ic('chev','s')}</span></div>
+ <div class="dbar"><i style="width:7%;background:#2F6B57"></i><i style="width:3%;background:#3B82F6"></i><i style="width:2%;background:#8B5CF6"></i><i style="width:1%;background:#A3423A"></i><i style="width:55%;background:#c9cbc4"></i></div><div class="legend">212 GB free of 512 GB</div></div>
+ <div class="card" style="padding:16px;margin-top:10px;opacity:.6"><div style="display:flex;align-items:center;gap:12px"><div class="avatar lap" style="width:40px;height:40px;background:linear-gradient(135deg,#a9c1d9,#3d5f8f)"><div class="dot" style="width:12px;height:12px;border-width:2px;background:var(--offline)"></div></div><div style="flex:1"><div class="devname" style="font-size:16px">office-pc</div><div class="sub">Off, last seen yesterday</div></div><span style="color:var(--text3)">${ic('chev','s')}</span></div>
+ <div class="dbar"><i style="width:12%;background:#2F6B57"></i><i style="width:40%;background:#c9cbc4"></i></div><div class="legend">228 GB free of 476 GB</div></div>
+ ${tabbar()}`);
+
+add('One device\'s storage','What fills it, each kind its colour; Recently deleted emptied with one tap. A phone\'s backups and Vault, and other people\'s, each a row.',
+`${back('Devices')}<div class="titlerow"><div class="title">saqib</div></div>
+ <div class="hero" style="margin-top:6px">212 GB free</div><div class="sub">of 512 GB</div>
+ <div class="dbar" style="height:14px;border-radius:7px"><i style="width:7%;background:#2F6B57"></i><i style="width:3%;background:#3B82F6"></i><i style="width:2%;background:#8B5CF6"></i><i style="width:1%;background:#A3423A"></i><i style="width:46%;background:#c9cbc4"></i></div>
+ <div class="card" style="margin-top:16px">
+  <div class="srow"><div class="dot8" style="background:#2F6B57"></div><div class="t">Shared</div><span class="v">7.0 GB</span></div>
+  <div class="srow"><div class="dot8" style="background:#3B82F6"></div><div class="t">sakib backups</div><span class="v">22.4 GB</span></div>
+  <div class="srow"><div class="dot8" style="background:#8B5CF6"></div><div class="t">sakib Vault</div><span class="v">2.4 GB</span></div>
+  <div class="srow"><div class="dot8" style="background:#946A24"></div><div class="t">Ammi's phone</div><span class="v">4.1 GB</span></div>
+  <div class="srow"><div class="dot8" style="background:#A3423A"></div><div class="t">Recently deleted</div><span class="v g" style="color:var(--error)">Empty</span></div>
+  <div class="srow"><div class="dot8" style="background:#c9cbc4"></div><div class="t">Other files on saqib</div><span class="v">263 GB</span></div></div>
+ ${tabbar()}`);
+
+add('Clear cache','Asked first: what it is, and that nothing of yours goes.',
+`<div class="title top">Settings</div>
+ <div class="scrim"></div><div class="dialog"><div class="grab"></div>
+ <div class="mark" style="background:var(--greenSoft);color:var(--green)">${ic('broom')}</div>
+ <h3 class="center">Clear 86 MB?</h3><div class="line">Previews and files opened from your computers. Your files stay where they are.</div>
+ <div class="btns"><div class="btn">Cancel</div><div class="btn primary">Clear</div></div></div>`);
+
+add('Update','Up to date, or the new version with Update. It installs by itself; the app restarts.',
+`<div class="title top">Settings</div>
+ <div class="scrim"></div><div class="dialog"><div class="grab"></div>
+ <div class="mark" style="background:var(--greenSoft);color:var(--green)">${ic('download')}</div>
+ <h3 class="center">0.2.0-beta.6 is ready</h3><div class="line">You have 0.2.0-beta.5</div>
+ <div class="btns"><div class="btn">Later</div><div class="btn primary">Update</div></div></div>`);
+
+add('Advanced','Identity and Key now here, with the connection settings.',
+`${back('Settings')}<div class="titlerow"><div class="title">Advanced</div></div>
+ <div class="label">This phone</div>
+ <div class="card">${row('info','Identity','f63a0f05')}${row('shield','Key','Backed up',{chev:true})}</div>
+ <div class="label">Connection</div>
+ <div class="card">${row('link','Rendezvous','saqib.tail86283c.ts.net',{})}${row('refresh','Relay','Default')}</div>
+ <div class="label">App</div>
+ <div class="card">${row('info','Version','0.2.0-beta.5')}</div>
+ ${tabbar()}`);
+
+document.getElementById('grid').innerHTML = screens.map(s => `<figure><div class="phone"><div class="screen">
+  <div class="status"><span>10:26</span><span>5G ▮▮▮</span></div><div class="body">${s.html}</div></div></div>
+  <figcaption><b>${s.title}</b>${s.caption}</figcaption></figure>`).join('');
+</script></body></html>
