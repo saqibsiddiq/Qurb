@@ -17,7 +17,8 @@ class Keeping(private val app: MainActivity, private val refresh: () -> Unit) {
     private val kit get() = app.kit
 
     /** Keep it there: on a device of this person's, or sealed on another person's computer. */
-    fun keep(peer: PeerInfo) {
+    /** Asked, then kept; `then` once it is. */
+    fun keep(peer: PeerInfo, then: (() -> Unit)? = null) {
         val sheet = kit.sheet().mark(R.drawable.ic_lock_keyhole, R.color.green_soft, R.color.green)
         if (peer.relation == "host") {
             sheet.title("Keep your files on ${peer.name}?", centred = true)
@@ -27,7 +28,7 @@ class Keeping(private val app: MainActivity, private val refresh: () -> Unit) {
             sheet.title("Keep your Private Vault on ${peer.name}?", centred = true)
                 .line("Nobody using ${peer.name} sees it. This phone can then free its own copies.")
         }
-        sheet.buttons(if (peer.relation == "host") "Keep them there" else "Keep it there") { set(peer, true) }
+        sheet.buttons(if (peer.relation == "host") "Keep them there" else "Keep it there") { set(peer, true, then) }
             .onDismiss { refresh() }
             .show()
     }
@@ -42,7 +43,7 @@ class Keeping(private val app: MainActivity, private val refresh: () -> Unit) {
             .show()
     }
 
-    private fun set(peer: PeerInfo, keep: Boolean) {
+    private fun set(peer: PeerInfo, keep: Boolean, then: (() -> Unit)? = null) {
         app.lifecycleScope.launch {
             try {
                 withContext(Dispatchers.IO) {
@@ -52,6 +53,7 @@ class Keeping(private val app: MainActivity, private val refresh: () -> Unit) {
                 // The next sync is now: choosing a device to keep the vault is
                 // a change it should act on while the person is looking.
                 if (keep) app.madeChange() else app.changed()
+                then?.invoke()
             } catch (e: Exception) {
                 app.fail("Could not change that", e)
                 app.changed()

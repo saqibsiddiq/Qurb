@@ -412,6 +412,16 @@ class MainActivity : AppCompatActivity() {
         // A newer build fetched while the app is open, to install from
         // Settings or when it is next closed (decision 0078).
         lifecycleScope.launch { Updates.run(this@MainActivity) }
+        // Once, the first time the app is open set up: a computer asking for
+        // this person's folder is told on this phone by a notification, and
+        // until 2026-11-01 the permission was asked only before a long
+        // transfer, so the S23 had never been asked and every such ask waited
+        // for the app to be opened (the owner's list of 2026-11-01, item 11).
+        val prefs = getSharedPreferences(NOTIFY_PREFS, MODE_PRIVATE)
+        if (!prefs.getBoolean(ASKED_TO_NOTIFY, false)) {
+            prefs.edit().putBoolean(ASKED_TO_NOTIFY, true).apply()
+            askToNotify()
+        }
     }
 
     override fun onPause() {
@@ -1290,6 +1300,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private companion object {
+        /** Whether notifications were asked for on first opening (item 11). */
+        const val NOTIFY_PREFS = "notify"
+        const val ASKED_TO_NOTIFY = "asked"
         const val TAB = "tab"
         val TABS = setOf(R.id.tab_home, R.id.tab_files, R.id.tab_settings)
 

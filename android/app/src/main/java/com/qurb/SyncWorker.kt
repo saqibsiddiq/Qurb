@@ -109,11 +109,6 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                     var postedAt = 0L
                     while (true) {
                         delay(2_000)
-                        // A computer's ask, heard while the pass stays to be
-                        // collected from: somebody there is waiting, so not
-                        // left until a half-hour pass ends. Raised once an ask,
-                        // and only with the app away (Notices.asked).
-                        runCatching { Notices.asked(applicationContext, engine) }
                         val sent = engine.serving().bytes - from
                         val now = Transfers.shown(sent, forOthers)
                         val moved = now.percent != shown.percent || now.waiting != shown.waiting
@@ -136,6 +131,18 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                         }
                     }
                 } else BackingUp.watch(applicationContext, engine, this, keeper)
+                // A computer's ask, looked for every second of every pass:
+                // somebody there is waiting, and a phone woken for it by push
+                // hears it as soon as it has reached the computer, not when the
+                // pass ends, which with a backup going is many seconds later
+                // (the owner's list of 2026-11-01, item 11). Raised once an
+                // ask, and only with the app away (Notices.asked).
+                val asking = launch {
+                    while (true) {
+                        delay(1_000)
+                        runCatching { Notices.asked(applicationContext, engine) }
+                    }
+                }
                 try {
                     withContext(Dispatchers.IO) {
                         Engine.hearingTheNetwork(applicationContext) {
@@ -144,6 +151,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
                         }
                     }
                 } finally {
+                    asking.cancel()
                     // Long or not, *Backed up* when the pass saw the round done.
                     BackingUp.finish(applicationContext, engine, backupBefore, showing, keeper)
                 }

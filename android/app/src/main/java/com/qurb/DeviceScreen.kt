@@ -141,6 +141,19 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
 
         kit.label(page, "Backs up")
         val card = kit.card(page)
+        // Which folders this phone backs up, always offered on its own
+        // computer's page, Home's circle the way here (the owner's list of
+        // 2026-11-01, item 12): the row had shown only once the computer kept
+        // the Private Vault, and he found no way to choose. Folders travel
+        // inside the vault, so on a computer not keeping it yet, choosing
+        // first asks to keep it there.
+        if (!host) {
+            kit.setting(card, R.drawable.ic_folder, "Folders",
+                if (state.keeps && state.folders > 0) state.folders.toString() else "") {
+                if (state.keeps) app.push(FoldersScreen(app, peer.name, R.id.tab_home))
+                else keeping.keep(peer) { app.push(FoldersScreen(app, peer.name, R.id.tab_home)) }
+            }
+        }
         if (state.keeps && !host) {
             val backing = WhatsApp.tree(app) != null
             kit.setting(card, R.drawable.ic_whatsapp, "WhatsApp",
@@ -152,10 +165,6 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
                 // WhatsApp's folder is chosen, off once stopping is confirmed.
                 refresh()
             })
-            kit.setting(card, R.drawable.ic_folder, "Folders",
-                if (state.folders > 0) state.folders.toString() else "") {
-                app.push(FoldersScreen(app, peer.name, R.id.tab_home))
-            }
         }
         kit.setting(card, R.drawable.ic_lock_keyhole, "Private Vault", on = state.keeps, onChange = { on ->
             if (on) keeping.keep(peer) else keeping.stop(peer)
