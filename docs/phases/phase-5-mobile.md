@@ -2993,6 +2993,40 @@ approves on their phone, as now (asked 2026-11-01). The dashboard: Grafana
 Cloud's free tier. Staging, with him, in [staging.md](../staging.md).
 **None of the six built yet.**
 
+## The owner's list of 2026-11-01, the phone's Files
+
+As he gave it, with his answers to what was asked:
+
+1. Files lists the devices: **this phone**, with two folders, *Vault* and
+   *Received*; then each computer, with its own picture and whether it is
+   online.
+2. A computer opens to the **exact reflection of its `~/qurb`** — with the
+   person's own folder there named after their **phone**, and renamed when
+   the phone is.
+3. So the laptop shows *Shared*, the folder of this phone's backups (its
+   name the phone's), and **other people's phones'** folders, locked to this
+   phone. (Asked: other people's, not the owner's other phones.)
+4. The phone's backup folder lists everything backed up, as folders and
+   files.
+5. Open, rename, copy, paste and delete, as the website promises: a tap
+   opens, a long press gives every option — in **Shared on a computer**, in
+   **Vault and Received**, and in **the phone's own backup**.
+6. Previews on the phone, as on the desktop.
+7. Opening a computer is slow to connect: as quick as is realistically
+   possible.
+8. The app holds no more data than it must. Settings → Storage manages the
+   storage **of the computers**, one or several, made easy to free as One
+   UI's storage is.
+9. No *Free space* and no *Recently deleted* on the phone.
+10. Vault, Received, Shared and the private folders look and behave alike,
+    with minimal words under each.
+11. A computer asking for the phone's private folder: the phone's request
+    for approval to arrive at once, not after a long wait.
+12. A screen from Home's circle for choosing which folders the phone backs
+    up, which the latest build has no way to do.
+
+**None built yet**; recorded here before any of it.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
