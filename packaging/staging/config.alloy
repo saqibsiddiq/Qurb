@@ -1,0 +1,121 @@
+// Grafana Alloy on the staging host -- for now the owner's laptop
+// (docs/staging.md): the host's traffic, CPU and memory, and the QurbSpace
+// rendezvous service's log, to Grafana Cloud's free tier.
+//
+// Installed as /etc/alloy/config.alloy. The four values in capitals come
+// from the Grafana Cloud stack (Connections -> Add new connection -> Linux
+// server, or the stack's details page) and go in
+// /etc/alloy/grafana-cloud.env, readable by root and the alloy user only,
+// never in this file:
+//
+//   GCLOUD_PROMETHEUS_URL=https://prometheus-....grafana.net/api/prom/push
+//   GCLOUD_PROMETHEUS_USER=123456
+//   GCLOUD_LOKI_URL=https://logs-....grafana.net/loki/api/v1/push
+//   GCLOUD_LOKI_USER=123456
+//   GCLOUD_TOKEN=glc_...
+//
+// Narrower than Grafana's own template on purpose: its journal source sends
+// every message every program on the host writes, and on a laptop that is
+// the person's own life, and QurbSpace's app log names their files. This
+// keeps only the rendezvous service's, which names neither files nor people.
+
+prometheus.remote_write "metrics_service" {
+  endpoint {
+    url = sys.env("GCLOUD_PROMETHEUS_URL")
+    basic_auth {
+      username = sys.env("GCLOUD_PROMETHEUS_USER")
+      password = sys.env("GCLOUD_TOKEN")
+    }
+  }
+}
+
+loki.write "grafana_cloud_loki" {
+  endpoint {
+    url = sys.env("GCLOUD_LOKI_URL")
+    basic_auth {
+      username = sys.env("GCLOUD_LOKI_USER")
+      password = sys.env("GCLOUD_TOKEN")
+    }
+  }
+}
+
+// ---------- The host: Grafana's Linux integration, as given ----------
+
+discovery.relabel "integrations_node_exporter" {
+  targets = prometheus.exporter.unix.integrations_node_exporter.targets
+
+  rule {
+    target_label = "instance"
+    replacement  = constants.hostname
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "integrations/node_exporter"
+  }
+}
+
+prometheus.exporter.unix "integrations_node_exporter" {
+  disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]
+
+  filesystem {
+    fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|tmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
+    mount_points_exclude = "^/(dev|proc|run/credentials/.+|sys|var/lib/docker/.+)($|/)"
+    mount_timeout        = "5s"
+  }
+
+  netclass {
+    ignored_devices = "^(veth.*|cali.*|[a-f0-9]{15})$"
+  }
+
+  netdev {
+    device_exclude = "^(veth.*|cali.*|[a-f0-9]{15})$"
+  }
+}
+
+prometheus.scrape "integrations_node_exporter" {
+  targets    = discovery.relabel.integrations_node_exporter.output
+  forward_to = [prometheus.relabel.integrations_node_exporter.receiver]
+}
+
+prometheus.relabel "integrations_node_exporter" {
+  forward_to = [prometheus.remote_write.metrics_service.receiver]
+
+  rule {
+    source_labels = ["__name__"]
+    regex         = "up|node_boot_time_seconds|node_cpu_seconds_total|node_disk_read_bytes_total|node_disk_written_bytes_total|node_filesystem_avail_bytes|node_filesystem_size_bytes|node_load1|node_load15|node_load5|node_memory_MemAvailable_bytes|node_memory_MemTotal_bytes|node_memory_SwapTotal_bytes|node_memory_SwapFree_bytes|node_network_receive_bytes_total|node_network_transmit_bytes_total|node_network_receive_packets_total|node_network_transmit_packets_total|node_network_up|node_netstat_Tcp_InSegs|node_netstat_Tcp_OutSegs|node_netstat_Tcp_RetransSegs|node_netstat_Udp_InDatagrams|node_netstat_Udp_OutDatagrams|node_sockstat_TCP_inuse|node_sockstat_UDP_inuse|node_systemd_unit_state|node_uname_info|node_os_info"
+    action        = "keep"
+  }
+}
+
+// ---------- QurbSpace's rendezvous service log, and nothing else ----------
+
+loki.source.journal "qurb" {
+  max_age       = "12h0m0s"
+  relabel_rules = loki.relabel.qurb_journal.rules
+  forward_to    = [loki.process.qurb.receiver]
+  labels        = { job = "qurb/rendezvous" }
+}
+
+loki.relabel "qurb_journal" {
+  // Only what the rendezvous service writes. It runs as a user service, so
+  // its unit is a user unit; its messages say which program wrote them.
+  rule {
+    source_labels = ["__journal_syslog_identifier"]
+    regex         = "qurb-rendezvous"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+  rule {
+    target_label = "instance"
+    replacement  = constants.hostname
+  }
+  forward_to = []
+}
+
+loki.process "qurb" {
+  forward_to = [loki.write.grafana_cloud_loki.receiver]
+}

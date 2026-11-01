@@ -21,8 +21,14 @@ Chosen 2026-11-01, with no money or card for a server yet. Costs nothing:
   (`QURB_DEFAULT_SIGNAL` in `.github/workflows/release.yml`), so a tester's
   phone or computer finds the others with nothing typed; a device whose
   settings name another keeps it.
-- **Dashboard**: Grafana Cloud's free tier needs an account (no card); its
-  agent then runs on the laptop.
+- **Dashboard**: Grafana Cloud's free tier, fed by Grafana Alloy on the
+  laptop: `sudo packaging/staging/install-alloy.sh` installs it from Arch's
+  own repository (Grafana's one-line installer is for Debian and Red Hat
+  only), asks for the stack's values and keeps the token root-only, and
+  installs [packaging/staging/config.alloy](../packaging/staging/config.alloy).
+  It sends the laptop's traffic, CPU, memory and disk, and **only the
+  rendezvous service's log** — narrower than Grafana's template, which sends
+  every program's journal, and the QurbSpace app's log, which names files.
 
 **What this lacks**, stated: staging is up only while the laptop is awake
 and online — it suspends when idle, by the owner's choice — and the
