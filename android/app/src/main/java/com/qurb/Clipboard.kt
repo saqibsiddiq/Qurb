@@ -36,6 +36,15 @@ object Clipboard {
     @Volatile
     var clip: Clip? = null
 
+    /** A paste under way: a second tap while one runs is not another paste.
+     *  On the S23 on 2026-11-01 one tap on *Paste* in the Vault left three
+     *  copies, the fetch taking a second or so. */
+    private val pasting = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Whether a paste may start now; [done] when it has finished. */
+    fun begin(): Boolean = pasting.compareAndSet(false, true)
+    fun done() = pasting.set(false)
+
     fun copy(app: MainActivity, clip: Clip) {
         this.clip = clip
         app.say("Copied ${clip.name}")

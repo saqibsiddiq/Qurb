@@ -333,7 +333,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean, private val u
                 kit.sheet()
                     .mark(R.drawable.ic_trash_2)
                     .title("Delete $name?", centred = true)
-                    .line("Everything in it, in Recently deleted for 30 days")
+                    .line("Everything in it")
                     .buttons("Delete", danger = true) { vault("Deleted $name") { it.deleteKept(path) } }
                     .show()
             }
@@ -346,8 +346,9 @@ class FilesScreen(app: MainActivity, private val private: Boolean, private val u
     }
 
     private fun paste(clip: Clip) {
+        if (!Clipboard.begin()) return
         if (clip is Clip.Remote) app.say("Pasting ${clip.name}…")
-        vault("Pasted ${clip.name}") { Clipboard.intoVault(app, it, dir) }
+        vault("Pasted ${clip.name}") { try { Clipboard.intoVault(app, it, dir) } finally { Clipboard.done() } }
     }
 
     /** A change to the Vault, said done or why not, and the folder read again. */
@@ -467,12 +468,12 @@ class FilesScreen(app: MainActivity, private val private: Boolean, private val u
         }
         kit.sheet()
             .header(States.icon(entry.path), "Delete ${entry.path.substringAfterLast('/')}?")
-            .text("$where Recently deleted keeps it for 30 days.")
+            .text(where)
             .buttons("Delete", danger = true) {
                 scope.launch {
                     try {
                         withContext(Dispatchers.IO) { engine().remove(entry.path) }
-                        app.say("Deleted. It's in Recently deleted for 30 days.")
+                        app.say("Deleted")
                         app.madeChange()
                     } catch (e: Exception) {
                         app.fail("Could not delete that", e)

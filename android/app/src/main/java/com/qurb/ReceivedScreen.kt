@@ -111,7 +111,6 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
                 kit.sheet()
                     .mark(R.drawable.ic_trash_2)
                     .title("Delete $name?", centred = true)
-                    .line("In Recently deleted for 30 days")
                     .buttons("Delete", danger = true) {
                         scope.launch {
                             try {

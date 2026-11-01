@@ -191,8 +191,9 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo, private va
             trail = kit.iconButton(R.drawable.ic_x, "Forget ${clip.name}") { Clipboard.clip = null; refresh() }) {
             val here = dir
             val local = !(clip is Clip.Remote && clip.shared && clip.computer.fingerprint == computer.fingerprint)
+            if (!Clipboard.begin()) return@row
             if (local) app.say("Pasting ${clip.name}…")
-            change("Pasted ${clip.name}") { Clipboard.intoShared(app, engine(), it, computer, here) }
+            change("Pasted ${clip.name}") { try { Clipboard.intoShared(app, engine(), it, computer, here) } finally { Clipboard.done() } }
         }
     }
 

@@ -336,7 +336,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             }
             looks.visibility = android.view.View.VISIBLE
         }
-        sheet.text("Whichever you don't keep goes to Recently deleted for 30 days.")
+        sheet.text("Whichever you don't keep is deleted.")
         // Keeping the other one, or both, needs its bytes here. Said, where
         // the desktop greys the two choices out, rather than left missing.
         if (!c.other.here) sheet.text("The other version isn't on this phone yet, so only this one can be kept for now.")

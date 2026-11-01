@@ -55,7 +55,21 @@ and in the phone's own backup folder on a computer
 - Copying a Vault folder whose files are only on a computer fails at the
   first such file, with the files before it already pasted.
 
-## Not verified
+## Tried on the S23, 2026-11-01
+
+A backup photo copied and pasted into the laptop's *Shared* arrived there.
+A copy pasted within *Shared* was made by the laptop: `name (2).jpg`,
+byte-for-byte identical to the original. A rename from the phone was
+renamed on the laptop. A file from *Shared* pasted into the Vault arrived
+there. A tap opened a Vault file in Android's *Open with*. A delete
+confirmed and done. Backups kept from before the phone took its permanent
+identity count as not the phone's own, so Copy is offered for any kept
+file, not only for this phone's own backups. One tap on *Paste* once left
+three copies, probably the owner tapping at the same moment; a paste now
+ignores taps while one runs. **Not tried:** Received's rename and copy,
+copying folders, pasting into the backup folder's *Private Vault*.
+
+## Not verified (as written before the trial)
 
 Only the computer's half is tested (`crates/peer/tests/shared_folder.rs`: a
 file copied, numbered, a folder copied whole, a copy into itself refused).

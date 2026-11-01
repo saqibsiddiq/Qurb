@@ -174,8 +174,9 @@ class KeptScreen(
             kit.row(rows, R.drawable.ic_clipboard, "Paste ${clip.name}", "",
                 trail = kit.iconButton(R.drawable.ic_x, "Forget ${clip.name}") { Clipboard.clip = null; refresh() }) {
                 val into = dir.removePrefix(vault.orEmpty()).trim('/')
+                if (!Clipboard.begin()) return@row
                 if (clip is Clip.Remote) app.say("Pasting ${clip.name}…")
-                change("Pasted ${clip.name}") { Clipboard.intoVault(app, it, into) }
+                change("Pasted ${clip.name}") { try { Clipboard.intoVault(app, it, into) } finally { Clipboard.done() } }
             }
         }
         if (listing.folders.isEmpty() && listing.files.isEmpty()) {
@@ -243,6 +244,15 @@ class KeptScreen(
                 fetch(file, downloads(file), "Saved to Downloads")
             }
             .action(R.drawable.ic_rotate_ccw, "Restore", meta = restoredTo(file)) { restore(file) }
+        // A backup, or a file kept from before this phone was set up again,
+        // is copied from the computer, to paste elsewhere; a backup renamed
+        // would come back under its own name at the next backup, so it is not.
+        if (!file.mine || backup(file)) {
+            sheet.action(R.drawable.ic_copy, "Copy") {
+                Clipboard.copy(app, Clip.Remote(computer, false, dir, file))
+                refresh()
+            }
+        }
         if (file.mine) {
             if (!backup(file)) {
                 sheet.action(R.drawable.ic_pencil, "Rename") {
@@ -262,22 +272,13 @@ class KeptScreen(
                     }
                 }
             }
-            if (backup(file)) {
-                // A backup is copied from the computer, to paste elsewhere;
-                // renamed it would come back under its own name at the next
-                // backup, so it is not.
-                sheet.action(R.drawable.ic_copy, "Copy") {
-                    Clipboard.copy(app, Clip.Remote(computer, false, dir, file))
-                    refresh()
-                }
-            }
             sheet.action(R.drawable.ic_trash_2, "Delete", danger = true) {
                 kit.sheet()
                     .mark(R.drawable.ic_trash_2)
                     .title("Delete $name?", centred = true)
-                    // In this phone's Recently deleted, whose restore puts it
-                    // back from the copy the computer keeps as long.
-                    .line("In Recently deleted for 30 days")
+                    // Still in this phone's Recently deleted for 30 days,
+                    // which the phone no longer shows (the owner's list of
+                    // 2026-11-01, item 9), so not promised here.
                     .buttons("Delete", danger = true) { change("Deleted $name") { it.deleteKept(file.path) } }
                     .show()
             }
@@ -320,7 +321,7 @@ class KeptScreen(
                 kit.sheet()
                     .mark(R.drawable.ic_trash_2)
                     .title("Delete $name?", centred = true)
-                    .line("Everything in it, in Recently deleted for 30 days")
+                    .line("Everything in it")
                     .buttons("Delete", danger = true) { change("Deleted $name") { it.deleteKept(path) } }
                     .show()
             }
