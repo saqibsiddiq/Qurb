@@ -3202,6 +3202,14 @@ found by surprise:
 - Activity's Backups and Transfers chips are by kind, so a send collected by
   a computer shows under both.
 
+**The owner's five, 2026-11-02, after the first look.** Restore in three
+sections: Everything, Folders (WhatsApp among them), Files. *Switch device*
+blue. The folder page's ⋮ in three sections: Sort by, Order, View. The
+selection's actions take the tab bar's place, drawn as the tab bar is (they
+had sat above it, in a bar unlike the mockup's). The folder chooser holds
+ticks until it is left, then asks to save them or not, with *Save* in its
+bar meanwhile.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

@@ -186,7 +186,7 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
         // another device chosen, as holding Home's circle does (D-1).
         page.addView(kit.button(if (host) "Stop visiting" else "Remove", Kit.Style.DANGER) { askToRemove() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48)).apply { topMargin = kit.dp(20) })
-        page.addView(kit.button("Switch device", Kit.Style.SECONDARY) {
+        page.addView(kit.button("Switch device", Kit.Style.BLUE) {
             scope.launch {
                 val peers = runCatching { withContext(Dispatchers.IO) { engine().peers() } }.getOrDefault(emptyList())
                 kit.chooseDevice(peers, peer) { app.onBackPressedDispatcher.onBackPressed() }
@@ -211,20 +211,29 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
         }
     }
 
-    /** The Restore section: everything, WhatsApp, each folder, files chosen. */
+    /** Restore, in three sections (the owner's answer of 2026-11-02):
+     *  everything; each folder backed up, WhatsApp among them; files chosen. */
     private fun restore(page: LinearLayout) {
         kit.label(page, "Restore")
-        val card = kit.card(page)
         val going = Restore.running
         if (going != null) {
+            val card = kit.card(page)
             kit.setting(card, R.drawable.ic_rotate_ccw, "Restoring ${going.what}", "${going.done} of ${going.files}")
             return
         }
-        kit.setting(card, R.drawable.ic_rotate_ccw, "Everything") { ask(Restore.What.Everything) }
-        kit.setting(card, R.drawable.ic_whatsapp, "WhatsApp") { ask(Restore.What.WhatsApp) }
-        val folders = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        card.addView(folders)
-        kit.setting(card, R.drawable.ic_circle_check, "Choose files") {
+        fun sub(words: String) = page.addView(TextView(app).apply {
+            text = words
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(kit.color(R.color.text_3))
+            setPadding(kit.dp(6), kit.dp(12), 0, kit.dp(6))
+        })
+        sub("Everything")
+        kit.setting(kit.card(page), R.drawable.ic_rotate_ccw, "Everything") { ask(Restore.What.Everything) }
+        sub("Folders")
+        val folders = kit.card(page)
+        kit.setting(folders, R.drawable.ic_whatsapp, "WhatsApp") { ask(Restore.What.WhatsApp) }
+        sub("Files")
+        kit.setting(kit.card(page), R.drawable.ic_circle_check, "Choose files") {
             scope.launch {
                 val top = runCatching {
                     withContext(Dispatchers.IO) {
@@ -235,8 +244,8 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
                 else app.say("${peer.name} keeps nothing for this phone yet")
             }
         }
-        // Each folder backed up, as the computer lists them; WhatsApp and the
-        // Private Vault have rows of their own or are the Vault.
+        // Each folder backed up, as the computer lists them; the Private
+        // Vault is the Vault, restored as part of everything.
         scope.launch {
             val names = runCatching {
                 withContext(Dispatchers.IO) {

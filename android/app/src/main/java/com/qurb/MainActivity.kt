@@ -502,12 +502,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** The tab bar hidden while a page's own bar stands in its place: the
+     *  folder page's actions on what is selected (the owner's review of
+     *  2026-11-02, S1). Shown again on any other screen. */
+    fun hideTabs(hidden: Boolean) {
+        if (!::views.isInitialized) return
+        views.tabs.visibility = if (hidden) View.GONE else View.VISIBLE
+    }
+
     private fun show(screen: Screen) {
         if (screen === current) return
         views.screen.removeAllViews()
         (screen.view.parent as? android.view.ViewGroup)?.removeView(screen.view)
         views.screen.addView(screen.view)
         current = screen
+        // The tabs back, should the last place have hidden them for its own bar.
+        views.tabs.visibility = View.VISIBLE
         // Its own bar above the tabs, or none: the last place's goes with it.
         views.dockBar.removeAllViews()
         screen.dockBar?.let { bar ->

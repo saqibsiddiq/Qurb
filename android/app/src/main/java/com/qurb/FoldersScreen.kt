@@ -43,6 +43,7 @@ class FoldersScreen(
     private var last: State? = null
 
     private val chosenText = TextView(app).apply { setTextAppearance(R.style.Text_Name) }
+    private val save: View = kit.button("Save") { saveChoices { refresh() } }.apply { visibility = View.GONE }
     override val dockBar: View = LinearLayout(app).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -50,6 +51,7 @@ class FoldersScreen(
         setPadding(kit.dp(16), kit.dp(12), kit.dp(16), kit.dp(12))
         visibility = View.GONE
         addView(chosenText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addView(save, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, kit.dp(40)).apply { marginEnd = kit.dp(10) })
         addView(ImageView(app).apply {
             setImageResource(R.drawable.ic_wifi)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -141,8 +143,11 @@ class FoldersScreen(
             searchAdded = true
         }
         draw(state, keeper)
-        val chosen = state.folders.filter { !it.path.contains('/') }.sumOf { it.chosenBytes }
+        val chosen = state.folders.filter { !it.path.contains('/') }.sumOf {
+            when (tickOf(it, state.folders)) { FolderTick.ALL -> it.bytes; FolderTick.NONE -> 0uL; else -> it.chosenBytes }
+        }
         chosenText.text = if (chosen > 0uL) "${Words.size(chosen)} chosen" else "Nothing chosen"
+        save.visibility = if (Choices.pending.isEmpty()) View.GONE else View.VISIBLE
         dockBar.visibility = View.VISIBLE
     }
 
@@ -162,8 +167,8 @@ class FoldersScreen(
         // Select all, for the folders on screen (F-2).
         if (query.isEmpty()) {
             val all = when {
-                here.all { it.tick == FolderTick.ALL } -> FolderTick.ALL
-                here.any { it.tick != FolderTick.NONE } -> FolderTick.SOME
+                here.all { tickOf(it, state.folders) == FolderTick.ALL } -> FolderTick.ALL
+                here.any { tickOf(it, state.folders) != FolderTick.NONE } -> FolderTick.SOME
                 else -> FolderTick.NONE
             }
             card.addView(line(null, "Select all", null, all, opens = false, keeper = keeper) {
@@ -174,7 +179,7 @@ class FoldersScreen(
             val opens = folder.path in hasInside
             card.addView(line(folder, folder.path.substringAfterLast('/'),
                 if (query.isEmpty()) Words.size(folder.bytes) else "${folder.path.substringBeforeLast('/', "Phone").replace("/", " › ")}  ${Words.size(folder.bytes)}",
-                folder.tick, opens, keeper) { choose(folder.path, folder.tick != FolderTick.ALL, keeper) })
+                tickOf(folder, state.folders), opens, keeper) { choose(folder.path, tickOf(folder, state.folders) != FolderTick.ALL, keeper) })
         }
     }
 
@@ -232,20 +237,6 @@ class FoldersScreen(
         return row
     }
 
-    private fun chooseAll(paths: List<String>, on: Boolean, keeper: PeerInfo) {
-        scope.launch {
-            try {
-                withContext(Dispatchers.IO) { val engine = engine(); for (p in paths) engine.chooseFolder(p, on) }
-                if (on) WhatsApp.runNow(app)
-                SyncWorker.runNow(app)
-                app.say(if (on) "${Words.count(paths.size.toLong())} folders back up to ${keeper.name} on Wi-Fi" else "Nothing here backs up now")
-            } catch (e: Exception) {
-                app.fail("Could not choose those", e)
-            }
-            refresh()
-        }
-    }
-
     /** The tree's checkbox: ticked, a dash, or empty (the redesign's Checkbox). */
     private fun checkbox(tick: FolderTick, size: Int) = FrameLayout(app).apply {
         layoutParams = LinearLayout.LayoutParams(kit.dp(size), kit.dp(size))
@@ -264,19 +255,84 @@ class FoldersScreen(
         })
     }
 
+    /**
+     * Ticks held until the person leaves the chooser, then asked whether to
+     * save them (the owner's answer of 2026-11-02): a folder ticked by mistake
+     * no longer starts a backup at once. Kept across the pages of the chooser.
+     */
+    private object Choices {
+        val pending = LinkedHashMap<String, Boolean>()
+    }
+
+    /** A folder's tick as it will be once saved: a tick waiting for it or
+     *  for a folder it is in, else as it is, a dash where something inside it
+     *  is waiting. */
+    private fun tickOf(folder: OwnFolder, all: List<OwnFolder>): FolderTick {
+        var at: String? = folder.path
+        while (at != null) {
+            Choices.pending[at]?.let { return if (it) FolderTick.ALL else FolderTick.NONE }
+            at = at.substringBeforeLast('/', "").ifEmpty { null }
+        }
+        val inside = Choices.pending.filterKeys { it.startsWith("${folder.path}/") }
+        return when {
+            inside.isEmpty() -> folder.tick
+            folder.tick == FolderTick.NONE && inside.values.none { it } -> FolderTick.NONE
+            folder.tick == FolderTick.ALL && inside.values.all { it } -> FolderTick.ALL
+            else -> FolderTick.SOME
+        }
+    }
+
     private fun choose(path: String, on: Boolean, keeper: PeerInfo) {
+        // A folder chosen covers what is in it: what was waiting inside it goes.
+        Choices.pending.keys.removeAll { it.startsWith("$path/") }
+        Choices.pending[path] = on
+        last?.let { show(it) }
+    }
+
+    private fun chooseAll(paths: List<String>, on: Boolean, keeper: PeerInfo) {
+        for (p in paths) {
+            Choices.pending.keys.removeAll { it.startsWith("$p/") }
+            Choices.pending[p] = on
+        }
+        last?.let { show(it) }
+    }
+
+    /** Leaving the chooser with ticks waiting: save them, or not. */
+    override fun back(): Boolean {
+        if (dir.isNotEmpty() || Choices.pending.isEmpty()) return false
+        val on = Choices.pending.count { it.value }
+        val off = Choices.pending.size - on
+        kit.sheet()
+            .mark(R.drawable.ic_folder, R.color.green_soft, R.color.green)
+            .title("Save your folder choices?", centred = true)
+            .line(listOfNotNull(
+                if (on > 0) "${Words.count(on.toLong())} to back up" else null,
+                if (off > 0) "${Words.count(off.toLong())} to stop" else null,
+            ).joinToString(", "))
+            .buttons("Save", secondary = "Discard", onSecondary = {
+                Choices.pending.clear()
+                app.onBackPressedDispatcher.onBackPressed()
+            }) {
+                saveChoices { app.onBackPressedDispatcher.onBackPressed() }
+            }
+            .show()
+        return true
+    }
+
+    /** What is waiting, chosen for real: backed up from the next pass. */
+    private fun saveChoices(then: () -> Unit) {
+        val chosen = LinkedHashMap(Choices.pending)
+        val keeper = last?.keeper
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { engine().chooseFolder(path, on) }
-                // Started now rather than at the next background pass, and the
-                // computer told at the next sync.
-                if (on) WhatsApp.runNow(app)
+                withContext(Dispatchers.IO) { val engine = engine(); for ((p, on) in chosen) engine.chooseFolder(p, on) }
+                Choices.pending.clear()
+                if (chosen.values.any { it }) WhatsApp.runNow(app)
                 SyncWorker.runNow(app)
-                app.say(if (on) "${path.substringAfterLast('/')} backs up to ${keeper.name} on Wi-Fi"
-                    else "${path.substringAfterLast('/')} backs up nothing new")
-                refresh()
+                app.say(if (keeper != null) "Saved. Backs up to ${keeper.name} on Wi-Fi" else "Saved")
+                then()
             } catch (e: Exception) {
-                app.fail("Could not choose $path", e)
+                app.fail("Could not save those", e)
                 refresh()
             }
         }

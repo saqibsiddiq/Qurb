@@ -367,7 +367,9 @@ class Kit(private val app: AppCompatActivity) {
         PRIMARY(com.google.android.material.R.attr.materialButtonStyle),
         SECONDARY(com.google.android.material.R.attr.materialButtonStyle),
         TEXT(com.google.android.material.R.attr.borderlessButtonStyle),
-        DANGER(com.google.android.material.R.attr.materialButtonStyle);
+        DANGER(com.google.android.material.R.attr.materialButtonStyle),
+        /** Blue, as a device's dot is when it is on: Switch device. */
+        BLUE(com.google.android.material.R.attr.materialButtonStyle);
 
         fun apply(kit: Kit, b: MaterialButton) {
             when (this) {
@@ -387,6 +389,7 @@ class Kit(private val app: AppCompatActivity) {
                     b.stateListAnimator = null
                 }
                 DANGER -> b.backgroundTintList = ColorStateList.valueOf(kit.color(R.color.error))
+                BLUE -> b.backgroundTintList = ColorStateList.valueOf(kit.color(R.color.online))
             }
         }
     }

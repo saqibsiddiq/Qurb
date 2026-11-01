@@ -77,7 +77,10 @@ class FolderPage(
         else -> false
     }
 
-    override fun left() = place.left()
+    override fun left() {
+        app.hideTabs(false)
+        place.left()
+    }
 
     private fun open(to: String) {
         dir = to
@@ -453,39 +456,56 @@ class FolderPage(
             files.sortedWith(if (d) order.reversed() else order)
     }
 
-    /** ⋮ (S4, S5): how this folder is sorted and shown, remembered for it. */
+    /** ⋮ (S4, S5): how this folder is sorted and shown, remembered for it,
+     *  in three sections as the mockup has them -- Sort by, Order, View. */
     private fun menu(anchor: View) {
-        val popup = android.widget.PopupMenu(app, anchor)
-        val m = popup.menu
-        m.add(0, 1, 0, "Name").isCheckable = true
-        m.add(0, 2, 1, "Date").isCheckable = true
-        m.add(0, 3, 2, "Size").isCheckable = true
-        m.add(0, 4, 3, "Type").isCheckable = true
-        m.add(1, 5, 4, "Ascending").isCheckable = true
-        m.add(1, 6, 5, "Descending").isCheckable = true
-        m.add(2, 7, 6, "List").isCheckable = true
-        m.add(2, 8, 7, "Grid").isCheckable = true
-        m.setGroupCheckable(0, true, true); m.setGroupCheckable(1, true, true); m.setGroupCheckable(2, true, true)
-        m.findItem(when (sort()) { "date" -> 2; "size" -> 3; "type" -> 4; else -> 1 }).isChecked = true
-        m.findItem(if (descending()) 6 else 5).isChecked = true
-        m.findItem(if (view() == "grid") 8 else 7).isChecked = true
-        popup.setOnMenuItemClickListener { item ->
-            val e = prefs.edit()
-            when (item.itemId) {
-                1 -> e.putString("${place.key}|$dir|sort", "name")
-                2 -> e.putString("${place.key}|$dir|sort", "date")
-                3 -> e.putString("${place.key}|$dir|sort", "size")
-                4 -> e.putString("${place.key}|$dir|sort", "type")
-                5 -> e.putBoolean("${place.key}|$dir|desc", false)
-                6 -> e.putBoolean("${place.key}|$dir|desc", true)
-                7 -> e.putString("${place.key}|$dir|view", "list")
-                8 -> e.putString("${place.key}|$dir|view", "grid")
-            }
-            e.apply()
-            draw()
-            true
+        val box = LinearLayout(app).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(R.color.surface, 18)
+            elevation = kit.dp(12).toFloat()
+            setPadding(0, kit.dp(8), 0, kit.dp(8))
         }
-        popup.show()
+        val popup = android.widget.PopupWindow(box, kit.dp(220), ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+            isOutsideTouchable = true
+            elevation = kit.dp(12).toFloat()
+        }
+        fun heading(words: String) = box.addView(TextView(app).apply {
+            text = words.uppercase()
+            setTextAppearance(R.style.Text_Label)
+            setPadding(kit.dp(16), kit.dp(8), kit.dp(16), kit.dp(4))
+        })
+        fun line() = box.addView(View(app).apply { setBackgroundColor(kit.color(R.color.border)) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(1)).apply { setMargins(0, kit.dp(6), 0, kit.dp(6)) })
+        fun option(icon: Int?, words: String, on: Boolean, choose: () -> Unit) = box.addView(LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            setPadding(kit.dp(16), kit.dp(10), kit.dp(16), kit.dp(10))
+            if (icon != null) addView(ImageView(app).apply {
+                setImageResource(icon)
+                imageTintList = ColorStateList.valueOf(kit.color(R.color.text_2))
+            }, LinearLayout.LayoutParams(kit.dp(18), kit.dp(18)).apply { marginEnd = kit.dp(10) })
+            addView(TextView(app).apply { text = words; setTextAppearance(R.style.Text_Body) },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (on) addView(ImageView(app).apply {
+                setImageResource(R.drawable.ic_check)
+                imageTintList = ColorStateList.valueOf(kit.color(R.color.green))
+            }, LinearLayout.LayoutParams(kit.dp(18), kit.dp(18)))
+            setOnClickListener { choose(); popup.dismiss(); draw() }
+        })
+        val key = "${place.key}|$dir"
+        heading("Sort by")
+        for ((k, words) in listOf("name" to "Name", "date" to "Date", "size" to "Size", "type" to "Type"))
+            option(null, words, sort() == k) { prefs.edit().putString("$key|sort", k).apply() }
+        line()
+        heading("Order")
+        option(null, "Ascending", !descending()) { prefs.edit().putBoolean("$key|desc", false).apply() }
+        option(null, "Descending", descending()) { prefs.edit().putBoolean("$key|desc", true).apply() }
+        line()
+        heading("View")
+        option(R.drawable.ic_list, "List", view() != "grid") { prefs.edit().putString("$key|view", "list").apply() }
+        option(R.drawable.ic_grid_four, "Grid", view() == "grid") { prefs.edit().putString("$key|view", "grid").apply() }
+        popup.showAsDropDown(anchor, -kit.dp(180), 0)
     }
 
     // --------------------------------------------------------- the dock
@@ -494,8 +514,10 @@ class FolderPage(
         dock.removeAllViews()
         Transfer.now?.let { dock.addView(progressCard(it)) }
         val pending = Clipboard.pending
+        // Selecting: the actions take the tab bar's place, looking as it does.
+        app.hideTabs(selected.isNotEmpty())
         when {
-            selected.isNotEmpty() -> dock.addView(actionBar())
+            selected.isNotEmpty() -> dock.addView(actionBar(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(68)))
             pending != null && place.canAdd(dir) -> dock.addView(pasteBar(pending))
         }
     }
@@ -503,28 +525,34 @@ class FolderPage(
     /** The selection's actions (S1): what this place allows, More for the rest. */
     private fun actionBar(): View {
         val chosen = items.orEmpty().filter { it.path in selected }
+        // As the tab bar it stands in for: the same glass, height and labels.
         val bar = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = ContextCompat.getDrawable(app, R.drawable.chosen_bar)
-            setPadding(kit.dp(6), kit.dp(10), kit.dp(6), kit.dp(10))
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.nav_glass)
+            elevation = kit.dp(8).toFloat()
+            setPadding(kit.dp(4), 0, kit.dp(4), 0)
         }
         fun act(icon: Int, words: String, danger: Boolean = false, enabled: Boolean = true, go: () -> Unit) {
             bar.addView(LinearLayout(app).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 alpha = if (enabled) 1f else 0.35f
+                background = ContextCompat.getDrawable(app, R.drawable.row_bg)
+                setPadding(0, kit.dp(8), 0, kit.dp(8))
                 addView(ImageView(app).apply {
                     setImageResource(icon)
-                    imageTintList = ColorStateList.valueOf(kit.color(if (danger) R.color.error else R.color.text))
+                    imageTintList = ColorStateList.valueOf(kit.color(if (danger) R.color.error else R.color.text_2))
                 }, LinearLayout.LayoutParams(kit.dp(22), kit.dp(22)))
                 addView(TextView(app).apply {
                     text = words
-                    setTextAppearance(R.style.Text_Meta)
-                    setTextColor(kit.color(if (danger) R.color.error else R.color.text))
-                    setPadding(0, kit.dp(4), 0, 0)
+                    textSize = 12f
+                    setTextColor(kit.color(if (danger) R.color.error else R.color.text_2))
+                    setPadding(0, kit.dp(3), 0, 0)
                 })
+                contentDescription = words
                 if (enabled) setOnClickListener { go() }
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
         }
         if (place.restores) act(R.drawable.ic_rotate_ccw, "Restore") { place.restore(app, chosen); done() }
         if (place.canChange(dir)) act(R.drawable.ic_folder_input, "Move") { clip(chosen, move = true) }
