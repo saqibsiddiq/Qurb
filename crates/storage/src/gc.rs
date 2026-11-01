@@ -137,7 +137,7 @@ const ACTIVITY_RETENTION: Duration = Duration::from_secs(90 * 24 * 60 * 60);
 ///
 /// Ten thousand rows is a few megabytes at most, and more than any interface
 /// will page through.
-const ACTIVITY_ROWS: usize = 10_000;
+const ACTIVITY_ROWS: usize = crate::db::ACTIVITY_MOST;
 
 /// Remove payloads on disk that the index does not know about.
 ///

@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27, V28, V29];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27, V28, V29, V30, V31];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -683,6 +683,21 @@ END;
 
 /// Each device's own name and picture, set on it and shown on every device
 /// paired with it (the owner's list of 2026-10-26, item 7).
+const V31: &str = r#"
+-- Activity read by kind, for a filter's chip (All, Backups, Transfers,
+-- Problems: the owner's review of 2026-11-02) without reading it all.
+CREATE INDEX IF NOT EXISTS activity_by_kind ON activity (kind, at);
+"#;
+
+const V30: &str = r#"
+-- An entry standing for many (the owner's review of 2026-11-02, Activity):
+-- a backup, a sync, a run of the same failure -- how many, since when, and the
+-- first names, rather than a row each.
+ALTER TABLE activity ADD COLUMN count INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE activity ADD COLUMN started INTEGER;
+ALTER TABLE activity ADD COLUMN names TEXT;
+"#;
+
 const V29: &str = r#"
 -- Whether a device keeping this device's vault keeps its Private Vault files
 -- too, or only the folders and WhatsApp backed up into it (the owner's review
@@ -2545,6 +2560,24 @@ impl Db {
         device: Option<&DeviceId>,
         detail: Option<&str>,
     ) -> Result<()> {
+        // Many of one kind in a row become one entry (the owner's review of
+        // 2026-11-02): a backup of 10,000 photos had written 10,000 rows and
+        // filled the cap alone. The same failure of the same file again is
+        // that entry counted once more.
+        if let Some(id) = self.merge_into(&kind, path, device, detail)? {
+            self.conn.execute(
+                "UPDATE activity
+                    SET count = count + 1,
+                        size = CASE WHEN ?2 IS NULL THEN size ELSE COALESCE(size, 0) + ?2 END,
+                        started = COALESCE(started, at),
+                        at = unixepoch(),
+                        names = CASE WHEN ?3 IS NOT NULL AND count < ?4
+                                     THEN COALESCE(names, path) || char(10) || ?3 ELSE COALESCE(names, path) END
+                  WHERE id = ?1",
+                params![id, size.map(|n| n as i64), path, NAMES_KEPT as i64],
+            )?;
+            return Ok(());
+        }
         self.conn.execute(
             "INSERT INTO activity (at, kind, path, size, device, detail)
              VALUES (unixepoch(), ?1, ?2, ?3, ?4, ?5)",
@@ -2556,7 +2589,54 @@ impl Db {
                 detail,
             ],
         )?;
+        // The cap kept as it writes, not only at the next cleanup.
+        if self.conn.last_insert_rowid() % 100 == 0 {
+            self.prune_activity(std::time::Duration::from_secs(ACTIVITY_DAYS * 86_400), ACTIVITY_MOST)?;
+        }
         Ok(())
+    }
+
+    /// The entry this one joins, if any: the newest, when it is of the same
+    /// kind, device and detail, and of the same sort of path -- a backup's,
+    /// or not -- within a quarter of an hour; for a failure, the same file.
+    /// Never what a person did one at a time: a send, a delivery, a pairing,
+    /// a restore, two versions.
+    fn merge_into(&self, kind: &Event, path: Option<&str>, device: Option<&DeviceId>, detail: Option<&str>) -> Result<Option<i64>> {
+        let bulk = matches!(kind, Event::Stored | Event::Received | Event::Collected | Event::Evicted | Event::Deleted | Event::Failed);
+        let delivered = matches!(kind, Event::Received) && detail.is_some_and(|d| d.starts_with("sent to this device"));
+        if !bulk || delivered {
+            return Ok(None);
+        }
+        let last: Option<(i64, i64, String, Option<String>, Option<Vec<u8>>, Option<String>)> = self
+            .conn
+            .query_row(
+                "SELECT id, at, kind, path, device, detail FROM activity ORDER BY id DESC LIMIT 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+            )
+            .optional()?;
+        let Some((id, at, last_kind, last_path, last_device, last_detail)) = last else { return Ok(None) };
+        let outside = |p: Option<&str>| p.is_some_and(|p| p.starts_with(".qurb-outside/"));
+        let same = last_kind == kind.as_str()
+            && last_device.as_deref() == device.map(|d| d.as_bytes().as_slice())
+            && last_detail.as_deref() == detail
+            && outside(last_path.as_deref()) == outside(path)
+            && at >= now() - MERGE_WITHIN
+            && (*kind != Event::Failed || last_path.as_deref() == path);
+        Ok(same.then_some(id))
+    }
+
+    /// Activity of these kinds only, newest first: a filter's chip (All,
+    /// Backups, Transfers, Problems), asked of the database, not sifted.
+    pub fn activity_of(&self, kinds: &[&str], limit: usize, before: Option<i64>) -> Result<Vec<Activity>> {
+        let list = kinds.iter().map(|k| format!("'{}'", k.replace('\'', ""))).collect::<Vec<_>>().join(",");
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {ACTIVITY_COLUMNS} FROM activity
+              WHERE (?1 IS NULL OR id < ?1) AND kind IN ({list})
+              ORDER BY at DESC, id DESC LIMIT ?2"
+        ))?;
+        let rows = stmt.query_map(params![before, limit as i64], activity_row)?;
+        rows.collect::<std::result::Result<_, _>>().map_err(Into::into)
     }
 
     /// Whether the last thing recorded about `path` is this same failure.
@@ -2598,10 +2678,12 @@ impl Db {
         let mut stmt = self.conn.prepare(
             // Never a file of a folder kept outside a vault (decision 0062):
             // a phone's WhatsApp, kept by this computer out of sight.
-            "SELECT id, at, kind, path, size, device, detail
+            // A backup's entries are shown when they stand for many: one
+            // file of a phone's WhatsApp is no news, a backup of 1,240 is.
+            "SELECT id, at, kind, path, size, device, detail, count, started, names
                FROM activity
               WHERE (?1 IS NULL OR id < ?1)
-                AND (path IS NULL OR substr(path, 1, 14) <> '.qurb-outside/')
+                AND (path IS NULL OR substr(path, 1, 14) <> '.qurb-outside/' OR count > 1)
               ORDER BY at DESC, id DESC
               LIMIT ?2",
         )?;
@@ -2711,7 +2793,7 @@ impl Db {
     pub fn activity_entry(&self, id: i64) -> Result<Option<Activity>> {
         self.conn
             .query_row(
-                "SELECT id, at, kind, path, size, device, detail FROM activity WHERE id = ?1",
+                "SELECT id, at, kind, path, size, device, detail, count, started, names FROM activity WHERE id = ?1",
                 params![id],
                 activity_row,
             )
@@ -2726,7 +2808,7 @@ impl Db {
     /// restart.
     pub fn activity_for(&self, path: &str, limit: usize) -> Result<Vec<Activity>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, at, kind, path, size, device, detail
+            "SELECT id, at, kind, path, size, device, detail, count, started, names
                FROM activity
               WHERE path = ?1
               ORDER BY at DESC, id DESC
@@ -5266,8 +5348,22 @@ fn activity_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Activity> {
         size: r.get::<_, Option<i64>>(4)?.map(|n| n as u64),
         device: device.and_then(to_device),
         detail: r.get(6)?,
+        count: r.get::<_, i64>(7)? as u64,
+        started: r.get(8)?,
+        names: r.get::<_, Option<String>>(9)?.map(|n| n.lines().map(str::to_string).collect()).unwrap_or_default(),
     })
 }
+
+/// What is read of an activity entry, in [`activity_row`]'s order.
+const ACTIVITY_COLUMNS: &str = "id, at, kind, path, size, device, detail, count, started, names";
+
+/// The most names an entry standing for many keeps.
+pub const NAMES_KEPT: usize = 20;
+/// How close together entries of one kind are, to become one.
+const MERGE_WITHIN: i64 = 15 * 60;
+/// Activity kept: 90 days, or this many entries, whichever is fewer.
+pub const ACTIVITY_DAYS: u64 = 90;
+pub const ACTIVITY_MOST: usize = 2_000;
 
 /// A file about to go into the trash. See [`Db::add_trash`].
 #[derive(Debug, Clone)]
@@ -5531,8 +5627,14 @@ pub fn told_once(rows: Vec<Activity>) -> Vec<Activity> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Activity {
     pub id: i64,
-    /// Unix seconds.
+    /// Unix seconds: when it happened, or, for one standing for many, the last.
     pub at: i64,
+    /// How many it stands for: 1, or a backup's files, a failure's tries.
+    pub count: u64,
+    /// When the first of them happened, for one standing for many.
+    pub started: Option<i64>,
+    /// The first names of what it stands for, at most [`NAMES_KEPT`].
+    pub names: Vec<String>,
     pub kind: Event,
     pub path: Option<String>,
     pub size: Option<u64>,
@@ -5832,6 +5934,31 @@ mod tests {
         assert!(phone.chosen_here().unwrap().contains(&"DCIM/Camera".to_string()));
     }
 
+    /// A backup of many files is one entry, its count and first names; the
+    /// same failure again is one entry counted; a delivery stays one each
+    /// (the owner's review of 2026-11-02, Activity).
+    #[test]
+    fn many_of_one_kind_are_one_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Db::open(&dir.path().join("index.db")).unwrap();
+        let laptop = DeviceId::from_bytes([4; 32]);
+        for i in 0..30 {
+            db.record(Event::Collected, Some(&format!(".qurb-outside/storage/DCIM/IMG_{i}.jpg")), Some(100), Some(&laptop), None).unwrap();
+        }
+        for _ in 0..12 {
+            db.record(Event::Failed, Some("wedding.mp4"), None, Some(&laptop), Some("saqib was off")).unwrap();
+        }
+        db.record(Event::Received, Some("a.pdf"), Some(5), Some(&laptop), Some("sent to this device")).unwrap();
+        db.record(Event::Received, Some("b.pdf"), Some(5), Some(&laptop), Some("sent to this device")).unwrap();
+        let all = db.activity(50, None).unwrap();
+        assert_eq!(all.len(), 4, "{all:?}");
+        let backup = all.iter().find(|a| a.kind == Event::Collected).unwrap();
+        assert_eq!((backup.count, backup.size, backup.names.len()), (30, Some(3000), NAMES_KEPT));
+        let failed = all.iter().find(|a| a.kind == Event::Failed).unwrap();
+        assert_eq!(failed.count, 12);
+        assert_eq!(db.activity_of(&["failed"], 10, None).unwrap().len(), 1);
+    }
+
     /// One line for each thing that happened to a file (the owner's list of
     /// 2026-10-26, item 8): a send copied in, put in the laptop's vault and
     /// collected was three lines, and is one; the same thing again within a
@@ -5847,6 +5974,9 @@ mod tests {
             size: Some(10),
             device,
             detail: None,
+            count: 1,
+            started: None,
+            names: Vec::new(),
         };
         // Newest first, as the history is read.
         let told = told_once(vec![
@@ -5867,8 +5997,9 @@ mod tests {
     #[test]
     fn history_is_kept_thirty_days() {
         let db = Db::open_in_memory().unwrap();
+        // Two kinds, so that they stay two entries rather than one standing for both.
         db.record(Event::Stored, Some("new.txt"), Some(1), None, None).unwrap();
-        db.record(Event::Stored, Some("old.txt"), Some(1), None, None).unwrap();
+        db.record(Event::Deleted, Some("old.txt"), Some(1), None, None).unwrap();
         db.conn.execute("UPDATE activity SET at = at - ?1 WHERE path = 'old.txt'", params![ACTIVITY_KEPT + 60]).unwrap();
         assert_eq!(db.forget_old_activity().unwrap(), 1);
         let left: Vec<String> = db.activity(10, None).unwrap().into_iter().filter_map(|a| a.path).collect();

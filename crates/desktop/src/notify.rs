@@ -238,6 +238,9 @@ mod tests {
             size: None,
             device: Some(qurb_sync::DeviceId::from_bytes([1; 32])),
             detail: detail.map(str::to_string),
+            count: 1,
+            started: None,
+            names: Vec::new(),
         }
     }
 

@@ -326,6 +326,10 @@ fn upgrading_remembers_every_delivery_already_taken() {
              DROP TRIGGER IF EXISTS files_listed_update;
              ALTER TABLE files DROP COLUMN held;
              DROP TABLE holders;
+             DROP INDEX IF EXISTS activity_by_kind;
+             ALTER TABLE activity DROP COLUMN count;
+             ALTER TABLE activity DROP COLUMN started;
+             ALTER TABLE activity DROP COLUMN names;
              PRAGMA user_version = 10;",
         )
         .unwrap();

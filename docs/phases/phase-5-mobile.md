@@ -3183,8 +3183,24 @@ fixed together and tested together. As he answered, page by page:
    Details, Share, + files or a folder, progress card, sheets, states.
 6. ✓ Quick preview of every kind, and thumbnails of every kind (the laptop
    making its own, Office through LibreOffice).
-7. Activity: big jobs as one entry, failures merged, the cap enforced as it
+7. ✓ Activity: big jobs as one entry, failures merged, the cap enforced as it
    writes, chips, details.
+
+All seven built by 2026-11-02, **none yet tried on the phone with the
+owner**. Tested on the laptop: the engine's tests for a backups-only holder
+(`outside.rs`), activity merging (`many_of_one_kind_are_one_entry`), the
+storage and protocol round trips. Known gaps, said here so they are not
+found by surprise:
+- Office previews and thumbnails need LibreOffice on the laptop, which is
+  not installed; without it an Office file is shown as one to open in an app.
+- A restore runs in the app's own scope, not as a foreground job: left long
+  in the background it may be stopped, and has to be started again (it skips
+  what came back).
+- The folder page's selection bar sits above the tab bar, not in its place.
+- A PDF preview draws its first 30 pages; a table its first 500 rows; text
+  its first 256 KB.
+- Activity's Backups and Transfers chips are by kind, so a send collected by
+  a computer shows under both.
 
 ## Deliberately left undone
 

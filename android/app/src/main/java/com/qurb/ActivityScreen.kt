@@ -35,6 +35,9 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
     /** How far back the history goes on screen. Grows with "Show older". */
     private var shown = PAGE
 
+    /** The chip chosen (the owner's review of 2026-11-02): all, backups, transfers, problems. */
+    private var filter = "all"
+
     init {
         views.back.visibility = View.VISIBLE
         views.back.text = "Settings"
@@ -47,7 +50,10 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
     override fun refresh() {
         refreshing {
             try {
-                val history = withContext(Dispatchers.IO) { engine().history(shown.toUInt(), null) }
+                val history = withContext(Dispatchers.IO) {
+                    if (filter == "all") engine().history(shown.toUInt(), null)
+                    else engine().historyOf(filter, shown.toUInt(), null)
+                }
                 show(history)
             } catch (e: Exception) {
                 app.fail("Could not read what happened", e)
@@ -57,9 +63,32 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
         }
     }
 
+    /** All, Backups, Transfers, Problems: each a question to the database. */
+    private fun chips(page: LinearLayout) {
+        val row = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
+        for ((key, words) in listOf("all" to "All", "backups" to "Backups", "transfers" to "Transfers", "problems" to "Problems")) {
+            val on = key == filter
+            row.addView(TextView(app).apply {
+                text = words
+                setTextAppearance(R.style.Text_Meta)
+                setTextColor(kit.color(if (on) R.color.surface else R.color.text_2))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = kit.dp(16).toFloat()
+                    setColor(kit.color(if (on) R.color.green else R.color.surface))
+                    if (!on) setStroke(kit.dp(1), kit.color(R.color.border))
+                }
+                setPadding(kit.dp(12), kit.dp(7), kit.dp(12), kit.dp(7))
+                setOnClickListener { filter = key; shown = PAGE; refresh() }
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = kit.dp(6) })
+        }
+        page.addView(android.widget.HorizontalScrollView(app).apply { isHorizontalScrollBarEnabled = false; addView(row) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(10) })
+    }
+
     private fun show(history: List<Happening>) {
         val page = views.sections
         page.removeAllViews()
+        chips(page)
         if (history.isEmpty()) {
             nothingYet(page)
             return
@@ -73,8 +102,19 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
             }
             val (what, icon) = what(h)
             val local = h.device == null
+            val many = h.count > 1uL
+            val backup = h.path?.startsWith(".qurb-outside/") == true
+            // One standing for many (a backup, a sync, a failure again): what
+            // it was and how many, not one of its names.
+            val name = when {
+                many && backup -> if (h.device != null) "Backed up to ${h.device}" else "Backed up"
+                many && h.kind == "failed" -> h.path?.substringAfterLast('/') ?: "Failed"
+                many -> "${Words.files(h.count.toInt())} ${what.words}"
+                else -> h.path?.substringAfterLast('/') ?: h.device ?: h.kind
+            }
             val device = when {
-                h.kind == "failed" && !h.detail.isNullOrBlank() -> h.detail!!
+                h.kind == "failed" && !h.detail.isNullOrBlank() -> if (many) "${h.detail}, ${h.count} times" else h.detail!!
+                many && h.size != null -> "${Words.files(h.count.toInt())}, ${Words.size(h.size!!)}"
                 local -> "This phone"
                 else -> h.device!!
             }
@@ -83,8 +123,11 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
                 local -> R.drawable.ic_smartphone
                 else -> States.device(h.device!!)
             }
-            val name = h.path?.substringAfterLast('/') ?: h.device ?: h.kind
-            kit.activityRow(page, icon, what, name, deviceIcon, device, time(h.at))
+            val row = kit.activityRow(page, icon, what, name, deviceIcon, device, time(h.at))
+            if (many || h.kind == "failed") {
+                row.background = ContextCompat.getDrawable(app, R.drawable.row_bg)
+                row.setOnClickListener { app.push(ActivityEntryScreen(app, h, name)) }
+            }
         }
         if (history.size == shown) {
             page.addView(kit.button("Show older", Kit.Style.TEXT) {
@@ -146,6 +189,60 @@ class ActivityScreen(app: MainActivity) : Screen(app) {
     }
 
     private companion object {
-        const val PAGE = 60
+        /** Read at a time, as the list is scrolled to its end. */
+        const val PAGE = 50
+    }
+}
+
+/**
+ * One entry of Activity opened (the owner's review of 2026-11-02): a big job
+ * -- when, how many, how much, the names kept, then how many more -- or a
+ * failure -- what, why, how many tries, when, and *Try again*.
+ */
+class ActivityEntryScreen(app: MainActivity, private val h: Happening, private val name: String) : Screen(app) {
+
+    private val views = ScreenPageBinding.inflate(app.layoutInflater)
+    override val view: View get() = views.root
+    override val tab = R.id.tab_settings
+
+    init {
+        views.back.visibility = View.VISIBLE
+        views.back.text = "Activity"
+        views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
+        views.title.text = name
+        views.refresh.isEnabled = false
+    }
+
+    override fun refresh() {
+        val page = views.sections
+        page.removeAllViews()
+        val card = kit.card(page, top = 12)
+        val time = { at: Long -> android.text.format.DateFormat.getTimeFormat(app).format(java.util.Date(at * 1000)) }
+        val started = h.started
+        kit.setting(card, R.drawable.ic_clock, "When",
+            "${Words.day(h.at)} ${if (started != null && started != h.at) "${time(started)} to ${time(h.at)}" else time(h.at)}")
+        if (h.kind == "failed") {
+            h.detail?.let { kit.setting(card, R.drawable.ic_info, "Why", it) }
+            if (h.count > 1uL) kit.setting(card, R.drawable.ic_history, "Tried", "${h.count} times")
+            page.addView(kit.button("Try again") { app.sync(); app.say("Trying again") },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48)).apply { topMargin = kit.dp(18) })
+            return
+        }
+        kit.setting(card, R.drawable.ic_file, "Files", Words.count(h.count.toLong()))
+        h.size?.let { kit.setting(card, R.drawable.ic_hard_drive, "Size", Words.size(it)) }
+        h.device?.let { kit.setting(card, R.drawable.ic_monitor_smartphone, "With", it) }
+        if (h.names.isNotEmpty()) {
+            kit.label(page, "Files")
+            val list = kit.card(page)
+            for (n in h.names) kit.setting(list, States.icon(n), n.removePrefix(".qurb-outside/").substringAfterLast('/'))
+            val more = h.count.toLong() - h.names.size
+            if (more > 0) page.addView(TextView(app).apply {
+                text = "and ${Words.count(more)} more"
+                setTextAppearance(R.style.Text_Meta)
+                setTextColor(kit.color(R.color.text_3))
+                gravity = Gravity.CENTER
+                setPadding(0, kit.dp(10), 0, 0)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
     }
 }

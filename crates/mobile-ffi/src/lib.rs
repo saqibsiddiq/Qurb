@@ -442,6 +442,12 @@ pub struct Happening {
     pub device: Option<String>,
     /// Why it failed, what a conflict was filed as, where a file went.
     pub detail: Option<String>,
+    /// How many it stands for: a backup's files, a failure's tries; 1 else.
+    pub count: u64,
+    /// When the first of them happened, for one standing for many.
+    pub started: Option<i64>,
+    /// The first names of what it stands for, at most 20.
+    pub names: Vec<String>,
 }
 
 /// The start of a rename's detail in the history, the old path after it.
@@ -2543,7 +2549,30 @@ impl Qurb {
     pub fn history(&self, limit: u32, before: Option<i64>) -> Result<Vec<Happening>, QurbError> {
         let names = self.look()?.store().db().device_names()?;
         let rows = self.look()?.store().db().activity_told(limit as usize, before)?;
-        Ok(rows
+        Ok(happenings(rows, &names))
+    }
+
+    /// Activity of one filter's kinds (the owner's review of 2026-11-02):
+    /// "backups", "transfers" or "problems"; anything else is everything.
+    pub fn history_of(&self, filter: String, limit: u32, before: Option<i64>) -> Result<Vec<Happening>, QurbError> {
+        let kinds: &[&str] = match filter.as_str() {
+            "backups" => &["stored", "collected", "held", "evicted"],
+            "transfers" => &["sent", "received", "collected", "cancelled"],
+            "problems" => &["failed", "conflicted"],
+            _ => return self.history(limit, before),
+        };
+        let names = self.look()?.store().db().device_names()?;
+        let rows = self.look()?.store().db().activity_of(kinds, limit as usize, before)?;
+        Ok(happenings(rows, &names))
+    }
+}
+
+fn happenings(
+    rows: Vec<qurb_storage::db::Activity>,
+    names: &std::collections::HashMap<qurb_sync::DeviceId, String>,
+) -> Vec<Happening> {
+    {
+        rows
             .into_iter()
             .map(|r| Happening {
                 id: r.id,
@@ -2557,8 +2586,11 @@ impl Qurb {
                 // rather than shown as a code: the app says "another device".
                 device: r.device.and_then(|id| names.get(&id).cloned()),
                 detail: r.detail,
+                count: r.count,
+                started: r.started,
+                names: r.names,
             })
-            .collect())
+            .collect()
     }
 }
 

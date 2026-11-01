@@ -21,8 +21,10 @@ fn what_happened_comes_back_newest_first() {
     let (_dir, store) = store();
     let db = store.db();
 
+    // Sends: each one entry of its own, where files stored in a row would
+    // become one entry standing for them all (the review of 2026-11-02).
     for path in ["first.txt", "second.txt", "third.txt"] {
-        db.note(Event::Stored, path).unwrap();
+        db.note(Event::Sent, path).unwrap();
     }
 
     let rows = db.activity(10, None).unwrap();
@@ -39,7 +41,7 @@ fn paging_neither_repeats_nor_skips_within_one_second() {
     let (_dir, store) = store();
     let db = store.db();
     for i in 0..10 {
-        db.note(Event::Stored, &format!("file-{i}.txt")).unwrap();
+        db.note(Event::Sent, &format!("file-{i}.txt")).unwrap();
     }
 
     let mut seen = Vec::new();
@@ -102,7 +104,7 @@ fn history_is_pruned_by_age_and_by_count() {
     let db = store.db();
 
     for i in 0..50 {
-        db.note(Event::Stored, &format!("file-{i}.txt")).unwrap();
+        db.note(Event::Sent, &format!("file-{i}.txt")).unwrap();
     }
     // Backdate half of them past any plausible window.
     db.conn()
