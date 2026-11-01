@@ -569,11 +569,13 @@ async fn a_phone_reaches_its_folder_on_the_computer_and_what_it_kept_before() {
 
     let (addr, fingerprint) = desktop.serve(phone.identity.fingerprint());
     let client = PeerClient::connect(addr, &phone.identity, fingerprint).await.unwrap();
+    // One device, one folder (2026-11-01): what it kept before it was set
+    // up again is inside its folder, not beside it as another.
     let (top, _) = client.kept("").await.unwrap().expect("not told");
-    assert_eq!(top, vec!["the other one".to_string(), "the other one, earlier".to_string()]);
-    let (folders, _) = client.kept("the other one, earlier").await.unwrap().unwrap();
+    assert_eq!(top, vec!["the other one".to_string()]);
+    let (folders, _) = client.kept("the other one").await.unwrap().unwrap();
     assert_eq!(folders, vec!["Private Vault".to_string()]);
-    let (_, files) = client.kept("the other one, earlier/Private Vault").await.unwrap().unwrap();
+    let (_, files) = client.kept("the other one/Private Vault").await.unwrap().unwrap();
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].name, "diary.txt");
     assert_eq!(files[0].owner, *before.id().as_bytes());
@@ -583,7 +585,7 @@ async fn a_phone_reaches_its_folder_on_the_computer_and_what_it_kept_before() {
     // (decision 0073, item 4).
     let found = client.search(qurb_peer::wire::Within::Kept, "DIARY").await.unwrap().expect("not told");
     assert_eq!(found.len(), 1);
-    assert_eq!(found[0].name, "the other one, earlier/Private Vault/diary.txt");
+    assert_eq!(found[0].name, "the other one/Private Vault/diary.txt");
     client.close();
     let content = files[0].content;
 

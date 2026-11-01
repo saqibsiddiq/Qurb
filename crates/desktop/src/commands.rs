@@ -1895,6 +1895,40 @@ fn owner_name() -> String {
 
 /// The owner's phones whose files are kept here, each under the name its
 /// folder shows: one set up again keeps its own folder, as *earlier*.
+/// The owner's devices as their folder shows them: one folder for each
+/// device, made of its identity and each it had before it was set up again
+/// (`qurb_storage::person::DeviceFolder`), so that a phone set up again twice
+/// is one folder, not three (2026-11-01). From `owner_phones`, which lists
+/// every identity kept for.
+fn owner_folders(phones: &[(String, qurb_cli::Device)]) -> Vec<qurb_storage::person::DeviceFolder> {
+    let listed = |id: &qurb_sync::DeviceId| phones.iter().any(|(_, d)| d.id == *id);
+    let mut folders: Vec<qurb_storage::person::DeviceFolder> = Vec::new();
+    // A device in use, or one whose later self is not kept for here.
+    for (_, root) in phones.iter().filter(|(_, d)| d.replaced_by.is_none_or(|r| !listed(&r))) {
+        let mut ids = vec![root.id];
+        let mut earlier: Vec<&qurb_cli::Device> = Vec::new();
+        let mut reaching = vec![root.id];
+        while let Some(at) = reaching.pop() {
+            for (_, d) in phones.iter().filter(|(_, d)| d.replaced_by == Some(at) && d.id != root.id) {
+                if !earlier.iter().any(|e| e.id == d.id) {
+                    earlier.push(d);
+                    reaching.push(d.id);
+                }
+            }
+        }
+        earlier.sort_by_key(|d| std::cmp::Reverse(d.paired_at));
+        ids.extend(earlier.iter().map(|d| d.id));
+        let mut name = root.name.clone();
+        let mut n = 2;
+        while folders.iter().any(|(taken, _)| *taken == name) {
+            name = format!("{} ({n})", root.name);
+            n += 1;
+        }
+        folders.push((name, ids));
+    }
+    folders
+}
+
 fn owner_phones(hosted: &Hosted) -> Result<Vec<(String, qurb_cli::Device)>, String> {
     let devices = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)).map_err(failed)?;
     // The owner's phones, and any of their computers this one keeps files
@@ -1990,8 +2024,8 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
         sealed: false,
         files: Some(files),
         size: big(bytes),
-        phones: phones.iter().filter(|(_, p)| p.replaced_by.is_none()).count(),
-        devices: phones.into_iter().map(|(name, _)| name).collect(),
+        phones: owner_folders(&phones).len(),
+        devices: owner_folders(&phones).into_iter().map(|(name, _)| name).collect(),
     }];
 
     // A guest's devices, gathered under their person.
@@ -2043,7 +2077,7 @@ pub fn person_folder(hosted: Host<'_>, person: String, dir: String) -> Answer<Pe
         // One folder per phone, each phone's files as the phone sees them
         // too (`qurb_storage::person`).
         let phones = owner_phones(&hosted)?;
-        let named: Vec<(String, qurb_sync::DeviceId)> = phones.iter().map(|(name, d)| (name.clone(), d.id)).collect();
+        let named = owner_folders(&phones);
         let (folders, shown) = hosted
             .with_store(|store| Ok(qurb_storage::person::listing(store.db(), &named, dir)?))
             .map_err(failed)?;
@@ -2117,7 +2151,7 @@ pub fn find_people(hosted: Host<'_>, text: String) -> Answer<Vec<FoundKept>> {
         let Some(key) = qurb_peer::openings::key(&id) else { continue };
         if person.id == OWNER {
             let phones = owner_phones(&hosted)?;
-            let named: Vec<(String, qurb_sync::DeviceId)> = phones.iter().map(|(name, d)| (name.clone(), d.id)).collect();
+            let named = owner_folders(&phones);
             let shown = hosted
                 .with_store(|store| Ok(qurb_storage::person::search(store.db(), &named, &needle, FOUND_MOST)?))
                 .map_err(failed)?;

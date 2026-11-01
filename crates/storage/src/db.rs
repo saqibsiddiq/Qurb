@@ -4554,6 +4554,13 @@ impl Db {
     }
 
     /// What the person said about `older`, if anything.
+    /// The connection itself, for tests elsewhere in this crate that set up
+    /// rows no public call makes alone.
+    #[cfg(test)]
+    pub(crate) fn conn_for_tests(&self) -> &Connection {
+        &self.conn
+    }
+
     pub fn said_same(&self, older: &DeviceId) -> Result<Same> {
         Ok(match self.local_fact(&format!("same_device:{}", older.to_hex()))?.as_deref() {
             Some("not") => Same::Not,
