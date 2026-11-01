@@ -1966,6 +1966,21 @@ impl Qurb {
         Ok(())
     }
 
+    /// Whether the computer keeps this phone's Private Vault files, not only
+    /// its backups (the owner's review of 2026-11-02, D-3).
+    pub fn keeps_vault_files(&self, fingerprint: String) -> Result<bool, QurbError> {
+        let device = self.device_of(&fingerprint)?;
+        Ok(self.engine()?.store().db().holds_vault_files(&device)?)
+    }
+
+    /// The Vault switch: the computer keeps the Private Vault files, or stops
+    /// being shown them, while the folders and WhatsApp go on being backed up
+    /// to it either way. What it already has, it keeps.
+    pub fn set_keeps_vault_files(&self, fingerprint: String, keep: bool) -> Result<(), QurbError> {
+        let device = self.device_of(&fingerprint)?;
+        Ok(self.engine()?.store().db().set_vault_files(&device, keep)?)
+    }
+
     /// Folders, and which devices each is shared with (decision 0044).
     pub fn sharing(&self) -> Result<Vec<SharedFolder>, QurbError> {
         let engine = self.look()?;

@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27, V28];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27, V28, V29];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -683,6 +683,13 @@ END;
 
 /// Each device's own name and picture, set on it and shown on every device
 /// paired with it (the owner's list of 2026-10-26, item 7).
+const V29: &str = r#"
+-- Whether a device keeping this device's vault keeps its Private Vault files
+-- too, or only the folders and WhatsApp backed up into it (the owner's review
+-- of 2026-11-02, D-3): the Vault switch, apart from the backups.
+ALTER TABLE holders ADD COLUMN vault INTEGER NOT NULL DEFAULT 1;
+"#;
+
 const V28: &str = r#"
 -- This device's: what it tells a device that asks.
 CREATE TABLE IF NOT EXISTS own_profile (
@@ -2473,6 +2480,13 @@ impl Db {
                         true => "",
                         false => "AND substr(path, 1, 14) <> '.qurb-outside/'",
                     };
+                    // A holder keeping only the backups is shown only them
+                    // (the owner's review of 2026-11-02, D-3).
+                    let outside = match self.holds_vault_files(asker)? {
+                        true => outside,
+                        false if outside.is_empty() => "AND substr(path, 1, 14) = '.qurb-outside/'",
+                        false => "AND 0",
+                    };
                     let mut mine = self.conn.prepare(&format!(
                         "SELECT {FILE_COLUMNS} FROM files WHERE scope = ?1 {outside} ORDER BY path"
                     ))?;
@@ -3149,6 +3163,30 @@ impl Db {
             Ok(to_device(raw))
         })?;
         Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?.into_iter().flatten().collect())
+    }
+
+    /// Whether `device`, holding this device's vault, keeps its Private Vault
+    /// files too, rather than only what is backed up into it (D-3). False for
+    /// a device that holds nothing.
+    pub fn holds_vault_files(&self, device: &DeviceId) -> Result<bool> {
+        Ok(self
+            .conn
+            .query_row("SELECT vault FROM holders WHERE device_id = ?1", params![device.as_bytes().as_slice()], |r| {
+                r.get::<_, i64>(0)
+            })
+            .optional()?
+            .is_some_and(|v| v != 0))
+    }
+
+    /// Whether `device` keeps the Private Vault files, set apart from whether
+    /// it keeps the backups: made a holder for the backups if it was not.
+    pub fn set_vault_files(&self, device: &DeviceId, keep: bool) -> Result<()> {
+        self.add_holder(device)?;
+        self.conn.execute(
+            "UPDATE holders SET vault = ?2 WHERE device_id = ?1",
+            params![device.as_bytes().as_slice(), keep as i64],
+        )?;
+        Ok(())
     }
 
     /// Whether `device` may hold this device's vault.

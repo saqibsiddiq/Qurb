@@ -440,3 +440,35 @@ fn a_file_older_than_any_tick_is_not_read_again() {
     let again = phone.sync(&[entry], true);
     assert_eq!((again.unchanged, again.bytes_read), (1, 0));
 }
+
+/// The Vault switch apart from the backups (the owner's review of 2026-11-02,
+/// D-3): a computer keeping only the backups is shown the folders kept
+/// outside and nothing of the Private Vault's own files; switched back, both.
+#[test]
+fn a_holder_of_the_backups_only_is_shown_only_them() {
+    let mut phone = Phone::new();
+    let entry = phone.write("Media/WhatsApp Images/IMG-2.jpg", &noisy(30_000, 3), 1);
+    phone.sync(&[entry], true);
+    let pdf = phone.store.root().join("passport.pdf");
+    std::fs::write(&pdf, noisy(20_000, 4)).unwrap();
+    phone.store.put_file("passport.pdf", &pdf).unwrap();
+    phone.store.db().set_outside_offered(true).unwrap();
+    phone.store.db().add_holder(&computer()).unwrap();
+
+    let paths = |phone: &Phone| -> Vec<String> {
+        phone.store.tree_for(Audience::Device(&computer())).unwrap().into_iter()
+            .filter(|v| v.area == Area::Hold).map(|v| v.path).collect()
+    };
+    let both = paths(&phone);
+    assert!(both.iter().any(|p| p == "passport.pdf"), "{both:?}");
+    assert!(both.iter().any(|p| p.starts_with(".qurb-outside/")), "{both:?}");
+
+    phone.store.db().set_vault_files(&computer(), false).unwrap();
+    assert!(phone.store.db().is_holder(&computer()).unwrap(), "stopped keeping the backups too");
+    let backups = paths(&phone);
+    assert!(backups.iter().all(|p| p.starts_with(".qurb-outside/")), "{backups:?}");
+    assert!(!backups.is_empty());
+
+    phone.store.db().set_vault_files(&computer(), true).unwrap();
+    assert_eq!(paths(&phone), both);
+}

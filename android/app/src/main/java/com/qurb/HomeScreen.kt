@@ -200,7 +200,8 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         box.removeAllViews()
         val files = state.outstanding.files
         val backupLeft = backupsLeft(state)
-        val count = files.size + state.sends.size + backupLeft
+        val restoring = Restore.running
+        val count = files.size + state.sends.size + backupLeft + (if (restoring != null) 1 else 0)
         box.visibility = if (count == 0) View.GONE else View.VISIBLE
         if (count == 0) return false
 
@@ -227,6 +228,14 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = kit.dp(8) })
 
+        // A restore going (the owner's review of 2026-11-02, D-2): from where,
+        // how far, and the file now coming back.
+        if (restoring != null) {
+            val fraction = if (restoring.bytes > 0uL) restoring.bytesDone.toFloat() / restoring.bytes.toFloat() else 0f
+            kit.queueRow(queue, R.drawable.ic_rotate_ccw, "Restoring from ${restoring.from}", "", fraction,
+                detail = restoring.current.ifEmpty { null },
+                after = "${restoring.done} of ${restoring.files}")
+        }
         for (f in files.take(WAITING_ROWS)) {
             kit.queueRow(queue, States.icon(f.path), f.path.substringAfterLast('/'), Words.size(f.size))
         }

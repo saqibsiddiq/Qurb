@@ -52,7 +52,10 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
 
     private class State(
         val peer: PeerInfo?,
+        /** It keeps this phone's backups (a holder). */
         val keeps: Boolean,
+        /** And the Private Vault's own files too (D-3). */
+        val vaultFiles: Boolean,
         val whatsApp: BackupState,
         val folders: Int,
     )
@@ -66,6 +69,7 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
                         engine.peers().firstOrNull { it.fingerprint == peer.fingerprint }
                             ?.also { Devices.load(engine, listOf(it)) },
                         engine.holders().any { it.fingerprint == peer.fingerprint },
+                        runCatching { engine.keepsVaultFiles(peer.fingerprint) }.getOrDefault(false),
                         engine.whatsappBackup(),
                         if (Folders.allowed(app)) engine.chosenFolders().size else 0,
                     )
@@ -141,38 +145,119 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
 
         kit.label(page, "Backs up")
         val card = kit.card(page)
-        // Which folders this phone backs up, always offered on its own
-        // computer's page, Home's circle the way here (the owner's list of
-        // 2026-11-01, item 12): the row had shown only once the computer kept
-        // the Private Vault, and he found no way to choose. Folders travel
-        // inside the vault, so on a computer not keeping it yet, choosing
-        // first asks to keep it there.
+        // What goes to it (the owner's review of 2026-11-02, D-3): the folders
+        // and WhatsApp, always offered on one's own computer, each making it
+        // keep the backups if it did not; and the Private Vault's own files,
+        // a switch of their own -- off, the backups go on.
         if (!host) {
             kit.setting(card, R.drawable.ic_folder, "Folders",
                 if (state.keeps && state.folders > 0) state.folders.toString() else "") {
-                if (state.keeps) app.push(FoldersScreen(app, peer.name, R.id.tab_home))
-                else keeping.keep(peer) { app.push(FoldersScreen(app, peer.name, R.id.tab_home)) }
+                backUpHere { app.push(FoldersScreen(app, peer.name, R.id.tab_home)) }
             }
-        }
-        if (state.keeps && !host) {
-            val backing = WhatsApp.tree(app) != null
+            val backing = state.keeps && WhatsApp.tree(app) != null
             kit.setting(card, R.drawable.ic_whatsapp, "WhatsApp",
                 if (backing && state.whatsApp.bytes > 0uL) Words.size(state.whatsApp.bytes) else "",
                 on = backing, onChange = { on ->
-                if (on) backups.whatsApp(state.whatsApp, peer.name, backing = false)
-                else backups.stopWhatsApp(peer.name)
-                // The switch shows what is so, not what was tapped: on once
-                // WhatsApp's folder is chosen, off once stopping is confirmed.
-                refresh()
+                    if (on) backUpHere { backups.whatsApp(state.whatsApp, peer.name, backing = false) }
+                    else backups.stopWhatsApp(peer.name)
+                    // The switch shows what is so, not what was tapped: on once
+                    // WhatsApp's folder is chosen, off once stopping is confirmed.
+                    refresh()
+                })
+            kit.setting(card, R.drawable.ic_lock_keyhole, "Private Vault", on = state.vaultFiles, onChange = { on ->
+                scope.launch {
+                    runCatching { withContext(Dispatchers.IO) { engine().setKeepsVaultFiles(peer.fingerprint, on) } }
+                        .onFailure { app.fail("Could not change that", it) }
+                    app.madeChange()
+                }
+            })
+        } else {
+            // Another person's computer: the vault sealed there, as before.
+            kit.setting(card, R.drawable.ic_lock_keyhole, "Private Vault", on = state.keeps, onChange = { on ->
+                if (on) keeping.keep(peer) else keeping.stop(peer)
             })
         }
-        kit.setting(card, R.drawable.ic_lock_keyhole, "Private Vault", on = state.keeps, onChange = { on ->
-            if (on) keeping.keep(peer) else keeping.stop(peer)
-        })
 
-        // In red, and behind the phone's own lock (items 5 and 18).
+        // Restore (D-2): from this computer, what it keeps of this phone put
+        // back where it came from; a file already here is skipped.
+        if (state.keeps) restore(page)
+
+        // In red, and behind the phone's own lock (items 5 and 18); then
+        // another device chosen, as holding Home's circle does (D-1).
         page.addView(kit.button(if (host) "Stop visiting" else "Remove", Kit.Style.DANGER) { askToRemove() },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48)).apply { topMargin = kit.dp(20) })
+        page.addView(kit.button("Switch device", Kit.Style.SECONDARY) {
+            scope.launch {
+                val peers = runCatching { withContext(Dispatchers.IO) { engine().peers() } }.getOrDefault(emptyList())
+                kit.chooseDevice(peers, peer) { app.onBackPressedDispatcher.onBackPressed() }
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48)).apply { topMargin = kit.dp(10) })
+    }
+
+    /** Make it keep this phone's backups, without the Vault's own files if it
+     *  did not keep them, then `then`. */
+    private fun backUpHere(then: () -> Unit) {
+        scope.launch {
+            val ok = runCatching {
+                withContext(Dispatchers.IO) {
+                    val engine = engine()
+                    if (engine.holders().none { it.fingerprint == peer.fingerprint }) engine.setKeepsVaultFiles(peer.fingerprint, false)
+                }
+            }.onFailure { app.fail("Could not change that", it) }.isSuccess
+            if (ok) {
+                app.madeChange()
+                then()
+            }
+        }
+    }
+
+    /** The Restore section: everything, WhatsApp, each folder, files chosen. */
+    private fun restore(page: LinearLayout) {
+        kit.label(page, "Restore")
+        val card = kit.card(page)
+        val going = Restore.running
+        if (going != null) {
+            kit.setting(card, R.drawable.ic_rotate_ccw, "Restoring ${going.what}", "${going.done} of ${going.files}")
+            return
+        }
+        kit.setting(card, R.drawable.ic_rotate_ccw, "Everything") { ask(Restore.What.Everything) }
+        kit.setting(card, R.drawable.ic_whatsapp, "WhatsApp") { ask(Restore.What.WhatsApp) }
+        val folders = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        card.addView(folders)
+        kit.setting(card, R.drawable.ic_circle_check, "Choose files") {
+            scope.launch {
+                val top = runCatching {
+                    withContext(Dispatchers.IO) {
+                        engine().openKeptFolder(peer.fingerprint, 20u).list("").folders.firstOrNull { !it.endsWith(", earlier") }
+                    }
+                }.getOrNull()
+                app.push(KeptScreen(app, peer, top, peer.name))
+            }
+        }
+        // Each folder backed up, as the computer lists them; WhatsApp and the
+        // Private Vault have rows of their own or are the Vault.
+        scope.launch {
+            val names = runCatching {
+                withContext(Dispatchers.IO) {
+                    val open = engine().openKeptFolder(peer.fingerprint, 20u)
+                    val top = open.list("").folders.firstOrNull { !it.endsWith(", earlier") } ?: return@withContext emptyList()
+                    open.list(top).folders.filter { it != "WhatsApp" && it != "Private Vault" }
+                }
+            }.getOrDefault(emptyList())
+            for (name in names) kit.setting(folders, R.drawable.ic_folder, name) { ask(Restore.What.Folder(name)) }
+        }
+    }
+
+    private fun ask(what: Restore.What) {
+        kit.sheet()
+            .mark(R.drawable.ic_rotate_ccw, R.color.green_soft, R.color.green)
+            .title("Restore ${what.words.lowercase().takeIf { what !is Restore.What.Folder } ?: what.words}?", centred = true)
+            .line("From ${peer.name}, back where each file was. Files already on this phone are skipped.")
+            .buttons("Restore") {
+                Restore.start(app, peer, what)
+                refresh()
+            }
+            .show()
     }
 
     /** Who it is, behind the info button: its identity and when it was paired. */
