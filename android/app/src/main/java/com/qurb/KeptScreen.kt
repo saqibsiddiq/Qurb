@@ -34,6 +34,8 @@ class KeptScreen(
      *  computer gives it (the owner's list of 2026-11-01, items 2 to 4);
      *  null for the folder's top, as before. */
     private val start: String? = null,
+    /** The page it was opened from, which the way back names. */
+    private val up: String = "Files",
 ) : Screen(app) {
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
@@ -53,15 +55,14 @@ class KeptScreen(
 
     init {
         views.back.visibility = View.VISIBLE
-        views.back.text = "Files"
+        views.back.text = up
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
-        views.title.text = start ?: "On ${computer.name}"
-        views.subtitle.visibility = View.VISIBLE
+        views.subtitle.visibility = View.GONE
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
         scope.launch(Dispatchers.IO) { Opened.tidy(app) }
 
-        val (field, box) = kit.searchField("Search ${computer.name}") { typed ->
+        val (field, box) = kit.searchField("Search ${start ?: computer.name}") { typed ->
             query = typed
             searching?.cancel()
             searching = scope.launch {
@@ -95,12 +96,22 @@ class KeptScreen(
     }
 
     override fun refresh() {
-        // Few words (item 10): where this is, and nothing at the top.
-        views.subtitle.text = if (dir.isEmpty() || dir == start) "" else dir.removePrefix(start.orEmpty()).trim('/').replace("/", "  ›  ")
-        views.subtitle.visibility = if (views.subtitle.text.isEmpty()) View.GONE else View.VISIBLE
+        // As every folder (item 10): its name the title, the way back naming
+        // where it goes, and no words under it.
+        val top = start ?: ""
+        views.title.text = if (dir == top) start ?: "On ${computer.name}" else dir.substringAfterLast('/')
+        views.back.text = when {
+            dir == top -> up
+            dir.substringBeforeLast('/', "") == top -> start ?: "On ${computer.name}"
+            else -> dir.substringBeforeLast('/').substringAfterLast('/')
+        }
+        val seen = LastListing.key(computer, "mine", dir)
         if (folder == null) {
-            listed.removeAllViews()
-            kit.empty(listed, R.drawable.ic_monitor_smartphone, "Reaching ${computer.name}…")
+            // What this folder held last time, at once, while it is asked again (item 7).
+            LastListing.of(seen).takeIf { query.isEmpty() }?.let { show(it) } ?: run {
+                listed.removeAllViews()
+                kit.empty(listed, R.drawable.ic_monitor_smartphone, "Reaching ${computer.name}…")
+            }
         }
         val asked = query
         scope.launch {
@@ -111,6 +122,7 @@ class KeptScreen(
                     }.also { folder = it }
                     if (asked.isEmpty()) open.list(dir) else KeptListing(emptyList(), open.search(false, asked))
                 }
+                if (asked.isEmpty()) LastListing.keep(seen, listing)
                 // A listing for words since changed is not shown.
                 if (asked == query) show(listing)
             } catch (e: Exception) {
@@ -398,4 +410,16 @@ class KeptScreen(
         private const val WHATSAPP = ".qurb-outside/whatsapp/"
         private const val STORAGE = ".qurb-outside/storage/"
     }
+}
+
+/**
+ * What each computer's folders listed when last seen, for this run of the
+ * app: shown at once when one is opened again, while the computer is asked
+ * (the owner's list of 2026-11-01, item 7). Held in memory only.
+ */
+internal object LastListing {
+    private val seen = java.util.concurrent.ConcurrentHashMap<String, KeptListing>()
+    fun key(computer: uniffi.qurb_mobile.PeerInfo, area: String, dir: String) = "${computer.fingerprint}/$area/$dir"
+    fun of(key: String): KeptListing? = seen[key]
+    fun keep(key: String, listing: KeptListing) { seen[key] = listing }
 }

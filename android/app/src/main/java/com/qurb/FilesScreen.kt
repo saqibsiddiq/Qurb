@@ -35,7 +35,7 @@ import uniffi.qurb_mobile.FileEntry
  * file picker lists Qurb, so the two cannot disagree. Search looks at every
  * folder at once. Back goes up a folder before it leaves.
  */
-class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app) {
+class FilesScreen(app: MainActivity, private val private: Boolean, private val up: String = "Files") : Screen(app) {
 
     private val views = ScreenFilesBinding.inflate(app.layoutInflater)
     override val view: View get() = views.root
@@ -68,7 +68,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             views.searchBox.hint = "Search Vault"
             views.search.hint = "Search Vault"
             views.back.visibility = View.VISIBLE
-            views.back.text = "Files"
+            views.back.text = up
             views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         } else {
             views.subtitle.text = "Everything in your Qurb space, and where it is."
@@ -223,7 +223,7 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             crumbs.visibility = View.GONE
             views.title.text = if (dir.isEmpty()) "Vault" else dir.substringAfterLast('/')
             views.back.text = when {
-                dir.isEmpty() -> "Files"
+                dir.isEmpty() -> up
                 dir.contains('/') -> dir.substringBeforeLast('/').substringAfterLast('/')
                 else -> "Vault"
             }

@@ -37,7 +37,7 @@ import uniffi.qurb_mobile.Progress
  * is open, and closed when it is left, as this phone's own folder there is
  * ([KeptScreen]).
  */
-class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app) {
+class SharedScreen(app: MainActivity, private val computer: PeerInfo, private val up: String = "Files") : Screen(app) {
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
     override val view: View get() = views.root
@@ -54,7 +54,7 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
 
     init {
         views.back.visibility = View.VISIBLE
-        views.back.text = "Files"
+        views.back.text = up
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         views.title.text = "Shared"
         // The plus adds files from this phone; the redesign floats it, and
@@ -83,9 +83,8 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
         views.refresh.setOnRefreshListener { refresh() }
 
         val page = views.sections
-        page.addView(on(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        page.addView(searchField(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48))
-            .apply { topMargin = kit.dp(14) })
+        // No line naming the computer (item 10): the page before is it.
+        page.addView(searchField(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(48)))
         page.addView(listed, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { topMargin = kit.dp(14) })
     }
@@ -109,30 +108,6 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
         StreamProvider.clear()
     }
 
-    /** Which computer the folder is on, and whether it answered: a laptop, its
-     *  name, its dot. */
-    private fun on(): View {
-        val line = LinearLayout(app).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            contentDescription = "On ${computer.name}"
-        }
-        line.addView(ImageView(app).apply {
-            setImageResource(States.device(computer.name, computer.kind))
-            imageTintList = ColorStateList.valueOf(kit.color(R.color.text_2))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(kit.dp(14), kit.dp(14)).apply { marginEnd = kit.dp(6) })
-        line.addView(TextView(app).apply {
-            text = computer.name
-            setTextAppearance(R.style.Text_Meta)
-            setTextColor(kit.color(R.color.text_2))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        })
-        line.addView(kit.dot(Engine.isOff(app, computer)), LinearLayout.LayoutParams(kit.dp(8), kit.dp(8))
-            .apply { marginStart = kit.dp(6) })
-        return line
-    }
-
     /** *Search Shared*: the computer looks, as the words are typed. */
     private fun searchField(): View {
         val (field, box) = kit.searchField("Search Shared") { typed ->
@@ -148,11 +123,14 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
     }
 
     override fun refresh() {
-        views.back.text = if (dir.isEmpty()) "Files" else dir.substringBeforeLast('/', "Shared")
+        views.back.text = if (dir.isEmpty()) up else dir.substringBeforeLast('/', "Shared")
         views.title.text = if (dir.isEmpty()) "Shared" else dir.substringAfterLast('/')
+        val seen = LastListing.key(computer, "shared", dir)
         if (folder == null) {
-            listed.removeAllViews()
-            kit.empty(listed, R.drawable.ic_users, "Reaching ${computer.name}…")
+            LastListing.of(seen).takeIf { query.isEmpty() }?.let { show(it) } ?: run {
+                listed.removeAllViews()
+                kit.empty(listed, R.drawable.ic_users, "Reaching ${computer.name}…")
+            }
         }
         val asked = query
         scope.launch {
@@ -161,6 +139,7 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
                     val open = opened()
                     if (asked.isEmpty()) open.shared(dir) else KeptListing(emptyList(), open.search(true, asked))
                 }
+                if (asked.isEmpty()) LastListing.keep(seen, listing)
                 if (asked == query) show(listing)
             } catch (e: Exception) {
                 left()

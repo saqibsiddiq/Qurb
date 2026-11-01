@@ -14,7 +14,7 @@ import uniffi.qurb_mobile.FileEntry
  * file is still here; it lives in the Vault, which is where a send to a
  * phone goes (decision 0037).
  */
-class ReceivedScreen(app: MainActivity) : Screen(app) {
+class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Screen(app) {
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
     override val view: View get() = views.root
@@ -22,11 +22,9 @@ class ReceivedScreen(app: MainActivity) : Screen(app) {
 
     init {
         views.back.visibility = View.VISIBLE
-        views.back.text = "Files"
-        views.back.setTextAppearance(R.style.Text_Name)
+        views.back.text = up
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
         views.title.text = "Received"
-        views.title.setTextAppearance(R.style.Text_Hero)
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
     }

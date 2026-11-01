@@ -3048,8 +3048,18 @@ Verified on the S23 against the laptop: the Files top, the laptop's
 *Shared* and *sakib*, the phone's *Vault* and *Received*. **Not verified:**
 a locked folder, there being no other person paired with the laptop; the
 renaming when the phone's name changes, which the computer does on its
-next layout and was not watched. Item 10 is begun — the folders are one
-card alike — but the screens inside them still differ in their words.
+next layout and was not watched.
+
+**Item 10 and item 7's second half, 2026-11-01.** Vault, Received, Shared and
+the phone's backup folder now behave alike: the folder's name is the title,
+the way back names the page it returns to (the phone's or the computer's
+name at the top, the parent folder below), and nothing is written under the
+title — the backup folder's breadcrumb line and Shared's line naming the
+computer are gone. A computer's folder, opened again in the same run of the
+app, shows what it listed last time at once while the computer is asked
+(`LastListing`, memory only). Verified on the S23 for the backup folder and
+Shared's first version; the final build installed but was not looked at, the
+phone being in use.
 
 The rest: not built yet.
 

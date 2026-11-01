@@ -87,8 +87,8 @@ class PhoneFolders(app: MainActivity, private val name: String) : Screen(app) {
         val page = views.sections
         page.removeAllViews()
         kit.folderGrid(page, listOf(
-            kit.folderCard("Vault", R.drawable.ic_lock_keyhole) { app.push(FilesScreen(app, private = true)) },
-            kit.folderCard("Received", R.drawable.ic_download) { app.push(ReceivedScreen(app)) },
+            kit.folderCard("Vault", R.drawable.ic_lock_keyhole) { app.push(FilesScreen(app, private = true, up = name)) },
+            kit.folderCard("Received", R.drawable.ic_download) { app.push(ReceivedScreen(app, name)) },
         ))
     }
 }
@@ -149,10 +149,10 @@ class ComputerFolders(app: MainActivity, private val computer: PeerInfo) : Scree
         page.removeAllViews()
         kit.folderGrid(page, places.map { place ->
             when (place.kind) {
-                "shared" -> kit.folderCard(place.name, R.drawable.ic_folder) { app.push(SharedScreen(app, computer)) }
+                "shared" -> kit.folderCard(place.name, R.drawable.ic_folder) { app.push(SharedScreen(app, computer, computer.name)) }
                 "mine" -> kit.folderCard(place.name, R.drawable.ic_smartphone) {
                     // From a computer too old to name it: the folder's top.
-                    app.push(KeptScreen(app, computer, place.name.takeIf { it != "Private" }))
+                    app.push(KeptScreen(app, computer, place.name.takeIf { it != "Private" }, computer.name))
                 }
                 else -> kit.folderCard(place.name, R.drawable.ic_lock_keyhole) {
                     app.say("${place.name}'s folder. Only they can open it.")
