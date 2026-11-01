@@ -22,9 +22,12 @@ Chosen 2026-11-01, with no money or card for a server yet. Costs nothing:
   phone or computer finds the others with nothing typed; a device whose
   settings name another keeps it.
 - **Dashboard**: Grafana Cloud's free tier, fed by Grafana Alloy on the
-  laptop: `sudo packaging/staging/install-alloy.sh` installs it from Arch's
-  own repository (Grafana's one-line installer is for Debian and Red Hat
-  only), asks for the stack's values and keeps the token root-only, and
+  laptop: `sudo packaging/staging/install-alloy.sh` installs Grafana's own
+  release of it (v1.21.3), checked against its published SHA-256, as a
+  service of its own user — not a distribution package: on 2026-11-01 every
+  Arch and CachyOS mirror answered 404 for the build the laptop's package
+  list named, and Grafana's one-line installer is for Debian and Red Hat
+  only. It asks for the stack's values and keeps the token root-only, and
   installs [packaging/staging/config.alloy](../packaging/staging/config.alloy).
   It sends the laptop's traffic, CPU, memory and disk, and **only the
   rendezvous service's log** — narrower than Grafana's template, which sends
