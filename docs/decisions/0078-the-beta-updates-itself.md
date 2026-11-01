@@ -10,8 +10,22 @@ refusals stand. **The desktop's update proven** with v0.2.0-beta.2 the same
 afternoon: the laptop's AppImage, restarted at 15:07:39, found it at
 15:08:42, fetched and verified it, and had it in place at 15:08:56 —
 byte for byte the release's — and, started again, ran as it and found
-nothing newer. **The phone's not yet**: it needs the owner's tap, and his
-one-time "allow installing" in Android.
+nothing newer. **The phone's proven the same afternoon**, after a gap was found
+and fixed: the S23, reinstalled and not yet set up, sat on the setup screen,
+where nothing looked for updates — so a phone that cannot get past setting
+up would never receive the build that fixes it. The setup screen now looks
+every time it shows, and the worker looks before asking whether the phone is
+set up. With that build on it (0.2.0-beta.1, release key), the S23 found
+beta.2 at 15:44:27, fetched and checked it, asked once to be allowed to
+install, and at 15:45:40 was 0.2.0-beta.2 (version code 20002), Android
+recording QurbSpace itself as its installer.
+
+**Google Play Protect warned** before that install: its verdict
+`POTENTIALLY_UNWANTED`, "This app may be harmful", threat type
+`generic_malware` — a heuristic, about an app from a developer it does not
+know, outside Play, able to install apps and to read all of the phone's
+files: the pattern of a dropper. The owner chose to install anyway. Ways out
+are in the left-undone list; disguising the app from the scan is not one.
 **Date:** 2026-11-01
 
 ## What was asked
@@ -65,3 +79,9 @@ installs over the last (`scripts/release-manifests.py`, `versionCodeOf` in
   release-signed build once, by reinstalling, which clears the app's data.
   Its files stay on the laptop.
 - **Rolling back** an update is by hand: install the earlier release.
+- **Play Protect's warning** on the APK from GitHub. The way out that keeps
+  updates seamless is Google Play's testing tracks: Play installs and updates
+  the app, and Play's own policy then forbids the app updating itself, so a
+  Play build would leave the updater out. Short of that, the APK can be
+  submitted to Google for review as a false positive, and the developer
+  registered under Android's developer verification.

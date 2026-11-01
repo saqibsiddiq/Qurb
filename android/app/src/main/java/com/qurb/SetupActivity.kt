@@ -43,6 +43,31 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * A newer build, looked for whenever this screen shows, not every six
+     * hours as once set up: a phone that cannot get past setting up is the
+     * one that most needs the build that fixes it (decision 0078; found
+     * 2026-11-01, when the S23 sat here on 0.2.0-beta.1 with beta.2 out).
+     * Installed at once when Android allows it; otherwise asked, once a visit.
+     */
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch {
+            val now = Updates.run(this@SetupActivity, now = true)
+            if (now !is Updates.State.Ready) return@launch
+            if (Updates.allowed(this@SetupActivity)) {
+                Updates.installReady(this@SetupActivity)
+                return@launch
+            }
+            androidx.appcompat.app.AlertDialog.Builder(this@SetupActivity)
+                .setTitle("QurbSpace ${now.versionName} is ready")
+                .setMessage("Allow QurbSpace to install its updates, then come back here.")
+                .setPositiveButton("Allow") { _, _ -> startActivity(Updates.allowIntent(this@SetupActivity)) }
+                .setNegativeButton("Not now", null)
+                .show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         views = ActivitySetupBinding.inflate(layoutInflater)
