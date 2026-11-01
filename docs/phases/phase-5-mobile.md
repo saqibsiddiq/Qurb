@@ -3083,8 +3083,12 @@ waited for the app to be opened; it is now asked once on first opening, and a
 pass looks for asks every second instead of at its end. Item 8: the computer
 answers `Request::Storage` (its disk, and its shared folder, each of the
 owner's phones' backups and Vault, other people's, Recently deleted) and
-`Request::EmptyDeleted`, to the owner's phones only; **the phone's Storage
-screen that shows and uses them is not built.**
+`Request::EmptyDeleted`, to the owner's phones only. Its phone half, built
+2026-11-02: Settings → *Storage* (`StorageScreen.kt`), a card for each of the
+person's computers -- free of its disk, one bar coloured by what fills it, a
+row for each kind with its size, *Recently deleted* tapped to empty it after
+asking -- then this phone: what the app takes, and its cache cleared. **All of
+items 6, 8, 11 and 12 await the test with the owner.**
 
 The rest: not built yet.
 

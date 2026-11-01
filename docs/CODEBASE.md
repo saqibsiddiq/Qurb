@@ -987,6 +987,15 @@ qurb/
 │       │                                      deleted (0073, Files draft 4)
 │       │                  Clipboard.kt        one copy for every folder, pasted
 │       │                                      into the Vault or a Shared (0080)
+│       │                  Thumbs.kt           thumbnails, a camera JPEG on a
+│       │                                      computer read from its first bytes;
+│       │                                      Gallery, a folder of photos as a grid
+│       │                  Peek.kt             quick preview: a picture or a text,
+│       │                                      full screen, swiped through
+│       │                  StorageScreen.kt    Settings → Storage: each computer's
+│       │                                      disk and what fills it
+│       │                                      (Request::Storage), Recently deleted
+│       │                                      emptied; this phone's cache
 │       │                  Opened.kt           a file of a computer's folder,
 │       │                                      opened without keeping it
 │       │                  StreamProvider.kt   a large file of it opened in another

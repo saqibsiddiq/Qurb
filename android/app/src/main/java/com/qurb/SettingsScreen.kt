@@ -123,7 +123,10 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         // What the app holds here, said; no Free up and no Recently deleted on
         // the phone (the owner's list of 2026-11-01, item 9): storage is the
         // computers' to manage.
-        kit.setting(card, R.drawable.ic_hard_drive, "Space used", Words.size(state.usage.onDisk))
+        // Storage: the computers', managed from here (item 8), and this phone's.
+        kit.setting(card, R.drawable.ic_hard_drive, "Storage", Words.size(state.usage.onDisk)) {
+            app.push(StorageScreen(app))
+        }
         // Its own row, never part of the one above: the devices sent to have
         // these, but one may have lost its copy since (decision 0030).
         if (state.sentCopies > 0uL) {

@@ -4112,6 +4112,26 @@ pub struct ComputerPlace {
     pub kind: String,
 }
 
+/// What a computer keeps, by kind, and its disk, for Settings → Storage (the
+/// owner's list of 2026-11-01, item 8). Sizes in bytes; `disk` and `free`
+/// are 0 when the computer could not say.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ComputerStorage {
+    pub disk: u64,
+    pub free: u64,
+    pub parts: Vec<StoragePart>,
+}
+
+/// One kind of what a computer keeps: `kind` is "shared", "backups",
+/// "vault", "guest", "deleted" or "other"; `name` the phone or person it is
+/// for, where it is for one.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct StoragePart {
+    pub kind: String,
+    pub name: String,
+    pub bytes: u64,
+}
+
 /// This phone's folder on a computer, reached once and kept open while it is
 /// browsed: listed a place at a time, and any file in it fetched to where the
 /// app says (decision 0067, step 4). Closed when the app leaves it.
@@ -4144,6 +4164,41 @@ impl KeptFolder {
     /// shared folder, this phone's own, named as the phone is, and other
     /// people's, locked. From a computer too old to say, its shared folder
     /// and this phone's, as before.
+    /// What the computer keeps, by kind, and its disk; None from a computer
+    /// too old to say, or one that does not tell this phone.
+    pub fn storage(&self) -> Result<Option<ComputerStorage>, QurbError> {
+        use qurb_peer::wire::Part;
+        let told = self
+            .runtime
+            .block_on(self.client.storage())
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        Ok(told.map(|(disk, free, parts)| ComputerStorage {
+            disk,
+            free,
+            parts: parts
+                .into_iter()
+                .map(|(part, name, bytes)| StoragePart {
+                    kind: match part {
+                        Part::Shared => "shared",
+                        Part::Backups => "backups",
+                        Part::Vault => "vault",
+                        Part::Guest => "guest",
+                        Part::Deleted => "deleted",
+                        Part::Other => "other",
+                    }
+                    .into(),
+                    name,
+                    bytes,
+                })
+                .collect(),
+        }))
+    }
+
+    /// The computer's Recently deleted emptied for good.
+    pub fn empty_deleted(&self) -> Result<(), QurbError> {
+        changed(self.runtime.block_on(self.client.empty_deleted()))
+    }
+
     pub fn places(&self) -> Result<Vec<ComputerPlace>, QurbError> {
         use qurb_peer::wire::Place;
         let answer = self
