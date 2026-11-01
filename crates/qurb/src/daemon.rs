@@ -858,11 +858,19 @@ impl Daemon {
         // store and still in `known` would go on being dialled and synced with
         // by this device, however firmly the listener refused it.
         if !added.is_empty() || !removed.is_empty() {
-            for peer in &added {
-                tracing::info!(peer = %peer.short(), "a new device was paired");
-            }
-            for peer in &removed {
-                tracing::info!(peer = %peer.short(), "a device was removed");
+            // One gone and one come in the same look is, nearly always, a
+            // device that took its permanent identity (decision 0079): the
+            // same device under a new fingerprint, not a pairing and a
+            // removal -- which is how it read in the log on 2026-11-01.
+            if added.len() == 1 && removed.len() == 1 {
+                tracing::info!(from = %removed[0].short(), to = %added[0].short(), "a device took a new identity");
+            } else {
+                for peer in &added {
+                    tracing::info!(peer = %peer.short(), "a new device was paired");
+                }
+                for peer in &removed {
+                    tracing::info!(peer = %peer.short(), "a device was removed");
+                }
             }
             peers.learn(&current);
             self.report(|status| {

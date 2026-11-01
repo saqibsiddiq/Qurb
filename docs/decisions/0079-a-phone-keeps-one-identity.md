@@ -1,8 +1,14 @@
 # 0079 — A phone keeps one identity, however often it is set up
 
 **Status:** Accepted — built 2026-11-01; tested over real connections
-(`crates/peer/tests/permanent_identity.rs`) and in the store's rules. Not
-yet run on a phone: it needs the laptop and the phone on a release with it.
+(`crates/peer/tests/permanent_identity.rs`) and in the store's rules; in
+v0.2.0-beta.4. **The installed case run on the owner's S23 the same
+evening**: with the laptop and phone both on beta.4, the phone reached the
+laptop over Wi-Fi at 20:33:34 and took its permanent identity — the laptop
+kept its device id `E5781F95` and turned its fingerprint from `6385F8CC` to
+`F63A0F05` — and at 20:36:28, restarted, connected as it and synced. **The
+set-up-again case is not yet run on a phone**: that needs the app
+uninstalled and set up again.
 **Date:** 2026-11-01
 
 ## What was asked
