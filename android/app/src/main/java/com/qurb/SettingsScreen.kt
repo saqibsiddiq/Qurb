@@ -157,6 +157,25 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.setting(card, R.drawable.ic_palette, "Theme", Appearance.chosen(app).words) { chooseTheme() }
         // Follows the phone's own animation setting; nothing to choose here.
         kit.setting(card, R.drawable.ic_sliders_horizontal, "Motion", if (Kit.calm()) "Reduced" else "Full")
+        // The beta updates itself (decision 0078): this build, and a newer
+        // one when it has been fetched -- a tap installs it, the first time
+        // after allowing it in the system's page.
+        val update = Updates.state(app)
+        kit.setting(card, R.drawable.ic_download, "Version", when (update) {
+            is Updates.State.Ready -> "${update.versionName} ready"
+            is Updates.State.Failed -> "${Updates.installedName(app)}, couldn't check"
+            Updates.State.UpToDate -> Updates.installedName(app)
+        }) {
+            when {
+                update is Updates.State.Ready && !Updates.allowed(app) -> app.startActivity(Updates.allowIntent(app))
+                update is Updates.State.Ready -> Updates.installReady(app)
+                else -> scope.launch {
+                    val now = Updates.run(app, now = true)
+                    app.say(if (now is Updates.State.Ready) "${now.versionName} is ready" else if (now is Updates.State.Failed) "Couldn't check for updates" else "Up to date")
+                    refresh()
+                }
+            }
+        }
 
         kit.label(page, "Connection")
         card = kit.card(page)

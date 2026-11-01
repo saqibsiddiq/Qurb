@@ -1,6 +1,6 @@
 # 0047 — Versions, installing, and upgrading
 
-**Status:** Accepted
+**Status:** Accepted; its "no automatic updater" superseded by [0078](0078-the-beta-updates-itself.md) on 2026-11-01
 **Date:** 2026-09-28 (brief §69, §70)
 
 ## Decision

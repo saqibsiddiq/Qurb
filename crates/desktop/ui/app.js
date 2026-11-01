@@ -48,7 +48,7 @@ let liveBusy = false;
 setInterval(async () => {
   if (!running || liveBusy || document.hidden) return;
   liveBusy = true;
-  try { await PLACES[place].live?.(); } finally { liveBusy = false; }
+  try { await PLACES[place].live?.(); await showUpdate(); } finally { liveBusy = false; }
 }, 2000);
 
 let listsBusy = false;
@@ -100,6 +100,7 @@ async function start() {
   }
   const at = new URLSearchParams(location.search).get("place");
   go(at || "home");
+  showUpdate();
 }
 
 start();

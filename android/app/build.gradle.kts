@@ -37,6 +37,19 @@ if (firebaseConfigured) {
 val signingFile = file(
     System.getenv("QURB_SIGNING") ?: "${System.getProperty("user.home")}/.config/qurb/signing.properties"
 )
+/**
+ * A version as Android counts it, from the version a person reads: major,
+ * minor and patch in two digits each, then the beta number, or 99 for a
+ * release -- 0.2.0-beta.1 is 2_00_01, 0.2.0 is 2_00_99 -- so every later
+ * version installs over every earlier one. 0.1.0, before this, was 1.
+ */
+fun versionCodeOf(name: String): Int {
+    val (core, beta) = name.split("-beta.").let { it[0] to it.getOrNull(1)?.toInt() }
+    val (major, minor, patch) = core.split(".").map { it.toInt() }
+    return if (major == 0 && minor <= 1 && beta == null) 1
+    else ((major * 100 + minor) * 100 + patch) * 100 + (beta ?: 99)
+}
+
 val signing = Properties().apply {
     if (signingFile.exists()) signingFile.inputStream().use { load(it) }
 }
@@ -75,8 +88,11 @@ android {
         // are complete, which SQLite needs for files over 2 GB.
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // From the release tag in CI (`-Pqurb.versionName=0.2.0-beta.1`,
+        // .github/workflows/release.yml): the in-app updater installs a build
+        // only when its versionCode is higher (decision 0078).
+        versionName = (findProperty("qurb.versionName") as String?) ?: System.getenv("QURB_VERSION_NAME") ?: "0.1.0"
+        versionCode = versionCodeOf(versionName!!)
     }
 
     // Which architectures go in the APK is decided per build type. Only what is

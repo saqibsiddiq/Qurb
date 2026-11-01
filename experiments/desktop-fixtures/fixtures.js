@@ -164,6 +164,9 @@ const ANSWERS = {
     upload_limit: String(fixtureRates.up),
     download_limit: String(fixtureRates.down),
   }),
+  update_state: () => ({ current: "0.2.0-beta.1", state: params.has("update") ? "installed" : "idle", version: params.has("update") ? "0.2.0-beta.2" : null, progress: null, error: null }),
+  update_now: () => ({ current: "0.2.0-beta.1", state: "idle", version: null, progress: null, error: null }),
+  apply_update: () => null,
   set_bandwidth: ({ up, down }) => { fixtureRates.up = Number(up); fixtureRates.down = Number(down); return null; },
 
   // This computer's own folders, backed up (the owner's list of 2026-10-28).

@@ -1,0 +1,143 @@
+# A beta release, from a tag: `git tag v0.2.0-beta.1 && git push origin v0.2.0-beta.1`.
+#
+# Builds the desktop app for Linux (an AppImage, which updates itself, and a
+# .deb) on Ubuntu 22.04 -- so it runs on distributions that old and newer,
+# which a build on the owner's laptop (glibc 2.44) does not -- and for
+# Windows (not yet run on Windows); and the phone app, signed with the
+# release key. Then publishes them as the latest release, with the two files
+# every installed app reads to find it: latest.json for the desktop's
+# updater, android.json for the phone's (decision 0078).
+#
+# The keys are this repository's secrets, never in it:
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD  the updater key
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD  the release key
+#   GOOGLE_SERVICES_JSON_BASE64  Firebase, for waking phones; optional
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_RELEASE_DEBUG: "false"
+  CARGO_PROFILE_RELEASE_STRIP: debuginfo
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            bundles: appimage,deb
+          - os: windows-latest
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The version, from the tag
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev file
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop
+      - name: Tauri's command line
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Build, and sign for the updater
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          cd crates/desktop
+          cargo tauri build --config tauri.beta.conf.json --config "{\"version\":\"$VERSION\"}" --bundles ${{ matrix.bundles }}
+      - name: Gather
+        shell: bash
+        run: |
+          mkdir out
+          b=target/release/bundle
+          for f in $b/appimage/*.AppImage $b/appimage/*.AppImage.sig $b/deb/*.deb $b/nsis/*-setup.exe $b/nsis/*-setup.exe.sig; do
+            [[ -f $f ]] && cp "$f" out/
+          done
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ runner.os }}
+          path: out/*
+
+  android:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+      - name: The release key, and Firebase if it is given
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_SERVICES: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=qurb\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/release.jks" "$STORE_PASSWORD" "$KEY_PASSWORD" > "$RUNNER_TEMP/signing.properties"
+          echo "QURB_SIGNING=$RUNNER_TEMP/signing.properties" >> "$GITHUB_ENV"
+          if [[ -n $GOOGLE_SERVICES ]]; then echo "$GOOGLE_SERVICES" | base64 -d > android/app/google-services.json; fi
+      - name: Build
+        env:
+          QURB_VERSION_NAME: ${{ env.VERSION }}
+        run: |
+          export ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME
+          ./scripts/android-app.sh release
+          mkdir out
+          cp android/app/build/outputs/apk/release/app-release.apk "out/QurbSpace-$VERSION-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/*
+
+  publish:
+    needs: [desktop, android]
+    # The Linux and phone builds go out even if Windows -- never yet run
+    # there -- did not build.
+    if: ${{ !cancelled() && needs.android.result == 'success' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: What each installed app reads to find this release
+        run: python3 scripts/release-manifests.py "$VERSION" assets "https://github.com/${{ github.repository }}/releases/download/$GITHUB_REF_NAME"
+      - name: Publish, as the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" assets/* \
+            --title "QurbSpace $VERSION" \
+            --notes "Beta. Installed apps update themselves to this; see docs/updates.md." \
+            --latest

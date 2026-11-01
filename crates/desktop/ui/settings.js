@@ -33,11 +33,53 @@ async function drawSettings(main) {
       setting({ ic: "clock", name: "Activity", onclick: () => go("activity") }),
       setting({ ic: "bell", name: "Notifications", end: toggle(s.notifications, (on) => invoke("set_notifications", { on }), "Notifications") }),
       setting({ ic: "palette", name: "Theme", value: theme, onclick: themeSheet }),
-      setting({ ic: "sliders-horizontal", name: "Motion", value: calm ? "Reduced" : "Full" })),
+      setting({ ic: "sliders-horizontal", name: "Motion", value: calm ? "Reduced" : "Full" }),
+      setting({ ic: "download", name: "Version", value: h("span", { id: "version-says" }, " "), onclick: updateClicked })),
     group("Connection",
       setting({ ic: "arrow-up-down", name: "Speed limit", value: speedWords(s), onclick: () => go("speed") }),
       setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") })),
     group(null, setting({ ic: "x", name: "Quit QurbSpace", danger: true, onclick: () => invoke("quit") })));
+}
+
+// ---------- Updates (decision 0078) ----------
+
+/** Where updating stands, in a few words. */
+function updateWords(u) {
+  switch (u?.state) {
+    case "checking": return "Looking…";
+    case "downloading": return `Fetching ${u.version} ${Math.round((u.progress ?? 0) * 100)}%`;
+    case "installed": return `${u.version}, restart to use`;
+    case "ready": return `${u.version} ready`;
+    case "manual": return `${u.version} out`;
+    case "failed": return `${u.current}, couldn't check`;
+    default: return u?.current ?? "";
+  }
+}
+
+async function showUpdate() {
+  const u = await invoke("update_state").catch(() => null);
+  const says = $("version-says");
+  if (says) says.textContent = updateWords(u);
+  const chip = $("sb-update");
+  if (!chip || !u) return;
+  const waiting = u.state === "installed" || u.state === "ready";
+  chip.hidden = !waiting;
+  if (waiting) put(chip, icon("refresh-cw"), h("span", {}, u.state === "installed" ? "Restart to update" : "Install update"));
+  chip.onclick = () => applyUpdate(u);
+}
+
+async function applyUpdate(u) {
+  try { await invoke("apply_update"); } catch (e) { toast(String(e), true); }
+}
+
+async function updateClicked() {
+  const u = await invoke("update_state").catch(() => null);
+  if (u?.state === "installed" || u?.state === "ready") return applyUpdate(u);
+  if (u?.state === "manual") { toast("Update it with your package manager, or install the AppImage"); return; }
+  $("version-says").textContent = "Looking…";
+  const now = await invoke("update_now").catch(() => null);
+  showUpdate();
+  if (now?.state === "idle") toast("Up to date");
 }
 
 function downloadsWords(s) {

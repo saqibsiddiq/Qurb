@@ -3060,6 +3060,25 @@ mod tests {
 
 /// Stop qurb: the window and the syncing both, until it is opened again.
 /// Closing the window only hides it.
+/// Where updating the window stands (decision 0078).
+#[tauri::command]
+pub fn update_state(app: tauri::AppHandle) -> crate::updates::UpdateState {
+    crate::updates::state(&app)
+}
+
+/// Look for an update now, rather than at the next six-hourly look.
+#[tauri::command(async)]
+pub async fn update_now(app: tauri::AppHandle) -> crate::updates::UpdateState {
+    crate::updates::look(app.clone()).await;
+    crate::updates::state(&app)
+}
+
+/// Put a fetched update in place and start again as it.
+#[tauri::command(async)]
+pub fn apply_update(app: tauri::AppHandle) -> Answer<()> {
+    crate::updates::apply(&app)
+}
+
 #[tauri::command]
 pub fn quit(app: tauri::AppHandle) {
     app.exit(0);

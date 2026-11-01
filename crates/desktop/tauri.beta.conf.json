@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "targets": [
+      "appimage",
+      "deb",
+      "nsis"
+    ],
+    "publisher": "Qurb",
+    "homepage": "https://github.com/saqibsiddiq/Qurb",
+    "license": "MIT OR Apache-2.0",
+    "linux": {
+      "deb": {
+        "section": "utils"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  }
+}

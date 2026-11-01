@@ -72,6 +72,10 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // Wi-Fi or not first: the WhatsApp backup waits for Wi-Fi, and is
             // counted only then (decision 0062).
             Engine.noteNetwork(applicationContext)
+            // A newer build, during the beta (decision 0078): fetched, and
+            // installed while nobody has the app open. At most every six
+            // hours, and never a reason for the sync to fail.
+            Updates.run(applicationContext, install = !Notices.onScreen)
             // The folders chosen on the computer (decision 0063), on Wi-Fi
             // only, as the WhatsApp backup is: new files kept before the pass
             // counts what is waiting, so they go in this pass. Briefly; a

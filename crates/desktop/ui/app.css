@@ -1872,3 +1872,22 @@ body.setting-up .win {
   padding: 0 13px;
   font-size: 13px;
 }
+
+/* An update waiting: one quiet line at the sidebar's foot. */
+.sb-update {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 600;
+  font-size: 13px;
+}
+.sb-update .ic {
+  width: 16px;
+  height: 16px;
+}

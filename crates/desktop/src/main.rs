@@ -24,6 +24,7 @@ mod instance;
 mod notify;
 mod session;
 mod stream;
+mod updates;
 
 pub use session::Hosted;
 
@@ -119,6 +120,8 @@ fn run() -> Result<()> {
                     }
                 });
             }
+            // A newer build, looked for in the background (decision 0078).
+            updates::watch(app.handle().clone());
             Ok(())
         })
         // Closing the window hides it; qurb keeps syncing. Quitting is a
@@ -131,6 +134,7 @@ fn run() -> Result<()> {
             }
         })
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Arc::clone(&hosted))
         .invoke_handler(tauri::generate_handler![
             commands::situation,
@@ -205,6 +209,9 @@ fn run() -> Result<()> {
             commands::fetch,
             commands::set_limit,
             commands::set_bandwidth,
+            commands::update_state,
+            commands::update_now,
+            commands::apply_update,
             commands::same_device,
             commands::backups,
             commands::set_backup_folders,

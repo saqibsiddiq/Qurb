@@ -36,6 +36,7 @@ tauri = { version = "2", features = [] }
 # no plugin; this is the accessible way to do the same thing, for anybody who
 # cannot drag or is using a keyboard.
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
 # Desktop notifications, for the few things worth interrupting somebody about.
 # Raised from Rust rather than from the page, because a notification is most
 # useful exactly when nobody is looking at the window.

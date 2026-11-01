@@ -409,6 +409,9 @@ class MainActivity : AppCompatActivity() {
         current?.refresh()
         updateDock()
         catchUp()
+        // A newer build fetched while the app is open, to install from
+        // Settings or when it is next closed (decision 0078).
+        lifecycleScope.launch { Updates.run(this@MainActivity) }
     }
 
     override fun onPause() {
