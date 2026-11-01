@@ -13,8 +13,13 @@ set -euo pipefail
 cd "$(dirname "$0")"
 [[ $EUID -eq 0 ]] || { echo "run with sudo" >&2; exit 1; }
 
-echo "== Alloy, from the distribution's own repository"
-pacman -S --needed --noconfirm grafana-alloy
+echo "== Alloy, from Arch's own repository"
+# Arch's build rather than a derivative's: on 2026-11-01 CachyOS's mirrors
+# had moved past the build its package list named, and two answered 404 --
+# which pacman then rightly refused as a corrupt package.
+if ! pacman -Q grafana-alloy >/dev/null 2>&1; then
+    pacman -S --noconfirm extra/grafana-alloy
+fi
 
 echo "== The Grafana Cloud stack's values (nothing is shown as the token is typed)"
 read -rp "Prometheus remote-write URL (…/api/prom/push): " PROM_URL
