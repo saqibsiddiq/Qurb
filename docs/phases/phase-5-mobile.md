@@ -3167,6 +3167,24 @@ fixed together and tested together. As he answered, page by page:
   a recycled list. Chips: All, Backups, Transfers, Problems, each a query.
   A big job or a failure tapped opens its details; a failure has Try again.
   The desktop on the same engine.
+- **Settings, further**: SE-7 *Motion* removed (it changed nothing anyone
+  saw); Android's own *Remove animations* still respected.
+
+**Build order, from 2026-11-02** (each ticked here when built):
+1. Settings: profile row and page, Manage storage (Devices, a device's
+   storage against its allowance, Clear cache), icons alone, Update, Identity
+   and Key into Advanced, no Motion.
+2. Received as a log; Files top in two sections with a computer's total;
+   holding Vault or Received.
+3. Device page: Switch device; Restore; the Vault switch apart from backups.
+4. Folder chooser: a page per folder, search, Select all.
+5. The one folder page for Vault, Shared and the backup folder: selection
+   and its bar, copy and move by going there, path, ⋮ Sort and View, grid,
+   Details, Share, + files or a folder, progress card, sheets, states.
+6. Quick preview of every kind, and thumbnails of every kind (the laptop
+   making its own, Office through LibreOffice).
+7. Activity: big jobs as one entry, failures merged, the cap enforced as it
+   writes, chips, details.
 
 ## Deliberately left undone
 
