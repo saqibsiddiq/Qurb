@@ -2970,6 +2970,29 @@ storage rules (word, install, name, a device still in use), in the list,
 and over a real connection; 570 tests of the five crates pass. The S23's
 SM-S911B pairing predates the marker and stays linked by the owner's word.
 
+## The owner's list of 2026-11-01
+
+For the phone app, as he answered when asked which app items 1 to 5 are:
+
+1. Recently added: the first four, then a + to see more.
+2. Only shared files in Recently added. Everything else appears as activity,
+   with nothing about it shown to whoever uses the laptop.
+3. A file opens in a viewer of the person's choosing; pictures and videos
+   shown as previews, not icons, everywhere.
+4. Send offers everything Android's own share sheet does: WhatsApp, email,
+   and every app that takes a file.
+5. Only the shared files are shown; operations on files are left to the
+   phone's own file manager.
+6. A password or fingerprint before removing a device, anything about the
+   key and recovery, and storage and sharing settings; and still nobody,
+   whoever set the computer up, sees another person's files without their
+   approval.
+
+On the laptop: a person's folder stays visible only after its owner
+approves on their phone, as now (asked 2026-11-01). The dashboard: Grafana
+Cloud's free tier. Staging, with him, in [staging.md](../staging.md).
+**None of the six built yet.**
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
