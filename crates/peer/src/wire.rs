@@ -194,6 +194,13 @@ pub enum Request {
     /// whose permanent identity this computer already knows, that one's.
     Become { cert: Vec<u8> },
 
+    /// What a computer's folder holds at its top, as the asker may see it
+    /// (the owner's list of 2026-11-01, items 2 and 3): its shared folder,
+    /// the asker's own folder there -- named after the asker -- and other
+    /// people's, locked to it. What a phone shows when a computer is
+    /// opened, the same as the computer's `~/qurb`.
+    Places,
+
     /// What install of the app this device is: a marker that outlives a
     /// reinstall or cleared data, made from what the platform keeps for the
     /// app (`qurb_storage::install_marker`). A device set up again comes back
@@ -359,6 +366,10 @@ pub enum Response {
     /// This device's install marker, answering [`Request::Install`].
     Install { marker: [u8; 16] },
 
+    /// What a computer's folder holds at its top for the asker, answering
+    /// [`Request::Places`]: each by name, and what it is to the asker.
+    Places { places: Vec<(String, Place)> },
+
     /// The device id the asker's permanent identity has here, answering
     /// [`Request::Become`].
     Became { device_id: [u8; 32] },
@@ -402,6 +413,7 @@ const TAG_SEARCH: u8 = 28;
 const TAG_PROFILE: u8 = 29;
 const TAG_INSTALL: u8 = 30;
 const TAG_BECOME: u8 = 31;
+const TAG_PLACES: u8 = 32;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -454,6 +466,31 @@ const STATUS_PLACED: u8 = 25;
 const STATUS_PROFILE: u8 = 26;
 const STATUS_INSTALL: u8 = 27;
 const STATUS_BECAME: u8 = 28;
+const STATUS_PLACES: u8 = 29;
+
+/// One place at the top of a computer's folder, as it is to the asker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    /// The shared folder.
+    Shared,
+    /// The asker's own: its backups, its WhatsApp, its Private Vault.
+    Mine,
+    /// Another person's, which the asker cannot open.
+    Locked,
+}
+
+impl Place {
+    fn byte(self) -> u8 {
+        match self {
+            Place::Shared => 0,
+            Place::Mine => 1,
+            Place::Locked => 2,
+        }
+    }
+}
+
+/// The most places a computer's top may hold.
+const MAX_PLACES: usize = 256;
 
 /// The largest certificate a device may say it is becoming: one of its own
 /// is a few hundred bytes.
@@ -547,6 +584,7 @@ impl Request {
                 out.extend_from_slice(&since.to_le_bytes());
             }
             Request::Install => out.push(TAG_INSTALL),
+            Request::Places => out.push(TAG_PLACES),
             Request::Become { cert } => {
                 out.push(TAG_BECOME);
                 put_u32(&mut out, cert.len());
@@ -635,6 +673,7 @@ impl Request {
             TAG_TREE_SINCE => Request::TreeSince { since: r.u64()? },
             TAG_PROFILE => Request::Profile { since: r.u64()? as i64 },
             TAG_INSTALL => Request::Install,
+            TAG_PLACES => Request::Places,
             TAG_BECOME => {
                 let len = r.count()?;
                 if len > MAX_CERT {
@@ -811,6 +850,15 @@ impl Response {
                 out.push(STATUS_BECAME);
                 out.extend_from_slice(device_id);
             }
+            Response::Places { places } => {
+                out.push(STATUS_PLACES);
+                let places = &places[..places.len().min(MAX_PLACES)];
+                put_u32(&mut out, places.len());
+                for (name, place) in places {
+                    put_name(&mut out, name);
+                    out.push(place.byte());
+                }
+            }
             Response::Refused { why } => {
                 out.push(STATUS_REFUSED);
                 put_path(&mut out, why);
@@ -880,6 +928,24 @@ impl Response {
             STATUS_ABOUT => Response::About { kind: r.name()? },
             STATUS_INSTALL => Response::Install { marker: r.array()? },
             STATUS_BECAME => Response::Became { device_id: r.hash()? },
+            STATUS_PLACES => {
+                let n = r.count()?;
+                if n > MAX_PLACES {
+                    return Err(Error::Protocol { detail: format!("{n} places is not a computer's folder") });
+                }
+                let mut places = Vec::with_capacity(n);
+                for _ in 0..n {
+                    let name = r.name()?;
+                    let place = match r.u8()? {
+                        0 => Place::Shared,
+                        1 => Place::Mine,
+                        2 => Place::Locked,
+                        other => return Err(Error::Protocol { detail: format!("no place of kind {other}") }),
+                    };
+                    places.push((name, place));
+                }
+                Response::Places { places }
+            }
             STATUS_WHO => Response::Who { name: r.name()?, kind: r.name()? },
             STATUS_PROFILE => {
                 let name = r.name()?;
@@ -1377,6 +1443,7 @@ mod tests {
             Request::TreeSince { since: 1 << 40 },
             Request::Profile { since: 1_792_000_000_123 },
             Request::Install,
+            Request::Places,
             Request::Become { cert: vec![0x30, 0x82, 1, 2] },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
@@ -1399,6 +1466,7 @@ mod tests {
             Response::Profile { name: "S23".into(), picture: vec![], changed_at: 1 },
             Response::Install { marker: [9; 16] },
             Response::Became { device_id: [4; 32] },
+            Response::Places { places: vec![("Shared".into(), Place::Shared), ("skib phone".into(), Place::Mine), ("Ammi's phone".into(), Place::Locked)] },
             Response::Refused { why: "something is already called Notes".into() },
             Response::Placed { path: "Photos/beach (2).jpg".into() },
             Response::Mismatch,

@@ -4088,6 +4088,14 @@ pub struct KeptFile {
     pub modified_at: i64,
 }
 
+/// One place at the top of a computer's folder, as it is to this phone:
+/// `kind` is "shared", "mine" or "locked".
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ComputerPlace {
+    pub name: String,
+    pub kind: String,
+}
+
 /// This phone's folder on a computer, reached once and kept open while it is
 /// browsed: listed a place at a time, and any file in it fetched to where the
 /// app says (decision 0067, step 4). Closed when the app leaves it.
@@ -4115,6 +4123,35 @@ impl KeptFolder {
 
     /// The folders and files at `dir`: at the top, this phone and, when it
     /// was set up again, what was kept for it before.
+    /// What the computer's folder holds at its top for this phone, as its
+    /// `~/qurb` does (the owner's list of 2026-11-01, items 2 and 3): its
+    /// shared folder, this phone's own, named as the phone is, and other
+    /// people's, locked. From a computer too old to say, its shared folder
+    /// and this phone's, as before.
+    pub fn places(&self) -> Result<Vec<ComputerPlace>, QurbError> {
+        use qurb_peer::wire::Place;
+        let answer = self
+            .runtime
+            .block_on(self.client.places())
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let places = match answer {
+            Some(places) => places,
+            None => vec![("Shared".to_string(), Place::Shared), ("Private".to_string(), Place::Mine)],
+        };
+        Ok(places
+            .into_iter()
+            .map(|(name, place)| ComputerPlace {
+                name,
+                kind: match place {
+                    Place::Shared => "shared",
+                    Place::Mine => "mine",
+                    Place::Locked => "locked",
+                }
+                .into(),
+            })
+            .collect())
+    }
+
     pub fn list(&self, dir: String) -> Result<KeptListing, QurbError> {
         let answer = self
             .runtime

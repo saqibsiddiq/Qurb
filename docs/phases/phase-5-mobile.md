@@ -3034,6 +3034,23 @@ them when Files is shown (`prepare_computers`): **2.1 s** measured the same
 way, the measuring itself about 0.7 s of each. Next: the listing shown from
 what was last seen while the new one comes.
 
+**Items 1 to 4, and 9, 2026-11-01.** Files is now a card per device: this
+phone, with its own picture, opening to *Vault* and *Received*; then each
+computer, with its picture and its dot. A computer opens to its `~/qurb` as
+the computer has it, asked of it over the kept connection
+(`Request::Places`, a new tag older builds ignore): *Shared*; this phone's
+own folder, which the computer now lays out under **the phone's name** and
+renames with it; and other people's phones' folders, shown locked. A
+computer too old to answer gives *Shared* and *Private*, as before. The
+backup folder opens at its top and lists what is there (item 4). *Free up*
+and *Recently deleted* are gone from Settings and the Vault (item 9).
+Verified on the S23 against the laptop: the Files top, the laptop's
+*Shared* and *sakib*, the phone's *Vault* and *Received*. **Not verified:**
+a locked folder, there being no other person paired with the laptop; the
+renaming when the phone's name changes, which the computer does on its
+next layout and was not watched. Item 10 is begun — the folders are one
+card alike — but the screens inside them still differ in their words.
+
 The rest: not built yet.
 
 ## Deliberately left undone

@@ -188,10 +188,6 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
                     // As Figma draws a folder: cards, then rows, no headings.
                     addAll(folders.map { Item.Folder(it, prefix + it) })
                     addAll(shown.map { Item.File(it) })
-                    if (!private && dir.isEmpty() && query.isEmpty()) {
-                        add(Item.Link(R.drawable.ic_trash_2, "Recently deleted",
-                            "Kept for 30 days") { app.push(DeletedScreen(app)) })
-                    }
                 }
                 items.submit(list)
                 showEmpty(folders.isEmpty() && files.isEmpty())
@@ -276,7 +272,6 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
         if (here.isNotEmpty()) {
             sheet.action(R.drawable.ic_save, "Save ${Words.files(here.size)} to this phone…") { app.saveAll(here) }
         }
-        if (!private) sheet.action(R.drawable.ic_trash_2, "Recently deleted") { app.push(DeletedScreen(app)) }
         sheet.show()
     }
 
@@ -297,9 +292,6 @@ class FilesScreen(app: MainActivity, private val private: Boolean) : Screen(app)
             sheet.action(R.drawable.ic_external_link, "Open") { app.open(entry) }
         } else if (entry.available == Available.ELSEWHERE && !downloading) {
             sheet.action(R.drawable.ic_download, "Keep here", meta = "Kept on this phone") { fetch(entry) }
-        }
-        if (entry.available == Available.HERE) {
-            sheet.action(R.drawable.ic_cloud_off, "Free up", meta = "Free local space; it stays in Qurb") { free(entry) }
         }
         if (here) {
             sheet.action(R.drawable.ic_send, "Send") {

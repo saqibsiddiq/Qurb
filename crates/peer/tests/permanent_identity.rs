@@ -107,3 +107,36 @@ fn a_seed_is_one_install_of_one_person() {
     assert_ne!(seed, Identity::permanent_seed(&key, "ffffffffffffffff"), "two phones, one identity");
     assert_ne!(seed, Identity::permanent_seed(&[6; 32], "a1b2c3d4e5f60718"), "two people, one identity");
 }
+
+/// What a phone sees at the top of its computer, as the computer's `~/qurb`
+/// is (the owner's list of 2026-11-01, items 2 and 3): the shared folder,
+/// its own folder under its own name, and another person's, locked.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_phone_sees_its_computers_top_as_the_computer_has_it() {
+    use qurb_peer::wire::Place;
+    let dir = tempfile::tempdir().unwrap();
+    let store = Store::open(dir.path(), ChunkKey::from_bytes([3; 32])).unwrap();
+    let computer = Identity::derived(&[2; 32]).unwrap();
+    let (phone, guest) = (Identity::derived(&[11; 32]).unwrap(), Identity::derived(&[13; 32]).unwrap());
+    store.db().trust_peer(&qurb_sync::DeviceId::from_bytes([20; 32]), phone.fingerprint().as_bytes(), "skib phone").unwrap();
+    store
+        .db()
+        .trust_visitor(&qurb_sync::DeviceId::from_bytes([30; 32]), guest.fingerprint().as_bytes(), "Ammi's phone", qurb_storage::db::Relation::Guest, &[1; 32])
+        .unwrap();
+
+    let reader = Store::open(dir.path(), ChunkKey::from_bytes([3; 32])).unwrap();
+    let addr = serve(&computer, reader, vec![phone.fingerprint(), guest.fingerprint()]).await;
+    let client = PeerClient::connect(addr, &phone, computer.fingerprint()).await.unwrap();
+    let places = client.places().await.unwrap().expect("not told");
+    client.close();
+    assert_eq!(places, vec![
+        ("Shared".to_string(), Place::Shared),
+        ("skib phone".to_string(), Place::Mine),
+        ("Ammi's phone".to_string(), Place::Locked),
+    ]);
+
+    // The guest's own phone sees the shared folder, and nobody else's.
+    let client = PeerClient::connect(addr, &guest, computer.fingerprint()).await.unwrap();
+    assert_eq!(client.places().await.unwrap().unwrap(), vec![("Shared".to_string(), Place::Shared)]);
+    client.close();
+}

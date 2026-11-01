@@ -27,16 +27,23 @@ import uniffi.qurb_mobile.PeerInfo
  * Reached from Files. The connection is made once and kept while the folder
  * is open, and closed when it is left.
  */
-class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app) {
+class KeptScreen(
+    app: MainActivity,
+    private val computer: PeerInfo,
+    /** Where it opens: this phone's own folder there, by the name the
+     *  computer gives it (the owner's list of 2026-11-01, items 2 to 4);
+     *  null for the folder's top, as before. */
+    private val start: String? = null,
+) : Screen(app) {
 
     private val views = ScreenPageBinding.inflate(app.layoutInflater)
     override val view: View get() = views.root
     override val tab = R.id.tab_files
 
     private var folder: KeptFolder? = null
-    private var dir = ""
+    private var dir = start ?: ""
     /** This phone's own folder there, as the top lists it: not an earlier self's. */
-    private var thisPhone: String? = null
+    private var thisPhone: String? = start
     private var query = ""
     private var searching: Job? = null
     private lateinit var search: EditText
@@ -48,7 +55,7 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
         views.back.visibility = View.VISIBLE
         views.back.text = "Files"
         views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
-        views.title.text = "On ${computer.name}"
+        views.title.text = start ?: "On ${computer.name}"
         views.subtitle.visibility = View.VISIBLE
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
@@ -73,22 +80,24 @@ class KeptScreen(app: MainActivity, private val computer: PeerInfo) : Screen(app
             search.setText("")
             return true
         }
-        if (dir.isEmpty()) return false
+        if (dir.isEmpty() || dir == start) return false
         dir = dir.substringBeforeLast('/', "")
         refresh()
         return true
     }
 
     override fun left() {
-        val open = folder ?: return
+        // The connection stays open, kept by the engine for the next visit
+        // (the owner's list of 2026-11-01, item 7); only this screen lets go.
+        folder ?: return
         folder = null
         StreamProvider.clear()
-        scope.launch(Dispatchers.IO) { runCatching { open.disconnect() } }
     }
 
     override fun refresh() {
-        views.subtitle.text = if (dir.isEmpty()) "Your folder there: backups, WhatsApp and Private Vault, " +
-            "deleted files included, while ${computer.name} is on." else dir.replace("/", "  ›  ")
+        // Few words (item 10): where this is, and nothing at the top.
+        views.subtitle.text = if (dir.isEmpty() || dir == start) "" else dir.removePrefix(start.orEmpty()).trim('/').replace("/", "  ›  ")
+        views.subtitle.visibility = if (views.subtitle.text.isEmpty()) View.GONE else View.VISIBLE
         if (folder == null) {
             listed.removeAllViews()
             kit.empty(listed, R.drawable.ic_monitor_smartphone, "Reaching ${computer.name}…")

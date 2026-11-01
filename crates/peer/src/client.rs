@@ -428,6 +428,18 @@ impl PeerClient {
         }
     }
 
+    /// What this computer's folder holds at its top for this device (the
+    /// owner's list of 2026-11-01, items 2 and 3). None from a build from
+    /// before, which cannot say.
+    pub async fn places(&self) -> Result<Option<Vec<(String, crate::wire::Place)>>> {
+        match self.request(Request::Places).await {
+            Ok(Response::Places { places }) => Ok(Some(places)),
+            Ok(Response::NotFound) => Ok(None),
+            Ok(other) => Err(unexpected("places", &other)),
+            Err(_) => Ok(None),
+        }
+    }
+
     /// The device's name and picture -- a JPEG, empty for none -- and when it
     /// set them, if they changed after `since` (the owner's list of
     /// 2026-10-26, item 7). None when nothing is newer, and from a device
@@ -720,6 +732,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Profile { .. } => "name and picture",
         Response::Install { .. } => "install marker",
         Response::Became { .. } => "identity taken",
+        Response::Places { .. } => "places",
         Response::Refused { .. } => "refusal of a change",
         Response::Placed { .. } => "place of an added file",
         Response::Mismatch => "key mismatch",

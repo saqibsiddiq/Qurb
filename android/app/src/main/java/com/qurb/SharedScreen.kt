@@ -102,10 +102,11 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo) : Screen(a
     }
 
     override fun left() {
-        val open = folder ?: return
+        // The connection stays open, kept by the engine for the next visit
+        // (the owner's list of 2026-11-01, item 7); only this screen lets go.
+        folder ?: return
         folder = null
         StreamProvider.clear()
-        scope.launch(Dispatchers.IO) { runCatching { open.disconnect() } }
     }
 
     /** Which computer the folder is on, and whether it answered: a laptop, its

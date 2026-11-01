@@ -403,6 +403,7 @@ async fn serve_request(
         Response::NotFound
         | Response::Install { .. }
         | Response::Became { .. }
+        | Response::Places { .. }
         | Response::Noted
         | Response::Paired { .. }
         | Response::Welcome { .. }
@@ -839,6 +840,34 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             Some(kind) => Response::About { kind },
             None => Response::NotFound,
         },
+
+        // What this computer's folder holds at its top for the asker, as its
+        // `~/qurb` does (the owner's list of 2026-11-01, items 2 and 3): the
+        // shared folder; the asker's own, under the asker's name, for one of
+        // its person's devices; and every other person's, by name, locked.
+        Request::Places => {
+            let Some(asker) = asker else { return Ok(Answer::Now(Response::NotFound)) };
+            let db = store.db();
+            let Some(me) = db.peer_by_fingerprint(asker.as_bytes())? else { return Ok(Answer::Now(Response::NotFound)) };
+            let mut places = vec![("Shared".to_string(), crate::wire::Place::Shared)];
+            if me.relation == qurb_storage::db::Relation::Own {
+                for (name, _) in qurb_storage::person::own_phones(db, &me.device_id)? {
+                    places.push((name, crate::wire::Place::Mine));
+                }
+                let mut others: Vec<String> = Vec::new();
+                for p in db.trusted_peers()? {
+                    if p.relation != qurb_storage::db::Relation::Guest || db.became(&p.device_id)?.is_some() {
+                        continue;
+                    }
+                    if !others.contains(&p.name) {
+                        others.push(p.name);
+                    }
+                }
+                others.sort();
+                places.extend(others.into_iter().map(|n| (n, crate::wire::Place::Locked)));
+            }
+            Response::Places { places }
+        }
 
         // One of this person's own devices becoming its permanent identity
         // (decision 0079): its fingerprint turned to that one's, keeping its

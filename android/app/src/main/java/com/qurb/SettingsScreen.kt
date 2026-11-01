@@ -120,25 +120,16 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
 
         kit.label(page, "Storage")
         card = kit.card(page)
-        // Free up beside the space it frees, as words: never the destructive
-        // one, so never red.
-        val used = kit.setting(card, R.drawable.ic_hard_drive, "Space used", Words.size(state.usage.onDisk))
-        used.root.addView(kit.button("Free up", Kit.Style.TEXT) { tidy() }.apply {
-            minWidth = 0
-            minimumWidth = 0
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { marginEnd = -kit.dp(8) })
+        // What the app holds here, said; no Free up and no Recently deleted on
+        // the phone (the owner's list of 2026-11-01, item 9): storage is the
+        // computers' to manage.
+        kit.setting(card, R.drawable.ic_hard_drive, "Space used", Words.size(state.usage.onDisk))
         // Its own row, never part of the one above: the devices sent to have
         // these, but one may have lost its copy since (decision 0030).
         if (state.sentCopies > 0uL) {
             kit.setting(card, R.drawable.ic_send, "Copies of files you sent", Words.size(state.sentCopies)) {
                 letGoOfSentCopies(state.sentCopies)
             }
-        }
-        // Until Files has it (the redesign puts Deleted there).
-        kit.setting(card, R.drawable.ic_trash_2, "Recently deleted",
-            if (state.deleted.isEmpty()) "" else Words.files(state.deleted.size)) {
-            app.push(DeletedScreen(app, fromSettings = true))
         }
 
         kit.label(page, "App")

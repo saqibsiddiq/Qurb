@@ -939,10 +939,13 @@ qurb/
 │       │                  Keeping.kt          keeping the Private Vault on a
 │       │                                      device, and stopping, asked alike
 │       │                                      from Backups and a device's page
-│       │                  FilesHome.kt        Files: This phone (Vault, Received
-│       │                                      as tiles), then Remote access, each
-│       │                                      computer opening to its Shared or
-│       │                                      this phone's Private folder there
+│       │                  FilesHome.kt        Files: every device as a card --
+│       │                                      this phone (Vault, Received), then
+│       │                                      each computer, opening to its
+│       │                                      ~/qurb as it has it (Request::
+│       │                                      Places): Shared, this phone's
+│       │                                      folder by the phone's name, other
+│       │                                      people's locked
 │       │                  FilesScreen.kt      the Vault, as Figma's Files draws
 │       │                                      it: folders as cards, files as rows
 │       │                                      badged with where each is, a tap or

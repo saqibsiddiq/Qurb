@@ -1986,25 +1986,34 @@ pub fn place_people(hosted: &Hosted) {
 
 fn lay_out(hosted: &Hosted, people: &[Person]) {
     let Some(dir) = qurb_cli::layout::people_dir(&hosted.root()) else { return };
-    let notes: Vec<(String, String)> = people
-        .iter()
-        .map(|p| {
-            let note = match p.relation {
-                "owner" => format!(
-                    "{name}'s folder\n\nWhat this computer keeps for {name}'s phones -- their backups, their \
-                     WhatsApp and their Private Vault -- is kept by Qurb, encrypted, and opens only inside Qurb, \
-                     with a yes on {name}'s phone.\n\nOpen Qurb, choose Files, then {name}.\n",
-                    name = p.name
-                ),
-                _ => format!(
-                    "{name}'s folder\n\nKept sealed by Qurb: this computer cannot read it. It opens only inside \
+    // The person's own folders under their phones' names, one each, renamed
+    // when a phone is (the owner's list of 2026-11-01, item 2); another
+    // person's under theirs, sealed.
+    let mut notes: Vec<(String, String)> = Vec::new();
+    for p in people {
+        match p.relation {
+            "owner" => {
+                for device in &p.devices {
+                    notes.push((
+                        device.clone(),
+                        format!(
+                            "{device}\n\nWhat this computer keeps for {device} -- its backups, its WhatsApp \
+                             and its Private Vault -- is kept by Qurb, encrypted, and opens only inside Qurb, \
+                             with a yes on the phone.\n\nOpen Qurb, choose Files, then {device}.\n"
+                        ),
+                    ));
+                }
+            }
+            _ => notes.push((
+                p.name.clone(),
+                format!(
+                    "{name}\n\nKept sealed by Qurb: this computer cannot read it. It opens only inside \
                      Qurb, when {name} approves on their phone.\n\nOpen Qurb, choose Files, then {name}.\n",
                     name = p.name
                 ),
-            };
-            (p.name.clone(), note)
-        })
-        .collect();
+            )),
+        }
+    }
     if let Err(e) = qurb_cli::layout::place_people(&dir, &notes) {
         tracing::warn!(error = %format!("{e:#}"), "could not lay out people's folders");
     }

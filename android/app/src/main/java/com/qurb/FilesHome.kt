@@ -1,28 +1,21 @@
 package com.qurb
 
-import android.content.res.ColorStateList
-import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.core.content.ContextCompat
 import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import uniffi.qurb_mobile.ComputerPlace
 import uniffi.qurb_mobile.PeerInfo
 
 /**
- * Files (the owner's list of 2026-10-26, items 9 to 12): *This phone* -- its
- * Vault and what was sent to it; Recently deleted is in Settings -- then
- * *Remote access*: each computer, its circle's dot blue when it is on and red
- * when it is off, which opens to its *Shared* folder, reached live, or to
- * *Private*, this phone's own folder there, which only this phone opens. A
- * phone keeps no shared files since decision 0073, so nothing here is a
- * folder of the phone's own but its Vault.
+ * Files (the owner's list of 2026-11-01, items 1 to 4 and 10): every device,
+ * as a card -- this phone first, with its picture, then each computer with
+ * its own picture and its dot, blue on and red off. A tap opens the device:
+ * this phone's two folders, *Vault* and *Received*; a computer's folder as
+ * its `~/qurb` has it -- *Shared*, this phone's own folder under the phone's
+ * name, and other people's, locked. Every folder the same card, with no
+ * words under it.
  */
 class FilesHome(app: MainActivity) : Screen(app) {
 
@@ -38,90 +31,138 @@ class FilesHome(app: MainActivity) : Screen(app) {
 
     override fun refresh() {
         scope.launch {
-            val peers = runCatching { withContext(Dispatchers.IO) { engine().peers() } }.getOrDefault(emptyList())
-            show(peers)
+            val (me, peers) = runCatching {
+                withContext(Dispatchers.IO) {
+                    val engine = engine()
+                    val peers = engine.peers()
+                    Devices.load(engine, peers)
+                    engine.ownProfile() to peers
+                }
+            }.getOrNull() ?: return@launch
+            show(me.name.ifEmpty { android.os.Build.MODEL ?: "This phone" }, me.picture?.let { Devices.decode(it) }, peers)
             views.refresh.isRefreshing = false
         }
         // The computers reached now, in the background, so that opening one
-        // finds it connected (the owner's list of 2026-11-01, item 7).
+        // finds it connected (item 7).
         Engine.later.launch { runCatching { engine().prepareComputers(8u) } }
     }
 
-    private fun show(peers: List<PeerInfo>) {
+    private fun show(name: String, picture: android.graphics.Bitmap?, peers: List<PeerInfo>) {
         val page = views.sections
         page.removeAllViews()
+        // This phone, which is always on: no dot.
+        kit.deviceCard(page, R.drawable.ic_smartphone, name, null, null,
+            end = R.drawable.ic_chevron_right, lead = kit.avatar(name, null, picture, 48)) {
+            app.push(PhoneFolders(app, name))
+        }
+        // Each computer: the person's own, and any this phone visits.
+        val computers = peers.filter { it.relation == "host" || (it.relation == "own" && it.kind != "phone") }
+        for (computer in computers) {
+            val off = Engine.isOff(app, computer)
+            // Its dot on its picture, as Home draws it: once, not again by the name.
+            kit.deviceCard(page, States.device(computer.name, computer.kind), computer.name, null, null,
+                end = R.drawable.ic_chevron_right, lead = kit.avatar(computer.name, off, Devices.picture(computer), 48)) {
+                app.push(ComputerFolders(app, computer))
+            }.contentDescription = "${computer.name}, ${if (off) "off" else "on"}"
+        }
+    }
+}
 
-        kit.label(page, "This phone", top = 0)
-        val places = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
-        places.addView(place(R.drawable.ic_lock_keyhole, "Vault") { app.push(FilesScreen(app, private = true)) },
-            LinearLayout.LayoutParams(0, kit.dp(92), 1f))
-        places.addView(place(R.drawable.ic_download, "Received") { app.push(ReceivedScreen(app)) },
-            LinearLayout.LayoutParams(0, kit.dp(92), 1f).apply { marginStart = kit.dp(10) })
-        page.addView(places)
+/** This phone's two folders, as cards: its Vault, and what was sent to it. */
+class PhoneFolders(app: MainActivity, private val name: String) : Screen(app) {
 
-        // Each computer: the owner's, and any this phone visits as a guest.
-        val computers = peers.filter { it.relation == "host" || (it.relation == "own" && it.kind == "computer") }
-        if (computers.isNotEmpty()) {
-            kit.label(page, "Remote access", top = 20)
-            // Rectangular cards, the device's icon in its tile and the dot by
-            // its name, blue on and red off: not circles here (the owner,
-            // 2026-10-26: "list the devices as it is listing right").
-            for (computer in computers) {
-                val off = Engine.isOff(app, computer)
-                kit.deviceCard(page, States.device(computer.name, computer.kind), computer.name, off,
-                    computer.lastSeen?.let { Words.since(it) }, end = R.drawable.ic_chevron_right) {
-                    open(computer)
-                }.contentDescription = "${computer.name}, ${if (off) "off" else "on"}"
+    private val views = ScreenPageBinding.inflate(app.layoutInflater)
+    override val view: View get() = views.root
+    override val tab = R.id.tab_files
+
+    init {
+        views.back.visibility = View.VISIBLE
+        views.back.text = "Files"
+        views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
+        views.title.text = name
+        views.refresh.isEnabled = false
+    }
+
+    override fun refresh() {
+        val page = views.sections
+        page.removeAllViews()
+        kit.folderGrid(page, listOf(
+            kit.folderCard("Vault", R.drawable.ic_lock_keyhole) { app.push(FilesScreen(app, private = true)) },
+            kit.folderCard("Received", R.drawable.ic_download) { app.push(ReceivedScreen(app)) },
+        ))
+    }
+}
+
+/**
+ * A computer's folder as its `~/qurb` has it (items 2 and 3): *Shared*; this
+ * phone's own folder, named as the phone is; and other people's, locked to
+ * this phone. Asked of the computer over the connection kept for it, so
+ * opening it is quick once Files has reached it.
+ */
+class ComputerFolders(app: MainActivity, private val computer: PeerInfo) : Screen(app) {
+
+    private val views = ScreenPageBinding.inflate(app.layoutInflater)
+    override val view: View get() = views.root
+    override val tab = R.id.tab_files
+
+    /** What it held last time, shown at once while it is asked again. */
+    private var places: List<ComputerPlace>? = Shown.places[computer.fingerprint]
+
+    init {
+        views.back.visibility = View.VISIBLE
+        views.back.text = "Files"
+        views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
+        views.title.text = computer.name
+        views.refresh.setColorSchemeResources(R.color.green)
+        views.refresh.setOnRefreshListener { refresh() }
+    }
+
+    override fun refresh() {
+        places?.let { show(it) } ?: run {
+            views.sections.removeAllViews()
+            kit.empty(views.sections, R.drawable.ic_monitor_smartphone, "Reaching ${computer.name}…")
+        }
+        scope.launch {
+            try {
+                val got = withContext(Dispatchers.IO) {
+                    Engine.hearingTheNetwork(app) { engine().openKeptFolder(computer.fingerprint, 20u) }.places()
+                }
+                places = got
+                Shown.places[computer.fingerprint] = got
+                show(got)
+            } catch (e: Exception) {
+                if (places == null) {
+                    views.sections.removeAllViews()
+                    kit.empty(views.sections, R.drawable.ic_cloud_off,
+                        "${computer.name} isn't reachable. It has to be on with Qurb running, and this phone online.",
+                        "Try again") { refresh() }
+                }
+                android.util.Log.w("qurb", "could not reach ${computer.name}", e)
+            } finally {
+                views.refresh.isRefreshing = false
             }
         }
     }
 
-    /**
-     * A computer's two folders, to choose between (item 11): its Shared
-     * folder, and this phone's own private one there -- which a computer this
-     * phone only visits as a guest keeps none of, so it opens Shared alone.
-     */
-    private fun open(computer: PeerInfo) {
-        if (computer.relation == "host") return app.push(SharedScreen(app, computer))
-        kit.sheet()
-            .header(States.device(computer.name, computer.kind), computer.name, "")
-            .action(R.drawable.ic_users, "Shared") {
-                app.push(SharedScreen(app, computer))
+    private fun show(places: List<ComputerPlace>) {
+        val page = views.sections
+        page.removeAllViews()
+        kit.folderGrid(page, places.map { place ->
+            when (place.kind) {
+                "shared" -> kit.folderCard(place.name, R.drawable.ic_folder) { app.push(SharedScreen(app, computer)) }
+                "mine" -> kit.folderCard(place.name, R.drawable.ic_smartphone) {
+                    // From a computer too old to name it: the folder's top.
+                    app.push(KeptScreen(app, computer, place.name.takeIf { it != "Private" }))
+                }
+                else -> kit.folderCard(place.name, R.drawable.ic_lock_keyhole) {
+                    app.say("${place.name}'s folder. Only they can open it.")
+                }.apply { alpha = 0.55f }
             }
-            .action(R.drawable.ic_lock_keyhole, "Private") {
-                app.push(KeptScreen(app, computer))
-            }
-            .show()
+        })
     }
 
-    /** One of this phone's places, as a tile (the redesign's Place tile):
-     *  its icon on the soft green, its name under it. */
-    private fun place(icon: Int, name: String, onTap: () -> Unit): View {
-        val tile = LinearLayout(app).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            background = ContextCompat.getDrawable(app, R.drawable.card)
-            foreground = ContextCompat.getDrawable(app, R.drawable.row_bg)
-            contentDescription = name
-            setOnClickListener { onTap() }
-        }
-        val mark = FrameLayout(app).apply { background = ContextCompat.getDrawable(app, R.drawable.tile_soft) }
-        mark.addView(ImageView(app).apply {
-            setImageResource(icon)
-            imageTintList = ColorStateList.valueOf(kit.color(R.color.green))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, FrameLayout.LayoutParams(kit.dp(22), kit.dp(22), Gravity.CENTER))
-        tile.addView(mark, LinearLayout.LayoutParams(kit.dp(40), kit.dp(40)))
-        tile.addView(TextView(app).apply {
-            text = name
-            setTextAppearance(R.style.Text_Label)
-            isAllCaps = false
-            letterSpacing = 0f
-            textSize = 12f
-            setTextColor(kit.color(R.color.text))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { topMargin = kit.dp(8) })
-        return tile
+    /** What each computer held at its top, as last seen, for this run of the app. */
+    private object Shown {
+        val places = java.util.concurrent.ConcurrentHashMap<String, List<ComputerPlace>>()
     }
 }
