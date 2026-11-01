@@ -72,8 +72,13 @@ async fn signal(url: &str, devices: usize, samples: usize) -> Result<()> {
             .map(|pair| {
                 let url = url.to_string();
                 async move {
+                    // Fresh for every run, as real devices are: the same seed
+                    // each run met the last run's connections still
+                    // registered under the same identity, and half the
+                    // introductions went to them (2026-11-01).
                     let mut seed = [0u8; 32];
                     seed[..8].copy_from_slice(&(pair as u64).to_le_bytes());
+                    seed[8..24].copy_from_slice(&run_nonce());
                     let master = MasterKey::from_bytes(seed);
                     let group = GroupId::derive(&master);
                     let a = MemberId::derive(&master, &[1; 32]);
@@ -104,6 +109,9 @@ async fn signal(url: &str, devices: usize, samples: usize) -> Result<()> {
         launched = (launched + 200).min(pairs);
     }
     println!("CONNECTED {} {:.2}", pairs * 2, started.elapsed().as_secs_f64());
+    if let Some(ms) = std::env::var("SETTLE_MS").ok().and_then(|v| v.parse().ok()) {
+        tokio::time::sleep(Duration::from_millis(ms)).await;
+    }
     pause("MEASURE_HELD");
 
     // Introductions, one at a time, while everyone else stays connected.
@@ -126,6 +134,18 @@ async fn signal(url: &str, devices: usize, samples: usize) -> Result<()> {
     println!("INTRODUCTIONS {} p50_ms {:.2} p95_ms {:.2} max_ms {:.2}", timings.len(), at(0.5), at(0.95), at(1.0));
     pause("MEASURE_AFTER");
     Ok(())
+}
+
+/// Sixteen bytes that differ between runs.
+fn run_nonce() -> [u8; 16] {
+    use std::sync::OnceLock;
+    static NONCE: OnceLock<[u8; 16]> = OnceLock::new();
+    *NONCE.get_or_init(|| {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let mut out = [0u8; 16];
+        out.copy_from_slice(&(now ^ ((std::process::id() as u128) << 64)).to_le_bytes());
+        out
+    })
 }
 
 /// The other half of every introduction: agree to be reached.

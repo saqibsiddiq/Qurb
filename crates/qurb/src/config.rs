@@ -10,7 +10,13 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Where the rendezvous service is, when nothing says otherwise.
-pub const DEFAULT_SIGNAL: &str = "ws://localhost:9000";
+/// A release names the beta's rendezvous service when it is built
+/// (`QURB_DEFAULT_SIGNAL`, set by .github/workflows/release.yml), so that a
+/// tester's device finds the others with nothing typed (docs/staging.md).
+pub const DEFAULT_SIGNAL: &str = match option_env!("QURB_DEFAULT_SIGNAL") {
+    Some(url) => url,
+    None => "ws://localhost:9000",
+};
 
 #[derive(Debug, Clone)]
 pub struct Config {

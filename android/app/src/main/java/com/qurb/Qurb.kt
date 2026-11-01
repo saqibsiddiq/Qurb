@@ -391,7 +391,7 @@ object Engine {
      */
     fun signalUrl(context: Context): String =
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
-            .getString("signal", null) ?: if (isEmulator()) EMULATOR_SIGNAL else ""
+            .getString("signal", null) ?: if (isEmulator()) EMULATOR_SIGNAL else context.getString(R.string.default_signal)
 
     fun setSignalUrl(context: Context, url: String) {
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE)

@@ -23,6 +23,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Staging, on the owner's laptop for now (docs/staging.md): what a device
+  # with no rendezvous set uses, so a tester types nothing.
+  QURB_DEFAULT_SIGNAL: wss://saqib.tail86283c.ts.net
   CARGO_PROFILE_RELEASE_DEBUG: "false"
   CARGO_PROFILE_RELEASE_STRIP: debuginfo
 

@@ -5,6 +5,37 @@ asked for the cheapest arrangement that runs QurbSpace end to end: the
 desktop app, the phone app, and a dashboard of the services' traffic and
 logs. Each step says who does it, and is marked here when it is done.
 
+## Now: on the owner's laptop
+
+Chosen 2026-11-01, with no money or card for a server yet. Costs nothing:
+
+- **Rendezvous and relay**: the laptop's `qurb-rendezvous` service
+  (`~/.config/systemd/user/qurb-rendezvous.service`, `qurb signal
+  127.0.0.1:9000` with push), published by **Tailscale Funnel** at
+  `wss://saqib.tail86283c.ts.net`. The relay is the one `qurb signal` carries
+  at `/relay` beside it, which every device uses when nothing else is set
+  (`relay_for`) — over HTTPS, so it also passes networks that let only web
+  traffic out. Checked from the public internet on 2026-11-01: a WebSocket
+  at `/` and at `/relay` answered 101 through Funnel's public address.
+- **Apps**: releases name this address as their default
+  (`QURB_DEFAULT_SIGNAL` in `.github/workflows/release.yml`), so a tester's
+  phone or computer finds the others with nothing typed; a device whose
+  settings name another keeps it.
+- **Dashboard**: Grafana Cloud's free tier needs an account (no card); its
+  agent then runs on the laptop.
+
+**What this lacks**, stated: staging is up only while the laptop is awake
+and online — it suspends when idle, by the owner's choice — and the
+laptop's upload is every tester's relay. Moving to a server later is steps
+1–4 below, and a new `QURB_DEFAULT_SIGNAL`.
+
+**Found while checking it**: the rendezvous test tool's introductions time
+out intermittently — 2 to 6 of 8 back-to-back runs at worst, locally and
+through Funnel alike, 8 of 8 at other times. Not Funnel; not yet explained.
+Being looked into separately.
+
+## Later: a server of its own
+
 ## What staging is
 
 Everything a user would touch, at addresses of its own, so a change can be

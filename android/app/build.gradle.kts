@@ -167,6 +167,11 @@ android {
         viewBinding = true
     }
 
+    // The beta's rendezvous service, named by a release when it is built
+    // (QURB_DEFAULT_SIGNAL, set by .github/workflows/release.yml): a tester's
+    // phone finds the other devices with nothing typed (docs/staging.md).
+    defaultConfig.resValue("string", "default_signal", System.getenv("QURB_DEFAULT_SIGNAL") ?: "")
+
     sourceSets["main"].java.srcDir(
         if (firebaseConfigured) "src/push/java" else "src/nopush/java"
     )
