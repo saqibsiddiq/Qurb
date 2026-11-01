@@ -3,8 +3,7 @@
 Written 2026-11-01 with the owner, who has not deployed anything before and
 asked for the cheapest arrangement that runs QurbSpace end to end: the
 desktop app, the phone app, and a dashboard of the services' traffic and
-logs. **Nothing here is set up yet**; each step says who does it, and is
-ticked here when it is done.
+logs. Each step says who does it, and is marked here when it is done.
 
 ## What staging is
 
@@ -78,7 +77,12 @@ install command with a token — send that. I install the agent, send the
 services' and Caddy's logs and the server's traffic, and make one dashboard:
 traffic in and out, the services up or down, their logs searchable.
 
-**5. Apps — me, then you.** A pre-release on GitHub: the desktop app (Linux
+**5. Apps — me, then you.** *Done 2026-11-01, for updates:* the first beta,
+[v0.2.0-beta.1](https://github.com/saqibsiddiq/Qurb/releases/tag/v0.2.0-beta.1),
+built and signed by `.github/workflows/release.yml` and updating itself
+([updates.md](updates.md)); the laptop runs its AppImage, the S23 its APK
+(reinstalled once onto the release key). Still to do here: pointing both at
+staging once the server is up. A pre-release on GitHub: the desktop app (Linux
 .deb and AppImage; Windows built, untested) and the phone APK, **signed with
 the release key** — see below. Then on your phone and laptop: point both at
 `wss://signal.staging.qurb.cloud` and `relay.staging.qurb.cloud:9001`, and

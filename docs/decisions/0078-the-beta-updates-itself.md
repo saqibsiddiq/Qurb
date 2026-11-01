@@ -1,10 +1,13 @@
 # 0078 — The beta updates itself, wherever it is
 
-**Status:** Accepted — built 2026-11-01. Supersedes the "no automatic
-updater" part of [0047](0047-versions-and-upgrades.md); its versions, index
-migrations and refusals stand. **Not yet run end to end:** the first release
-needs the keys added to the repository's secrets, and the owner's S23 runs a
-build signed with the debug key, which no release can update.
+**Status:** Accepted — built 2026-11-01, and the first beta,
+v0.2.0-beta.1, published by the workflow the same day (its first run failed
+on the phone build, fixed). Its APK checked: the SHA-256 in `android.json`,
+the release key's signature, version code 20001. The owner's laptop runs its
+AppImage, the S23 its APK. Supersedes the "no automatic updater" part of
+[0047](0047-versions-and-upgrades.md); its versions, index migrations and
+refusals stand. **An update has not yet been applied by either app**: that
+waits for v0.2.0-beta.2.
 **Date:** 2026-11-01
 
 ## What was asked
@@ -52,7 +55,6 @@ installs over the last (`scripts/release-manifests.py`, `versionCodeOf` in
 
 ## Left undone
 
-- **The first release** waits for the secrets.
 - **Windows** builds in CI; it has never run on Windows.
 - **macOS** is not built.
 - **A phone on the debug key** — the owner's S23 — has to move to a
