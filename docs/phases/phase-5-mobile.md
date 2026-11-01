@@ -3177,7 +3177,7 @@ fixed together and tested together. As he answered, page by page:
 2. ✓ Received as a log; Files top in two sections with a computer's total;
    holding Vault or Received.
 3. ✓ Device page: Switch device; Restore; the Vault switch apart from backups.
-4. Folder chooser: a page per folder, search, Select all.
+4. ✓ Folder chooser: a page per folder, search, Select all.
 5. The one folder page for Vault, Shared and the backup folder: selection
    and its bar, copy and move by going there, path, ⋮ Sort and View, grid,
    Details, Share, + files or a folder, progress card, sheets, states.
