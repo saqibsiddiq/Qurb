@@ -428,3 +428,14 @@ a set that only grew would keep letting it in.
 - **A measured gain from the two sections above** over a real link. They
   were built after an 800 MB video failed to cross from a phone; the speed
   before and after, on that phone and Wi-Fi, has not been measured yet.
+
+## Asked by the owner's phone (2026-11-01, 2026-11-02)
+
+`Storage` tells one of the owner's phones what the computer keeps, by kind,
+measured against the space it gives QurbSpace (its allowance), and
+`EmptyDeleted` empties its Recently deleted for good. `Convert` turns an
+Office document the asker may read into a PDF for the phone to show, through
+LibreOffice when it is installed (`convert.rs`); read under the store's
+lock, converted after it is let go; the PDF kept by content in the system's
+temporary folder. Without LibreOffice the answer is `NotFound`, and the
+phone shows the document as one to open in an app.

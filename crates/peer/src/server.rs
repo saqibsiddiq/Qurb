@@ -374,6 +374,12 @@ async fn serve_request(
         }
         match answered {
             Answer::Now(response) => response,
+            Answer::Convert { content, bytes, ext } => tokio::task::block_in_place(|| {
+                match crate::convert::to_pdf(&content, &bytes, &ext) {
+                    Some(pdf) if pdf.len() < crate::wire::MAX_MESSAGE - 64 => Response::Converted(pdf),
+                    _ => Response::NotFound,
+                }
+            }),
             // A chunk's bytes, read after the lock is let go, so that the
             // requests a collecting device makes at once are read at once
             // (decision 0064). The index is asked again only to mark a send
@@ -408,6 +414,7 @@ async fn serve_request(
         | Response::Install { .. }
         | Response::Became { .. }
         | Response::Places { .. }
+        | Response::Converted(_)
         | Response::Storage { .. }
         | Response::Noted
         | Response::Paired { .. }
@@ -531,6 +538,9 @@ fn piece(store: &Store, device: &qurb_sync::DeviceId, id: &[u8; 16], offset: u64
 /// they are read without the store (decision 0064).
 enum Answer {
     Now(Response),
+    /// A document read under the lock, turned into a PDF after it is let go:
+    /// LibreOffice can take seconds, and nothing else should wait on it.
+    Convert { content: blake3::Hash, bytes: Vec<u8>, ext: String },
     Read { hash: blake3::Hash, places: Vec<qurb_storage::ChunkAt>, reader: qurb_storage::ChunkReader },
 }
 
@@ -543,6 +553,10 @@ fn owners_phone(store: &Store, asker: Option<Fingerprint>) -> Result<Option<qurb
     let phone = db.peer_kind(&me.device_id)?.as_deref() == Some("phone");
     Ok((me.relation == qurb_storage::db::Relation::Own && phone).then_some(me))
 }
+
+/// The largest document converted: an Office file bigger than this is shown
+/// as one to open in an app.
+const CONVERT_MOST: usize = 50 << 20;
 
 fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> Result<Answer> {
     // Which device is asking, as the connection proves rather than as anything
@@ -635,6 +649,21 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             }
         }
 
+        // An Office document as a PDF, to whoever may read the document:
+        // read here, converted once the lock is let go (Answer::Convert).
+        Request::Convert { content, name } => {
+            let content = blake3::Hash::from(*content);
+            let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+            let reached = guest_here && owner.as_ref().map_or(Ok(false), |d| store.db().shared_content_reachable(&content, d))?;
+            let ours = keeps_mine;
+            if !crate::convert::OFFICE.contains(&ext.as_str()) || (!reached && !ours && !store.content_visible_to(&content, audience)?) {
+                return Ok(Answer::Now(Response::NotFound));
+            }
+            match store.read_content(&content)? {
+                Some(bytes) if bytes.len() <= CONVERT_MOST => return Ok(Answer::Convert { content, bytes, ext }),
+                _ => Response::NotFound,
+            }
+        }
         Request::Manifest { content } => {
             let content = blake3::Hash::from(*content);
             if let (true, Some(holder)) = (keeps_mine, &owner) {

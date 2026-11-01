@@ -4209,6 +4209,24 @@ impl KeptFolder {
         }))
     }
 
+    /// An Office document of the folder as a PDF, made by the computer and
+    /// written to `to`; false where it could not be (no LibreOffice there,
+    /// too large, not Office).
+    pub fn convert(&self, file: KeptFile, to: String) -> Result<bool, QurbError> {
+        let content = unhex(&file.content).ok_or_else(|| QurbError::Other { detail: "not a file of the folder".into() })?;
+        let pdf = self
+            .runtime
+            .block_on(self.client.convert(content, &file.name))
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        match pdf {
+            Some(pdf) => {
+                std::fs::write(&to, pdf).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+
     /// The computer's Recently deleted emptied for good.
     pub fn empty_deleted(&self) -> Result<(), QurbError> {
         changed(self.runtime.block_on(self.client.empty_deleted()))

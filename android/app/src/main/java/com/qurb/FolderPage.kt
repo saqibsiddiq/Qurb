@@ -419,7 +419,17 @@ class FolderPage(
             return
         }
         val files = shown.filter { !it.folder && it.here }
-        Peek.show(app, scope, files.map { place.peek(app, scope, it) }, files.indexOf(item))
+        val looks = files.map { f ->
+            place.peek(app, scope, f).apply {
+                actions = buildList {
+                    add((R.drawable.ic_share_2 to "Share") to { share(listOf(f)) })
+                    add((R.drawable.ic_copy to "Copy") to { clip(listOf(f), move = false) })
+                    add((R.drawable.ic_info to "Details") to { details(f) })
+                    if (place.canChange(dir) || place.restores) add((R.drawable.ic_trash_2 to "Delete") to { delete(listOf(f)) })
+                }
+            }
+        }
+        Peek.show(app, scope, looks, files.indexOf(item))
     }
 
     // ------------------------------------------------------- sort and view

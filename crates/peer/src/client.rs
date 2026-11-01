@@ -308,6 +308,16 @@ impl PeerClient {
         }
     }
 
+    /// An Office document as a PDF, made by the peer; None where it will not
+    /// or cannot convert it.
+    pub async fn convert(&self, content: [u8; 32], name: &str) -> Result<Option<Vec<u8>>> {
+        match self.request(Request::Convert { content, name: name.to_string() }).await? {
+            Response::Converted(pdf) => Ok(Some(pdf)),
+            Response::NotFound => Ok(None),
+            other => Err(unexpected("convert", &other)),
+        }
+    }
+
     /// The peer's Recently deleted emptied for good.
     pub async fn empty_deleted(&self) -> Result<std::result::Result<(), String>> {
         self.change(Request::EmptyDeleted).await
@@ -761,6 +771,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Became { .. } => "identity taken",
         Response::Places { .. } => "places",
         Response::Storage { .. } => "storage",
+        Response::Converted(_) => "converted",
         Response::Refused { .. } => "refusal of a change",
         Response::Placed { .. } => "place of an added file",
         Response::Mismatch => "key mismatch",

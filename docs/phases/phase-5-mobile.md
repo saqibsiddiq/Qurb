@@ -3181,7 +3181,7 @@ fixed together and tested together. As he answered, page by page:
 5. ✓ The one folder page for Vault, Shared and the backup folder: selection
    and its bar, copy and move by going there, path, ⋮ Sort and View, grid,
    Details, Share, + files or a folder, progress card, sheets, states.
-6. Quick preview of every kind, and thumbnails of every kind (the laptop
+6. ✓ Quick preview of every kind, and thumbnails of every kind (the laptop
    making its own, Office through LibreOffice).
 7. Activity: big jobs as one entry, failures merged, the cap enforced as it
    writes, chips, details.

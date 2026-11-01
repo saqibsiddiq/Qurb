@@ -243,6 +243,10 @@ pub enum Request {
     /// Its Recently deleted emptied for good, asked from the owner's phone:
     /// answered [`Response::Noted`].
     EmptyDeleted,
+    /// An Office document turned into a PDF by the computer, to be shown on
+    /// the phone: answered [`Response::Converted`], or [`Response::NotFound`]
+    /// where it may not be read, is not Office, or nothing here converts it.
+    Convert { content: [u8; 32], name: String },
     /// A piece of a file being added, at `offset`, in order: `id` is the
     /// asker's own name for the upload, and the computer keeps the pieces
     /// apart from the folder until [`Request::UploadDone`].
@@ -385,6 +389,8 @@ pub enum Response {
     /// no limit) and what QurbSpace uses on it, then each part it keeps --
     /// its kind, a name, its bytes.
     Storage { given: u64, used: u64, parts: Vec<(Part, String, u64)> },
+    /// [`Request::Convert`]: the document as a PDF.
+    Converted(Vec<u8>),
 
     /// The device id the asker's permanent identity has here, answering
     /// [`Request::Become`].
@@ -433,6 +439,7 @@ const TAG_PLACES: u8 = 32;
 const TAG_SHARED_COPY: u8 = 33;
 const TAG_STORAGE: u8 = 34;
 const TAG_EMPTY_DELETED: u8 = 35;
+const TAG_CONVERT: u8 = 36;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -487,6 +494,7 @@ const STATUS_INSTALL: u8 = 27;
 const STATUS_BECAME: u8 = 28;
 const STATUS_PLACES: u8 = 29;
 const STATUS_STORAGE: u8 = 30;
+const STATUS_CONVERTED: u8 = 31;
 
 /// One place at the top of a computer's folder, as it is to the asker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -651,6 +659,11 @@ impl Request {
             Request::Places => out.push(TAG_PLACES),
             Request::Storage => out.push(TAG_STORAGE),
             Request::EmptyDeleted => out.push(TAG_EMPTY_DELETED),
+            Request::Convert { content, name } => {
+                out.push(TAG_CONVERT);
+                out.extend_from_slice(content);
+                put_name(&mut out, name);
+            }
             Request::Become { cert } => {
                 out.push(TAG_BECOME);
                 put_u32(&mut out, cert.len());
@@ -747,6 +760,7 @@ impl Request {
             TAG_PLACES => Request::Places,
             TAG_STORAGE => Request::Storage,
             TAG_EMPTY_DELETED => Request::EmptyDeleted,
+            TAG_CONVERT => Request::Convert { content: r.hash()?, name: r.name()? },
             TAG_BECOME => {
                 let len = r.count()?;
                 if len > MAX_CERT {
@@ -924,6 +938,11 @@ impl Response {
                 out.push(STATUS_BECAME);
                 out.extend_from_slice(device_id);
             }
+            Response::Converted(pdf) => {
+                out.push(STATUS_CONVERTED);
+                put_u32(&mut out, pdf.len());
+                out.extend_from_slice(pdf);
+            }
             Response::Storage { given, used, parts } => {
                 out.push(STATUS_STORAGE);
                 out.extend_from_slice(&given.to_le_bytes());
@@ -1014,6 +1033,10 @@ impl Response {
             STATUS_ABOUT => Response::About { kind: r.name()? },
             STATUS_INSTALL => Response::Install { marker: r.array()? },
             STATUS_BECAME => Response::Became { device_id: r.hash()? },
+            STATUS_CONVERTED => {
+                let n = r.count()?;
+                Response::Converted(r.take(n)?.to_vec())
+            }
             STATUS_STORAGE => {
                 let given = r.u64()?;
                 let used = r.u64()?;
@@ -1548,6 +1571,7 @@ mod tests {
             Request::Places,
             Request::Storage,
             Request::EmptyDeleted,
+            Request::Convert { content: [7; 32], name: "lease.docx".into() },
             Request::Become { cert: vec![0x30, 0x82, 1, 2] },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
@@ -1570,6 +1594,7 @@ mod tests {
             Response::Profile { name: "S23".into(), picture: vec![], changed_at: 1 },
             Response::Install { marker: [9; 16] },
             Response::Became { device_id: [4; 32] },
+            Response::Converted(b"%PDF-1.7".to_vec()),
             Response::Storage { given: 100 << 30, used: 37 << 30, parts: vec![(Part::Shared, String::new(), 4 << 30), (Part::Backups, "skib phone".into(), 20 << 30), (Part::Other, String::new(), 1)] },
             Response::Places { places: vec![("Shared".into(), Place::Shared), ("skib phone".into(), Place::Mine), ("Ammi's phone".into(), Place::Locked)] },
             Response::Refused { why: "something is already called Notes".into() },
