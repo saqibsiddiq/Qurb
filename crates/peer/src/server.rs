@@ -402,6 +402,7 @@ async fn serve_request(
         }
         Response::NotFound
         | Response::Install { .. }
+        | Response::Became { .. }
         | Response::Noted
         | Response::Paired { .. }
         | Response::Welcome { .. }
@@ -838,6 +839,35 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             Some(kind) => Response::About { kind },
             None => Response::NotFound,
         },
+
+        // One of this person's own devices becoming its permanent identity
+        // (decision 0079): its fingerprint turned to that one's, keeping its
+        // device id -- or, set up again and that identity already known
+        // here, the device it was, which it then is again.
+        Request::Become { cert } => {
+            let Some(asker) = asker else { return Ok(Answer::Now(Response::NotFound)) };
+            let db = store.db();
+            let Some(me) = db.peer_by_fingerprint(asker.as_bytes())? else { return Ok(Answer::Now(Response::NotFound)) };
+            if me.relation != qurb_storage::db::Relation::Own {
+                return Ok(Answer::Now(Response::Refused { why: "only one of your own devices can say what it is".into() }));
+            }
+            let permanent = *blake3::hash(cert).as_bytes();
+            match db.peer_by_fingerprint(&permanent)? {
+                // Already this identity.
+                Some(known) if known.device_id == me.device_id => Response::Became { device_id: *me.device_id.as_bytes() },
+                // Set up again: the device it was, which it is again; this
+                // pairing, made only to get here, is that device's earlier self.
+                Some(known) if known.relation == qurb_storage::db::Relation::Own => {
+                    db.set_same_device(&me.device_id, qurb_storage::db::Same::Is(known.device_id))?;
+                    Response::Became { device_id: *known.device_id.as_bytes() }
+                }
+                Some(_) => Response::Refused { why: "that identity is another person's device".into() },
+                None => {
+                    db.set_peer_fingerprint(&me.device_id, &permanent)?;
+                    Response::Became { device_id: *me.device_id.as_bytes() }
+                }
+            }
+        }
 
         // What install of the app this is, to any device it trusts: how one
         // set up again is known for what it was (`Db::became`).

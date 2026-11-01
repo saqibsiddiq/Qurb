@@ -4579,6 +4579,61 @@ impl Db {
         self.set_local_fact("install", &hex16(marker))
     }
 
+    /// Turn a paired device's fingerprint to `fingerprint`: the device became
+    /// its permanent identity (decision 0079). Same device id, so everything
+    /// kept for it stays its.
+    pub fn set_peer_fingerprint(&self, device: &DeviceId, fingerprint: &[u8; 32]) -> Result<()> {
+        self.conn.execute(
+            "UPDATE peers SET fingerprint = ?2 WHERE device_id = ?1",
+            params![device.as_bytes().as_slice(), fingerprint.as_slice()],
+        )?;
+        Ok(())
+    }
+
+    /// Take `id` as this device's own, in a store nothing has been written to
+    /// yet: a phone set up again, told by a computer which device it was
+    /// (decision 0079). Refused -- false -- once anything has been made here,
+    /// since every version counts against the id it was made under.
+    pub fn adopt_local_device(&self, id: &DeviceId) -> Result<bool> {
+        let me = self.local_device()?;
+        if me == *id {
+            return Ok(true);
+        }
+        let counter: i64 = self.conn.query_row("SELECT counter FROM local WHERE id = 1", [], |r| r.get(0))?;
+        let mine: i64 = self.conn.query_row(
+            "SELECT count(*) FROM files WHERE modified_by = ?1 OR scope = ?1",
+            params![me.as_bytes().as_slice()],
+            |r| r.get(0),
+        )?;
+        if counter != 0 || mine != 0 {
+            return Ok(false);
+        }
+        self.conn.execute("UPDATE local SET device_id = ?1 WHERE id = 1", params![id.as_bytes().as_slice()])?;
+        Ok(true)
+    }
+
+    /// What the platform keeps for this install of the app -- on a phone,
+    /// `ANDROID_ID` -- as it is: the seed of the permanent identity (decision
+    /// 0079). Kept here only, in the app's own storage, and never sent; the
+    /// marker made from it (`install_marker`) is what other devices are told.
+    pub fn set_install_source(&self, id: &str) -> Result<()> {
+        self.set_local_fact("install_source", id.trim())
+    }
+
+    pub fn install_source(&self) -> Result<Option<String>> {
+        Ok(self.local_fact("install_source")?.filter(|s| !s.is_empty()))
+    }
+
+    /// Whether the computer with `fingerprint` has taken this device's
+    /// permanent identity (decision 0079).
+    pub fn became_with(&self, fingerprint: &[u8; 32]) -> Result<bool> {
+        Ok(self.local_fact(&format!("became:{}", hex32(fingerprint)))?.is_some())
+    }
+
+    pub fn note_became_with(&self, fingerprint: &[u8; 32]) -> Result<()> {
+        self.set_local_fact(&format!("became:{}", hex32(fingerprint)), "1")
+    }
+
     /// A paired device's install marker, as it said; none until it has.
     pub fn peer_install(&self, device: &DeviceId) -> Result<Option<[u8; 16]>> {
         Ok(self.local_fact(&format!("install:{}", device.to_hex()))?.as_deref().and_then(marker_from_hex))
@@ -4944,6 +4999,10 @@ pub fn install_marker(platform: &str) -> [u8; 16] {
     let mut marker = [0u8; 16];
     marker.copy_from_slice(&whole[..16]);
     marker
+}
+
+fn hex32(bytes: &[u8; 32]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 fn hex16(bytes: &[u8; 16]) -> String {
@@ -5569,6 +5628,22 @@ mod tests {
         let mut stmt = db.conn.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
         let rows = stmt.query_map([vec![0u8; 32]], |r| r.get::<_, String>(3)).unwrap();
         rows.map(|r| r.unwrap()).collect::<Vec<_>>().join(" | ")
+    }
+
+    /// A store takes the device id a computer says it was only while nothing
+    /// has been made in it: every version counts against the id it was made
+    /// under (decision 0079).
+    #[test]
+    fn a_store_takes_its_old_device_id_only_while_empty() {
+        let db = Db::open_in_memory().unwrap();
+        let was = DeviceId::from_bytes([42; 32]);
+        assert!(db.adopt_local_device(&was).unwrap());
+        assert_eq!(db.local_device().unwrap(), was);
+
+        let db = Db::open_in_memory().unwrap();
+        db.next_counter().unwrap();
+        assert!(!db.adopt_local_device(&was).unwrap(), "an id taken over after something was made");
+        assert_ne!(db.local_device().unwrap(), was);
     }
 
     /// What is kept for a phone counts each content once (2026-10-31): its

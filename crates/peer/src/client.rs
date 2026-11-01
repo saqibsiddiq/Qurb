@@ -415,6 +415,19 @@ impl PeerClient {
         }
     }
 
+    /// Say to this computer that this device is becoming the identity whose
+    /// certificate is `cert` (decision 0079), and learn the device id it is
+    /// to have here. None from a build from before, which cannot read the
+    /// request, or one that will not take it.
+    pub async fn become_permanent(&self, cert: &[u8]) -> Result<Option<[u8; 32]>> {
+        match self.request(Request::Become { cert: cert.to_vec() }).await {
+            Ok(Response::Became { device_id }) => Ok(Some(device_id)),
+            Ok(Response::NotFound | Response::Refused { .. }) => Ok(None),
+            Ok(other) => Err(unexpected("identity taken", &other)),
+            Err(_) => Ok(None),
+        }
+    }
+
     /// The device's name and picture -- a JPEG, empty for none -- and when it
     /// set them, if they changed after `since` (the owner's list of
     /// 2026-10-26, item 7). None when nothing is newer, and from a device
@@ -706,6 +719,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Who { .. } => "name of a device showing a code",
         Response::Profile { .. } => "name and picture",
         Response::Install { .. } => "install marker",
+        Response::Became { .. } => "identity taken",
         Response::Refused { .. } => "refusal of a change",
         Response::Placed { .. } => "place of an added file",
         Response::Mismatch => "key mismatch",

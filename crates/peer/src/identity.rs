@@ -92,6 +92,66 @@ impl Identity {
         Ok(Self::from_parts(cert_der, key_der))
     }
 
+    /// The identity `seed` always makes: the same certificate, byte for byte,
+    /// every time -- an Ed25519 key, whose signatures are deterministic, and
+    /// every field of the certificate fixed -- so the same fingerprint.
+    ///
+    /// What lets a phone keep one identity across a reinstall or its data
+    /// cleared (decision 0079): its seed is made from the person's key and
+    /// what Android keeps for the app (`permanent_seed`), both of which come
+    /// back, and so does this.
+    pub fn derived(seed: &[u8; 32]) -> Result<Self> {
+        // PKCS #8 v1 for an Ed25519 key: a fixed prefix, then the seed.
+        let mut pkcs8 = vec![0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20];
+        pkcs8.extend_from_slice(seed);
+        let key = rcgen::KeyPair::from_pkcs8_der_and_sign_algo(
+            &rustls::pki_types::PrivatePkcs8KeyDer::from(pkcs8.as_slice()),
+            &rcgen::PKCS_ED25519,
+        )
+        .map_err(|e| Error::Tls(format!("making the identity's key: {e}")))?;
+        let mut params = rcgen::CertificateParams::new(vec!["qurb-device".to_string()])
+            .map_err(|e| Error::Tls(format!("making the identity: {e}")))?;
+        params.not_before = rcgen::date_time_ymd(2026, 1, 1);
+        params.not_after = rcgen::date_time_ymd(4096, 1, 1);
+        let serial = blake3::derive_key("qurb 2026-11-01 identity serial", seed);
+        params.serial_number = Some(rcgen::SerialNumber::from_slice(&serial[..16]));
+        params.distinguished_name = rcgen::DistinguishedName::new();
+        params.distinguished_name.push(rcgen::DnType::CommonName, "qurb-device");
+        let cert = params.self_signed(&key).map_err(|e| Error::Tls(format!("signing the identity: {e}")))?;
+        Ok(Self::from_parts(cert.der().to_vec(), pkcs8))
+    }
+
+    /// The seed of a device's permanent identity (decision 0079): from the
+    /// person's key, as `Purpose::DeviceIdentity` derives it, and what the
+    /// platform keeps for this install of the app across a reinstall or its
+    /// data cleared -- Android's `ANDROID_ID`, never sent anywhere as it is.
+    /// The same phone, set up again with the same person's key, makes the
+    /// same seed; another phone, or another person, a different one.
+    pub fn permanent_seed(identity_key: &[u8; 32], install: &str) -> [u8; 32] {
+        let mut input = b"qurb 2026-11-01 permanent identity\0".to_vec();
+        input.extend_from_slice(install.trim().as_bytes());
+        *blake3::keyed_hash(identity_key, &input).as_bytes()
+    }
+
+    /// This identity's certificate, as a device sends it to say it is
+    /// becoming this identity (`Request::Become`).
+    pub fn cert_bytes(&self) -> &[u8] {
+        &self.cert_der
+    }
+
+    /// Put `self` in `dir` as this device's identity, in place of any there:
+    /// the new files written beside the old and moved over them, so that a
+    /// device stopped part-way has one identity or the other, never half.
+    pub fn save(&self, dir: &Path) -> Result<()> {
+        std::fs::create_dir_all(dir).map_err(|e| Error::Io { path: dir.to_path_buf(), source: e })?;
+        for (name, bytes, private) in [("identity.key", &self.key_der, true), ("identity.crt", &self.cert_der, false)] {
+            let fresh = dir.join(format!("{name}.new"));
+            write(&fresh, bytes, private)?;
+            std::fs::rename(&fresh, dir.join(name)).map_err(|e| Error::Io { path: fresh.clone(), source: e })?;
+        }
+        Ok(())
+    }
+
     /// Load this device's identity, refusing rather than creating one.
     ///
     /// For everything that is not setting a device up. A folder moved to the

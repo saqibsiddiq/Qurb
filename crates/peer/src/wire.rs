@@ -186,6 +186,14 @@ pub enum Request {
     /// also what a device from before this answers.
     Profile { since: i64 },
 
+    /// The asking device's permanent identity, given as its certificate
+    /// (decision 0079): "I am becoming this one." Asked of a computer by one
+    /// of its person's own devices. Answered with [`Response::Became`], the
+    /// device id that identity is to have here -- the asker's own, its
+    /// fingerprint now the permanent one's, or, for a device set up again
+    /// whose permanent identity this computer already knows, that one's.
+    Become { cert: Vec<u8> },
+
     /// What install of the app this device is: a marker that outlives a
     /// reinstall or cleared data, made from what the platform keeps for the
     /// app (`qurb_storage::install_marker`). A device set up again comes back
@@ -351,6 +359,10 @@ pub enum Response {
     /// This device's install marker, answering [`Request::Install`].
     Install { marker: [u8; 16] },
 
+    /// The device id the asker's permanent identity has here, answering
+    /// [`Request::Become`].
+    Became { device_id: [u8; 32] },
+
     /// A change asked of the shared folder, not made, and why, in words for
     /// the person who asked (decision 0073).
     Refused { why: String },
@@ -389,6 +401,7 @@ const TAG_UPLOAD_DONE: u8 = 27;
 const TAG_SEARCH: u8 = 28;
 const TAG_PROFILE: u8 = 29;
 const TAG_INSTALL: u8 = 30;
+const TAG_BECOME: u8 = 31;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -440,6 +453,11 @@ const STATUS_REFUSED: u8 = 24;
 const STATUS_PLACED: u8 = 25;
 const STATUS_PROFILE: u8 = 26;
 const STATUS_INSTALL: u8 = 27;
+const STATUS_BECAME: u8 = 28;
+
+/// The largest certificate a device may say it is becoming: one of its own
+/// is a few hundred bytes.
+const MAX_CERT: usize = 4096;
 
 /// The largest picture a device may give itself: a 256-pixel square as JPEG
 /// is a few tens of KiB.
@@ -529,6 +547,11 @@ impl Request {
                 out.extend_from_slice(&since.to_le_bytes());
             }
             Request::Install => out.push(TAG_INSTALL),
+            Request::Become { cert } => {
+                out.push(TAG_BECOME);
+                put_u32(&mut out, cert.len());
+                out.extend_from_slice(cert);
+            }
             Request::Who { token } => {
                 out.push(TAG_WHO);
                 out.extend_from_slice(token);
@@ -612,6 +635,13 @@ impl Request {
             TAG_TREE_SINCE => Request::TreeSince { since: r.u64()? },
             TAG_PROFILE => Request::Profile { since: r.u64()? as i64 },
             TAG_INSTALL => Request::Install,
+            TAG_BECOME => {
+                let len = r.count()?;
+                if len > MAX_CERT {
+                    return Err(Error::Protocol { detail: format!("a certificate of {len} bytes is not a device's") });
+                }
+                Request::Become { cert: r.take(len)?.to_vec() }
+            }
             TAG_WHO => {
                 let mut token = [0u8; 16];
                 token.copy_from_slice(r.take(16)?);
@@ -777,6 +807,10 @@ impl Response {
                 out.push(STATUS_INSTALL);
                 out.extend_from_slice(marker);
             }
+            Response::Became { device_id } => {
+                out.push(STATUS_BECAME);
+                out.extend_from_slice(device_id);
+            }
             Response::Refused { why } => {
                 out.push(STATUS_REFUSED);
                 put_path(&mut out, why);
@@ -845,6 +879,7 @@ impl Response {
             },
             STATUS_ABOUT => Response::About { kind: r.name()? },
             STATUS_INSTALL => Response::Install { marker: r.array()? },
+            STATUS_BECAME => Response::Became { device_id: r.hash()? },
             STATUS_WHO => Response::Who { name: r.name()?, kind: r.name()? },
             STATUS_PROFILE => {
                 let name = r.name()?;
@@ -1342,6 +1377,7 @@ mod tests {
             Request::TreeSince { since: 1 << 40 },
             Request::Profile { since: 1_792_000_000_123 },
             Request::Install,
+            Request::Become { cert: vec![0x30, 0x82, 1, 2] },
         ] {
             assert_eq!(Request::decode(&r.encode()).unwrap(), r);
         }
@@ -1362,6 +1398,7 @@ mod tests {
             Response::Profile { name: "Saqib's laptop".into(), picture: vec![0xFF, 0xD8, 0xFF], changed_at: 1_792_000_000_123 },
             Response::Profile { name: "S23".into(), picture: vec![], changed_at: 1 },
             Response::Install { marker: [9; 16] },
+            Response::Became { device_id: [4; 32] },
             Response::Refused { why: "something is already called Notes".into() },
             Response::Placed { path: "Photos/beach (2).jpg".into() },
             Response::Mismatch,

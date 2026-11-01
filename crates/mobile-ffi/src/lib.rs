@@ -1468,9 +1468,14 @@ impl Qurb {
         if id.trim().is_empty() {
             return Ok(());
         }
-        self.engine()?.store().db().set_local_install(&qurb_storage::db::install_marker(&id))?;
+        let engine = self.engine()?;
+        engine.store().db().set_local_install(&qurb_storage::db::install_marker(&id))?;
+        // Kept as it is, here only: the seed of this phone's permanent
+        // identity (decision 0079), which it takes over in its next syncs.
+        engine.store().db().set_install_source(&id)?;
         Ok(())
     }
+
 
     /// Offer an invitation, for another device to scan or be read.
     ///
@@ -2757,6 +2762,81 @@ impl Qurb {
     }
 
     /// This device's network identity, loaded or created on first use.
+    /// This phone's permanent identity (decision 0079): made from the
+    /// person's key and what Android keeps for this install, so the same
+    /// every time this phone is set up with this person's key -- after a
+    /// reinstall, or its data cleared. None until the app has said what
+    /// Android keeps (`set_install_id`).
+    fn permanent_identity(&self, db: &qurb_storage::db::Db) -> Option<qurb_peer::Identity> {
+        let install = db.install_source().ok().flatten()?;
+        let key = self.master.derive(Purpose::DeviceIdentity).to_bytes();
+        qurb_peer::Identity::derived(&qurb_peer::Identity::permanent_seed(&key, &install)).ok()
+    }
+
+    /// Say to the computer reached as `peer` that this phone is becoming its
+    /// permanent identity, if it is not that already and the computer has not
+    /// taken it; then take it, once every computer of this person's seen in
+    /// the last month has (decision 0079). A phone set up again is told
+    /// which device it was, and is that device again -- if nothing has been
+    /// made here yet. Briefly, and never a reason for the sync to fail.
+    fn become_permanent(
+        &self,
+        runtime: &tokio::runtime::Runtime,
+        client: &qurb_peer::PeerClient,
+        db: &qurb_storage::db::Db,
+        peer: &qurb_peer::Fingerprint,
+    ) {
+        let Some(permanent) = self.permanent_identity(db) else { return };
+        let Ok(current) = qurb_peer::Identity::load(&self.store_dir) else { return };
+        if current.fingerprint() == permanent.fingerprint() {
+            return;
+        }
+        let own = db.peer_by_fingerprint(peer.as_bytes()).ok().flatten().is_some_and(|p| p.relation == qurb_storage::db::Relation::Own);
+        if !own || db.became_with(peer.as_bytes()).unwrap_or(false) {
+            return;
+        }
+        let told = runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(3), client.become_permanent(permanent.cert_bytes())).await
+        });
+        let Ok(Ok(Some(device))) = told else { return };
+        let device = qurb_sync::DeviceId::from_bytes(device);
+        let Ok(me) = db.local_device() else { return };
+        let mut at_once = false;
+        if device != me {
+            // Set up again: the device this phone was. Taken only while
+            // nothing has been made here; otherwise it stays as it is, and
+            // the computer has already counted the two as one device.
+            match db.adopt_local_device(&device) {
+                Ok(true) => at_once = true,
+                _ => {
+                    tracing::info!("set up again, but this phone has made files since: keeping its identity");
+                    let _ = db.note_became_with(peer.as_bytes());
+                    return;
+                }
+            }
+        }
+        let _ = db.note_became_with(peer.as_bytes());
+        // Taken when every computer that might be reached has it, so none is
+        // left not knowing this phone. One not seen for a month is not
+        // waited for; it knows this phone by its word, or pairs again.
+        let month_ago = now() - 30 * 24 * 3600;
+        let waiting = db.trusted_peers().map(|peers| {
+            peers.iter().any(|p| {
+                p.relation == qurb_storage::db::Relation::Own
+                    && db.became(&p.device_id).ok().flatten().is_none()
+                    && db.peer_kind(&p.device_id).ok().flatten().as_deref() != Some("phone")
+                    && p.last_seen.is_some_and(|seen| seen >= month_ago)
+                    && !db.became_with(&p.fingerprint).unwrap_or(false)
+            })
+        });
+        if at_once || matches!(waiting, Ok(false)) {
+            match permanent.save(&self.store_dir) {
+                Ok(()) => tracing::info!("this phone is its permanent identity now"),
+                Err(e) => tracing::warn!("could not take the permanent identity: {e}"),
+            }
+        }
+    }
+
     fn identity(&self) -> Result<qurb_peer::Identity, QurbError> {
         qurb_peer::Identity::load_or_create(&self.store_dir)
             .map_err(|e| QurbError::Storage { detail: e.to_string() })
@@ -3321,6 +3401,8 @@ impl Qurb {
                     let _ = engine.store().db().set_peer_install(device, &marker);
                 }
             }
+            // Its permanent identity, taken (decision 0079).
+            self.become_permanent(runtime, client, engine.store().db(), &peer);
             // Which folders the person chose for this phone on a computer
             // keeping its vault (decision 0063): asked, never pushed. Kept, so
             // that a backup run with the computer away still knows. Briefly,
