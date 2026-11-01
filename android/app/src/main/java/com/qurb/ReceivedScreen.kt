@@ -71,12 +71,18 @@ class ReceivedScreen(app: MainActivity, private val up: String = "Files") : Scre
         // 2026-11-01, item 5).
         val rows = android.widget.LinearLayout(app).apply { orientation = android.widget.LinearLayout.VERTICAL }
         page.addView(rows)
-        for ((file, h) in received) {
+        val files = received.map { it.first }
+        val looks = files.map { Peek.local(app, it) }
+        for ((i, pair) in received.withIndex()) {
+            val (file, h) = pair
             val name = file.path.substringAfterLast('/')
             val from = h.device
-            kit.fileRow(rows, States.icon(name), name, Words.size(file.size),
+            val row = kit.fileRow(rows, States.icon(name), name, Words.size(file.size),
                 badge = from?.let { Kit.Badge(States.device(it), R.color.green) },
-                said = from?.let { "from $it" } ?: Words.ago(h.at), onHold = { choose(file, from) }) { app.open(file) }
+                said = from?.let { "from $it" } ?: Words.ago(h.at), onHold = { choose(file, from) }) {
+                Peek.show(app, scope, looks, i)
+            }
+            Thumbs.local(scope, row.icon, file.path, file.modifiedAt)
         }
     }
 

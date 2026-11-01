@@ -177,9 +177,26 @@ class SharedScreen(app: MainActivity, private val computer: PeerInfo, private va
                 refresh()
             }
         })
-        for (file in listing.files.sortedBy { it.name.lowercase() }) {
-            kit.fileRow(listed, States.icon(file.name), file.name, Words.size(file.size), onHold = { choose(file) }) {
-                Opened.open(app, scope, folder, file)
+        // A tap previews, the others of the folder a swipe away; a folder
+        // mostly of photos as a gallery (item 6).
+        val files = listing.files.sortedBy { it.name.lowercase() }
+        val looks = files.map { Peek.remote(app, scope, { folder }, it) }
+        if (Gallery.suits(files.map { it.name })) {
+            Gallery.grid(app, listed, files.size) { i, picture, cell ->
+                val file = files[i]
+                picture.setImageResource(States.icon(file.name))
+                picture.imageTintList = ColorStateList.valueOf(kit.color(R.color.text_2))
+                cell.contentDescription = file.name
+                cell.setOnClickListener { Peek.show(app, scope, looks, i) }
+                cell.setOnLongClickListener { choose(file); true }
+                Thumbs.remote(scope, picture, { folder }, file)
+            }
+        } else {
+            for ((i, file) in files.withIndex()) {
+                val row = kit.fileRow(listed, States.icon(file.name), file.name, Words.size(file.size), onHold = { choose(file) }) {
+                    Peek.show(app, scope, looks, i)
+                }
+                Thumbs.remote(scope, row.icon, { folder }, file)
             }
         }
     }

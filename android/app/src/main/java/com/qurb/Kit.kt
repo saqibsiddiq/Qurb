@@ -175,6 +175,8 @@ class Kit(private val app: AppCompatActivity) {
         onHold: (() -> Unit)? = null,
         onTap: () -> Unit,
     ) {
+        // A recycled row's thumbnail let go of (item 6): its kind's icon again.
+        Thumbs.reset(row.icon, dp(22))
         row.icon.setImageResource(icon)
         row.icon.imageTintList = ColorStateList.valueOf(color(R.color.text_2))
         row.name.text = name

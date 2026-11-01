@@ -215,8 +215,26 @@ class KeptScreen(
      */
     private fun showFiles(rows: LinearLayout, files: List<KeptFile>, from: Int) {
         val upTo = minOf(files.size, from + PAGE)
-        for (file in files.subList(from, upTo)) {
-            kit.fileRow(rows, States.icon(file.name), file.name, Words.size(file.size), onHold = { choose(file) }) { open(file) }
+        // A tap previews, the others of the folder a swipe away (item 6).
+        val looks = files.map { Peek.remote(app, scope, { folder }, it) }
+        val page = files.subList(from, upTo)
+        if (Gallery.suits(files.map { it.name })) {
+            Gallery.grid(app, rows, page.size) { i, picture, cell ->
+                val file = page[i]
+                picture.setImageResource(States.icon(file.name))
+                picture.imageTintList = android.content.res.ColorStateList.valueOf(kit.color(R.color.text_2))
+                cell.contentDescription = file.name
+                cell.setOnClickListener { Peek.show(app, scope, looks, from + i) }
+                cell.setOnLongClickListener { choose(file); true }
+                Thumbs.remote(scope, picture, { folder }, file)
+            }
+        } else {
+            for ((i, file) in page.withIndex()) {
+                val row = kit.fileRow(rows, States.icon(file.name), file.name, Words.size(file.size), onHold = { choose(file) }) {
+                    Peek.show(app, scope, looks, from + i)
+                }
+                Thumbs.remote(scope, row.icon, { folder }, file)
+            }
         }
         if (upTo < files.size) {
             var more: View? = null

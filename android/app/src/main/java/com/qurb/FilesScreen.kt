@@ -560,10 +560,18 @@ class FilesScreen(app: MainActivity, private val private: Boolean, private val u
             val state = States.of(entry, downloading, keptOn)
             kit.bindFile(row, States.icon(entry.path), name, Words.size(entry.size), badge(entry, downloading),
                 state.words, onHold = { choose(entry) }) {
-                if (States.here(entry)) app.open(entry) else choose(entry)
+                if (States.here(entry)) preview(entry) else choose(entry)
             }
+            if (States.here(entry)) Thumbs.local(scope, row.icon, entry.path, entry.modifiedAt)
             row.tile.alpha = if (!States.here(entry) && !downloading) 0.7f else 1f
         }
+    }
+
+    /** A file here, in quick preview with the others here to swipe to; one
+     *  it cannot show, in an app (item 6). */
+    private fun preview(entry: FileEntry) {
+        val here = shown.filter { States.here(it) }
+        Peek.show(app, scope, here.map { Peek.local(app, it) }, here.indexOf(entry))
     }
 
     /** Where a file is, as Figma's badge: a check on green for here, a cloud on grey for elsewhere. */

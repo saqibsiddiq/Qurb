@@ -55,17 +55,12 @@ object Opened {
             }
             return
         }
-        val dir = java.io.File(app.cacheDir, "$OPENED/${file.content.take(16)}")
         val name = file.name.substringAfterLast('/')
-        val here = java.io.File(dir, name)
-        if (!here.exists()) app.say("Fetching $name…")
+        if (!cached(app, file).exists()) app.say("Fetching $name…")
         scope.launch {
             try {
                 val local = withContext(Dispatchers.IO) {
-                    if (here.exists()) return@withContext here
-                    val open = folder ?: error("the folder is closed")
-                    dir.mkdirs()
-                    java.io.File(open.download(file, here.path))
+                    fetched(app, folder ?: error("the folder is closed"), file) ?: error("too large to fetch whole")
                 }
                 val uri = FileProvider.getUriForFile(app, "${app.packageName}.opened", local)
                 scope.launch(Dispatchers.IO) { tidy(app) }
@@ -80,6 +75,24 @@ object Opened {
                 app.fail("Could not open $name", e)
             }
         }
+    }
+
+    /** Where `file` is kept once fetched to be opened. */
+    private fun cached(context: Context, file: KeptFile) =
+        java.io.File(java.io.File(context.cacheDir, "$OPENED/${file.content.take(16)}"), file.name.substringAfterLast('/'))
+
+    /**
+     * `file`, fetched whole into the cache of opened files, or as it already
+     * is there; null for one larger than [STREAM_FROM], which is read as it
+     * is shown instead. Called off the main thread: by opening, and by quick
+     * preview ([Peek]), so a photo previewed then opened is fetched once.
+     */
+    fun fetched(context: Context, folder: KeptFolder, file: KeptFile): java.io.File? {
+        if (file.size > STREAM_FROM) return null
+        val here = cached(context, file)
+        if (here.exists()) return here
+        here.parentFile?.mkdirs()
+        return java.io.File(folder.download(file, here.path))
     }
 
     /** Files opened more than a day ago let go of, and the oldest beyond
