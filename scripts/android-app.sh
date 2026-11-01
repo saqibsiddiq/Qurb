@@ -93,7 +93,9 @@ cp -r target/bindings/kotlin/uniffi android/app/src/main/java/
 echo "   $(find android/app/src/main/java/uniffi -name '*.kt' | wc -l) file(s)"
 
 echo "== 3/3  Gradle"
-GRADLE=$(find "$HOME/.gradle/wrapper/dists" -name gradle -type f -path '*/bin/*' 2>/dev/null | head -1)
+# `|| true`: on a machine with no wrapper cache -- CI -- the folder is not
+# there, and under `set -e` the failed search would end the script unsaid.
+GRADLE=$(find "$HOME/.gradle/wrapper/dists" -name gradle -type f -path '*/bin/*' 2>/dev/null | head -1 || true)
 GRADLE=${GRADLE:-$(command -v gradle || true)}
 [[ -x ${GRADLE:-} ]] || { echo "No gradle found." >&2; exit 1; }
 
