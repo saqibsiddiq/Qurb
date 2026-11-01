@@ -6,8 +6,12 @@ on the phone build, fixed). Its APK checked: the SHA-256 in `android.json`,
 the release key's signature, version code 20001. The owner's laptop runs its
 AppImage, the S23 its APK. Supersedes the "no automatic updater" part of
 [0047](0047-versions-and-upgrades.md); its versions, index migrations and
-refusals stand. **An update has not yet been applied by either app**: that
-waits for v0.2.0-beta.2.
+refusals stand. **The desktop's update proven** with v0.2.0-beta.2 the same
+afternoon: the laptop's AppImage, restarted at 15:07:39, found it at
+15:08:42, fetched and verified it, and had it in place at 15:08:56 —
+byte for byte the release's — and, started again, ran as it and found
+nothing newer. **The phone's not yet**: it needs the owner's tap, and his
+one-time "allow installing" in Android.
 **Date:** 2026-11-01
 
 ## What was asked
