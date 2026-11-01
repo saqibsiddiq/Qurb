@@ -35,16 +35,29 @@ class AdvancedScreen(app: MainActivity) : Screen(app) {
         views.refresh.setOnRefreshListener { refresh() }
     }
 
+    private val key = KeySheet(app, scope) { refresh() }
+
     override fun refresh() {
-        show()
-        views.refresh.isRefreshing = false
+        scope.launch {
+            val identity = runCatching { withContext(Dispatchers.IO) { engine().identityShort() } }.getOrDefault("")
+            show(identity, key.kept())
+            views.refresh.isRefreshing = false
+        }
     }
 
-    private fun show() {
+    private fun show(identity: String, kept: KeySheet.Kept) {
         val page = views.sections
         page.removeAllViews()
 
-        var card = kit.card(page, top = 16)
+        // Moved here from Settings (the owner's review of 2026-11-02, SE-1):
+        // who this phone is, for comparing with another device, and its key.
+        kit.label(page, "This phone", top = 12)
+        var card = kit.card(page)
+        if (identity.isNotEmpty()) kit.setting(card, R.drawable.ic_info, "Identity", identity)
+        kit.setting(card, R.drawable.ic_shield_check, "Key", key.words(kept)) { key.show(kept) }
+
+        kit.label(page, "Connection")
+        card = kit.card(page)
         kit.setting(card, R.drawable.ic_link, "Rendezvous", Engine.signalUrl(app).ifEmpty { "None" }) { editSignal() }
         kit.setting(card, R.drawable.ic_cloud, "Relay", when (val relay = Engine.relayAddress(app)) {
             null -> "Auto"
@@ -52,7 +65,8 @@ class AdvancedScreen(app: MainActivity) : Screen(app) {
             else -> relay
         }) { editRelay() }
 
-        card = kit.card(page, top = 16)
+        kit.label(page, "App")
+        card = kit.card(page)
         val version = runCatching {
             app.packageManager.getPackageInfo(app.packageName, 0).versionName
         }.getOrNull() ?: "unknown"

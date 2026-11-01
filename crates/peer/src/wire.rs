@@ -381,9 +381,10 @@ pub enum Response {
     /// What a computer's folder holds at its top for the asker, answering
     /// [`Request::Places`]: each by name, and what it is to the asker.
     Places { places: Vec<(String, Place)> },
-    /// [`Request::Storage`]: the disk's size and what is free on it, then
-    /// each part Qurb keeps -- its kind, a name, its bytes.
-    Storage { disk: u64, free: u64, parts: Vec<(Part, String, u64)> },
+    /// [`Request::Storage`]: the space the computer gives QurbSpace (0 for
+    /// no limit) and what QurbSpace uses on it, then each part it keeps --
+    /// its kind, a name, its bytes.
+    Storage { given: u64, used: u64, parts: Vec<(Part, String, u64)> },
 
     /// The device id the asker's permanent identity has here, answering
     /// [`Request::Become`].
@@ -923,10 +924,10 @@ impl Response {
                 out.push(STATUS_BECAME);
                 out.extend_from_slice(device_id);
             }
-            Response::Storage { disk, free, parts } => {
+            Response::Storage { given, used, parts } => {
                 out.push(STATUS_STORAGE);
-                out.extend_from_slice(&disk.to_le_bytes());
-                out.extend_from_slice(&free.to_le_bytes());
+                out.extend_from_slice(&given.to_le_bytes());
+                out.extend_from_slice(&used.to_le_bytes());
                 let parts = &parts[..parts.len().min(MAX_PARTS)];
                 put_u32(&mut out, parts.len());
                 for (part, name, bytes) in parts {
@@ -1014,8 +1015,8 @@ impl Response {
             STATUS_INSTALL => Response::Install { marker: r.array()? },
             STATUS_BECAME => Response::Became { device_id: r.hash()? },
             STATUS_STORAGE => {
-                let disk = r.u64()?;
-                let free = r.u64()?;
+                let given = r.u64()?;
+                let used = r.u64()?;
                 let n = r.count()?;
                 if n > MAX_PARTS {
                     return Err(Error::Protocol { detail: format!("{n} parts is not a computer's storage") });
@@ -1026,7 +1027,7 @@ impl Response {
                     let name = r.name()?;
                     parts.push((part, name, r.u64()?));
                 }
-                Response::Storage { disk, free, parts }
+                Response::Storage { given, used, parts }
             }
             STATUS_PLACES => {
                 let n = r.count()?;
@@ -1569,7 +1570,7 @@ mod tests {
             Response::Profile { name: "S23".into(), picture: vec![], changed_at: 1 },
             Response::Install { marker: [9; 16] },
             Response::Became { device_id: [4; 32] },
-            Response::Storage { disk: 512 << 30, free: 100 << 30, parts: vec![(Part::Shared, String::new(), 4 << 30), (Part::Backups, "skib phone".into(), 20 << 30), (Part::Other, String::new(), 1)] },
+            Response::Storage { given: 100 << 30, used: 37 << 30, parts: vec![(Part::Shared, String::new(), 4 << 30), (Part::Backups, "skib phone".into(), 20 << 30), (Part::Other, String::new(), 1)] },
             Response::Places { places: vec![("Shared".into(), Place::Shared), ("skib phone".into(), Place::Mine), ("Ammi's phone".into(), Place::Locked)] },
             Response::Refused { why: "something is already called Notes".into() },
             Response::Placed { path: "Photos/beach (2).jpg".into() },

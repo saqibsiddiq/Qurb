@@ -900,7 +900,10 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             if owners_phone(store, asker)?.is_none() {
                 return Ok(Answer::Now(Response::NotFound));
             }
-            let (disk, free) = store.tree_root().map(crate::disk::space).unwrap_or((0, 0));
+            // Measured against what this computer gives QurbSpace, not its
+            // whole disk (the owner's review of 2026-11-02, SE-6).
+            let usage = store.usage()?;
+            let (given, used) = (crate::disk::allowance(), usage.files + usage.chunks);
             let mut parts = vec![(crate::wire::Part::Shared, String::new(), store.usage()?.files)];
             let db = store.db();
             let outside = qurb_storage::db::OUTSIDE;
@@ -940,7 +943,7 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             }
             let deleted: u64 = store.recently_deleted()?.iter().map(|d| d.size).sum();
             parts.push((crate::wire::Part::Deleted, String::new(), deleted));
-            Response::Storage { disk, free, parts }
+            Response::Storage { given, used, parts }
         }
         // Its Recently deleted emptied for good, from the owner's phone's
         // Storage. Nobody else may.

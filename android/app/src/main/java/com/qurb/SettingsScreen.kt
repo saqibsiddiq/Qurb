@@ -11,7 +11,6 @@ import com.qurb.databinding.ScreenPageBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.qurb_mobile.DeletedFile
 import uniffi.qurb_mobile.Usage
 
 /**
@@ -45,13 +44,9 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
 
     private class State(
         val usage: Usage,
-        val identity: String,
-        val deleted: List<DeletedFile>,
         val sentCopies: ULong,
-        /** Whether the key this phone holds is the one its backup gives back. */
-        val keyKept: Boolean,
-        /** Whether that backup leaves the phone: Google's, with a screen lock. */
-        val keyInCloud: Boolean,
+        /** What the app's cache holds, in bytes. */
+        val cache: ULong,
         /** The name set here, or empty. */
         val name: String,
         val picture: android.graphics.Bitmap?,
@@ -70,19 +65,11 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                         WhatsApp.schedule(app)
                         SyncWorker.runNow(app)
                     }
-                    // Where the key is safe, checked rather than assumed
-                    // (decision 0053): the key the backup gives back is
-                    // compared with this phone's own.
-                    val found = Backup.find(app)
-                    val mine = runCatching { engine.recoveryPhrase() }.getOrNull()
                     val profile = runCatching { engine.ownProfile() }.getOrNull()
                     State(
                         engine.usage(),
-                        runCatching { engine.identityShort() }.getOrDefault(""),
-                        engine.recentlyDeleted(),
                         engine.sentCopies(),
-                        found != null && found == mine,
-                        Backup.leavesThePhone(app),
+                        app.cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }.toULong(),
                         profile?.name.orEmpty(),
                         profile?.picture?.let { Devices.decode(it) },
                     )
@@ -99,48 +86,50 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
     private fun show(state: State) {
         val page = views.sections
         page.removeAllViews()
-
-        kit.label(page, "This phone", top = 12)
-        var card = kit.card(page)
         val name = state.name.ifEmpty { android.os.Build.MODEL ?: "Phone" }
-        kit.setting(card, R.drawable.ic_smartphone, "Name", name) {
-            kit.askName("Name", name, "Save") { to -> change { it.setOwnName(to) } }
-        }
-        // Its circle at the end, as the devices paired with it draw it.
-        val picture = kit.setting(card, R.drawable.ic_image, "Picture") { picture(state) }
-        picture.chevron.visibility = View.GONE
-        picture.root.addView(kit.avatar(name, null, state.picture, 36),
-            LinearLayout.LayoutParams(kit.dp(36), kit.dp(36)))
-        if (state.identity.isNotEmpty()) kit.setting(card, R.drawable.ic_info, "Identity", state.identity)
-        kit.setting(card, R.drawable.ic_shield_check, "Key", when {
-            !state.keyKept -> "Not kept yet"
-            state.keyInCloud -> "Safe"
-            else -> "This phone only"
-        }) { key(state) }
 
-        kit.label(page, "Storage")
-        card = kit.card(page)
-        // What the app holds here, said; no Free up and no Recently deleted on
-        // the phone (the owner's list of 2026-11-01, item 9): storage is the
-        // computers' to manage.
-        // Storage: the computers', managed from here (item 8), and this phone's.
-        kit.setting(card, R.drawable.ic_hard_drive, "Storage", Words.size(state.usage.onDisk)) {
-            app.push(StorageScreen(app))
+        // This phone as one profile, as WhatsApp has it (the owner's review of
+        // 2026-11-02, SE-2): its picture, its name; tapped, the profile page.
+        var card = kit.card(page, top = 18)
+        val profile = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            setPadding(kit.dp(16), kit.dp(16), kit.dp(16), kit.dp(16))
+            contentDescription = "Profile, $name"
+            setOnClickListener { app.push(ProfileScreen(app)) }
         }
-        // Its own row, never part of the one above: the devices sent to have
+        profile.addView(kit.avatar(name, null, state.picture, 64), LinearLayout.LayoutParams(kit.dp(64), kit.dp(64)))
+        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(TextView(app).apply { text = name; setTextAppearance(R.style.Text_Title) })
+        words.addView(TextView(app).apply {
+            text = "This phone"
+            setTextAppearance(R.style.Text_Meta)
+            setTextColor(kit.color(R.color.text_3))
+        })
+        profile.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = kit.dp(16) })
+        profile.addView(android.widget.ImageView(app).apply {
+            setImageResource(R.drawable.ic_chevron_right)
+            imageTintList = android.content.res.ColorStateList.valueOf(kit.color(R.color.text_3))
+        }, LinearLayout.LayoutParams(kit.dp(20), kit.dp(20)))
+        card.addView(profile)
+
+        // Manage storage (SE-3): the computers', each against what it gives
+        // QurbSpace; and what the app keeps here that it can let go of.
+        kit.label(page, "Manage storage")
+        card = kit.card(page)
+        kit.setting(card, R.drawable.ic_hard_drive, "Devices") { app.push(StorageScreen(app)) }
+        kit.setting(card, R.drawable.ic_trash_2, "Clear cache", Words.size(state.cache)) { clearCache(state.cache) }
+        // Its own row, never part of the cache: the devices sent to have
         // these, but one may have lost its copy since (decision 0030).
         if (state.sentCopies > 0uL) {
-            kit.setting(card, R.drawable.ic_send, "Copies of files you sent", Words.size(state.sentCopies)) {
+            kit.setting(card, R.drawable.ic_send, "Sent files kept here", Words.size(state.sentCopies)) {
                 letGoOfSentCopies(state.sentCopies)
             }
         }
 
         kit.label(page, "App")
         card = kit.card(page)
-        // One switch, and no words under it (the owner, 2026-10-24: "lets
-        // keep notification one switch only"). On means asked of Android too.
-        // What happened, moved here from Home's top bar (the owner's list of
-        // 2026-10-26, item 8): 30 days of it, each file told once.
         kit.setting(card, R.drawable.ic_clock, "Activity") { app.push(ActivityScreen(app)) }
         kit.setting(card, R.drawable.ic_bell, "Notifications",
             on = Notices.enabled(app) && Notices.permitted(app), onChange = { on ->
@@ -149,27 +138,25 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                 refresh()
             })
         kit.setting(card, R.drawable.ic_palette, "Theme", Appearance.chosen(app).words) { chooseTheme() }
-        // Follows the phone's own animation setting; nothing to choose here.
-        kit.setting(card, R.drawable.ic_sliders_horizontal, "Motion", if (Kit.calm()) "Reduced" else "Full")
-        // The beta updates itself (decision 0078): this build, and a newer
-        // one when it has been fetched -- a tap installs it, the first time
-        // after allowing it in the system's page.
+        // Update, where Version was (SE-5): up to date, or the new one, a tap
+        // installing it (decision 0078). The version itself is in Advanced.
         val update = Updates.state(app)
-        kit.setting(card, R.drawable.ic_download, "Version", when (update) {
-            is Updates.State.Ready -> "${update.versionName} ready"
-            is Updates.State.Failed -> "${Updates.installedName(app)}, couldn't check"
-            Updates.State.UpToDate -> Updates.installedName(app)
+        val row = kit.setting(card, R.drawable.ic_download, "Update", when (update) {
+            is Updates.State.Ready -> update.versionName
+            is Updates.State.Failed -> "Couldn't check"
+            Updates.State.UpToDate -> "Up to date"
         }) {
             when {
-                update is Updates.State.Ready && !Updates.allowed(app) -> app.startActivity(Updates.allowIntent(app))
-                update is Updates.State.Ready -> Updates.installReady(app)
+                update is Updates.State.Ready -> askToUpdate(update.versionName)
                 else -> scope.launch {
                     val now = Updates.run(app, now = true)
-                    app.say(if (now is Updates.State.Ready) "${now.versionName} is ready" else if (now is Updates.State.Failed) "Couldn't check for updates" else "Up to date")
+                    if (now is Updates.State.Ready) askToUpdate(now.versionName)
+                    else app.say(if (now is Updates.State.Failed) "Couldn't check for updates" else "Up to date")
                     refresh()
                 }
             }
         }
+        if (update is Updates.State.Ready) row.value.setTextColor(kit.color(R.color.green))
 
         kit.label(page, "Connection")
         card = kit.card(page)
@@ -178,21 +165,32 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.setting(card, R.drawable.ic_link, "Advanced") { app.push(AdvancedScreen(app)) }
     }
 
-    /** Pick a picture for this phone, or, with one set, pick another or take it away. */
-    private fun picture(state: State) {
-        val pick = {
-            app.pickPicture { uri ->
+    /** The new version, and Later or Update. */
+    private fun askToUpdate(version: String) {
+        kit.sheet()
+            .mark(R.drawable.ic_download, R.color.green_soft, R.color.green)
+            .title("$version is ready", centred = true)
+            .line("You have ${Updates.installedName(app)}")
+            .buttons("Update", secondary = "Later") {
+                if (!Updates.allowed(app)) app.startActivity(Updates.allowIntent(app)) else Updates.installReady(app)
+            }
+            .show()
+    }
+
+    /** The app's cache let go of, asked first: previews and files opened
+     *  from the computers, none of the person's own. */
+    private fun clearCache(bytes: ULong) {
+        kit.sheet()
+            .mark(R.drawable.ic_trash_2, R.color.green_soft, R.color.green)
+            .title("Clear ${Words.size(bytes)}?", centred = true)
+            .line("Previews and files opened from your computers. Your files stay where they are.")
+            .buttons("Clear") {
                 scope.launch {
-                    val bytes = runCatching { withContext(Dispatchers.IO) { Devices.encode(app, uri) } }
-                        .getOrElse { app.fail("Could not read that picture", it); return@launch }
-                    change { it.setOwnPicture(bytes) }
+                    withContext(Dispatchers.IO) { app.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
+                    app.say("Cleared")
+                    refresh()
                 }
             }
-        }
-        if (state.picture == null) return pick()
-        kit.sheet().title("Picture")
-            .action(R.drawable.ic_image, "Choose another") { pick() }
-            .action(R.drawable.ic_trash_2, "Remove", danger = true) { change { it.setOwnPicture(null) } }
             .show()
     }
 
@@ -202,110 +200,6 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
             runCatching { withContext(Dispatchers.IO) { work(engine()) } }
                 .onSuccess { refresh() }
                 .onFailure { app.fail("Could not change it", it) }
-        }
-    }
-
-    /**
-     * Where the key is safe (decision 0053), checked: on this phone, in the
-     * Android Keystore; and in Google's backup, end-to-end encrypted with the
-     * screen lock, when there is one. The 24 words behind the screen lock.
-     */
-    private fun key(state: State) {
-        val title = when {
-            !state.keyKept -> "Your key isn't kept yet"
-            state.keyInCloud -> "Your key is safe"
-            else -> "Your key is on this phone only"
-        }
-        val facts = LinearLayout(app).apply {
-            orientation = LinearLayout.VERTICAL
-            background = ContextCompat.getDrawable(app, R.drawable.group_quiet)
-            setPadding(0, kit.dp(4), 0, kit.dp(4))
-        }
-        // Said as it is: the Keystore key is not tied to unlocking the phone
-        // (AndroidKeyStore.kt says why), so background syncing works locked.
-        kit.setting(facts, R.drawable.ic_smartphone, "This phone", "Android Keystore")
-        kit.setting(facts, R.drawable.ic_cloud, "Google backup", when {
-            !state.keyKept -> "Not kept"
-            state.keyInCloud -> "Encrypted with your screen lock"
-            else -> "Off: no screen lock"
-        })
-        val sheet = kit.sheet()
-            .mark(R.drawable.ic_shield_check,
-                if (state.keyKept && state.keyInCloud) R.color.green_soft else R.color.attention_bg,
-                if (state.keyKept && state.keyInCloud) R.color.green else R.color.attention)
-            .title(title, centred = true)
-            .view(facts, top = 16)
-        if (!state.keyKept) {
-            sheet.view(kit.button("Keep it now") { sheet.dismiss(); keepKey() },
-                top = 18)
-        }
-        sheet.view(kit.button("Show the 24 words", Kit.Style.SECONDARY) {
-            sheet.dismiss()
-            showPhrase()
-        }, top = if (state.keyKept) 18 else 10)
-        if (ScreenLock.available(app)) {
-            val note = TextView(app).apply {
-                text = "Asks for your screen lock"
-                setTextAppearance(R.style.Text_Meta)
-                gravity = Gravity.CENTER
-                compoundDrawablePadding = kit.dp(6)
-                setCompoundDrawablesRelativeWithIntrinsicBounds(
-                    ContextCompat.getDrawable(app, R.drawable.ic_lock_keyhole)?.mutate()?.apply {
-                        setBounds(0, 0, kit.dp(14), kit.dp(14))
-                        setTint(kit.color(R.color.text_3))
-                    }, null, null, null)
-            }
-            val centre = FrameLayout(app)
-            centre.addView(note, FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-            sheet.view(centre, top = 10)
-        }
-        sheet.show()
-    }
-
-    /**
-     * The words again, for a new paper copy before the old one is lost.
-     *
-     * Not a secret kept from the person holding the phone: anyone who can
-     * open this app can read every file already, so the words give away
-     * nothing new (decision 0033). But they are the key, so the screen lock is
-     * asked first where there is one (the redesign), and the sheet is kept
-     * out of screenshots while they are on it.
-     */
-    private fun showPhrase() {
-        if (ScreenLock.available(app)) {
-            ScreenLock.confirm(app, "Show your 24 words", "Anyone who sees them can read your files") { yes ->
-                if (yes) app.runOnUiThread { phrase() }
-            }
-        } else {
-            kit.sheet()
-                .mark(R.drawable.ic_key_round, R.color.attention_bg, R.color.attention)
-                .title("Show your 24 words?", centred = true)
-                .line("Anyone who sees them can read every file you keep in Qurb")
-                .buttons("Show") { phrase() }
-                .show()
-        }
-    }
-
-    private fun phrase() {
-        scope.launch {
-            try {
-                val words = withContext(Dispatchers.IO) { engine().recoveryPhrase() }
-                val sheet = kit.sheet()
-                    .title("Your 24 words")
-                    .view(Words.phraseView(app, words), top = 16)
-                // As a text file, wherever the person picks (the owner's list
-                // of 2026-10-26, item 17): numbered, one a line.
-                sheet.view(kit.button("Save as text file", Kit.Style.SECONDARY, R.drawable.ic_download) {
-                    app.saveText("QurbSpace 24 words.txt",
-                        words.trim().split(Regex("\\s+")).mapIndexed { i, w -> "${i + 1}. $w" }.joinToString("\n", postfix = "\n"))
-                }, top = 16)
-                    .closing("Hide")
-                    .secure()
-                    .show()
-            } catch (e: Exception) {
-                app.fail("Could not show the words", e)
-            }
         }
     }
 
@@ -420,20 +314,6 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             textColor = kit.color(R.color.text)
             selectionDividerHeight = kit.dp(1)
-        }
-    }
-
-    /** Keep the key in Block Store now, for a phone that does not have it. */
-    private fun keepKey() {
-        scope.launch {
-            try {
-                withContext(Dispatchers.IO) { Backup.save(app, engine().recoveryPhrase()) }
-                app.say("Your key is kept")
-            } catch (e: Exception) {
-                app.fail("Could not keep the key", e)
-            } finally {
-                refresh()
-            }
         }
     }
 

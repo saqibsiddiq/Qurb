@@ -4112,13 +4112,13 @@ pub struct ComputerPlace {
     pub kind: String,
 }
 
-/// What a computer keeps, by kind, and its disk, for Settings → Storage (the
-/// owner's list of 2026-11-01, item 8). Sizes in bytes; `disk` and `free`
-/// are 0 when the computer could not say.
+/// What a computer keeps, by kind, for Settings → Manage storage (the
+/// owner's list of 2026-11-01, item 8): measured against the space it gives
+/// QurbSpace (`given`, 0 for no limit), and what QurbSpace uses of it. Bytes.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ComputerStorage {
-    pub disk: u64,
-    pub free: u64,
+    pub given: u64,
+    pub used: u64,
     pub parts: Vec<StoragePart>,
 }
 
@@ -4172,9 +4172,9 @@ impl KeptFolder {
             .runtime
             .block_on(self.client.storage())
             .map_err(|e| QurbError::Network { detail: e.to_string() })?;
-        Ok(told.map(|(disk, free, parts)| ComputerStorage {
-            disk,
-            free,
+        Ok(told.map(|(given, used, parts)| ComputerStorage {
+            given,
+            used,
             parts: parts
                 .into_iter()
                 .map(|(part, name, bytes)| StoragePart {

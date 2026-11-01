@@ -298,11 +298,11 @@ impl PeerClient {
         self.change(Request::SharedDelete { path: path.to_string() }).await
     }
 
-    /// What the peer keeps, by kind, and its disk: `None` from a peer that
+    /// What the peer keeps, by kind, the space it gives QurbSpace and what is used of it: `None` from a peer that
     /// does not tell this device (or is too old to).
     pub async fn storage(&self) -> Result<Option<(u64, u64, Vec<(crate::wire::Part, String, u64)>)>> {
         match self.request(Request::Storage).await? {
-            Response::Storage { disk, free, parts } => Ok(Some((disk, free, parts))),
+            Response::Storage { given, used, parts } => Ok(Some((given, used, parts))),
             Response::NotFound => Ok(None),
             other => Err(unexpected("storage", &other)),
         }

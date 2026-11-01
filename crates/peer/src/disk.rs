@@ -22,3 +22,17 @@ pub fn set(ask: fn(&Path) -> (u64, u64)) {
 pub fn space(dir: &Path) -> (u64, u64) {
     ASK.get().map(|ask| ask(dir)).unwrap_or((0, 0))
 }
+
+static ALLOWANCE: OnceLock<Box<dyn Fn() -> u64 + Send + Sync>> = OnceLock::new();
+
+/// How this program reads the space it is given (its configured limit,
+/// read fresh each time, 0 for none); the first one given is kept.
+pub fn set_allowance(read: impl Fn() -> u64 + Send + Sync + 'static) {
+    let _ = ALLOWANCE.set(Box::new(read));
+}
+
+/// The space this computer gives QurbSpace, in bytes; 0 for no limit, or
+/// when nobody said.
+pub fn allowance() -> u64 {
+    ALLOWANCE.get().map(|read| read()).unwrap_or(0)
+}

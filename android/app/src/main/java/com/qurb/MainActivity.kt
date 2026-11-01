@@ -157,6 +157,33 @@ class MainActivity : AppCompatActivity() {
         if (then != null && uri != null) then(uri)
     }
 
+    private var photoThen: ((android.graphics.Bitmap) -> Unit)? = null
+
+    private val photoTaker = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        val then = photoThen
+        photoThen = null
+        if (then != null && bitmap != null) then(bitmap)
+    }
+
+    private val cameraAsk = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) photoTaker.launch(null) else photoThen = null
+    }
+
+    /** A photo taken with the camera, small, for the profile picture (the
+     *  owner's review of 2026-11-02, SE-2). The camera permission is the app's
+     *  already, for scanning a code; asked for here if it has not been given. */
+    fun takePicture(then: (android.graphics.Bitmap) -> Unit) {
+        photoThen = then
+        try {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED) photoTaker.launch(null)
+            else cameraAsk.launch(android.Manifest.permission.CAMERA)
+        } catch (e: Exception) {
+            photoThen = null
+            fail("Could not open the camera", e)
+        }
+    }
+
     /** Pick a picture with the system's photo picker, for a screen to do `then` with. */
     fun pickPicture(then: (Uri) -> Unit) {
         pictureThen = then

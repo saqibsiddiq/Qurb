@@ -70,6 +70,11 @@ object Devices {
                 BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
             } ?: error("not a picture")
         }
+        return encode(whole)
+    }
+
+    /** A picture already decoded, squared and made small, as JPEG. */
+    fun encode(whole: Bitmap): ByteArray {
         val side = minOf(whole.width, whole.height)
         val square = Bitmap.createBitmap(whole, (whole.width - side) / 2, (whole.height - side) / 2, side, side)
         val small = Bitmap.createScaledBitmap(square, SIDE, SIDE, true)

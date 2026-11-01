@@ -3171,7 +3171,7 @@ fixed together and tested together. As he answered, page by page:
   saw); Android's own *Remove animations* still respected.
 
 **Build order, from 2026-11-02** (each ticked here when built):
-1. Settings: profile row and page, Manage storage (Devices, a device's
+1. ✓ Settings: profile row and page, Manage storage (Devices, a device's
    storage against its allowance, Clear cache), icons alone, Update, Identity
    and Key into Advanced, no Motion.
 2. Received as a log; Files top in two sections with a computer's total;
