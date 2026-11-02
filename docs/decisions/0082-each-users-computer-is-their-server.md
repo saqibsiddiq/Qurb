@@ -96,3 +96,19 @@ introduction, which is what the meeting point is for. That afternoon, from
 not recover after restarting tailscaled or resetting the Funnel, while
 Tailscale's status page said all was well: the dependency this decision
 removes.
+
+## The meeting point, built and tried, 2026-11-02
+
+Built as a `nostr` signalling address (`crates/signal/src/nostr.rs`), spoken
+to the connector exactly as the rendezvous service is. Live over the public
+relays from the owner's laptop, three runs of `tests/nostr_live.rs`: the ask
+heard in 0.17–0.21 s, both sides told to punch 0.40–0.52 s after it.
+
+Then on the owner's devices, both switched to `nostr` (the laptop's config
+`signal = nostr`; the phone built with it as its default), no Tailscale: the
+S23 on Airtel mobile data opened the laptop's *Shared*, and the laptop logged
+`connected peer=f63a0f05 candidate=106.202.97.42:47568` at 14:30:27 IST --
+**a direct connection to the phone's mobile address**, through both carriers'
+CGNATs, introduced by the public relays. The first attempts before it timed
+out on the addresses the phone had announced while on Wi-Fi; not yet looked
+into, and to be with the hole-punching work.
