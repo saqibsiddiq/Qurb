@@ -96,6 +96,19 @@ object Restore {
         }
     }
 
+    /** Asked first: from where, back where each file was, what is skipped. */
+    fun ask(app: MainActivity, computer: PeerInfo, what: What, then: () -> Unit) {
+        app.kit.sheet()
+            .mark(R.drawable.ic_rotate_ccw, R.color.green_soft, R.color.green)
+            .title("Restore ${if (what is What.Folder || what is What.WhatsApp) what.words else what.words.lowercase()}?", centred = true)
+            .line("From ${computer.name}, back where each file was. Files already on this phone are skipped.")
+            .buttons("Restore") {
+                start(app, computer, what)
+                then()
+            }
+            .show()
+    }
+
     fun cancel() {
         job?.cancel()
     }

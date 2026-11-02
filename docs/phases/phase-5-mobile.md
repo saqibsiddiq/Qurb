@@ -3210,6 +3210,14 @@ had sat above it, in a bar unlike the mockup's). The folder chooser holds
 ticks until it is left, then asks to save them or not, with *Save* in its
 bar meanwhile.
 
+**Four more, 2026-11-02.** Restore is one card of three: *Everything*,
+*Folders* (a page of every folder backed up, one tapped restored, asked
+first), *Files* (the backup folder, to pick in). The selection bar's icons
+and words, and *All*'s, centred on one line each (they were off centre).
+Sort, order and view remembered for every folder, not each one. Each tab
+keeps its open pages: back in Files, the folder that was open is open again;
+the tab tapped again goes to its top.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

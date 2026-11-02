@@ -49,7 +49,11 @@ class MainActivity : AppCompatActivity() {
     private val screens = mutableMapOf<Int, Screen>()
 
     /** Places reached from a tab's place, newest last: Back leaves them. */
-    private val stack = ArrayDeque<Screen>()
+    /** Each tab's places reached from others, kept while another tab is
+     *  open: back in Files, the folder that was open is open again (the
+     *  owner's review of 2026-11-02). */
+    private val stacks = HashMap<Int, ArrayDeque<Screen>>()
+    private val stack: ArrayDeque<Screen> get() = stacks.getOrPut(views.tabs.selectedItemId) { ArrayDeque() }
     private var current: Screen? = null
 
     /** Set while the tab bar is moved to match a pushed place, so moving it
@@ -342,8 +346,7 @@ class MainActivity : AppCompatActivity() {
         views.tabs.selectedItemId = tab
         views.tabs.setOnItemSelectedListener { item ->
             if (!quietly) {
-                clearStack()
-                show(screenFor(item.itemId))
+                show(stacks[item.itemId]?.lastOrNull() ?: screenFor(item.itemId))
                 current?.refresh()
             }
             true
@@ -562,6 +565,7 @@ class MainActivity : AppCompatActivity() {
     /** Move to another tab, as a screen's action does ("Choose a device"). */
     fun go(tab: Int) {
         clearStack()
+        stacks[tab]?.let { other -> other.forEach { it.left() }; other.clear() }
         if (views.tabs.selectedItemId == tab) show(screenFor(tab)) else views.tabs.selectedItemId = tab
     }
 

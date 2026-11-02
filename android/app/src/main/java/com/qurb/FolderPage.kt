@@ -234,14 +234,21 @@ class FolderPage(
         bar.addView(LinearLayout(app).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            addView(tick(everything))
-            addView(TextView(app).apply { text = "All"; setTextAppearance(R.style.Text_Meta) })
+            addView(tick(everything).apply {
+                layoutParams = LinearLayout.LayoutParams(kit.dp(22), kit.dp(22)).apply { gravity = Gravity.CENTER_HORIZONTAL }
+            })
+            addView(TextView(app).apply {
+                text = "All"
+                setTextAppearance(R.style.Text_Meta)
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(3) })
             setOnClickListener {
                 if (everything) selected.clear() else all.forEach { selected += it.path }
                 draw()
             }
-            setPadding(kit.dp(8), kit.dp(4), kit.dp(4), kit.dp(4))
-        })
+            setPadding(kit.dp(6), kit.dp(4), kit.dp(6), kit.dp(4))
+        }, LinearLayout.LayoutParams(kit.dp(48), ViewGroup.LayoutParams.WRAP_CONTENT))
         page.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(56)).apply { topMargin = kit.dp(4) })
         page.addView(path())
     }
@@ -438,9 +445,11 @@ class FolderPage(
     // ------------------------------------------------------- sort and view
 
     private val prefs get() = app.getSharedPreferences("folders", android.content.Context.MODE_PRIVATE)
-    private fun sort() = prefs.getString("${place.key}|$dir|sort", "name") ?: "name"
-    private fun descending() = prefs.getBoolean("${place.key}|$dir|desc", false)
-    private fun view() = prefs.getString("${place.key}|$dir|view", "list") ?: "list"
+    // Remembered for every folder, as My Files does (the owner, 2026-11-02:
+    // grid chosen, then a folder opened, and it was a list again).
+    private fun sort() = prefs.getString("sort", "name") ?: "name"
+    private fun descending() = prefs.getBoolean("desc", false)
+    private fun view() = prefs.getString("view", "list") ?: "list"
 
     private fun sorted(all: List<FolderItem>): List<FolderItem> {
         val (folders, files) = all.partition { it.folder }
@@ -493,18 +502,17 @@ class FolderPage(
             }, LinearLayout.LayoutParams(kit.dp(18), kit.dp(18)))
             setOnClickListener { choose(); popup.dismiss(); draw() }
         })
-        val key = "${place.key}|$dir"
         heading("Sort by")
         for ((k, words) in listOf("name" to "Name", "date" to "Date", "size" to "Size", "type" to "Type"))
-            option(null, words, sort() == k) { prefs.edit().putString("$key|sort", k).apply() }
+            option(null, words, sort() == k) { prefs.edit().putString("sort", k).apply() }
         line()
         heading("Order")
-        option(null, "Ascending", !descending()) { prefs.edit().putBoolean("$key|desc", false).apply() }
-        option(null, "Descending", descending()) { prefs.edit().putBoolean("$key|desc", true).apply() }
+        option(null, "Ascending", !descending()) { prefs.edit().putBoolean("desc", false).apply() }
+        option(null, "Descending", descending()) { prefs.edit().putBoolean("desc", true).apply() }
         line()
         heading("View")
-        option(R.drawable.ic_list, "List", view() != "grid") { prefs.edit().putString("$key|view", "list").apply() }
-        option(R.drawable.ic_grid_four, "Grid", view() == "grid") { prefs.edit().putString("$key|view", "grid").apply() }
+        option(R.drawable.ic_list, "List", view() != "grid") { prefs.edit().putString("view", "list").apply() }
+        option(R.drawable.ic_grid_four, "Grid", view() == "grid") { prefs.edit().putString("view", "grid").apply() }
         popup.showAsDropDown(anchor, -kit.dp(180), 0)
     }
 
@@ -540,16 +548,22 @@ class FolderPage(
                 alpha = if (enabled) 1f else 0.35f
                 background = ContextCompat.getDrawable(app, R.drawable.row_bg)
                 setPadding(0, kit.dp(8), 0, kit.dp(8))
+                // Each icon over its word, both on the item's centre line: the
+                // word as wide as the item and centred in it, on one line.
                 addView(ImageView(app).apply {
                     setImageResource(icon)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
                     imageTintList = ColorStateList.valueOf(kit.color(if (danger) R.color.error else R.color.text_2))
-                }, LinearLayout.LayoutParams(kit.dp(22), kit.dp(22)))
+                }, LinearLayout.LayoutParams(kit.dp(22), kit.dp(22)).apply { gravity = Gravity.CENTER_HORIZONTAL })
                 addView(TextView(app).apply {
                     text = words
                     textSize = 12f
+                    gravity = Gravity.CENTER
+                    textAlignment = View.TEXT_ALIGNMENT_CENTER
+                    maxLines = 1
+                    includeFontPadding = false
                     setTextColor(kit.color(if (danger) R.color.error else R.color.text_2))
-                    setPadding(0, kit.dp(3), 0, 0)
-                })
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(4) })
                 contentDescription = words
                 if (enabled) setOnClickListener { go() }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))

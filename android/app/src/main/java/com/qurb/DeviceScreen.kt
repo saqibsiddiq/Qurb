@@ -211,29 +211,20 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
         }
     }
 
-    /** Restore, in three sections (the owner's answer of 2026-11-02):
-     *  everything; each folder backed up, WhatsApp among them; files chosen. */
+    /** Restore: three options in one card (the owner, 2026-11-02) --
+     *  everything; Folders, a page of every folder backed up to pick from;
+     *  and Files, the backup folder to pick files in. */
     private fun restore(page: LinearLayout) {
         kit.label(page, "Restore")
+        val card = kit.card(page)
         val going = Restore.running
         if (going != null) {
-            val card = kit.card(page)
             kit.setting(card, R.drawable.ic_rotate_ccw, "Restoring ${going.what}", "${going.done} of ${going.files}")
             return
         }
-        fun sub(words: String) = page.addView(TextView(app).apply {
-            text = words
-            setTextAppearance(R.style.Text_Meta)
-            setTextColor(kit.color(R.color.text_3))
-            setPadding(kit.dp(6), kit.dp(12), 0, kit.dp(6))
-        })
-        sub("Everything")
-        kit.setting(kit.card(page), R.drawable.ic_rotate_ccw, "Everything") { ask(Restore.What.Everything) }
-        sub("Folders")
-        val folders = kit.card(page)
-        kit.setting(folders, R.drawable.ic_whatsapp, "WhatsApp") { ask(Restore.What.WhatsApp) }
-        sub("Files")
-        kit.setting(kit.card(page), R.drawable.ic_circle_check, "Choose files") {
+        kit.setting(card, R.drawable.ic_rotate_ccw, "Everything") { ask(Restore.What.Everything) }
+        kit.setting(card, R.drawable.ic_folder, "Folders") { app.push(RestoreFolders(app, peer)) }
+        kit.setting(card, R.drawable.ic_file, "Files") {
             scope.launch {
                 val top = runCatching {
                     withContext(Dispatchers.IO) {
@@ -244,31 +235,10 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
                 else app.say("${peer.name} keeps nothing for this phone yet")
             }
         }
-        // Each folder backed up, as the computer lists them; the Private
-        // Vault is the Vault, restored as part of everything.
-        scope.launch {
-            val names = runCatching {
-                withContext(Dispatchers.IO) {
-                    val open = engine().openKeptFolder(peer.fingerprint, 20u)
-                    val top = open.list("").folders.firstOrNull { !it.endsWith(", earlier") } ?: return@withContext emptyList()
-                    open.list(top).folders.filter { it != "WhatsApp" && it != "Private Vault" }
-                }
-            }.getOrDefault(emptyList())
-            for (name in names) kit.setting(folders, R.drawable.ic_folder, name) { ask(Restore.What.Folder(name)) }
-        }
     }
 
-    private fun ask(what: Restore.What) {
-        kit.sheet()
-            .mark(R.drawable.ic_rotate_ccw, R.color.green_soft, R.color.green)
-            .title("Restore ${what.words.lowercase().takeIf { what !is Restore.What.Folder } ?: what.words}?", centred = true)
-            .line("From ${peer.name}, back where each file was. Files already on this phone are skipped.")
-            .buttons("Restore") {
-                Restore.start(app, peer, what)
-                refresh()
-            }
-            .show()
-    }
+    private fun ask(what: Restore.What) = Restore.ask(app, peer, what) { refresh() }
+
 
     /** Who it is, behind the info button: its identity and when it was paired. */
     private fun details() {
@@ -350,3 +320,56 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
         }
     }
 }
+
+/**
+ * Restore › Folders: every folder this phone backed up to `computer`,
+ * WhatsApp among them, each a row; one tapped is restored, asked first.
+ */
+class RestoreFolders(app: MainActivity, private val computer: PeerInfo) : Screen(app) {
+
+    private val views = com.qurb.databinding.ScreenPageBinding.inflate(app.layoutInflater)
+    override val view: View get() = views.root
+    override val tab = R.id.tab_home
+
+    init {
+        views.back.visibility = View.VISIBLE
+        views.back.text = computer.name
+        views.back.setOnClickListener { app.onBackPressedDispatcher.onBackPressed() }
+        views.title.text = "Folders"
+        views.refresh.setColorSchemeResources(R.color.green)
+        views.refresh.setOnRefreshListener { refresh() }
+    }
+
+    override fun refresh() {
+        val page = views.sections
+        scope.launch {
+            val names = runCatching {
+                withContext(Dispatchers.IO) {
+                    val open = engine().openKeptFolder(computer.fingerprint, 20u)
+                    val top = open.list("").folders.firstOrNull { !it.endsWith(", earlier") } ?: return@withContext emptyList()
+                    // The Private Vault is the Vault: put back with everything.
+                    open.list(top).folders.filter { it != "Private Vault" }
+                }
+            }
+            page.removeAllViews()
+            val list = names.getOrNull()
+            when {
+                list == null -> kit.empty(page, R.drawable.ic_cloud_off, "${computer.name} isn't reachable", "Try again") { refresh() }
+                list.isEmpty() -> kit.empty(page, R.drawable.ic_folder_open, "No folders backed up yet")
+                else -> {
+                    val card = kit.card(page, top = 16)
+                    for (name in list.sortedBy { it.lowercase() }) {
+                        val icon = if (name == "WhatsApp") R.drawable.ic_whatsapp else R.drawable.ic_folder
+                        kit.setting(card, icon, name) {
+                            Restore.ask(app, computer, if (name == "WhatsApp") Restore.What.WhatsApp else Restore.What.Folder(name)) {
+                                app.onBackPressedDispatcher.onBackPressed()
+                            }
+                        }
+                    }
+                }
+            }
+            views.refresh.isRefreshing = false
+        }
+    }
+}
+
