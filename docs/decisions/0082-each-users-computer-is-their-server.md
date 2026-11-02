@@ -150,7 +150,28 @@ Measured on the owner's laptop (Ryzen, CachyOS, home Wi-Fi), 2026-11-02:
 | the desktop's onion published | 10 s after start, state kept from an earlier run |
 | phone app with Tor (release, arm64) | APK 12.36 to **20.45 MB**; engine 9.12 to 17.04 MB |
 
-**Not yet known:** Tor on the phone itself, and a phone reaching the
-laptop through it, are to be tried with the owner. The direct path wins
-whenever it works, so trying Tor means a network where it does not.
+### Tried on the owner's devices, 2026-11-02, evening
 
+- **Direct over mobile data, through the public relays.** The S23 on Airtel
+  mobile data, brought back to the screen at 19:31:09 IST, reached the laptop
+  at its CGNAT's public address at 19:31:13 -- relays opened and connected in
+  about 2 s. The minutes of failure before it were the app paused in the
+  background during phone calls, not the path.
+- **A laptop woken from sleep heard nothing.** After the laptop resumed at
+  19:19, its six relay connections looked open and carried nothing (bytes
+  stuck unsent on each), so the phone's asks went unheard. Fixed the same
+  hour: each relay is pinged every 20 s and redialled after 45 s of silence
+  (`nostr.rs`, `BEAT` and `SILENT`), on both apps. Not yet watched across a
+  real suspend.
+- **Tor, from the phone.** The laptop started with `QURB_TEST_TOR_ONLY=1`,
+  the S23 on mobile data. Tapping the laptop's folder at about 19:39:09; Tor
+  tried at 19:39:14; **connected through Tor at 19:39:27.9**, about 19 s in
+  all, Tor's start on the phone included; the folder's 77,590-file list came
+  through unchanged. The six connections that followed for images took
+  2–3 s each, Tor already running. The images opened.
+
+**Not yet known:** throughput through Tor on the phone (the images were
+small), and what Tor costs the phone in data and battery while the app is
+open: Arti builds circuits ahead of need once started. Also seen: each
+connection the phone opens holds its own six relay connections, 85 relay
+connections opened in the test's few minutes; to be shared.

@@ -3269,9 +3269,16 @@ Trying Tor where the direct path works: start the desktop with
 `QURB_TEST_TOR_ONLY=1`, and it announces its onion address alone. A test
 switch, not a setting.
 
-**Not yet done:** Tor on the S23 and a phone reaching the laptop through it,
-to be tried with the owner; the 24-hour relay test, still running, which is
-to choose the built-in relay list.
+Tried with the owner the same evening (figures in the decision): the S23 on
+mobile data reached the laptop directly in about 2 s, and **through Tor in
+about 19 s**, the laptop announcing its onion alone. A laptop woken from sleep
+had sat deaf on dead relay connections; relays are now pinged every 20 s and
+redialled after 45 s of silence.
+
+**Not yet done:** Tor's throughput and its cost in data and battery on the
+phone; sharing one set of relay connections between the phone's connections
+(each now opens its own six); the 24-hour relay test, interrupted by the
+laptop's sleep, which is to choose the built-in relay list.
 
 ## Deliberately left undone
 

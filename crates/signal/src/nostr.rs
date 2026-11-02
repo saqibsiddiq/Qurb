@@ -306,6 +306,13 @@ pub(crate) async fn open(
 
 /// One relay, kept: connected, subscribed to the group's topics, posting what
 /// is posted, passing on what it hears; and again after it goes, backing off.
+/// How often a relay is pinged, and how long it may say nothing before its
+/// connection is taken for dead and dialled again. A laptop woken from sleep
+/// keeps sockets that look open and carry nothing: on 2026-11-02 the owner's
+/// sat deaf on all six relays after waking, and the phone could not reach it.
+const BEAT: Duration = Duration::from_secs(20);
+const SILENT: Duration = Duration::from_secs(45);
+
 async fn stay_on(
     relay: String,
     topics: Vec<String>,
@@ -331,8 +338,20 @@ async fn stay_on(
         let _ = ready.send(());
         wait = Duration::from_secs(2);
         tracing::debug!(%relay, "listening on a nostr relay");
+        let mut beat = tokio::time::interval(BEAT);
+        beat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut heard_at = tokio::time::Instant::now();
         loop {
             tokio::select! {
+                _ = beat.tick() => {
+                    if heard_at.elapsed() > SILENT {
+                        tracing::debug!(%relay, "a nostr relay fell silent");
+                        break;
+                    }
+                    if sink.send(Message::Ping(Vec::new().into())).await.is_err() {
+                        break;
+                    }
+                }
                 out = post.recv() => match out {
                     Ok(text) => {
                         if sink.send(Message::Text(text.into())).await.is_err() {
@@ -342,25 +361,28 @@ async fn stay_on(
                     Err(broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(broadcast::error::RecvError::Closed) => return,
                 },
-                incoming = source.next() => match incoming {
-                    Some(Ok(Message::Text(text))) => {
-                        // ["EVENT", sub, event]: the content is all we read.
-                        if let Ok(serde_json::Value::Array(parts)) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if parts.first().and_then(|p| p.as_str()) == Some("EVENT") {
-                                if let Some(content) = parts.get(2).and_then(|e| e.get("content")).and_then(|c| c.as_str()) {
-                                    if heard.send(content.to_string()).is_err() {
-                                        return;
+                incoming = source.next() => {
+                    let Some(Ok(message)) = incoming else { break };
+                    heard_at = tokio::time::Instant::now();
+                    match message {
+                        Message::Text(text) => {
+                            // ["EVENT", sub, event]: the content is all we read.
+                            if let Ok(serde_json::Value::Array(parts)) = serde_json::from_str::<serde_json::Value>(&text) {
+                                if parts.first().and_then(|p| p.as_str()) == Some("EVENT") {
+                                    if let Some(content) = parts.get(2).and_then(|e| e.get("content")).and_then(|c| c.as_str()) {
+                                        if heard.send(content.to_string()).is_err() {
+                                            return;
+                                        }
                                     }
                                 }
                             }
                         }
+                        Message::Ping(data) => {
+                            let _ = sink.send(Message::Pong(data)).await;
+                        }
+                        _ => {}
                     }
-                    Some(Ok(Message::Ping(data))) => {
-                        let _ = sink.send(Message::Pong(data)).await;
-                    }
-                    Some(Ok(_)) => {}
-                    _ => break,
-                },
+                }
             }
         }
         tracing::debug!(%relay, "a nostr relay went; trying again");
