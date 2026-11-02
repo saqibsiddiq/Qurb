@@ -287,6 +287,8 @@ pub async fn relay_for(setting: Option<&str>, signal_url: &str) -> Option<RelayA
                 None
             }
         },
+        // Public Nostr relays carry no data: no relay beside them (decision 0082).
+        None if qurb_signal::nostr::is_nostr(signal_url) => None,
         None if !signal_url.trim().is_empty() => Some(RelayAt::Tunnel(qurb_signal::tunnel::beside(signal_url))),
         None => None,
     }

@@ -27,6 +27,8 @@
 pub mod client;
 pub mod error;
 pub mod message;
+/// Public Nostr relays as the meeting point: decision 0082.
+pub mod nostr;
 pub mod rendezvous;
 pub mod server;
 pub mod tls;

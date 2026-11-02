@@ -48,6 +48,12 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 jsonwebtoken = { version = "9", optional = true }
 
 tracing = "0.1"
+# The meeting point on public Nostr relays (decision 0082, src/nostr.rs):
+# BIP-340 signatures, which relays require, and sealing what is said so they
+# cannot read it.
+k256 = { version = "0.13", default-features = false, features = ["schnorr", "std"] }
+chacha20poly1305 = "0.10"
+getrandom = "0.3"
 
 [features]
 default = []

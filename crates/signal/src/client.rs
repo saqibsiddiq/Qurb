@@ -59,6 +59,13 @@ impl SignalClient {
         Self::open(url, group, member, endpoints).await
     }
 
+    /// Public Nostr relays as the meeting point, for `nostr` or
+    /// `nostr:wss://…,wss://…` (decision 0082): spoken to as the service is.
+    async fn over_nostr(url: &str, group: GroupId, member: MemberId, endpoints: Endpoints) -> Result<Self> {
+        let (outgoing, incoming, tasks) = crate::nostr::open(url, group, member, endpoints).await?;
+        Ok(Self { outgoing, incoming, group, member, tasks })
+    }
+
     /// Connect without requiring encryption. For tests and local development.
     pub async fn connect_insecure(
         url: &str,
@@ -75,6 +82,9 @@ impl SignalClient {
         member: MemberId,
         endpoints: Endpoints,
     ) -> Result<Self> {
+        if crate::nostr::is_nostr(url) {
+            return Self::over_nostr(url, group, member, endpoints).await;
+        }
         // A fingerprint after `#` means "expect exactly this certificate", which
         // is how a rendezvous on a bare IP address is authenticated: there is
         // no name for an authority to sign. Without one, the ordinary public
