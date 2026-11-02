@@ -14,6 +14,7 @@ fn endpoints(port: u16) -> Endpoints {
     Endpoints {
         public: Some(format!("203.0.113.5:{port}").parse().unwrap()),
         local: vec![format!("192.168.1.{}:{port}", port % 250 + 1).parse().unwrap()],
+        onion: None,
     }
 }
 
@@ -496,6 +497,7 @@ async fn an_announcement_bigger_than_a_read_arrives_whole() {
     let many = Endpoints {
         public: Some("203.0.113.5:40000".parse().unwrap()),
         local: (0..400u16).map(|n| format!("10.{}.{}.1:{}", n / 250, n % 250, 40_000 + n).parse().unwrap()).collect(),
+        onion: None,
     };
     let size = serde_json::to_vec(&many).unwrap().len();
     assert!(size > 4096 && size < 16 * 1024, "{size} bytes does not test what it says");

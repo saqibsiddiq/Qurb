@@ -16,7 +16,7 @@ fastcdc.workspace = true
 memmap2.workspace = true
 
 qurb-sync = { path = "../sync" }
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 # Without the default extras: the formats from before 2016 and building
 # dictionaries, neither of which the store reads or writes (2026-11-02).
 zstd = { version = "0.13", default-features = false }

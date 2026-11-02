@@ -64,6 +64,10 @@ pub enum Error {
     #[error("the peer did not answer the request to connect")]
     PeerDidNotAnswer,
 
+    /// Tor, the slow last resort, could not be started or reach the peer.
+    #[error("tor: {detail}")]
+    Tor { detail: String },
+
     #[error("no relay is configured to fall back to")]
     NoRelay,
 

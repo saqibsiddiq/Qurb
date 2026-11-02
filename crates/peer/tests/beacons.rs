@@ -22,7 +22,7 @@ fn port(name: &str) -> u16 {
 }
 
 fn endpoints(port: u16) -> Endpoints {
-    Endpoints { public: None, local: vec![([127, 0, 0, 1], port).into()] }
+    Endpoints { public: None, local: vec![([127, 0, 0, 1], port).into()], onion: None }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -135,7 +135,7 @@ async fn a_moved_device_announces_its_new_address() {
         Beacons::start(master.clone(), here, endpoints(41935), group).unwrap();
     let (moving, _) = Beacons::start(master, there, endpoints(51935), group).unwrap();
 
-    moving.now_at(Endpoints { public: None, local: vec!["10.0.0.9:61935".parse().unwrap()] });
+    moving.now_at(Endpoints { public: None, local: vec!["10.0.0.9:61935".parse().unwrap()], onion: None });
     moving.announce().await;
 
     // The three beacons every device sends at startup are still in flight, so

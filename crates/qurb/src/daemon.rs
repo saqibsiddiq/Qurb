@@ -558,6 +558,33 @@ impl Daemon {
             relay = ?relay,
             "listening"
         );
+        // Tor, the slow last resort (decision 0082): this computer's onion
+        // service, started in the background -- seconds the first time -- and
+        // announced with its addresses once published, so a phone whose
+        // network lets nothing direct through can still open its files.
+        #[cfg(feature = "tor")]
+        {
+            qurb_peer::tor::set_dir(self.store_dir.join("tor"));
+            let port = connector.local_addr()?.port();
+            let announcing = Arc::clone(&connector);
+            tokio::spawn(async move {
+                match qurb_peer::tor::host(port).await {
+                    Ok(onion) => {
+                        tracing::info!(%onion, "reachable through Tor too");
+                        if std::env::var_os("QURB_TEST_TOR_ONLY").is_some() {
+                            // For trying the last resort on networks where
+                            // the direct path works: announced at the onion
+                            // alone. A peer on the same Wi-Fi still finds it.
+                            tracing::warn!("QURB_TEST_TOR_ONLY: announcing the onion service alone");
+                            announcing.reannounce(qurb_signal::Endpoints { public: None, local: Vec::new(), onion: Some(onion) });
+                        } else {
+                            announcing.set_onion(Some(onion));
+                        }
+                    }
+                    Err(e) => tracing::warn!(error = %e, "no onion service; direct paths only"),
+                }
+            });
+        }
         self.meet_visitors(&connector);
 
         // How far this device's own state has got. Peers hold a request open

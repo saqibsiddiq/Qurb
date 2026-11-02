@@ -19,7 +19,7 @@ async fn running() -> (Arc<SignalServer>, String) {
 
 fn somewhere(port: u16) -> Endpoints {
     let address: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
-    Endpoints { public: Some(address), local: vec![address] }
+    Endpoints { public: Some(address), local: vec![address], onion: None }
 }
 
 async fn join(url: &str, group: GroupId, member: MemberId, port: u16) -> SignalClient {

@@ -239,7 +239,7 @@ impl Beacon {
         // from *this* network, so it all goes in `local`. A public address
         // learned from STUN is in there too when the sender had one; racing it
         // costs nothing and occasionally wins on a network that hairpins.
-        Ok(Self { member, endpoints: Endpoints { public: None, local }, sent_at, news, probe })
+        Ok(Self { member, endpoints: Endpoints { public: None, local, onion: None }, sent_at, news, probe })
     }
 }
 
@@ -657,6 +657,7 @@ mod tests {
             endpoints: Endpoints {
                 public: Some("203.0.113.5:41935".parse().unwrap()),
                 local: vec!["192.168.1.4:41935".parse().unwrap()],
+                onion: None,
             },
             sent_at: 1_790_000_000,
             news: true,
@@ -741,6 +742,7 @@ mod tests {
             endpoints: Endpoints {
                 public: None,
                 local: (0..40).map(|i| SocketAddr::from(([10, 0, 0, i], 41935))).collect(),
+                onion: None,
             },
             ..beacon()
         };
@@ -756,7 +758,7 @@ mod tests {
     fn a_sighting_goes_stale() {
         let neighbours = Neighbours::new();
         let member = MemberId::from_bytes([3; 32]);
-        neighbours.note(member, Endpoints { public: None, local: vec![] });
+        neighbours.note(member, Endpoints { public: None, local: vec![], onion: None });
 
         assert!(neighbours.where_is(&member).is_some());
         assert_eq!(neighbours.count(), 1);

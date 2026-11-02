@@ -427,7 +427,7 @@ impl Connector {
         // loses nothing it cannot rediscover on its next sweep.
         let (arrivals, _) = broadcast::channel(16);
 
-        let endpoints = Endpoints { public, local: reachable_at(local) };
+        let endpoints = Endpoints { public, local: reachable_at(local), onion: None };
         // Read again every few seconds once running, because a machine's
         // addresses are not fixed for the life of the process (2026-10-13).
         //
@@ -736,6 +736,13 @@ impl Connector {
         self.here.borrow().clone()
     }
 
+    /// This device's onion service, from now on announced with its addresses
+    /// (decision 0082): the slow last resort a peer tries when nothing direct
+    /// gets through.
+    pub fn set_onion(&self, onion: Option<String>) {
+        self.here.send_modify(|here| here.onion = onion);
+    }
+
     pub fn endpoint(&self) -> &quinn::Endpoint {
         &self.endpoint
     }
@@ -775,7 +782,7 @@ impl Connector {
                 Ok(Err(_)) => return Err(Error::Signalling { detail: "signalling has stopped".into() }),
                 Err(_) => return Err(Error::PeerDidNotAnswer),
             };
-            return self.direct_or_relay(peer, &endpoints).await;
+            return self.or_through_tor(peer, &endpoints).await;
         }
 
         // Somebody who beaconed from this network moments ago is both the
@@ -817,7 +824,59 @@ impl Connector {
             Err(_) => return Err(Error::PeerDidNotAnswer),
         };
 
-        self.direct_or_relay(peer, &endpoints).await
+        self.or_through_tor(peer, &endpoints).await
+    }
+
+    /// [`direct_or_relay`](Self::direct_or_relay), and when nothing there got
+    /// through and the peer has an onion service, through Tor (decision 0082):
+    /// slow -- seconds to reach, a fraction of a megabyte a second -- but it
+    /// passes any network that lets the device out at all.
+    async fn or_through_tor(&self, peer: Fingerprint, endpoints: &Endpoints) -> Result<PeerClient> {
+        #[cfg(feature = "tor")]
+        if let Some(onion) = &endpoints.onion {
+            // Tor started alongside, once the direct path has had its head
+            // start: run after it, the two would not fit any caller's wait.
+            let direct = self.direct_or_relay(peer, endpoints);
+            tokio::pin!(direct);
+            if let Ok(found) = tokio::time::timeout(RELAY_HEAD_START, &mut direct).await {
+                if found.is_ok() {
+                    return found;
+                }
+                return self.through_tor(peer, onion).await;
+            }
+            let tor = self.through_tor(peer, onion);
+            tokio::pin!(tor);
+            let (mut direct_failed, mut tor_failed) = (None, None);
+            loop {
+                tokio::select! {
+                    result = &mut direct, if direct_failed.is_none() => match result {
+                        Ok(client) => return Ok(client),
+                        Err(e) => direct_failed = Some(e),
+                    },
+                    result = &mut tor, if tor_failed.is_none() => match result {
+                        Ok(client) => return Ok(client),
+                        Err(e) => tor_failed = Some(e),
+                    },
+                }
+                if tor_failed.is_some() {
+                    if let Some(e) = direct_failed.take() {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+        self.direct_or_relay(peer, endpoints).await
+    }
+
+    /// The peer reached at its onion service, QUIC carried by the bridge.
+    #[cfg(feature = "tor")]
+    async fn through_tor(&self, peer: Fingerprint, onion: &str) -> Result<PeerClient> {
+        tracing::info!(peer = %peer.short(), "trying Tor");
+        let local = crate::tor::dial(onion).await.inspect_err(|e| tracing::info!(peer = %peer.short(), error = %e, "Tor did not reach it"))?;
+        let through = Endpoints { public: None, local: vec![local], onion: None };
+        let client = self.race(peer, &through).await?;
+        tracing::info!(peer = %peer.short(), "connected through Tor");
+        Ok(client)
     }
 
     /// The addresses a peer was announced at, raced; and the relay too, if
@@ -1384,7 +1443,7 @@ mod tests {
     async fn a_new_address_is_noticed_and_passed_on() {
         let before: SocketAddr = "192.168.1.4:37716".parse().unwrap();
         let after: SocketAddr = "192.168.1.2:37716".parse().unwrap();
-        let here = Arc::new(watch::Sender::new(Endpoints { public: None, local: vec![before] }));
+        let here = Arc::new(watch::Sender::new(Endpoints { public: None, local: vec![before], onion: None }));
         let mut told = here.subscribe();
         let machine = Arc::new(std::sync::Mutex::new(vec![before]));
         let looking = Arc::clone(&machine);

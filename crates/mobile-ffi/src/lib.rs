@@ -1870,6 +1870,11 @@ impl Qurb {
 
     fn reach_kept_folder(&self, fingerprint: &str, seconds: u32) -> Result<Arc<KeptFolder>, QurbError> {
         let budget = std::time::Duration::from_secs(seconds.max(1) as u64);
+        // Tor, the last resort, takes longer than any caller's budget: up to
+        // 18 s to reach the computer, 8 s more the first time (measured on
+        // 2026-11-02, decision 0082), after a head start for the direct path.
+        #[cfg(feature = "tor")]
+        let budget = budget.max(TOR_BUDGET);
         let (peer, name, trusted, meetings, me) = {
             let engine = self.engine()?;
             let db = engine.store().db();
@@ -2777,6 +2782,9 @@ impl Qurb {
 
         let store_dir = store_dir(Path::new(&root));
         let vault = vault_at(&store_dir, keystore.as_ref());
+        // Tor's state beside the store, so it is fetched once, not each start.
+        #[cfg(feature = "tor")]
+        qurb_peer::tor::set_dir(store_dir.join("tor"));
 
         if !vault.exists() {
             return Err(QurbError::NotSetUp { detail: format!("{root} has no vault") });
@@ -3777,6 +3785,11 @@ impl Drop for Held<'_> {
 
 /// A wait for the engine worth a line in the log: a screen waiting this long
 /// has visibly not answered.
+/// The least a computer is given to answer when Tor is built in: the direct
+/// path's head start, Tor's first start, and the slowest reach measured.
+#[cfg(feature = "tor")]
+const TOR_BUDGET: std::time::Duration = std::time::Duration::from_secs(35);
+
 const WAITED_LONG: std::time::Duration = std::time::Duration::from_millis(250);
 
 /// A hold worth a line: everything else that wants the engine waits this long.

@@ -3243,6 +3243,36 @@ made without losing anything. Measured on the S23 and the build machine:
   **Not yet measured:** what else grows in a browsing session, to be done with
   the owner.
 
+## Reaching the computer from anywhere, with no server (2026-11-02)
+
+[Decision 0082](../decisions/0082-each-users-computer-is-their-server.md):
+each person's computer is their own server, and nothing costs the owner money.
+Built that day, in the order the owner listed it:
+
+1. **Better hole punching.** The punch also tries the four ports above each
+   public address, for NATs that hand out the next port per destination.
+   Both of the owner's networks keep the port, so it is not yet seen to help.
+2. **The IPv6 nudge** (`Reach.kt`). After a computer answered through the
+   meeting point and still could not be reached, its page and its folder ask
+   for IPv6 from the provider. The phone also lets go of kept connections
+   when the network changes, which ended a minute of failed tries after
+   moving to mobile data.
+3. **Tor**, the slow last resort (`crates/peer/src/tor.rs`). The desktop
+   publishes an onion service and announces it; the phone tries it 4 s into
+   an attempt alongside the direct path. Measured figures are in the
+   decision. Arti required rusqlite 0.40 across the workspace.
+   It makes the release APK 20.45 MB, from 12.36 (engine 17.04 MB).
+4. **Releases meet on public Nostr relays** (`QURB_DEFAULT_SIGNAL: nostr` in
+   the release workflow; the beta's old address is read as `nostr`).
+
+Trying Tor where the direct path works: start the desktop with
+`QURB_TEST_TOR_ONLY=1`, and it announces its onion address alone. A test
+switch, not a setting.
+
+**Not yet done:** Tor on the S23 and a phone reaching the laptop through it,
+to be tried with the owner; the 24-hour relay test, still running, which is
+to choose the built-in relay list.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
@@ -3263,12 +3293,12 @@ made without losing anything. Measured on the S23 and the build machine:
   while the waking one is itself awake to ask. This is still the strongest
   argument for a storage-only replica in the picture, and the reason the
   roadmap plans iOS as a good viewer rather than a peer equal to a desktop.
-- **Being told without Firebase.** Push is built and measured, and it is a
-  dependency on Google. A deployment without one falls back to the phone
-  deciding when to look and Android deciding how often to allow it — about
-  fifteen minutes, longer while dozing. UnifiedPush would remove the
-  dependency at the cost of asking people to install a distributor app, and
-  has not been attempted. (`BGTaskScheduler` and APNs, the iOS halves, are
+- **Being told at once.** Push was built and measured, then removed with
+  Firebase by [decision 0082](../decisions/0082-each-users-computer-is-their-server.md):
+  the phone looks when opened, and otherwise when Android allows, about every
+  fifteen minutes, longer while dozing. UnifiedPush would bring it back
+  without Google at the cost of a distributor app, and has not been
+  attempted. (`BGTaskScheduler` and APNs, the iOS halves, are
   untouched along with the rest of iOS.)
 - **Upgrading a relayed connection back to direct.** Inherited from Phase 3 and
   worse on a phone, which changes network several times a day: a connection that

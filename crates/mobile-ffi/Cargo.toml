@@ -9,6 +9,12 @@ edition = "2021"
 # extension cannot dlopen a shared library from the app bundle.
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[features]
+# Tor as the slow last resort (decision 0082): the client half only, a phone
+# reaching its computer's onion service. On: the owner asked for it, at 6.7 MB.
+default = ["tor"]
+tor = ["qurb-peer/tor"]
+
 [dependencies]
 # Only for the type `Served` names a served chunk by.
 blake3.workspace = true

@@ -8,7 +8,7 @@ use qurb_signal::{Endpoints, FromServer, GroupId, MemberId, SignalClient};
 use std::time::{Duration, Instant};
 
 fn at(port: u16) -> Endpoints {
-    Endpoints { public: Some(format!("203.0.113.7:{port}").parse().unwrap()), local: vec![] }
+    Endpoints { public: Some(format!("203.0.113.7:{port}").parse().unwrap()), local: vec![], onion: None }
 }
 
 #[tokio::test]

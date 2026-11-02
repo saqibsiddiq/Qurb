@@ -854,7 +854,7 @@ mod wake_tests {
     }
 
     fn nowhere() -> Endpoints {
-        Endpoints { public: None, local: Vec::new() }
+        Endpoints { public: None, local: Vec::new(), onion: None }
     }
 
     /// The rule the whole feature turns on: a device is woken when somebody

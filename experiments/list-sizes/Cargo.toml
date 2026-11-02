@@ -12,4 +12,4 @@ anyhow.workspace = true
 qurb-peer = { path = "../../crates/peer" }
 qurb-storage = { path = "../../crates/storage" }
 qurb-sync = { path = "../../crates/sync" }
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }

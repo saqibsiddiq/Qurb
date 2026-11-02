@@ -21,13 +21,16 @@ decision. Since 2026-10-14 `~/qurb` holds people: `~/qurb/Shared`, the synced
 folder, and a folder for each person, opened only with their phone's yes
 ([0067](decisions/0067-a-folder-for-each-person.md)). Phase 5 has an Android
 app on a real phone that syncs with a laptop in both directions, shares into
-qurb from anywhere on the phone, is woken by push, and backs up WhatsApp and
+qurb from anywhere on the phone, and backs up WhatsApp and
 chosen folders to the laptop — restoring them unproven
 ([0062](decisions/0062-backing-up-whatsapp.md)); iOS is untouched. Both apps
 were rebuilt to the owner's design direction on 2026-09-29, and given a dark
 mode on 2026-10-08 ([0056](decisions/0056-dark-mode.md)). What comes next:
-the owner's numbered lists as he gives them, then the relay on a server of
-the owner's own, then a formal release for Linux and Android.
+the owner's numbered lists as he gives them, then a formal release for Linux
+and Android. Since 2026-11-02 the release needs no server of anyone's: each
+person's computer is their own server, devices meet through public Nostr
+relays, and Tor is the slow last resort; no instant wake-ups
+([0082](decisions/0082-each-users-computer-is-their-server.md)).
 [features.md](features.md) lists everything that exists, by where a person
 meets it.
 
@@ -790,6 +793,10 @@ qurb/
 │   │   ├── src/local.rs     beacons: finding each other with no server at all
 │   │   ├── src/nat.rs       STUN, NAT classification, hole punching
 │   │   ├── src/connect.rs   the policy: discover, announce, race candidates
+│   │   │                    and the ports beside them, then Tor (0082)
+│   │   ├── src/tor.rs       Tor, the slow last resort (feature `tor`): the
+│   │   │                    computer's onion service (`tor-host`) and a
+│   │   │                    bridge carrying QUIC's datagrams over its stream
 │   │   ├── src/tls.rs       mutual authentication by pinned fingerprint
 │   │   ├── src/kept.rs      a vault kept sealed by another person's computer:
 │   │   │                    fetched back and unsealed (0060)
@@ -828,6 +835,8 @@ qurb/
 │   │   ├── src/message.rs     what is said; carries nothing about files
 │   │   ├── src/server.rs      holds a channel open per device
 │   │   ├── src/client.rs      announce, ask, punch when told
+│   │   ├── src/nostr.rs       the same, spoken over public Nostr relays: the
+│   │   │                      release's meeting point, no server of ours (0082)
 │   │   ├── src/wake.rs        the seam: how an absent device gets poked
 │   │   ├── src/fcm.rs         that seam, filled in by Firebase (feature `push`)
 │   │   ├── src/tunnel.rs      the relay it carries, at `/relay`, as a WebSocket
@@ -1086,9 +1095,8 @@ qurb/
 │       │                                      when opened
 │       ├── main/res/      the design as resources: colours and glass by role,
 │       │                  Inter, Phosphor icons (generated), the layouts
-│       ├── push/java/     being woken by Firebase — compiled only when a
-│       │                  google-services.json is present
-│       └── nopush/java/   the same surface, doing nothing, when it is not
+│       └── (no push/)     Firebase was removed with instant wake-ups
+│                          (0082); `Push.kt` in main is the surface, idle
 │
 ├── packaging/             Getting it onto a machine.
 │   ├── arch/PKGBUILD      a pacman package of this checkout (makepkg -si);
@@ -1376,7 +1384,16 @@ service carries one too, at `/relay` on its own address over a WebSocket, and
 a device with no relay set uses that one: nothing to configure, and published
 wherever the rendezvous is, through a proxy that carries only TLS by name
 ([decisions/0068](decisions/0068-the-rendezvous-service-relays.md)). The
-owner's runs that way on the laptop, behind its Tailscale Funnel.
+owner's ran that way on the laptop, behind its Tailscale Funnel, until
+2026-11-02; since then the owner's devices meet through public Nostr relays,
+which carry no relay ([0082](decisions/0082-each-users-computer-is-their-server.md)).
+
+**And Tor, when nothing else reaches.** A computer built with `tor-host`
+publishes an onion service and announces its address with its others; a
+phone built with `tor` that cannot reach it directly within a few seconds
+tries the onion alongside, QUIC carried over Tor's stream by a small bridge
+(`crates/peer/src/tor.rs`). Slow — measured 0.15–0.31 MB/s — and meant for
+opening files away from home.
 
 **And the two are joined.** Reaching a peer tries every direct address at once
 and falls back to the relay when none answers, with identity pinned exactly as
@@ -1486,11 +1503,11 @@ Android's nor iOS's is reachable from Rust.
 
 The Android app is a **share target**: anything on the phone can be sent into
 qurb from the system share sheet, with no network and no other device switched
-on. It can also be **woken** when another device has something, if a push
-service is configured — without one it learns at its next scheduled look, about
-fifteen minutes away. See
-[decisions/0028](decisions/0028-waking-a-sleeping-device.md), which sets out
-what that costs and why nothing else works. Home says how many files are still
+on. It is **not woken** when another device has something: Firebase was
+removed with [decision 0082](decisions/0082-each-users-computer-is-their-server.md),
+and it learns at its next scheduled look, about fifteen minutes away, or when
+opened. [decisions/0028](decisions/0028-waking-a-sleeping-device.md) sets out
+the waking that was built and why nothing free replaces it. Home says how many files are still
 held only by the phone, which is the honest form of "it will get there"; the
 share sheet's confirmation says where what was just shared will go.
 

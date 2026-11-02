@@ -250,6 +250,7 @@ async fn a_local_address_is_preferred_over_a_public_one() {
     let endpoints = qurb_signal::Endpoints {
         public: Some("203.0.113.5:4500".parse().unwrap()),
         local: vec!["192.168.1.40:4500".parse().unwrap()],
+        onion: None,
     };
     let candidates = endpoints.candidates();
     assert_eq!(candidates[0], "192.168.1.40:4500".parse().unwrap());
@@ -784,7 +785,7 @@ async fn the_relay_is_tried_alongside_direct_paths_that_do_not_answer() {
 
     // Bound and never read: a knock there goes nowhere and is not refused.
     let silent = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
-    desktop_conn.reannounce(qurb_signal::Endpoints { public: None, local: vec![silent.local_addr().unwrap()] });
+    desktop_conn.reannounce(qurb_signal::Endpoints { public: None, local: vec![silent.local_addr().unwrap()], onion: None });
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     let asked = std::time::Instant::now();

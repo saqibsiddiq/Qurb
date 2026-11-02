@@ -19,6 +19,11 @@ pub struct Endpoints {
     pub public: Option<SocketAddr>,
     /// Bound locally: what the same network can reach.
     pub local: Vec<SocketAddr>,
+    /// The device's onion service, where it has one: the slow last resort
+    /// when no direct path gets through (decision 0082). Absent from what an
+    /// older build sends, and left out when there is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onion: Option<String>,
 }
 
 impl Endpoints {
@@ -161,6 +166,7 @@ mod tests {
         Endpoints {
             public: Some("203.0.113.5:4500".parse().unwrap()),
             local: vec!["192.168.1.40:4500".parse().unwrap()],
+            onion: None,
         }
     }
 
@@ -176,7 +182,7 @@ mod tests {
     #[test]
     fn a_device_with_no_public_address_still_offers_its_local_one() {
         let only_local =
-            Endpoints { public: None, local: vec!["10.0.0.2:4500".parse().unwrap()] };
+            Endpoints { public: None, local: vec!["10.0.0.2:4500".parse().unwrap()], onion: None };
         assert!(!only_local.is_empty());
         assert_eq!(only_local.candidates().len(), 1);
     }

@@ -51,6 +51,7 @@ fn somewhere(n: usize) -> Endpoints {
     Endpoints {
         public: Some(format!("198.51.100.{}:{}", n % 250 + 1, 40_000 + n % 20_000).parse().unwrap()),
         local: vec![format!("192.168.1.{}:{}", n % 250 + 1, 40_000 + n % 20_000).parse().unwrap()],
+        onion: None,
     }
 }
 

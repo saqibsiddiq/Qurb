@@ -622,7 +622,7 @@ fn a_device_that_is_off_does_not_starve_one_that_is_on() {
         &signal,
         qurb_signal::GroupId::derive(&master),
         qurb_signal::MemberId::derive(&master, &off),
-        qurb_signal::Endpoints { public: None, local: vec!["192.0.2.1:9".parse().unwrap()] },
+        qurb_signal::Endpoints { public: None, local: vec!["192.0.2.1:9".parse().unwrap()], onion: None },
     ));
 
     let desktop = Qurb::open_with(

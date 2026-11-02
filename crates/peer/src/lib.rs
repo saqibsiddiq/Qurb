@@ -51,6 +51,8 @@ pub mod short;
 pub mod source;
 pub mod tls;
 pub mod trees;
+#[cfg(feature = "tor")]
+pub mod tor;
 pub mod wire;
 
 pub use client::PeerClient;

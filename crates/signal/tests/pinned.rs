@@ -11,7 +11,7 @@ use qurb_signal::{Certificate, Endpoints, GroupId, MemberId, SignalClient, Signa
 use std::sync::Arc;
 
 fn endpoints() -> Endpoints {
-    Endpoints { public: None, local: vec!["127.0.0.1:41935".parse().unwrap()] }
+    Endpoints { public: None, local: vec!["127.0.0.1:41935".parse().unwrap()], onion: None }
 }
 
 /// A certificate in a directory of its own, as the service keeps one.

@@ -112,3 +112,45 @@ S23 on Airtel mobile data opened the laptop's *Shared*, and the laptop logged
 CGNATs, introduced by the public relays. The first attempts before it timed
 out on the addresses the phone had announced while on Wi-Fi; not yet looked
 into, and to be with the hole-punching work.
+
+## Hole punching, the IPv6 nudge and Tor, built, 2026-11-02
+
+- **The punch's spread.** Each side now tries, with the other's announced
+  addresses, the four ports above its public one (`Endpoints::spread`): a
+  NAT that gives each new destination the next port, common on carriers,
+  maps the connection to one of them. Raced at once with the rest, so it
+  costs no time. **Not yet seen to matter:** the owner's router and the
+  S23's carrier both keep the port, so neither needed it.
+- **Changing network.** The phone lets go of its kept connections when
+  Android says the network changed. The minute of failed tries on the
+  addresses the phone had announced while on Wi-Fi (above) was that.
+- **The IPv6 nudge.** The phone notes, per computer, whether it was reached
+  from outside the home network or answered and could not be reached; in the
+  second case the computer's page and its folder say so, and ask for IPv6
+  from the provider. It shows only after a real failure.
+- **Tor.** Arti 0.47, inside both apps (`crates/peer/src/tor.rs`). The
+  computer (`tor-host`, on by default in the `qurb` crate, so the desktop
+  too) publishes an onion service once started and announces its address
+  with its others; the phone (`tor`, on by default in `qurb-mobile`) tries
+  it when the direct path has not answered in 4 s, alongside it, keeping
+  whichever connects first. QUIC runs unchanged over a bridge that carries
+  each datagram behind its length in Tor's stream. The phone's budget for
+  reaching a computer rises to at least 35 s with Tor built in.
+  Arti needs rusqlite 0.36 or later; the workspace moved from 0.32 to 0.40,
+  all tests passing.
+
+Measured on the owner's laptop (Ryzen, CachyOS, home Wi-Fi), 2026-11-02:
+
+| | |
+|---|---|
+| Tor started, empty state | 8.3 s; then 0.17 s (spike, release build) |
+| onion service reached | 7–18 s (spike); 20 s for a just-published one (`tests/tor_live.rs`, debug build, empty state) |
+| a datagram there and back | 0.6–0.9 s (spike); 0.95–1.22 s (`tor_live`) |
+| throughput | 0.15–0.31 MB/s each way (spike) |
+| the desktop's onion published | 10 s after start, state kept from an earlier run |
+| phone app with Tor (release, arm64) | APK 12.36 to **20.45 MB**; engine 9.12 to 17.04 MB |
+
+**Not yet known:** Tor on the phone itself, and a phone reaching the
+laptop through it, are to be tried with the owner. The direct path wins
+whenever it works, so trying Tor means a network where it does not.
+

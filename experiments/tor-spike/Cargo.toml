@@ -1,0 +1,27 @@
+[package]
+name = "tor-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Throwaway (decision 0082, Tor as the slow last resort): whether Arti can
+# host an onion service on the laptop and reach it from a client, how long
+# that takes to start, and what it does to speed and size. Its own workspace,
+# so Tor's dependency tree stays out of the product's lockfile until decided.
+[workspace]
+
+[dependencies]
+arti-client = { version = "0.47", default-features = false, features = ["tokio", "rustls", "compression", "static-sqlite", "onion-service-client", "onion-service-service"] }
+tor-hsservice = "0.47"
+tor-cell = "0.47"
+safelog = "0.10"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+futures = "0.3"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true

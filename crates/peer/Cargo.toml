@@ -10,7 +10,18 @@ license.workspace = true
 # Sits above the engine rather than below it — the engine knows nothing about
 # networks, and this crate adapts it to one.
 
+[features]
+# Tor as the slow last resort (decision 0082): reaching a computer's onion
+# service (`tor`), and hosting one (`tor-host`, the computer's).
+tor = ["dep:arti-client", "dep:tor-rtcompat"]
+tor-host = ["tor", "arti-client/onion-service-service", "dep:tor-hsservice", "dep:tor-cell", "dep:safelog"]
+
 [dependencies]
+arti-client = { version = "0.47", optional = true, default-features = false, features = ["tokio", "rustls", "compression", "static-sqlite", "onion-service-client"] }
+tor-rtcompat = { version = "0.47", optional = true, default-features = false, features = ["tokio", "rustls"] }
+tor-hsservice = { version = "0.47", optional = true }
+tor-cell = { version = "0.47", optional = true }
+safelog = { version = "0.10", optional = true }
 blake3.workspace = true
 tokio.workspace = true
 

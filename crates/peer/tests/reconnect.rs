@@ -138,7 +138,7 @@ async fn an_unreachable_device_is_reported_address_by_address() {
     // that will not open a path.
     let silent = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
     let address = silent.local_addr().unwrap();
-    let endpoints = qurb_signal::Endpoints { public: None, local: vec![address] };
+    let endpoints = qurb_signal::Endpoints { public: None, local: vec![address], onion: None };
 
     let peer = qurb_peer::Fingerprint::from_bytes([7; 32]);
     let error = connector.race(peer, &endpoints).await.err().expect("nothing answers there");
@@ -180,14 +180,14 @@ async fn a_device_that_moves_is_offered_where_it_is_now() {
     .unwrap();
 
     // Documentation addresses: nothing is there, and nothing is dialled.
-    let moved = Endpoints { public: None, local: vec!["192.0.2.2:37716".parse().unwrap()] };
+    let moved = Endpoints { public: None, local: vec!["192.0.2.2:37716".parse().unwrap()], onion: None };
     connector.reannounce(moved.clone());
     assert_eq!(connector.endpoints(), moved);
 
     // A phone in the same group, at an address that swallows the laptop's
     // knock rather than sending it out of the machine.
     let silent = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
-    let mine = Endpoints { public: None, local: vec![silent.local_addr().unwrap()] };
+    let mine = Endpoints { public: None, local: vec![silent.local_addr().unwrap()], onion: None };
     let phone = MemberId::derive(&master, &[9; 32]);
     let mut asking = SignalClient::connect(&url, GroupId::derive(&master), phone, mine.clone())
         .await
