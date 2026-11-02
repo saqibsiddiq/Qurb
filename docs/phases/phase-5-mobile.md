@@ -3277,8 +3277,8 @@ redialled after 45 s of silence.
 
 **Not yet done:** Tor's throughput and its cost in data and battery on the
 phone; sharing one set of relay connections between the phone's connections
-(each now opens its own six); the 24-hour relay test, interrupted by the
-laptop's sleep, which is to choose the built-in relay list.
+(each now opens its own six); the 24-hour relay test, with a gap while the
+laptop slept, which is to choose the built-in relay list.
 
 ## Deliberately left undone
 
