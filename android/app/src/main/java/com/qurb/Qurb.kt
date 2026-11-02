@@ -33,6 +33,32 @@ object Engine {
 
     val later = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Whether the network watch below is set up, once for the process. */
+    private var watching = false
+
+    /**
+     * Told when the phone moves between networks, to let go of computers'
+     * kept connections, which still describe it where it was (decision 0082):
+     * on 2026-11-02 going from Wi-Fi to mobile data cost a minute of failed
+     * tries. The first call, made as the watch is set up, is not a move.
+     */
+    fun watchNetwork(context: Context) {
+        if (watching) return
+        watching = true
+        val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        var first = true
+        connectivity.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                if (first) { first = false; return }
+                later.launch { runCatching { open(context).networkChanged() } }
+            }
+
+            override fun onLost(network: android.net.Network) {
+                later.launch { runCatching { open(context).networkChanged() } }
+            }
+        })
+    }
+
     /**
      * The push token to be woken by from now on: the push service issued a
      * new one. Given to the rendezvous service on the next pass; a phone that
@@ -395,7 +421,11 @@ object Engine {
      */
     fun signalUrl(context: Context): String =
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE)
-            .getString("signal", null) ?: if (isEmulator()) EMULATOR_SIGNAL else context.getString(R.string.default_signal)
+            .getString("signal", null)
+            // The beta's address on the owner's laptop, saved before decision
+            // 0082: the public Nostr relays now (crates/qurb/src/config.rs).
+            ?.let { if (it == "wss://saqib.tail86283c.ts.net") "nostr" else it }
+            ?: if (isEmulator()) EMULATOR_SIGNAL else context.getString(R.string.default_signal)
 
     fun setSignalUrl(context: Context, url: String) {
         context.getSharedPreferences("qurb", Context.MODE_PRIVATE)

@@ -32,10 +32,30 @@ impl Endpoints {
         out
     }
 
+    /// The candidates and, beside the public address, the next few ports:
+    /// a stricter NAT that gives each new destination the next port in turn
+    /// (common on carriers) maps this connection to one of them, not to the
+    /// one STUN saw (decision 0082, better hole punching). Tried at once with
+    /// the rest, so the wider spread costs no time.
+    pub fn spread(&self) -> Vec<SocketAddr> {
+        let mut out = self.candidates();
+        if let Some(public) = self.public {
+            for step in 1..=SPREAD {
+                if let Some(port) = public.port().checked_add(step) {
+                    out.push(SocketAddr::new(public.ip(), port));
+                }
+            }
+        }
+        out
+    }
+
     pub fn is_empty(&self) -> bool {
         self.public.is_none() && self.local.is_empty()
     }
 }
+
+/// How many ports beside a public address [`Endpoints::spread`] tries.
+pub const SPREAD: u16 = 4;
 
 /// Client to server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

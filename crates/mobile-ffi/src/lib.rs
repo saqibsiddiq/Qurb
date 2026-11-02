@@ -715,6 +715,8 @@ pub struct Qurb {
     /// a whole connection from nothing every time -- an endpoint, the relay,
     /// discovery -- 1.3 s of the 4.8 s it took on the S23 over Wi-Fi.
     kept_open: Mutex<std::collections::HashMap<String, Arc<KeptFolder>>>,
+    /// [`reach_state`](Self::reach_state), by computer, for this run.
+    reach_states: Mutex<std::collections::HashMap<String, String>>,
     /// The app's way to open again a document it sent from where it is
     /// (decision 0060), given to every store handle opened here.
     documents: Mutex<Option<Arc<dyn qurb_storage::Documents>>>,
@@ -1843,6 +1845,22 @@ impl Qurb {
     /// Reach each of this person's computers now, so that opening one finds
     /// it connected (item 7): asked when the app shows Files. Those that do
     /// not answer within `seconds` are left; opening one tries again.
+    /// The phone moved between networks -- Wi-Fi to mobile data, one Wi-Fi to
+    /// another: every computer's kept connection is let go, since it still
+    /// describes the phone where it was, and a computer asked to punch to
+    /// those addresses reaches nothing. On the S23 on 2026-11-02 that cost a
+    /// minute of failed tries after going to mobile data (decision 0082).
+    /// How this phone has reached a computer from outside its home network
+    /// (decision 0082): "anywhere" once it has, directly; "blocked" when the
+    /// computer answered and no direct path got through; "" when not known.
+    pub fn reach_state(&self, fingerprint: String) -> String {
+        self.reach_states.lock().expect("reach_states poisoned").get(&fingerprint).cloned().unwrap_or_default()
+    }
+
+    pub fn network_changed(&self) {
+        self.kept_open.lock().expect("kept_open poisoned").clear();
+    }
+
     pub fn prepare_computers(&self, seconds: u32) {
         let Ok(peers) = self.peers() else { return };
         for peer in peers.into_iter().filter(|p| p.kind.as_deref() != Some("phone") && (p.relation == "own" || p.relation == "host")) {
@@ -1926,7 +1944,26 @@ impl Qurb {
         let client = runtime
             .block_on(async { tokio::time::timeout(budget, connector.reach(peer)).await })
             .map_err(|_| QurbError::Network { detail: format!("{name} isn't reachable: it has to be on, with Qurb running") })?
-            .map_err(|e| QurbError::Network { detail: format!("{name} isn't reachable: {e}") });
+            .map_err(|e| {
+                // It answered the introduction and no direct path got through:
+                // the network blocks it (decision 0082, the IPv6 nudge), which
+                // is not the same as being off.
+                if matches!(e, qurb_peer::Error::Unreachable { .. }) {
+                    self.note_reach(fingerprint, "blocked");
+                }
+                QurbError::Network { detail: format!("{name} isn't reachable: {e}") }
+            });
+        // Reached at an address of the open internet: reachable from anywhere.
+        if let Ok(client) = &client {
+            let ip = client.remote_address().ip();
+            let private = match ip {
+                std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_loopback() || v4.is_link_local() || v4.octets()[0] == 100,
+                std::net::IpAddr::V6(v6) => v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00 || (v6.segments()[0] & 0xffc0) == 0xfe80,
+            };
+            if !private {
+                self.note_reach(fingerprint, "anywhere");
+            }
+        }
         let client = match client {
             Ok(client) => client,
             Err(e) => {
@@ -2598,6 +2635,10 @@ fn happenings(
 /// applied to, and neither a `MutexGuard` nor a four-argument constructor
 /// taking an optional callback interface can cross an FFI boundary.
 impl Qurb {
+    fn note_reach(&self, fingerprint: &str, state: &str) {
+        self.reach_states.lock().expect("reach_states poisoned").insert(fingerprint.to_string(), state.to_string());
+    }
+
     /// Keep one folder where it lies, a few seconds at a time until
     /// `deadline`, adding what was done to `run` (decisions 0062 and 0063).
     fn keep_folder(
@@ -2781,6 +2822,7 @@ impl Qurb {
             runtime: Mutex::new(None),
             serving: Arc::new(ServingStats::default()),
             kept_open: Mutex::new(std::collections::HashMap::new()),
+            reach_states: Mutex::new(std::collections::HashMap::new()),
             documents: Mutex::new(None),
             open_asks: Mutex::new(std::collections::HashMap::new()),
             approved: Mutex::new(std::collections::HashMap::new()),

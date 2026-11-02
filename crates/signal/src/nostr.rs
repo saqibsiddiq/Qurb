@@ -40,15 +40,17 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::tungstenite::Message;
 
-/// The public relays used when none are named: chosen by a 24-hour test from
-/// the owner's laptop on 2026-11-02 (docs/decisions/0082), the ones that
-/// passed an ephemeral event back every time.
+/// The public relays used when none are named: those that passed an
+/// ephemeral event back in every round of the test from the owner's laptop,
+/// begun 2026-11-02 (docs/decisions/0082). Six, so that any one or two being
+/// down changes nothing.
 pub const DEFAULT_RELAYS: &[&str] = &[
     "wss://relay.primal.net",
     "wss://relay.nostr.net",
-    "wss://nos.lol",
     "wss://relay.damus.io",
     "wss://offchain.pub",
+    "wss://nostr.oxtr.dev",
+    "wss://nostr-pub.wellorder.net",
 ];
 
 /// The address that selects this carrier: `nostr` alone for the relays above,

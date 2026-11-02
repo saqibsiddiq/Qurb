@@ -18,6 +18,10 @@ pub const DEFAULT_SIGNAL: &str = match option_env!("QURB_DEFAULT_SIGNAL") {
     None => "ws://localhost:9000",
 };
 
+/// The beta's rendezvous on the owner's laptop, through Tailscale Funnel,
+/// before decision 0082. Read as `nostr`.
+pub const BETA_SIGNAL: &str = "wss://saqib.tail86283c.ts.net";
+
 #[derive(Debug, Clone)]
 pub struct Config {
     /// The rendezvous service.
@@ -216,7 +220,10 @@ impl Config {
 
         let mut config = Self::default();
         if let Some(signal) = settings.remove("signal") {
-            config.signal = signal;
+            // The beta's address on the owner's laptop, written into testers'
+            // configs before decision 0082: the meeting point now, so that
+            // nobody depends on his laptop after updating.
+            config.signal = if signal == BETA_SIGNAL { "nostr".into() } else { signal };
         }
         if let Some(relay) = settings.remove("relay") {
             if !relay.is_empty() {

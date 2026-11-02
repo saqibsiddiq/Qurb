@@ -50,6 +50,7 @@ class FolderPage(
     private var query: String? = null
     private val selected = LinkedHashSet<String>()
     private var unreachable = false
+    private var blocked = false
     private var searchBox: View? = null
     private var searching: kotlinx.coroutines.Job? = null
 
@@ -106,6 +107,7 @@ class FolderPage(
                 if (q == null) Seen.of["${place.key}|$at"] = it
             }.onFailure {
                 unreachable = true
+                blocked = place.blocked(app)
                 android.util.Log.w("qurb", "could not list ${place.title}", it)
             }
             views.refresh.isRefreshing = false
@@ -121,7 +123,12 @@ class FolderPage(
         if (selected.isNotEmpty()) selectionHead(page) else head(page)
         val shown = items?.let { sorted(it) }
         when {
-            shown == null && unreachable -> kit.empty(page, R.drawable.ic_cloud_off, "${place.where} isn't reachable", "Try again") { load() }
+            shown == null && unreachable -> {
+                // Answered and blocked: the nudge, not "it is off" (0082).
+                if (blocked) page.addView(Reach.blocked(app, place.where), LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(12) })
+                kit.empty(page, R.drawable.ic_cloud_off, "${place.where} isn't reachable", "Try again") { load() }
+            }
             shown == null -> skeleton(page)
             else -> {
                 if (unreachable) offBanner(page)
@@ -931,6 +938,8 @@ abstract class Place {
     abstract fun save(app: MainActivity, item: FolderItem): Boolean
     open fun keepHere(app: MainActivity, item: FolderItem) {}
     open fun restore(app: MainActivity, items: List<FolderItem>) {}
+    /** Whether the computer answered and no direct path reached it (0082). */
+    open fun blocked(app: MainActivity): Boolean = false
     /** Gone from the screen: what it holds open, let go. */
     open fun left() {}
 
@@ -1041,6 +1050,9 @@ abstract class ComputerPlace(protected val computer: PeerInfo) : Place() {
     override fun left() {
         open = null
     }
+
+    override fun blocked(app: MainActivity) =
+        runCatching { Engine.openNow(app).reachState(computer.fingerprint) == "blocked" }.getOrDefault(false)
 }
 
 /** A computer's *Shared*: changed there, as a guest or the owner's phone may (decision 0073). */

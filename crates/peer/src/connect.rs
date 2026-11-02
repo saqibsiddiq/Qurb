@@ -916,7 +916,8 @@ impl Connector {
     /// three timeouts to discover the last one worked. Local addresses are
     /// listed first, so when several succeed the cheapest path is preferred.
     pub async fn race(&self, peer: Fingerprint, endpoints: &Endpoints) -> Result<PeerClient> {
-        let candidates = endpoints.candidates();
+        // With the ports beside the public one, for a stricter NAT (0082).
+        let candidates = endpoints.spread();
         if candidates.is_empty() {
             return Err(Error::NoCandidates);
         }
@@ -1162,7 +1163,7 @@ async fn run_signalling(
                         // so without it the caller's packets arrive somewhere
                         // that has never heard of them.
                         None => {
-                            for candidate in theirs.candidates() {
+                            for candidate in theirs.spread() {
                                 knock(&endpoint, &identity, candidate);
                             }
                         }

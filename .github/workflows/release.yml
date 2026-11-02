@@ -24,7 +24,9 @@ env:
   CARGO_TERM_COLOR: always
   # Staging, on the owner's laptop for now (docs/staging.md): what a device
   # with no rendezvous set uses, so a tester types nothing.
-  QURB_DEFAULT_SIGNAL: wss://saqib.tail86283c.ts.net
+  # Public Nostr relays as the meeting point: no server of anyone's own
+  # (decision 0082). Was the owner's laptop, through Tailscale Funnel.
+  QURB_DEFAULT_SIGNAL: nostr
   CARGO_PROFILE_RELEASE_DEBUG: "false"
   CARGO_PROFILE_RELEASE_STRIP: debuginfo
 

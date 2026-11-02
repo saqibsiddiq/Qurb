@@ -143,6 +143,10 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
 
         // No Send here: Home's is the one (the owner's list of 2026-10-26, item 5).
 
+        // How it is reached from away (decision 0082): from anywhere, once
+        // the phone has; or the plain reason it is not, and what helps.
+        reach(page)
+
         kit.label(page, "Backs up")
         val card = kit.card(page)
         // What goes to it (the owner's review of 2026-11-02, D-3): the folders
@@ -239,6 +243,24 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
 
     private fun ask(what: Restore.What) = Restore.ask(app, peer, what) { refresh() }
 
+
+    /** One line on how it is reached from away from home: "Reachable from
+     *  anywhere" once the phone has done it; when it answered and nothing got
+     *  through, why, and the one thing that usually helps. Nothing while it
+     *  is not known. */
+    private fun reach(page: LinearLayout) {
+        scope.launch {
+            val state = runCatching { withContext(Dispatchers.IO) { engine().reachState(peer.fingerprint) } }.getOrDefault("")
+            val view = when (state) {
+                "anywhere" -> kit.chip(R.drawable.ic_circle_check, "Reachable from anywhere")
+                "blocked" -> Reach.blocked(app, peer.name)
+                else -> return@launch
+            }
+            // Under the header, before Backs up.
+            page.addView(view, 1, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = kit.dp(14) })
+        }
+    }
 
     /** Who it is, behind the info button: its identity and when it was paired. */
     private fun details() {
