@@ -5,28 +5,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// Push is optional, and the build has to work without it.
-//
-// Waking a sleeping phone needs Firebase, which needs a `google-services.json`
-// from a project somebody owns. Without that file the Google plugin fails the
-// build outright — so the whole thing is switched on the file's presence, and
-// a checkout with no Firebase project builds and runs exactly as before. The
-// phone then learns about changes at its next scheduled look rather than the
-// moment they happen.
-//
-// Two source sets rather than a runtime check, because the alternative is
-// compiling against an SDK that is not there.
+// No push: decision 0082 dropped instant wake-ups, and with them Firebase. The
+// phone learns of changes at its next scheduled look, or when it is opened. A
+// `google-services.json` left in this folder is ignored.
 //
 // `-Pqurb.idSuffix=.x` installs a second copy beside the real one, under its
 // own package -- its own data, its own Block Store -- so that what clearing an
 // app's data does can be tried on a phone without clearing the person's
-// (2026-10-08). Firebase knows only `com.qurb`, so that copy builds without
-// push.
+// (2026-10-08).
 val idSuffix = (findProperty("qurb.idSuffix") as String?).orEmpty()
-val firebaseConfigured = file("google-services.json").exists() && idSuffix.isEmpty()
-if (firebaseConfigured) {
-    apply(plugin = "com.google.gms.google-services")
-}
 
 // Release signing, from a properties file kept outside the repository: the
 // key that says an update comes from the same author as the installed app,
@@ -172,10 +159,6 @@ android {
     // phone finds the other devices with nothing typed (docs/staging.md).
     defaultConfig.resValue("string", "default_signal", System.getenv("QURB_DEFAULT_SIGNAL") ?: "")
 
-    sourceSets["main"].java.srcDir(
-        if (firebaseConfigured) "src/push/java" else "src/nopush/java"
-    )
-
     // Nothing here about stripping: scripts/android-app.sh strips the .so with
     // the NDK it already located before copying it into jniLibs, so Gradle
     // packages something that is 3.7 MB rather than 61 MB and does not need an
@@ -183,13 +166,6 @@ android {
 }
 
 dependencies {
-    if (firebaseConfigured) {
-        // Being woken when another device has something. Only the messaging
-        // library: qurb uses no other part of Firebase, and does not want to.
-        implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
-        implementation("com.google.firebase:firebase-messaging")
-    }
-
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")

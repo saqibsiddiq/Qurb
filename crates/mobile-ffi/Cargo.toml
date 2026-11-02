@@ -34,7 +34,10 @@ tracing = "0.1"
 # what it did went nowhere. Android only, since every other platform has stderr.
 [target.'cfg(target_os = "android")'.dependencies]
 tracing-android = "0.2"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+# Only the registry and a plain target filter: the environment-variable
+# filter brought regex, 0.2 MB of the engine, to read a variable a phone
+# never sets (2026-11-02, decision 0082's room for Tor).
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
 
 [build-dependencies]
 uniffi = { version = "0.32", features = ["build"] }

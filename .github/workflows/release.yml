@@ -11,7 +11,6 @@
 # The keys are this repository's secrets, never in it:
 #   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD  the updater key
 #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD  the release key
-#   GOOGLE_SERVICES_JSON_BASE64  Firebase, for waking phones; optional
 name: release
 
 on:
@@ -101,13 +100,11 @@ jobs:
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          GOOGLE_SERVICES: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
         run: |
           echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
           printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=qurb\nkeyPassword=%s\n' \
             "$RUNNER_TEMP/release.jks" "$STORE_PASSWORD" "$KEY_PASSWORD" > "$RUNNER_TEMP/signing.properties"
           echo "QURB_SIGNING=$RUNNER_TEMP/signing.properties" >> "$GITHUB_ENV"
-          if [[ -n $GOOGLE_SERVICES ]]; then echo "$GOOGLE_SERVICES" | base64 -d > android/app/google-services.json; fi
       - name: Build
         env:
           QURB_VERSION_NAME: ${{ env.VERSION }}

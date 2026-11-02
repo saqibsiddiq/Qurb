@@ -901,11 +901,11 @@ fn logging() {
         let Ok(layer) = tracing_android::layer("qurb") else { return };
         let _ = tracing_subscriber::registry()
             // Debug from the engine, warnings from everything else. Enough to
-            // follow a sync without the noise of every library it uses, and
-            // overridable by the same variable the desktop uses.
+            // follow a sync without the noise of every library it uses.
             .with(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| "qurb=debug,warn".into()),
+                tracing_subscriber::filter::Targets::new()
+                    .with_target("qurb", tracing::Level::DEBUG)
+                    .with_default(tracing::Level::WARN),
             )
             .with(layer)
             .try_init();

@@ -24,7 +24,7 @@ import uniffi.qurb_mobile.KeptFolder
  * the file's content or its path and time.
  */
 object Thumbs {
-    private val held = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
+    private val held = object : LruCache<String, Bitmap>(8 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
     /** Known to have none: not asked again this run. */

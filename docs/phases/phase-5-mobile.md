@@ -3218,6 +3218,31 @@ Sort, order and view remembered for every folder, not each one. Each tab
 keeps its open pages: back in Files, the folder that was open is open again;
 the tab tapped again goes to its top.
 
+## Lighter, to make room for Tor (2026-11-02)
+
+Decision 0082 adds Tor (Arti) to the engine; the owner asked for the room to be
+made without losing anything. Measured on the S23 and the build machine:
+
+| | Before | After |
+|---|---|---|
+| APK (release, arm64) | 13.09 MB | **11.24 MB** |
+| engine, `libqurb_mobile.so` | 9.76 MB | **7.99 MB** |
+
+- Firebase out (no instant wake-ups, decision 0082): 0.09 MB, R8 had already
+  shrunk most of it; removed for simplicity, with its CI step and manifest entry.
+- The engine built for size (`opt-level = "s"` in `profile.mobile`): 9.76 to
+  8.59 MB. Speed on the S23, 64 MiB, two rounds: BLAKE3 1,645 against 1,656
+  MB/s, zstd 2,509 against 2,492, unchanged; ChaCha20-Poly1305 415 against 297
+  MB/s, so its crates keep opt-level 3 (no size cost measured).
+- No regex: the phone's log filter is a plain target filter, not the
+  environment-variable one; and zstd without its pre-2016 formats and
+  dictionary building: 8.59 to 7.99 MB. Storage tests pass.
+- Memory: the thumbnail cache capped at 8 MB rather than 24. Fresh after
+  launch the app holds 23 MB native, 4 MB Java heap, 59 MB of graphics while
+  on screen; the 105 MB native seen earlier had built up while browsing.
+  **Not yet measured:** what else grows in a browsing session, to be done with
+  the owner.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

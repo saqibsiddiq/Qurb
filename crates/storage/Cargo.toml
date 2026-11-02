@@ -17,7 +17,9 @@ memmap2.workspace = true
 
 qurb-sync = { path = "../sync" }
 rusqlite = { version = "0.32", features = ["bundled"] }
-zstd = "0.13"
+# Without the default extras: the formats from before 2016 and building
+# dictionaries, neither of which the store reads or writes (2026-11-02).
+zstd = { version = "0.13", default-features = false }
 chacha20poly1305 = "0.10"
 rand = "0.8"
 thiserror = "2"
