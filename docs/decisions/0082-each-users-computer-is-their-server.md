@@ -1,6 +1,6 @@
 # 0082 — Each user's computer is their own server; no instant wake-up
 
-**Status:** Accepted as the release direction, 2026-11-02. Not built.
+**Status:** Accepted as the release direction, 2026-11-02; amended the same day (*No money of the owner's*, below). Not built.
 **Date:** 2026-11-02
 
 ## What was asked
@@ -59,3 +59,40 @@ user reaches things, and the desktop tells them when the phone is needed.
   router answers UPnP.
 - Speeds over the internet, direct, and desktop to desktop: not measured.
 - Whether pairing passes the computer's rendezvous to the phone today.
+
+## Amended, 2026-11-02: no money of the owner's
+
+The owner: the project is open source and earns him nothing, so nothing in
+it may cost him money. So there is **no paid service anywhere**, Cloudflare
+included, and plan B changes:
+
+- **The meeting point is public Nostr relays**, free, run by volunteers and
+  companies, no account. The desktop listens on several (4–5); the phone posts
+  its current address there, encrypted to the desktop, as an ephemeral event
+  relays do not keep; both then hole-punch and the relays play no further
+  part. A relay sees encrypted bytes between two keys, never files or names.
+  Measured from the owner's laptop on 2026-11-02, 13:50 IST: 7 of 10 public
+  relays carried a test event back, in 0.18–0.43 s; the other three timed
+  out, dropped it, or failed certificate checks. A 24-hour repeat every 30
+  minutes is running; its figures choose the built-in list.
+- **Better hole punching** (Tailscale's published technique: a spread of
+  likely ports at once) for the stricter NATs.
+- **The IPv6 nudge**: a device that cannot be reached from outside says so in
+  plain words, and asks the person to have their provider turn IPv6 on.
+- **Tor as the slow last resort**, run inside the app (Arti, in Rust): for
+  opening files away from home when no direct path exists; backups wait for
+  home Wi-Fi, also out of fairness to volunteers' bandwidth.
+
+## The owner's connection, measured 2026-11-02
+
+Router PPC 2K15X; WAN IPv4 10.107.0.128 (private: behind the ISP's CGNAT,
+public address 192.140.152.113); IPv6 configured but down; no UPnP or
+NAT-PMP. STUN from three servers saw the same public port as the local one
+each time: endpoint-independent mapping, kept port. A packet from the phone
+on Airtel mobile data to that port was not let in: the CGNAT filters
+unsolicited packets. So his laptop is reached only by hole punching with an
+introduction, which is what the meeting point is for. That afternoon, from
+12:59, Tailscale Funnel's public route to his laptop failed mid-TLS and did
+not recover after restarting tailscaled or resetting the Funnel, while
+Tailscale's status page said all was well: the dependency this decision
+removes.
