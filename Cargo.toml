@@ -48,16 +48,4 @@ lto = "fat"
 codegen-units = 1
 debug = false
 strip = true
-# Built for size (2026-11-02, to make room for Tor, decision 0082): the engine
-# 9.76 MB at opt-level 3, 8.59 MB at "s". Measured on the S23 the same day,
-# 64 MiB, two rounds: BLAKE3 1,645 against 1,656 MB/s and zstd 2,509 against
-# 2,492, unchanged; ChaCha20-Poly1305 415 against 297 MB/s -- so the cipher's
-# crates keep opt-level 3, below.
-opt-level = "s"
 
-[profile.mobile.package.chacha20poly1305]
-opt-level = 3
-[profile.mobile.package.chacha20]
-opt-level = 3
-[profile.mobile.package.poly1305]
-opt-level = 3
