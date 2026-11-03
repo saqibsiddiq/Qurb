@@ -2346,6 +2346,56 @@ fn open_sealed(hosted: &Host<'_>, person: &qurb_sync::DeviceId, key: [u8; 32], p
     reveal(&to)
 }
 
+/// Recently deleted emptied for good: every file in it, here (the owner's
+/// review of 2026-11-03, K-2).
+#[tauri::command(async)]
+pub fn empty_deleted(hosted: Host<'_>) -> Answer<String> {
+    let (_, bytes) = hosted
+        .with_store_mut(|store| Ok(store.empty_trash(std::time::Duration::ZERO)?))
+        .map_err(failed)?;
+    Ok(bytes.to_string())
+}
+
+/// One file the owner's phone deleted from its Private Vault.
+#[derive(Serialize)]
+pub struct PhoneDeleted {
+    path: String,
+    size: String,
+    at: i64,
+    /// The phone, by name.
+    by: String,
+}
+
+/// What the owner's phones deleted from their Private Vault in the last
+/// thirty days -- named only while the owner's folder is open, its names
+/// being as private as its files (the owner, 2026-11-03). Put back from the
+/// phone, whose Recently deleted keeps them. `None` while locked.
+#[tauri::command(async)]
+pub fn phone_deleted(hosted: Host<'_>) -> Answer<Option<Vec<PhoneDeleted>>> {
+    let owner = person_of(&hosted, OWNER)?;
+    if !qurb_peer::openings::is_open(&owner) {
+        return Ok(None);
+    }
+    let phones = owner_phones(&hosted)?;
+    let ids: Vec<qurb_sync::DeviceId> = phones.iter().map(|(_, d)| d.id).collect();
+    let since = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+        - 30 * 86_400;
+    let rows = hosted.with_store(|store| Ok(store.db().vault_deleted_for(&ids, since)?)).map_err(failed)?;
+    Ok(Some(
+        rows.into_iter()
+            .map(|(path, size, at, owner)| PhoneDeleted {
+                path,
+                size: size.to_string(),
+                at,
+                by: phones.iter().find(|(_, d)| d.id == owner).map(|(_, d)| d.name.clone()).unwrap_or_default(),
+            })
+            .collect(),
+    ))
+}
+
 /// Open one of this computer's places in the file manager (the owner's review
 /// of 2026-11-03, F-1): `shared`, the synced folder; `received`, where files
 /// sent here go -- inside the QurbSpace folder when that is how it is set.

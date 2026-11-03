@@ -2107,3 +2107,91 @@ body.setting-up .win {
     transform: rotate(360deg);
   }
 }
+
+/* Settings in the phone's shape (S-1): this computer as one profile card. */
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--raised);
+  text-align: left;
+}
+.profile:hover {
+  border-color: color-mix(in srgb, var(--green) 40%, var(--line));
+}
+.profile-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+.profile-words b {
+  font-size: 18px;
+  font-weight: 600;
+}
+.profile-words small {
+  color: var(--mute);
+}
+.chip-ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.chip-do {
+  background: var(--green);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* This computer's storage (S-2). */
+.disk {
+  margin: 8px 0 18px;
+}
+.disk-bar {
+  display: flex;
+  overflow: hidden;
+  height: 12px;
+  margin-top: 12px;
+  border-radius: 6px;
+  background: var(--soft);
+}
+.disk-bar i {
+  display: block;
+  height: 100%;
+}
+.sw {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin: 0 4px;
+  border-radius: 4px;
+}
+.key-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0 18px;
+}
+.key-status h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+.w-pic-row {
+  position: relative;
+  top: 0;
+  flex: none;
+  box-shadow: none;
+  border-color: var(--line);
+}
+.btn-danger-quiet {
+  border: 0;
+  background: color-mix(in srgb, var(--red) 14%, var(--bg));
+  color: var(--red);
+  font-weight: 600;
+}

@@ -15,7 +15,7 @@ const PLACES = {
   waiting: { draw: drawWaitingAll, live: listsWaitingAll, parent: "home" },
   files: { draw: drawFiles, lists: () => FILES.area === null && drawTopBody() },
   received: { draw: drawReceived, parent: "files" },
-  deleted: { draw: drawDeleted, parent: "files" },
+  deleted: { draw: drawDeleted, parent: "settings" },
   conflicts: { draw: drawConflicts, parent: "files" },
   settings: { draw: drawSettings },
   storage: { draw: drawStorage, parent: "settings" },

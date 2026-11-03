@@ -151,6 +151,8 @@ fn run() -> Result<()> {
             commands::lock_person_folder,
             commands::open_person_folder,
             commands::open_place,
+            commands::empty_deleted,
+            commands::phone_deleted,
             commands::open_person_file,
             commands::cancel_send,
             commands::removal_plan,

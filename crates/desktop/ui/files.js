@@ -567,24 +567,32 @@ async function drawReceived(main) {
   } catch (e) { put(body, oops(e)); }
 }
 
+// Recently deleted (K-2), reached from This computer's storage: each file's
+// preview where it can be had, its name and the device that deleted it; ↺
+// puts it back, × deletes it for good; how long it has left only in its last
+// week. Empty at the top asks first. What the owner's phone deleted from its
+// Private Vault is listed too, while the owner's folder is open -- put back
+// from the phone, whose Recently deleted keeps it.
 async function drawDeleted(main) {
   const body = h("div", {});
-  main.append(h("div", { class: "pg" }, pageHead("Recently deleted", { words: "Files", go: () => go("files") }), body));
-  let entries;
-  try { entries = await invoke("recently_deleted"); } catch (e) { put(body, oops(e)); return; }
-  if (!entries.length) { put(body, empty("trash-2", "Nothing deleted lately")); return; }
-  put(body, h("div", { class: "rows" }, ...entries.map((d) => {
-    const left = Math.max(0, 30 - Math.floor((Date.now() / 1000 - d.at) / 86400));
-    const forget = h("button", { class: "icon-btn", title: "Delete now", "aria-label": `Delete ${base(d.path)} now` }, icon("x"));
+  const emptyBtn = h("button", { class: "btn btn-sm btn-danger-quiet", hidden: true, onclick: () => askEmpty() }, "Empty");
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Recently deleted", { words: "This computer", go: () => go("storage") }, emptyBtn), body));
+  let entries, phone;
+  try { [entries, phone] = await Promise.all([invoke("recently_deleted"), invoke("phone_deleted").catch(() => null)]); } catch (e) { put(body, oops(e)); return; }
+  emptyBtn.hidden = !entries.length;
+  const dayLeft = (at) => Math.max(1, 30 - Math.floor((Date.now() / 1000 - at) / 86400));
+  const daysPill = (at) => (dayLeft(at) <= 7 ? h("span", { class: "chip chip-wait" }, icon("clock"), String(dayLeft(at))) : null);
+  const pic = (path) => { const el = h("span", { class: "w-pic w-pic-row" }); previewInto(el, path); return el; };
+  const here = entries.map((d) => {
+    const forget = h("button", { class: "icon-btn", title: "Delete for good", "aria-label": `Delete ${base(d.path)} for good` }, icon("x"));
     // Twice: the first press asks, in red, and the second deletes for good.
     forget.addEventListener("click", async () => {
       if (!forget.classList.contains("armed")) { forget.classList.add("armed"); put(forget, "Delete"); return; }
       try { await invoke("forget_deleted", { id: d.id }); go("deleted"); } catch (e) { toast(String(e), true); }
     });
     return row({
-      ic: fileIcon(d.path), name: base(d.path), title: d.why ?? undefined,
-      sub: [d.of ? d.of : d.private ? "Vault" : null, named(d.by) ?? null, ago(d.at), left ? `${count(left, "day")} left` : "Goes today"],
-      end: [h("button", { class: "icon-btn", title: "Restore", "aria-label": `Restore ${base(d.path)}`, onclick: async () => {
+      ic: pic(d.path), name: base(d.path), title: d.why ?? undefined, sub: named(d.by) ?? "This computer",
+      end: [daysPill(d.at), h("button", { class: "icon-btn", title: "Restore", "aria-label": `Restore ${base(d.path)}`, onclick: async () => {
         try {
           const at = await invoke("restore_deleted", { id: d.id });
           toast(at !== d.path ? `Restored as ${base(at)}` : "Restored");
@@ -592,7 +600,23 @@ async function drawDeleted(main) {
         } catch (e) { toast(String(e), true); }
       } }, icon("rotate-ccw")), forget],
     });
-  })));
+  });
+  const theirs = (phone ?? []).map((d) => row({
+    ic: pic(d.path), name: base(d.path), sub: d.by,
+    end: [daysPill(d.at), h("span", { class: "chip", title: "Put back from the phone: Settings, Manage storage, Recently deleted" }, icon("smartphone"), "On the phone")],
+  }));
+  if (!here.length && !theirs.length) { put(body, empty("trash-2", "Nothing deleted lately")); return; }
+  put(body,
+    here.length ? h("div", { class: "grp-box" }, ...here) : null,
+    theirs.length ? label("From your phone's Vault") : null,
+    theirs.length ? h("div", { class: "grp-box" }, ...theirs) : null);
+}
+
+function askEmpty() {
+  const box = sheet({ ic: "trash-2", title: "Empty Recently deleted?", sub: "Gone for good" });
+  box.append(actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Empty", async () => {
+    try { await invoke("empty_deleted"); box.close(); toast("Emptied"); go("deleted"); } catch (e) { toast(String(e), true); }
+  }, "btn-danger")));
 }
 
 /** Two versions of a file (brief §14): both kept, side by side, and a choice. */

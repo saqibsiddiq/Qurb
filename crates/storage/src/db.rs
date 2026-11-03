@@ -4636,6 +4636,30 @@ impl Db {
         Ok((files, bytes))
     }
 
+    /// What `owners` -- a person's phones -- deleted from their Private Vault
+    /// since `since` (unix seconds), as this device still lists it: path,
+    /// size, when, whose. Not their backups' files, which go when the
+    /// phone's own folders let go of them. The newest first.
+    pub fn vault_deleted_for(&self, owners: &[DeviceId], since: i64) -> Result<Vec<(String, u64, i64, DeviceId)>> {
+        let mut out = Vec::new();
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size, deleted_at FROM files
+              WHERE scope = ?1 AND deleted_at IS NOT NULL AND deleted_at >= ?2 AND path NOT LIKE ?3 ESCAPE '\\'",
+        )?;
+        let outside = escape_like(&format!("{OUTSIDE}/%"));
+        for owner in owners {
+            let rows = stmt.query_map(params![owner.as_bytes().as_slice(), since, outside], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)?))
+            })?;
+            for row in rows {
+                let (path, size, at) = row?;
+                out.push((path, size, at, *owner));
+            }
+        }
+        out.sort_by_key(|(_, _, at, _)| std::cmp::Reverse(*at));
+        Ok(out)
+    }
+
     /// The disk this device's store takes for any of `owners`: the chunks of
     /// their live files, compressed as they are stored, each counted once
     /// however many files or devices share it. Beneath `under` alone when

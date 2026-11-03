@@ -1,6 +1,9 @@
-// Settings, as the phone groups them — This computer, Files, App,
-// Connection — each a row with its value, a switch, or an arrow to its own
-// page: Storage, the key, Activity, Advanced.
+// Settings, in the phone's shape (the owner's review of 2026-11-03, S-1 to
+// S-5): this computer as one profile card; Manage storage; App; Connection;
+// Quit in red at the end. The key, the identity, where received files go and
+// the meeting point are in Advanced, as on the phone. Backing up this
+// computer's folders is on the page of the computer that keeps them (S-4),
+// and *New files go to the Vault* is gone (S-5): where a file is put says it.
 
 /** The settings as last read: saving one sends them all back. */
 let SETTINGS = null;
@@ -13,32 +16,34 @@ async function drawSettings(main) {
     [s, st, atLogin] = await Promise.all([invoke("settings"), invoke("storage").catch(() => null), invoke("starts_at_login").catch(() => false)]);
   } catch (e) { put(body, oops(e)); return; }
   SETTINGS = s;
-  const others = s.key_also_on ?? [];
   const theme = { system: "System", light: "Light", dark: "Dark" }[window.qurbTheme?.chosen?.() ?? "system"];
-  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  put(body, 
-    h("div", { class: "me" }, circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-xl"), h("h2", {}, s.name)),
-    group("This computer",
-      setting({ ic: "laptop", name: "Name", value: s.name, onclick: askName }),
-      setting({ ic: "image", name: "Picture", end: circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-md circle-plain"), onclick: () => pictureSheet(s) }),
-      setting({ ic: "shield-check", name: "Key", value: others.length ? "Safe" : "Only here", onclick: () => go("key") }),
-      setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") }),
-      setting({ ic: "hard-drive", name: "Back up folders", onclick: () => go("backup") })),
-    group("Files",
-      setting({ ic: "lock-keyhole", name: "New files go to the Vault", end: toggle(s.own_files_private, (on) => invoke("set_privacy", { private: on }), "New files go to the Vault") }),
-      setting({ ic: "download", name: "Received files", value: downloadsWords(s), onclick: askDownloads }),
-      setting({ ic: "hard-drive", name: "Storage", value: st ? size(st.used) : null, onclick: () => go("storage") }),
-      setting({ ic: "trash-2", name: "Recently deleted", onclick: () => go("deleted") })),
+  put(body,
+    // Name and picture as one, as WhatsApp and the phone have them (SE-2).
+    h("button", { class: "profile", onclick: () => profileSheet(s) },
+      circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-xl circle-plain"),
+      h("span", { class: "profile-words" }, h("b", {}, s.name), h("small", {}, "Name and picture")),
+      icon("chevron-right", "set-go")),
+    group("Manage storage",
+      setting({ ic: "hard-drive", name: "This computer", value: st ? size(st.used) : null, onclick: () => go("storage") })),
     group("App",
       setting({ ic: "clock", name: "Activity", onclick: () => go("activity") }),
       setting({ ic: "bell", name: "Notifications", end: toggle(s.notifications, (on) => invoke("set_notifications", { on }), "Notifications") }),
       setting({ ic: "palette", name: "Theme", value: theme, onclick: themeSheet }),
-      setting({ ic: "sliders-horizontal", name: "Motion", value: calm ? "Reduced" : "Full" }),
-      setting({ ic: "download", name: "Version", value: h("span", { id: "version-says" }, " "), onclick: updateClicked })),
+      setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") }),
+      setting({ ic: "download", name: "Update", end: h("span", { id: "version-says", class: "chip chip-ok" }, " "), onclick: updateClicked })),
     group("Connection",
       setting({ ic: "arrow-up-down", name: "Speed limit", value: speedWords(s), onclick: () => go("speed") }),
       setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") })),
-    group(null, setting({ ic: "x", name: "Quit QurbSpace", danger: true, onclick: () => invoke("quit") })));
+    h("button", { class: "big-btn big-red", onclick: () => invoke("quit") }, "Quit QurbSpace"));
+  showUpdate();
+}
+
+/** This computer's name and picture, together. */
+function profileSheet(s) {
+  const box = sheet({ ic: circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-lg circle-plain"), title: s.name });
+  box.append(h("div", { class: "grp-box" },
+    setting({ ic: "laptop", name: "Name", value: s.name, onclick: () => { box.close(); askName(); } }),
+    setting({ ic: "image", name: "Picture", onclick: () => { box.close(); pictureSheet(s); } })));
 }
 
 // ---------- Updates (decision 0078) ----------
@@ -48,24 +53,24 @@ function updateWords(u) {
   switch (u?.state) {
     case "checking": return "Looking…";
     case "downloading": return `Fetching ${u.version} ${Math.round((u.progress ?? 0) * 100)}%`;
-    case "installed": return `${u.version}, restart to use`;
-    case "ready": return `${u.version} ready`;
+    case "installed":
+    case "ready": return "Restart";
     case "manual": return `${u.version} out`;
-    case "failed": return `${u.current}, couldn't check`;
-    default: return u?.current ?? "";
+    case "failed": return "Couldn't check";
+    default: return "Up to date";
   }
 }
 
 async function showUpdate() {
   const u = await invoke("update_state").catch(() => null);
   const says = $("version-says");
-  if (says) says.textContent = updateWords(u);
-  const chip = $("sb-update");
-  if (!chip || !u) return;
-  const waiting = u.state === "installed" || u.state === "ready";
-  chip.hidden = !waiting;
-  if (waiting) put(chip, icon("refresh-cw"), h("span", {}, u.state === "installed" ? "Restart to update" : "Install update"));
-  chip.onclick = () => applyUpdate(u);
+  if (!says) return;
+  says.textContent = updateWords(u);
+  // The chip says where it stands; ready, it is the button (N-2). Without
+  // anybody pressing it the update is put in place once the window is
+  // closed and nothing moves (updates.rs).
+  const ready = u?.state === "installed" || u?.state === "ready";
+  says.className = `chip ${ready ? "chip-do" : u?.state === "manual" || u?.state === "failed" ? "chip-wait" : "chip-ok"}`;
 }
 
 async function applyUpdate(u) {
@@ -169,87 +174,35 @@ async function squareJpeg(file) {
 
 const GIB = 1024 ** 3;
 
+// This computer's storage (S-2): its disk's free space, one bar coloured by
+// what fills it, and a row for each part. No limit and nothing to free: a
+// computer keeps everything (F-3). Recently deleted lives here (F-1).
 async function drawStorage(main) {
   const body = h("div", {});
-  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Storage", { words: "Settings", go: () => go("settings") }), body));
-  let st, fr, parts, alone;
-  try {
-    [st, fr, parts, alone] = await Promise.all([invoke("storage"), invoke("freeable"), invoke("storage_parts"), invoke("not_elsewhere").catch(() => null)]);
-  } catch (e) { put(body, oops(e)); return; }
-  const used = Number(st.used), freeable = Number(fr.bytes), free = Number(st.free_disk), limit = Number(st.limit), disk = Number(st.disk);
-  const whole = Math.max(limit > 0 ? limit : Math.max(disk, used + free), used, 1);
-  const pct = (n) => `${Math.max(0, (100 * n) / whole)}%`;
-
-  // The limit: a switch, and a track that is square-law, so that the small
-  // amounts people choose get most of it (a 500 GB disk against a 20 GB
-  // allowance would otherwise sit in its first four percent).
-  const maxGib = Math.max(1, Math.floor(disk / GIB));
-  const toTrack = (gib) => Math.round(Math.sqrt(Math.min(gib, maxGib) / maxGib) * 1000);
-  const fromTrack = (v) => Math.max(1, Math.round((v / 1000) ** 2 * maxGib));
-  const track = h("input", { type: "range", min: "0", max: "1000", class: "track", "aria-label": "Limit" });
-  track.value = String(toTrack(limit > 0 ? limit / GIB : maxGib / 10));
-  const amount = h("b", { class: "track-v" });
-  // Said as every other size is, so that the limit chosen and the limit shown
-  // above are the same number.
-  const showAmount = () => { amount.textContent = size(fromTrack(Number(track.value)) * GIB); };
-  track.addEventListener("input", showAmount);
-  showAmount();
-  const limitBox = h("div", { class: "limit", hidden: limit === 0 }, track, amount,
-    btn("Apply", async () => { await invoke("set_limit", { bytes: String(fromTrack(Number(track.value)) * GIB) }).catch((e) => toast(String(e), true)); go("storage"); }, "btn-main btn-sm"));
-
-  // Each file once: a phone's WhatsApp inside a backed-up folder is stored once.
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("This computer", { words: "Settings", go: () => go("settings") }), body));
+  let st, parts;
+  try { [st, parts] = await Promise.all([invoke("storage"), invoke("storage_parts")]); } catch (e) { put(body, oops(e)); return; }
+  const disk = Number(st.disk), free = Number(st.free_disk);
   const phoneBytes = Number(parts.phones_once ?? parts.phones.reduce((n, p) => n + Number(p.whatsapp) + Number(p.folders) + Number(p.vault), 0));
-  const guestBytes = parts.guests.reduce((n, g) => n + Number(g.size), 0);
-  put(body, 
-    h("div", { class: "used" },
-      h("p", { class: "used-big" }, size(st.used)),
-      h("p", { class: "note" }, limit > 0 ? `of ${size(st.limit)}${st.over ? ", over" : ""}` : `${size(st.free_disk)} free on this disk`),
-      h("div", { class: "meter" }, h("i", { class: "m-used", style: { width: pct(used - freeable) } }), h("i", { class: "m-free", style: { width: pct(freeable) } })),
-      h("div", { class: "chips" },
-        h("span", { class: "chip chip-quiet" }, h("i", { class: "dot d-used" }), "Used"),
-        freeable ? h("span", { class: "chip chip-quiet" }, h("i", { class: "dot d-free" }), `${size(fr.bytes)} can be freed`) : null),
-      freeable ? btn(`Free up ${size(fr.bytes)}`, (e) => freeAll(e.currentTarget), "btn-main") : null),
-    group("Kept here",
-      setting({ ic: "smartphone", name: "Your phones' backups", value: size(phoneBytes), onclick: () => inFiles("owner") }),
-      setting({ ic: "folder", name: "Shared", value: size(parts.shared_here), onclick: () => inFiles("shared") }),
-      parts.guests.length ? setting({ ic: "users", name: "People's folders", value: size(guestBytes) }) : null,
-      setting({ ic: "trash-2", name: "Recently deleted", value: size(parts.deleted), onclick: () => go("deleted") }),
-      // Made here, and on no other device yet (component 5: storage's, not
-      // Home's Waiting).
-      alone?.files ? setting({ ic: "laptop", name: "Only on this computer", value: count(alone.files, "file"), onclick: () => onlyHere(alone) }) : null),
-    group("Limit",
-      setting({ ic: "sliders-horizontal", name: "Limit QurbSpace's space", end: toggle(limit > 0, async (on) => {
-        limitBox.hidden = !on;
-        if (!on) { await invoke("set_limit", { bytes: "0" }); go("storage"); }
-      }, "Limit QurbSpace's space") }),
-      limitBox),
-    fr.files.length ? label("Largest you can free") : null,
-    fr.files.length ? h("div", { class: "rows" }, ...fr.files.slice(0, 5).map((f) => row({
-      ic: fileIcon(f.path), name: base(f.path), sub: [size(f.size), folderOf(f.path) || "Shared"],
-      end: h("button", { class: "btn btn-quiet btn-sm", onclick: async () => { await freeUp(f.path); go("storage"); } }, "Free up"),
-    }))) : null,
-    h("p", { class: "note" }, "Freed files stay in QurbSpace, on your other devices"));
-}
-
-/** The files made here that no other device has yet: the first few. */
-function onlyHere(alone) {
-  const box = sheet({ ic: "laptop", title: "Only on this computer", sub: `${count(alone.files, "file")}, ${size(alone.size)}` });
-  box.append(h("div", { class: "rows" }, ...alone.first.map((f) => row({ ic: fileIcon(f.path), name: base(f.path), sub: [size(f.size), folderOf(f.path) || "Shared"] }))),
-    h("p", { class: "note" }, "They reach your other devices when one is online"));
-}
-
-async function freeAll(b) {
-  b.disabled = true;
-  let freed = 0;
-  try {
-    // A page at a time, largest first, until nothing more can go.
-    for (let round = 0; round < 20; round++) {
-      const fr = await invoke("freeable");
-      if (!fr.files.length) break;
-      for (const f of fr.files) { try { freed += Number(await invoke("free_file", { path: f.path })); } catch (e) { /* the only copy */ } }
-    }
-    toast(`Freed ${size(freed)}`);
-  } finally { go("storage"); }
+  const kinds = [
+    { name: "Shared", bytes: Number(parts.shared_here), colour: "var(--green)" },
+    { name: SETTINGS?.name ? "Your phones" : "Your phones", bytes: phoneBytes, colour: "var(--blue)", lead: "smartphone" },
+    ...parts.guests.map((g) => ({ name: g.name, bytes: Number(g.size), colour: "#d8a0b8", lead: "user-circle" })),
+    { name: "Recently deleted", bytes: Number(parts.deleted), colour: "var(--warn)", lead: "trash-2", open: () => go("deleted") },
+  ];
+  const whole = Math.max(disk, 1);
+  put(body,
+    h("div", { class: "disk" },
+      h("p", { class: "used-big" }, `${size(free)} free`),
+      h("p", { class: "note" }, `of ${size(disk)}`),
+      h("div", { class: "disk-bar" }, ...kinds.filter((k) => k.bytes > 0).map((k) =>
+        h("i", { style: { width: `${Math.max(0.6, (100 * k.bytes) / whole)}%`, background: k.colour }, title: k.name })))),
+    h("div", { class: "grp-box" }, ...kinds.map((k) => {
+      const lead = k.lead ? icon(k.lead, "set-ic") : h("i", { class: "sw", style: { background: k.colour } });
+      return h(k.open ? "button" : "div", { class: "set", onclick: k.open },
+        lead, h("span", { class: "set-name" }, k.name), h("span", { class: "set-value" }, size(k.bytes)),
+        k.open ? icon("chevron-right", "set-go") : null);
+    })));
 }
 
 // ---------- The key ----------
@@ -316,10 +269,10 @@ function protectSheet(to, was) {
 
 /** The rates a person picks from, bytes a second; 0 for none. */
 const SPEEDS = [0, 1e6, 5e6, 10e6, 25e6];
-const speed = (rate) => (Number(rate) ? `${size(rate)}/s` : "None");
+const speed = (rate) => (Number(rate) ? `${size(rate)}/s` : "Off");
 function speedWords(s) {
   const [up, down] = [Number(s.upload_limit ?? 0), Number(s.download_limit ?? 0)];
-  return up || down ? [up ? `${speed(up)} up` : null, down ? `${speed(down)} down` : null].filter(Boolean).join(", ") : "None";
+  return up || down ? [up ? `${speed(up)} up` : null, down ? `${speed(down)} down` : null].filter(Boolean).join(", ") : "Off";
 }
 
 /** How fast files may go to and come from other devices: chips for each
@@ -342,12 +295,12 @@ async function drawSpeed(main) {
       },
     }, speed(r))));
     draw();
-    return h("section", { class: "grp" }, label(words), h("div", { class: "speed" }, icon(ic, "set-ic"), chips));
+    return h("div", { class: "speed", title: words }, icon(ic, "set-ic"), chips);
   };
-  put(body,
+  // One card, ↑ and ↓ (K-3): the arrows say which way.
+  put(body, h("div", { class: "grp-box" },
     way("up", "arrow-up", "Sending to your devices"),
-    way("down", "arrow-down", "Receiving from them"),
-    h("p", { class: "note" }, "Leaves room on your connection for everything else"));
+    way("down", "arrow-down", "Receiving from them")));
 }
 
 // ---------- Backing up this computer's folders ----------
@@ -413,29 +366,71 @@ async function removeBackupFolder(f) {
 
 // ---------- Advanced ----------
 
+// Advanced, as the phone's (S-3): this computer's identity, its key, where
+// files sent here go; the meeting point and relay; the version.
 async function drawAdvanced(main) {
   const body = h("div", {});
   main.append(h("div", { class: "pg pg-narrow" }, pageHead("Advanced", { words: "Settings", go: () => go("settings") }), body));
-  let s;
-  try { s = await invoke("settings"); } catch (e) { put(body, oops(e)); return; }
+  let s, sec;
+  try { [s, sec] = await Promise.all([invoke("settings"), invoke("security")]); } catch (e) { put(body, oops(e)); return; }
   SETTINGS = s;
-  const field = (name, value, placeholder) => h("label", { class: "fld" }, h("span", {}, name), h("input", { class: "field", value: value ?? "", placeholder, spellcheck: "false" }));
-  const signal = field("Rendezvous", s.signal);
-  const relay = field("Relay", s.relay, "None");
-  const port = field("Port", String(s.port), "Any");
-  const says = h("p", { class: "note" });
-  put(body, 
-    group("Connection", signal, relay, port),
-    actions(btn("Save", async () => {
-      try {
-        await saveSettings({ signal: signal.querySelector("input").value, relay: relay.querySelector("input").value, port: port.querySelector("input").value });
-        toast("Saved");
-      } catch (e) { says.textContent = String(e); says.classList.add("warn"); }
-    }, "btn-main")),
-    says,
+  const others = s.key_also_on ?? [];
+  const meeting = (v) => (!v || v === "nostr" ? "Public relays" : v.startsWith("nostr:") ? "Chosen relays" : v);
+  put(body,
     group("This computer",
-      setting({ ic: "folder-open", name: "Folder", value: s.root, onclick: () => invoke("show_root").catch((e) => toast(String(e), true)) }),
+      setting({ ic: "info", name: "Identity", value: sec.identity.slice(0, 9) }),
+      setting({ ic: "shield-check", name: "Key", value: others.length ? "Safe" : "Only here", onclick: () => keySheet(s, sec) }),
+      setting({ ic: "download", name: "Received files", value: downloadsWords(s), onclick: askDownloads })),
+    group("Connection",
+      setting({ ic: "link", name: "Meeting point", value: meeting(s.signal), onclick: () => askField({
+        ic: "link", title: "Meeting point", value: s.signal, placeholder: "nostr",
+        note: "nostr: the public relays. Or a rendezvous service's address",
+        save: (v) => saveSettings({ signal: v || "nostr" }) }) }),
+      setting({ ic: "cloud", name: "Relay", value: s.relay || "None", onclick: () => askField({
+        ic: "cloud", title: "Relay", value: s.relay ?? "", placeholder: "None",
+        save: (v) => saveSettings({ relay: v }) }) })),
+    group("App",
       setting({ ic: "info", name: "Version", value: s.version.split(" · ")[0].replace("window ", "") })));
+}
+
+/** The phone's key sheet (K-4): safe or not, where this computer keeps it,
+ * which devices also have it, and the 24 words, asked first. */
+function keySheet(s, sec) {
+  const others = s.key_also_on ?? [];
+  const how = { file: "In a file", keystore: "System keyring", passphrase: "Passphrase" };
+  const box = sheet({});
+  box.append(h("div", { class: "key-status" },
+      h("span", { class: `empty-orb${others.length ? " ok" : " warn"}` }, icon(others.length ? "shield-check" : "triangle-alert")),
+      h("h2", {}, others.length ? "Your key is safe" : "Your key is only here")),
+    h("div", { class: "grp-box" },
+      setting({ ic: "laptop", name: "This computer", value: how[sec.protection] ?? sec.protection, onclick: () => { box.close(); keptWhere(sec.protection); } }),
+      others.length ? setting({ ic: "smartphone", name: "Also on", value: others.join(", ") }) : null),
+    actions(btn("Show the 24 words", () => { box.close(); askWords(); }, "btn-quiet")));
+}
+
+/** Where the key is kept: a file, the system's keyring, or a passphrase. */
+function keptWhere(now) {
+  const how = { file: "In a file", keystore: "System keyring", passphrase: "Passphrase" };
+  const box = sheet({ ic: "lock-keyhole", title: "Where this computer keeps it" });
+  box.append(h("div", { class: "grp-box" }, ...["file", "keystore", "passphrase"].map((to) => setting({
+    ic: { file: "file", keystore: "key-round", passphrase: "lock-keyhole" }[to],
+    name: how[to],
+    end: now === to ? icon("check", "set-tick") : null,
+    onclick: now === to && to !== "passphrase" ? null : () => { box.close(); protectSheet(to, now); },
+  }))));
+}
+
+/** The 24 words, after asking: anyone who sees them can read the files. */
+function askWords() {
+  const box = sheet({ ic: "key-round", title: "Show your 24 words?", sub: "Anyone who sees them can read every file you keep in QurbSpace" });
+  box.append(actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Show", async () => {
+    try {
+      const list = await invoke("reveal_phrase");
+      box.close();
+      const shown = sheet({ ic: "key-round", title: "Your 24 words" });
+      shown.append(h("ol", { class: "words" }, ...list.map((w) => h("li", {}, w))));
+    } catch (e) { box.close(); toast(String(e), true); }
+  }, "btn-main")));
 }
 
 // ---------- Activity ----------
