@@ -40,7 +40,7 @@ const inFiles = (area, dir = "") => go("files", { area, dir });
 
 function drawFilesTop(main) {
   const body = h("div", { id: "files-body" });
-  main.append(h("div", { class: "pg" }, pageHead("Files", null), body));
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Files", null), body));
   drawTopBody(body);
 }
 
@@ -573,50 +573,111 @@ async function drawReceived(main) {
 // week. Empty at the top asks first. What the owner's phone deleted from its
 // Private Vault is listed too, while the owner's folder is open -- put back
 // from the phone, whose Recently deleted keeps it.
+// Recently deleted, as Photos keeps its own (D13, D13b): the files
+// themselves in a grid, by where they were deleted; days left only in the
+// last week, on the picture, in amber. Restore all and Delete all at the
+// foot; Select to choose some, the title then saying how many, and the bar
+// holding only Restore -- green, as Send is -- and Delete. What a phone's
+// Vault deleted shows too, put back from the phone.
+
+const DELETED = { selecting: false, chosen: new Set(), entries: [] };
+
 async function drawDeleted(main) {
-  const body = h("div", {});
-  const emptyBtn = h("button", { class: "btn btn-sm btn-danger-quiet", hidden: true, onclick: () => askEmpty() }, "Empty");
-  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Recently deleted", { words: "This computer", go: () => go("storage") }, emptyBtn), body));
-  let entries, phone;
-  try { [entries, phone] = await Promise.all([invoke("recently_deleted"), invoke("phone_deleted").catch(() => null)]); } catch (e) { put(body, oops(e)); return; }
-  emptyBtn.hidden = !entries.length;
+  DELETED.selecting = false;
+  DELETED.chosen.clear();
+  main.append(h("div", { class: "pg pg-narrow" }, h("div", { id: "deleted-page" })));
+  let phone;
+  try { [DELETED.entries, phone] = await Promise.all([invoke("recently_deleted"), invoke("phone_deleted").catch(() => null)]); } catch (e) { put($("deleted-page"), oops(e)); return; }
+  DELETED.phone = phone ?? [];
+  drawDeletedPage();
+}
+
+function drawDeletedPage() {
+  const page = $("deleted-page");
+  if (!page) return;
+  const { entries, phone, chosen } = DELETED;
+  const selecting = DELETED.selecting;
+  const back = { words: "This computer", go: () => go("storage") };
+  const head = selecting
+    ? h("div", { class: "pg-hd" },
+      h("button", { class: "back", onclick: back.go }, icon("chevron-right", "flip"), back.words),
+      h("div", { class: "pg-title" },
+        h("button", { class: "icon-btn sel-x", "aria-label": "Stop choosing", onclick: () => { DELETED.selecting = false; chosen.clear(); drawDeletedPage(); } }, icon("x")),
+        h("h1", {}, `${chosen.size} selected`),
+        btn("All", () => { entries.forEach((d) => chosen.add(d.id)); drawDeletedPage(); }, "btn-quiet btn-sm")))
+    : pageHead("Recently deleted", back,
+      entries.length ? btn("Select", () => { DELETED.selecting = true; drawDeletedPage(); }, "btn-quiet btn-sm") : null);
   const dayLeft = (at) => Math.max(1, 30 - Math.floor((Date.now() / 1000 - at) / 86400));
-  const daysPill = (at) => (dayLeft(at) <= 7 ? h("span", { class: "chip chip-wait" }, icon("clock"), String(dayLeft(at))) : null);
-  const pic = (path) => { const el = h("span", { class: "w-pic w-pic-row" }); previewInto(el, path); return el; };
-  const here = entries.map((d) => {
-    const forget = h("button", { class: "icon-btn", title: "Delete for good", "aria-label": `Delete ${base(d.path)} for good` }, icon("x"));
-    // Twice: the first press asks, in red, and the second deletes for good.
-    forget.addEventListener("click", async () => {
-      if (!forget.classList.contains("armed")) { forget.classList.add("armed"); put(forget, "Delete"); return; }
-      try { await invoke("forget_deleted", { id: d.id }); go("deleted"); } catch (e) { toast(String(e), true); }
-    });
-    return row({
-      ic: pic(d.path), name: base(d.path), title: d.why ?? undefined, sub: named(d.by) ?? "This computer",
-      end: [daysPill(d.at), h("button", { class: "icon-btn", title: "Restore", "aria-label": `Restore ${base(d.path)}`, onclick: async () => {
-        try {
-          const at = await invoke("restore_deleted", { id: d.id });
-          toast(at !== d.path ? `Restored as ${base(at)}` : "Restored");
-          go("deleted");
-        } catch (e) { toast(String(e), true); }
-      } }, icon("rotate-ccw")), forget],
-    });
-  });
-  const theirs = (phone ?? []).map((d) => row({
-    ic: pic(d.path), name: base(d.path), sub: d.by,
-    end: [daysPill(d.at), h("span", { class: "chip", title: "Put back from the phone: Settings, Manage storage, Recently deleted" }, icon("smartphone"), "On the phone")],
-  }));
-  if (!here.length && !theirs.length) { put(body, empty("trash-2", "Nothing deleted lately")); return; }
-  put(body,
-    here.length ? h("div", { class: "grp-box" }, ...here) : null,
-    theirs.length ? label("From your phone's Vault") : null,
-    theirs.length ? h("div", { class: "grp-box" }, ...theirs) : null);
+  const cell = (path, at, id) => {
+    const th = h("span", { class: "rd-th" });
+    previewInto(th, path);
+    if (kindOf(path) === "video") th.append(h("span", { class: "wa-play" }));
+    if (dayLeft(at) <= 7) th.append(h("span", { class: "rd-days" }, dayLeft(at) === 1 ? "1 day" : `${dayLeft(at)} days`));
+    if (selecting && id != null) th.append(h("span", { class: `rd-tick${chosen.has(id) ? "" : " off"}` }, chosen.has(id) ? icon("check") : null));
+    const on = id != null && chosen.has(id);
+    return h(id != null ? "button" : "div", {
+      class: `rd${on ? " sel" : ""}`, title: id != null ? base(path) : `${base(path)}: put back on the phone`,
+      onclick: id != null ? () => {
+        if (!DELETED.selecting) { DELETED.selecting = true; }
+        chosen.has(id) ? chosen.delete(id) : chosen.add(id);
+        drawDeletedPage();
+      } : null,
+    }, th, h("small", {}, base(path)));
+  };
+  const byPhone = new Map();
+  for (const d of phone) {
+    if (!byPhone.has(d.by)) byPhone.set(d.by, []);
+    byPhone.get(d.by).push(d);
+  }
+  const sections = [];
+  if (entries.length) sections.push(label("This computer"), h("div", { class: "rdg" }, ...entries.map((d) => cell(d.path, d.at, d.id))));
+  for (const [by, list] of byPhone) {
+    sections.push(h("div", { class: "label label-who" }, h("span", { class: "circle circle-xs" }, (by || "?")[0].toUpperCase()), `${by}'s Vault`),
+      h("div", { class: "rdg" }, ...list.map((d) => cell(d.path, d.at, null))));
+  }
+  const bar = !entries.length ? null : selecting
+    ? h("div", { class: "selbar" },
+      h("button", { class: "btn btn-main btn-sm", disabled: !chosen.size, onclick: () => restoreDeleted([...chosen]) }, icon("rotate-ccw"), "Restore"),
+      h("button", { class: "btn btn-danger-solid btn-sm", disabled: !chosen.size, onclick: () => forgetDeleted([...chosen]) }, icon("trash-2"), "Delete"))
+    : h("div", { class: "selbar" },
+      btn("Restore all", () => restoreDeleted(entries.map((d) => d.id)), "btn-main btn-sm"),
+      btn("Delete all", () => askEmpty(), "btn-quiet btn-sm btn-red-words"));
+  put(page, head,
+    h("p", { class: "quiet-line" }, "Kept for 30 days, then deleted for good"),
+    ...(sections.length ? sections : [empty("trash-2", "Nothing deleted lately")]),
+    bar);
+  icons(page);
+}
+
+async function restoreDeleted(ids) {
+  let renamed = 0;
+  for (const id of ids) {
+    const d = DELETED.entries.find((x) => x.id === id);
+    try {
+      const at = await invoke("restore_deleted", { id });
+      if (d && at !== d.path) renamed++;
+    } catch (e) { toast(String(e), true); }
+  }
+  toast(renamed ? `Restored, ${renamed} under a new name` : "Restored");
+  go("deleted");
+}
+
+function forgetDeleted(ids) {
+  const box = sheet({ ic: "trash-2", title: ids.length === 1 ? "Delete for good?" : `Delete ${ids.length} for good?`, sub: "They can't be restored" });
+  box.append(actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Delete", async () => {
+    box.close();
+    for (const id of ids) {
+      try { await invoke("forget_deleted", { id }); } catch (e) { toast(String(e), true); }
+    }
+    go("deleted");
+  }, "btn-danger-solid")));
 }
 
 function askEmpty() {
-  const box = sheet({ ic: "trash-2", title: "Empty Recently deleted?", sub: "Gone for good" });
-  box.append(actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Empty", async () => {
-    try { await invoke("empty_deleted"); box.close(); toast("Emptied"); go("deleted"); } catch (e) { toast(String(e), true); }
-  }, "btn-danger")));
+  const box = sheet({ ic: "trash-2", title: "Delete all for good?", sub: "They can't be restored" });
+  box.append(actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Delete all", async () => {
+    try { await invoke("empty_deleted"); box.close(); toast("Deleted"); go("deleted"); } catch (e) { toast(String(e), true); }
+  }, "btn-danger-solid")));
 }
 
 /** Two versions, as the phone's sheet from Home's mark (K-1): straight to
@@ -646,23 +707,34 @@ async function drawConflicts(main) {
 }
 
 function conflictBlock(c) {
-  const side = (words, v) => {
+  // Each version's text, once both are read, with the lines the other does
+  // not have marked: this computer's in red, the other's in green (D15).
+  const texts = {};
+  const marked = () => {
+    if (texts.this == null || texts.other == null) return;
+    for (const [mine, theirs, cls] of [["this", "other", "gone"], ["other", "this", "new"]]) {
+      const others = new Set(texts[theirs].text.split("\n"));
+      put(texts[mine].pre, ...texts[mine].text.split("\n").flatMap((line, i) => [
+        i ? "\n" : "", others.has(line) ? line : h("span", { class: `ver-${cls}` }, line)]));
+    }
+  };
+  const side = (which, v) => {
     const col = h("div", { class: "ver" });
     if (!v) { col.append(h("p", { class: "note" }, "Gone since")); return col; }
     // The preview first, then whose and how long ago, under it (K-1).
     const look = h("div", { class: "ver-look" });
-    col.append(look, h("div", { class: "ver-by" }, icon(v.kind === "phone" ? "smartphone" : "laptop"), h("b", {}, named(v.by)), h("small", {}, ago(v.at))));
+    col.append(look, h("div", { class: "ver-by" }, icon(v.kind === "phone" ? "smartphone" : "laptop"), h("b", {}, which === "this" ? "This computer" : named(v.by)), h("small", {}, ago(v.at))));
     if (!v.here) { look.append(h("p", { class: "note" }, "Not on this computer yet")); return col; }
     invoke("preview", { path: v.path }).then((p) => {
       if (p.kind === "image") look.append(h("img", { src: p.data, alt: "" }));
-      else if (p.kind === "text") look.append(h("pre", {}, p.data));
+      else if (p.kind === "text") { const pre = h("pre", {}, p.data); look.append(pre); texts[which] = { pre, text: p.data }; marked(); }
       else look.append(icon(fileIcon(v.path), "ver-ic"));
     }, () => {});
     return col;
   };
   const block = h("section", { class: "conflict" },
     h("div", { class: "conflict-hd" }, tile(fileIcon(c.path)), h("span", { class: "row-main" }, h("b", {}, base(c.path)), h("small", {}, folderOf(c.path) || "Shared"))),
-    h("div", { class: "vers" }, side("This one", c.this), side("The other", c.other)));
+    h("div", { class: "vers" }, side("this", c.this), side("other", c.other)));
   const keep = (words, how, needsOther) => {
     const b = btn(words, async () => {
       block.querySelectorAll(".acts button").forEach((x) => (x.disabled = true));
@@ -676,7 +748,9 @@ function conflictBlock(c) {
   };
   // Named after the devices, not "this one" and "the other" (K-1).
   const other = c.other ? named(c.other.by) : "the other";
+  const both = keep("Keep both", "both", true);
+  both.classList.replace("btn-quiet", "btn-soft");
   block.append(h("div", { class: "keeps" },
-    keep("Keep this computer's", "this", false), keep(`Keep ${other}'s`, "other", true), keep("Keep both", "both", true)));
+    keep("Keep this computer's", "this", false), keep(`Keep ${other}'s`, "other", true), both));
   return block;
 }

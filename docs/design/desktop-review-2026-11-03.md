@@ -192,3 +192,58 @@ real size ([system/desktop.html](system/desktop.html)). Asked and answered:
   device id. Drawn as D21 (asked before removing), D22 (Home after), D23
   ("Galaxy S23 is back").
 
+
+## The desktop rebuilt to the mockups, 2026-11-03 (night)
+
+`app.css` now writes `tokens.css`'s values exactly (its old names kept as
+aliases), and its components follow `components.css`: 48-high round buttons,
+18-radius cards with the shadow, rows 56 high with the line starting after
+the icon, uppercase labels, sheets sized to their content (380, or 420 wide)
+with their picture, title and words centred, over the main area only.
+
+Each frame was compared side by side with the built window rendered from the
+fixtures, headless Chromium at 1120 × 720 (the mockup's 36-pixel drawn title
+bar cropped, since the real window's is the system's), light and dark:
+`experiments/desktop-fixtures/frame.html?n=<frame>` shows one frame alone,
+and `index.html?then=<script>` / `?dev=<id>` reach a screen behind a click.
+
+| Frame | Now |
+|---|---|
+| D1 Home | as drawn: tinted sidebar with the mark and pills, 168 mark, 48-high Send |
+| D2 Home, waiting | option A rows; the mark shrinks to 128 and moves up while a queue shows; its words the verb alone |
+| D3 Device | 72 avatar, solid red Remove and blue Switch device, sizes formatted |
+| D4 Switch device | as drawn |
+| D5 Files | tiles 116 high, two to a row, 600 across |
+| D6 Opening a locked folder | as drawn |
+| D7 Settings, D8 This computer | 60 avatar; "153 GB free" with "of 473 GB" beside it |
+| D9 Activity | rows as drawn; batches of a backup are still one row per file (below) |
+| D10 Waiting | a section per Home row, 72 previews seven to a row, +N, × on a send's |
+| D11 Advanced | as drawn; Received files as `~/Downloads/qurb` |
+| D12 The key | the sheet, its shield on the soft green |
+| D13, D13b Recently deleted | the grid by where deleted, days in amber in the last week, Select, "2 selected" with × and All, Restore green and Delete red in the bar |
+| D14 Speed limit | "1 MB/s", not "1.0 MB/s" |
+| D15 Two versions | each version a card, the lines the other lacks marked red and green, Keep both soft |
+| D16 First run | the app's mark, Start 300 wide |
+| D17, D18 Add your phone | centred; the phone asking in a sheet with the six digits boxed |
+| D19 Add a device | two tiles, the person's in pink |
+| D21 Removing | as drawn, with what else applies (a send cancelled, files only on it) as rows when it does |
+| D22 After removing | "Galaxy S23 was removed", what stays, *Add it again*; "… removed this computer" when it was the other side |
+| D23 The same phone, back | "Galaxy S23 is back", what is its again |
+
+**Different from the frames, deliberately:**
+
+- **Icons are the phone's** (Phosphor, from the Android app's drawables via
+  `scripts/desktop-icons.py`), not the mockups' line icons, so the two apps
+  show the same marks. That set has no share, inbox or moon: Shared keeps the
+  folder, Received the download arrow, and "when it's on" the clock.
+- **D3's "Reachable from anywhere"** is not shown: the computer does not know
+  how its phone reaches it; the phone does.
+- **D9** groups a backup's files as one row in the frame; the window lists
+  them one by one, as the engine records them.
+- **D20, notifications,** are the system's, unchanged here.
+- **D23 is only for the same install.** A phone set up again pairs under a
+  passing identity and is recognised after it says its permanent one
+  (decision 0084), so its approval reads as any phone's.
+
+Not yet run in the application itself: compared in the fixtures only.
+`scripts/desktop-smoke.sh` has not been run since.

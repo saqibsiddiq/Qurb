@@ -71,3 +71,19 @@ The phrase shown there is a fixed list of words that is **not** a valid
 recovery phrase and is not a key to anything. Confirmation accepts any answer,
 because the real check is against the phrase the session is holding and a
 fixture has no way to be that.
+
+## Comparing with the mockups
+
+`frame.html?n=<i>` shows the `i`-th frame of `docs/design/system/desktop.html`
+alone at 1120 × 720 (`&page=` for another mockup page, `&theme=dark`), and
+`index.html?then=<script>` runs a script once the window is up -- a click, a
+sheet -- with `?dev=<id>` opening a device's page, so a headless browser can
+photograph each screen beside its frame:
+
+    chromium --headless=new --window-size=1120,720 --virtual-time-budget=5000 \
+      --screenshot=out.png "http://localhost:8731/experiments/desktop-fixtures/frame.html?n=3"
+
+`?removed`, `?removedby` and `?back` answer as after a device was removed
+here, removed this computer, or came back (decision 0084).
+
+Corner cut: `?then=` is `eval`. Fixtures only; nothing in `crates/` reads it.

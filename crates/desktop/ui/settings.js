@@ -90,7 +90,8 @@ async function updateClicked() {
 function downloadsWords(s) {
   const at = s.downloads_at ?? {};
   if ("Err" in at) return "Refused";
-  return at.Ok ? base(at.Ok) : "In your QurbSpace folder";
+  // Where it is, as a person writes it: ~/Downloads/qurb (D11).
+  return at.Ok ? at.Ok.replace(/^\/home\/[^/]+|^\/Users\/[^/]+/, "~") : "In your QurbSpace folder";
 }
 
 /** Saves the settings with one changed. */
@@ -188,13 +189,15 @@ async function drawStorage(main) {
     { name: "Shared", bytes: Number(parts.shared_here), colour: "var(--green)" },
     { name: SETTINGS?.name ? "Your phones" : "Your phones", bytes: phoneBytes, colour: "var(--blue)", lead: "smartphone" },
     ...parts.guests.map((g) => ({ name: g.name, bytes: Number(g.size), colour: "#d8a0b8", lead: "user-circle" })),
+    // A device removed here: what it kept stays, locked, until it is added
+    // again or deleted (decision 0084).
+    ...(parts.removed ?? []).map((r) => ({ name: r.name, bytes: Number(r.size), colour: "var(--ink-3)", lead: "lock-keyhole", open: () => deleteRemoved(r) })),
     { name: "Recently deleted", bytes: Number(parts.deleted), colour: "var(--warn)", lead: "trash-2", open: () => go("deleted") },
   ];
   const whole = Math.max(disk, 1);
   put(body,
     h("div", { class: "disk" },
-      h("p", { class: "used-big" }, `${size(free)} free`),
-      h("p", { class: "note" }, `of ${size(disk)}`),
+      h("p", { class: "free" }, `${size(free)} free`, h("small", {}, `of ${size(disk)}`)),
       h("div", { class: "disk-bar" }, ...kinds.filter((k) => k.bytes > 0).map((k) =>
         h("i", { style: { width: `${Math.max(0.6, (100 * k.bytes) / whole)}%`, background: k.colour }, title: k.name })))),
     h("div", { class: "grp-box" }, ...kinds.map((k) => {
@@ -203,6 +206,19 @@ async function drawStorage(main) {
         lead, h("span", { class: "set-name" }, k.name), h("span", { class: "set-value" }, size(k.bytes)),
         k.open ? icon("chevron-right", "set-go") : null);
     })));
+}
+
+/** A removed device's files, kept here locked: said plainly, then deleted
+ * to Recently deleted if asked. Added again, it would have them back. */
+function deleteRemoved(r) {
+  const box = sheet({ ic: "lock-keyhole", title: `${r.name} was removed`, sub: `Its ${size(r.size)} here stay locked until it's added again` });
+  box.append(h("div", { class: "acts acts-2" },
+    btn("Cancel", () => box.close(), "btn-quiet"),
+    btn("Delete", async () => {
+      box.close();
+      try { await invoke("delete_removed", { id: r.id }); } catch (e) { toast(String(e), true); }
+      go("storage");
+    }, "btn-danger-solid")));
 }
 
 // ---------- The key ----------
@@ -269,7 +285,7 @@ function protectSheet(to, was) {
 
 /** The rates a person picks from, bytes a second; 0 for none. */
 const SPEEDS = [0, 1e6, 5e6, 10e6, 25e6];
-const speed = (rate) => (Number(rate) ? `${size(rate)}/s` : "Off");
+const speed = (rate) => (Number(rate) ? `${size(rate).replace(/\.0 /, " ")}/s` : "Off");
 function speedWords(s) {
   const [up, down] = [Number(s.upload_limit ?? 0), Number(s.download_limit ?? 0)];
   return up || down ? [up ? `${speed(up)} up` : null, down ? `${speed(down)} down` : null].filter(Boolean).join(", ") : "Off";

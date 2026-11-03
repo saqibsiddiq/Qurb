@@ -4,7 +4,7 @@
 // right, the status mark in the middle with one line under it, Send, and
 // Waiting only while something is queued. Nothing else.
 
-const HOME = { devices: [], guests: [], summary: null, sends: [], sending: false, note: null, conflicts: 0, beats: 0 };
+const HOME = { devices: [], guests: [], removed: [], summary: null, sends: [], sending: false, note: null, conflicts: 0, beats: 0 };
 
 // ---------- The chosen device ----------
 
@@ -34,7 +34,8 @@ function drawHome(main) {
           ring(),
           h("span", { class: "mark-in", id: "mark-in" })),
         h("p", { class: "mark-words", id: "mark-words" }, " "),
-        h("button", { class: "send", onclick: chooseAndSend }, icon("send"), "Send"),
+        h("p", { class: "mark-quiet", id: "mark-quiet", hidden: true }),
+        h("button", { class: "send", id: "home-send", onclick: () => (HOME.mark?.again ? go("add") : chooseAndSend()) }, icon("send"), "Send"),
         h("div", { class: "waiting", id: "home-waiting" }))));
   icons(main);
   drawCircle();
@@ -57,12 +58,19 @@ function ring() {
 function markFor(s) {
   const to = chosenDevice();
   if (!s) return { icon: "circle-alert", words: "QurbSpace can't read its state", tone: "warn" };
-  if (s.peers === 0) return { icon: "plus", words: "Add a device", tone: "idle" };
+  if (s.peers === 0) {
+    // The only device gone (D22; decision 0084): what was kept, and the one
+    // thing to do.
+    const gone = HOME.removed[0];
+    if (gone?.by_them) return { icon: "lock-keyhole", words: `${gone.name} removed this computer`, quiet: "Add it again to sync", tone: "idle", again: true };
+    if (gone) return { icon: "lock-keyhole", words: `${gone.name} was removed`, quiet: Number(gone.size) > 0 ? "Its files stay here, locked, until it's added again" : null, tone: "idle", again: true };
+    return { icon: "plus", words: "Add a device", tone: "idle" };
+  }
   const moving = s.incoming[0] ?? s.outgoing[0];
   if (moving) {
     const done = Math.min(1, Number(moving.done) / Number(moving.size || 1));
     const verb = s.incoming[0] ? "Receiving" : "Sending";
-    return { icon: s.incoming[0] ? "arrow-down" : "arrow-up", words: `${verb} ${moving.path.split("/").pop()}`, tone: "busy", progress: done };
+    return { icon: s.incoming[0] ? "arrow-down" : "arrow-up", words: verb, tone: "busy", progress: done };
   }
   if (HOME.note && Date.now() < HOME.note.until) return { icon: "arrow-up", words: HOME.note.words, tone: "busy", progress: null, spin: true };
   if (s.problem || s.state === "needs attention") return { icon: "triangle-alert", words: "Something needs attention", tone: "warn", go: "activity" };
@@ -85,6 +93,13 @@ async function liveHome() {
   mark.classList.toggle("spinning", Boolean(m.spin));
   put($("mark-in"), icon(m.icon));
   $("mark-words").textContent = m.words;
+  $("mark-quiet").hidden = !m.quiet;
+  $("mark-quiet").textContent = m.quiet ?? "";
+  const sendBtn = $("home-send");
+  if (sendBtn.dataset.again !== String(Boolean(m.again))) {
+    sendBtn.dataset.again = String(Boolean(m.again));
+    put(sendBtn, icon(m.again ? "smartphone" : "send"), m.again ? "Add it again" : "Send");
+  }
   const arc = $("ring-arc");
   arc.style.strokeDasharray = m.spin ? "33 67" : m.progress != null ? `${Math.max(1, m.progress * 100)} 100` : "0 100";
   // No arc at all when nothing moves: an empty one with round ends is a dot.
@@ -94,7 +109,8 @@ async function liveHome() {
 
 async function listsHome() {
   if (!$("home-circle")) return;
-  const [devices, sends] = await Promise.all([invoke("devices").catch(() => []), invoke("outgoing").catch(() => [])]);
+  const [devices, sends, removed] = await Promise.all([invoke("devices").catch(() => []), invoke("outgoing").catch(() => []), invoke("removed_devices").catch(() => [])]);
+  HOME.removed = removed;
   // One's own devices, each once: a phone set up again is the one it became.
   HOME.devices = devices.filter((d) => d.relation === "own" && !d.replaced_by);
   HOME.guests = devices.filter((d) => d.relation === "guest");
@@ -199,12 +215,26 @@ function waitingGroups(s, sends) {
   return [...groups.values()];
 }
 
-/** A file's preview into `el` when it can be had here; its kind's icon until. */
+/** The colour of a document's tag, by what it is, as the mockups draw it. */
+const DOC_TAG = { pdf: "#c4412f", doc: "#2b5fb8", docx: "#2b5fb8", odt: "#2b5fb8", xls: "#1f7a4a", xlsx: "#1f7a4a", ods: "#1f7a4a", csv: "#1f7a4a", ppt: "#c2661f", pptx: "#c2661f" };
+
+/** A document as the mockups draw one: a page of lines, its type on a tag. */
+function docFace(path) {
+  const ext = path.includes(".") ? path.split(".").pop().toLowerCase() : "";
+  return h("span", { class: "doc-face" }, h("i"), h("i"), h("i"), h("i", { style: { width: "55%" } }),
+    ext && ext.length <= 4 ? h("em", { style: { background: DOC_TAG[ext] ?? "#6b7280" } }, ext.toUpperCase()) : null);
+}
+
+/** A file's preview into `el` when it can be had here: a picture's own, a
+ * document's page, its kind's icon otherwise. Put first, so that what is
+ * laid over it -- a ring, a tick -- stays over it. */
 function previewInto(el, path) {
-  el.append(icon(fileIcon(path)));
-  if (kindOf(path) !== "image") return;
+  const kind = kindOf(path);
+  const face = kind === "text" || kind === "code" ? docFace(path) : icon(fileIcon(path));
+  el.prepend(face);
+  if (kind !== "image") return;
   invoke("preview", { path, small: true }).then((p) => {
-    if (p?.kind === "image") put(el, h("img", { src: p.data, alt: "" }));
+    if (p?.kind === "image" && face.isConnected) face.replaceWith(h("img", { src: p.data, alt: "" }));
   }).catch(() => {});
 }
 
@@ -235,21 +265,47 @@ function waitingWho(g) {
     g.device ? circle(g.device, "circle-xs") : null, h("b", {}, g.name));
 }
 
+/** One row of Waiting as option A (the owner, 2026-11-03; D2): one picture
+ * with the other device's face on its corner, a title whose verb says the
+ * way, one quiet line -- amber only when it waits on you -- and how far it
+ * has got. */
+function waitingRow(g, onclick) {
+  const n = g.files.length;
+  const what = `${n.toLocaleString()} ${n === 1 ? "file" : "files"}`;
+  const done = g.moving && g.size ? Math.min(1, g.done / g.size) : null;
+  const th = h("span", { class: "wa-th" });
+  previewInto(th, g.files[0] ?? "");
+  if (kindOf(g.files[0] ?? "") === "video") th.append(h("span", { class: "wa-play" }));
+  if (done != null && done < 1) th.append(ringOver(done));
+  th.append(g.device ? circle(g.device, "wa-face") : h("span", { class: "circle wa-face" }, (g.name || "?")[0].toUpperCase()));
+  const off = g.device?.kind !== "phone";
+  const line = g.moving
+    ? h("span", {}, `${g.coming ? "From" : "To"} ${g.name}, ${size(g.size)}`)
+    : g.waitingOn
+      ? off ? h("span", {}, `To ${g.name}, when it's on`) : h("span", { class: "wait" }, `Open QurbSpace on ${g.name}`)
+      : h("span", {}, `${g.coming ? "From" : "To"} ${g.name}${g.size ? `, ${size(g.size)}` : ""}`);
+  const end = done != null
+    ? h("span", { class: "wa-end" }, `${Math.round(done * 100)}%`)
+    : g.waitingOn ? icon(off ? "clock" : "smartphone", off ? "wa-end-ic" : "wa-end-ic wait") : null;
+  return h("button", { class: "wa", onclick },
+    th,
+    h("span", { class: "wa-t" },
+      h("b", {}, `${g.coming ? "Receiving" : "Sending"} ${what}`),
+      line,
+      done != null ? h("span", { class: "wa-bar" }, h("i", { style: { width: `${Math.round(done * 100)}%` } })) : null),
+    end);
+}
+
 function drawWaiting() {
   const box = $("home-waiting");
   if (!box) return;
   const groups = waitingGroups(HOME.summary, HOME.sends);
+  // The mark moves up and shrinks while a queue shows (D2).
+  $("home-mark")?.closest(".home")?.classList.toggle("queued", groups.length > 0);
   if (!groups.length) { put(box); return; }
-  const rows = groups.map((g) => h("button", { class: "w-row", onclick: () => go("waiting") },
-    previewStack(g.files, g.moving && g.size ? g.done / g.size : null),
-    h("span", { class: "w-main" },
-      waitingWho(g),
-      h("span", { class: "w-chips" },
-        h("span", { class: "chip" }, Number(g.files.length).toLocaleString()),
-        g.size ? h("span", { class: "chip" }, size(g.size)) : null,
-        g.waitingOn ? h("span", { class: "chip chip-wait" }, icon(g.device?.kind === "phone" ? "smartphone" : "laptop"), g.waitingOn) : null)),
-    icon("chevron-right", "row-go")));
-  put(box, h("div", { class: "w-hd" }, "Waiting", h("span", { class: "badge" }, groups.length)), h("div", { class: "w-card" }, ...rows));
+  put(box,
+    h("div", { class: "wl" }, h("b", {}, "Waiting"), h("button", { class: "wl-all", onclick: () => go("waiting") }, "See all")),
+    h("div", { class: "wa-card" }, ...groups.map((g) => waitingRow(g, () => go("waiting")))));
 }
 
 async function cancel(o) {
@@ -312,31 +368,28 @@ async function drawWaitingAll(main) {
 async function listsWaitingAll() {
   const box = $("waiting-all");
   if (!box) return;
-  const [s, sends, done] = await Promise.all([
-    invoke("summary").catch(() => null),
-    invoke("outgoing").catch(() => []),
-    invoke("activity", { path: null, limit: 200, before: null }).catch(() => []),
-  ]);
+  const [s, sends] = await Promise.all([invoke("summary").catch(() => null), invoke("outgoing").catch(() => [])]);
   const groups = waitingGroups(s, sends);
-  const finished = done.filter((r) => r.kind === "collected" || (r.kind === "received" && (r.detail ?? "").startsWith("sent to this device"))).slice(0, 12);
+  // Each of Home's rows as a section (D10): its title and quiet line as on
+  // Home, then its files' previews, the moving one ringed, a send's with ×.
   const section = (g) => {
-    const grid = h("div", { class: "a-grid w-grid" });
-    g.files.slice(0, 23).forEach((path, i) => {
-      const cell = h("span", { class: "w-pic w-pic-row", title: base(path) });
+    const row = waitingRow(g, null);
+    const words = row.querySelector(".wa-t");
+    words.querySelector(".wa-bar")?.remove();
+    const grid = h("div", { class: "wgrid" });
+    const room = 6;
+    g.files.slice(0, g.files.length > room + 1 ? room : room + 1).forEach((path, i) => {
+      const cell = h("span", { class: "wa-th wa-cell", title: base(path) });
       previewInto(cell, path);
+      if (kindOf(path) === "video") cell.append(h("span", { class: "wa-play" }));
       if (i === 0 && g.moving && g.size) cell.append(ringOver(g.done / g.size));
       const send = g.sends.find((o) => o.path === path);
       if (send) cell.append(h("button", { class: "w-x", "aria-label": `Stop sending ${base(path)}`, onclick: async () => { await cancel(send); listsWaitingAll(); } }, icon("x")));
       grid.append(cell);
     });
-    if (g.files.length > 23) grid.append(h("span", { class: "w-pic w-pic-row a-more" }, `+${(g.files.length - 23).toLocaleString()}`));
-    return [h("div", { class: "w-sect" }, waitingWho(g),
-      g.size ? h("span", { class: "chip" }, size(g.size)) : null,
-      g.waitingOn ? h("span", { class: "chip chip-wait" }, g.waitingOn) : null), grid];
+    if (g.files.length > room + 1) grid.append(h("span", { class: "wa-th wa-cell wa-more" }, `+${(g.files.length - room).toLocaleString()}`));
+    return [h("div", { class: "wsect" }, ...words.children), grid];
   };
-  put(box,
-    ...(groups.length ? groups.flatMap(section) : [empty("circle-check", "Nothing waiting")]),
-    finished.length ? label("Done") : null,
-    finished.length ? h("div", { class: "a-grid w-grid" }, ...finished.map((r) => { const c = h("span", { class: "w-pic w-pic-row", title: base(r.path ?? "") }); previewInto(c, r.path ?? ""); return c; })) : null);
+  put(box, ...(groups.length ? groups.flatMap(section) : [empty("circle-check", "Nothing waiting")]));
   icons(box);
 }

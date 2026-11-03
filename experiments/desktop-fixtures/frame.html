@@ -1,0 +1,11 @@
+<!doctype html><meta charset=utf-8>
+<style>html,body{margin:0;overflow:hidden;width:1120px;height:720px}iframe{border:0;position:absolute;left:0;top:0;width:1300px;height:30000px}</style>
+<iframe id=f></iframe>
+<script>
+const q=new URLSearchParams(location.search);const n=+q.get('n');const theme=q.get('theme')||'light';
+const f=document.getElementById('f');f.src='/docs/design/system/'+(q.get('page')||'desktop.html');
+f.onload=()=>setTimeout(()=>{const d=f.contentDocument;
+ if(theme==='dark'){d.documentElement.setAttribute('data-theme','dark')}
+ const w=d.querySelectorAll(q.get('sel')||'figure .win')[n];const r=w.getBoundingClientRect();
+ f.style.left=(-r.left)+'px';f.style.top=(-r.top)+'px';},300);
+</script>

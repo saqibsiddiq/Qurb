@@ -17,40 +17,70 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1EFF, U+20A0-20C0;
 }
 
+/* The tokens, exactly as docs/design/system/tokens.css writes them -- the
+   one place each colour is written; the phone's colors.xml copies them too.
+   The names this file used before are kept as aliases below. */
 :root,
 [data-theme="light"] {
-  --bg: #faf9f6;
-  --raised: #ffffff;
-  --soft: #f1f0eb;
-  --line: #e7e6e0;
-  --ink: #171816;
-  --ink-2: #4c4f4a;
-  --mute: #7a7d76;
-  --green: #2f6b57;
-  --green-2: #285b4a;
-  --green-soft: #e8f0ec;
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-2: #efefea;
+  --line: #e4e4de;
+  --ink: #161815;
+  --ink-2: #5c605a;
+  --ink-3: #8b8e87;
+  --brand: #2f6b57;
+  --brand-strong: #255848;
+  --brand-soft: #e6efea;
+  --on-brand: #ffffff;
+  --online: #2f7de1;
   --warn: #946a24;
-  --blue: #2e7cf6;
-  --red: #c4412f;
-  --shadow: 0 1px 2px rgba(23, 24, 22, 0.05), 0 16px 40px -16px rgba(23, 24, 22, 0.18);
+  --warn-soft: #f6eedb;
+  --danger: #b0443a;
+  --danger-soft: #f7e8e5;
+  --shadow-1: 0 1px 2px rgba(22, 24, 21, 0.05), 0 1px 1px rgba(22, 24, 21, 0.03);
+  --shadow-2: 0 2px 6px rgba(22, 24, 21, 0.06), 0 12px 32px -12px rgba(22, 24, 21, 0.16);
+  --scrim: rgba(22, 24, 21, 0.32);
   color-scheme: light;
 }
 [data-theme="dark"] {
-  --bg: #0e1210;
-  --raised: #171c19;
-  --soft: #1b211e;
-  --line: #262e2a;
-  --ink: #edf1ee;
-  --ink-2: #b9c1bc;
-  --mute: #87918b;
-  --green: #4fa585;
-  --green-2: #5db896;
-  --green-soft: #172520;
+  --bg: #0f1311;
+  --surface: #171c19;
+  --surface-2: #1e2420;
+  --line: #2a312d;
+  --ink: #ecf0ed;
+  --ink-2: #b5bdb8;
+  --ink-3: #848e88;
+  --brand: #55ab8b;
+  --brand-strong: #6bbf9f;
+  --brand-soft: #18271f;
+  --on-brand: #08110d;
+  --online: #5b9bff;
   --warn: #d9a64a;
-  --blue: #5b9bff;
-  --red: #ef6b5d;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -16px rgba(0, 0, 0, 0.75);
+  --warn-soft: #2a2316;
+  --danger: #ef6b5d;
+  --danger-soft: #2b1715;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.35), 0 16px 40px -14px rgba(0, 0, 0, 0.7);
+  --scrim: rgba(0, 0, 0, 0.55);
   color-scheme: dark;
+}
+:root {
+  --r-s: 10px;
+  --r-m: 14px;
+  --r-l: 18px;
+  --r-xl: 24px;
+  --r-full: 999px;
+  /* This file's earlier names for the same tokens. */
+  --raised: var(--surface);
+  --soft: var(--surface-2);
+  --mute: var(--ink-3);
+  --green: var(--brand);
+  --green-2: var(--brand-strong);
+  --green-soft: var(--brand-soft);
+  --blue: var(--online);
+  --red: var(--danger);
+  --shadow: var(--shadow-2);
 }
 
 * {
@@ -92,20 +122,39 @@ p {
 
 .win {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr);
   height: 100%;
 }
+/* The sidebar, as D1 draws it: a tint of the soft surface, the mark and
+   name, and pills. */
 .sb {
   display: flex;
   flex-direction: column;
-  padding: 26px 14px;
+  padding: 24px 12px 16px;
+  background: color-mix(in srgb, var(--surface-2) 55%, var(--bg));
   border-right: 1px solid var(--line);
 }
 .sb-brand {
-  padding: 0 12px 28px;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 22px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.sb-brand i {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--brand);
+  color: var(--on-brand);
+}
+.sb-brand i .ic {
+  width: 15px;
+  height: 15px;
 }
 .sb-nav {
   display: flex;
@@ -116,21 +165,28 @@ p {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  height: 38px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--r-s);
   background: none;
-  color: var(--mute);
+  color: var(--ink-2);
+  font-size: 14px;
   font-weight: 500;
   text-align: left;
   transition: color 0.2s, background 0.2s;
 }
+.sb-nav button .ic {
+  width: 19px;
+  height: 19px;
+}
 .sb-nav button:hover {
   color: var(--ink);
-  background: var(--soft);
+  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
 }
 .sb-nav button.on {
-  color: var(--green);
+  color: var(--brand);
+  background: var(--brand-soft);
   font-weight: 600;
 }
 .main {
@@ -146,19 +202,18 @@ p {
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  padding: 26px 32px 40px;
+  padding: 8px 36px 40px;
 }
 .home-top {
   display: flex;
   justify-content: flex-end;
 }
+/* D1: the mark 108 from the top, not centred -- Waiting grows below it. */
 .home-middle {
   display: flex;
-  flex: 1;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding-bottom: 40px;
+  padding-top: 20px;
 }
 
 /* The status mark: the phone's, as large. */
@@ -166,13 +221,13 @@ p {
   position: relative;
   display: grid;
   place-items: center;
-  width: 180px;
-  height: 180px;
+  width: 168px;
+  height: 168px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--raised);
-  box-shadow: var(--shadow);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
   transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .mark:hover {
@@ -193,7 +248,7 @@ p {
   stroke-width: 2.4;
 }
 .ring-track {
-  stroke: var(--line);
+  stroke: color-mix(in srgb, var(--brand) 22%, transparent);
 }
 .ring-arc {
   stroke: var(--green);
@@ -218,8 +273,8 @@ p {
   color: var(--green);
 }
 .mark-in .ic {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
 }
 .mark[data-tone="warn"] .mark-in {
   color: var(--warn);
@@ -230,9 +285,9 @@ p {
 }
 .mark-words {
   margin-top: 26px;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.025em;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
   text-align: center;
 }
 
@@ -242,15 +297,17 @@ p {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  width: min(420px, 100%);
-  height: 56px;
-  margin-top: 40px;
+  width: min(360px, 100%);
+  height: 48px;
+  margin-top: 26px;
   border: 0;
-  border-radius: 18px;
-  background: var(--green);
-  color: #fff;
-  font-size: 16px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: var(--on-brand);
+  font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.005em;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 6px 16px -8px color-mix(in srgb, var(--brand) 70%, transparent);
   transition: background 0.2s, transform 0.15s;
 }
 .send:hover {
@@ -260,17 +317,186 @@ p {
   transform: scale(0.98);
 }
 .send .ic {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
-/* Waiting, only while something is queued. */
+/* Waiting, only while something is queued: option A (D2), from
+   components.css's .wl/.w/.th. */
 .waiting {
-  width: min(500px, 100%);
-  margin-top: 26px;
+  width: min(560px, 100%);
+  margin-top: 30px;
 }
 .waiting:empty {
   display: none;
+}
+.home.queued .mark {
+  width: 128px;
+  height: 128px;
+}
+.home.queued .mark-in .ic {
+  width: 40px;
+  height: 40px;
+}
+.home.queued .mark-words {
+  margin-top: 18px;
+}
+.home.queued .send {
+  margin-top: 20px;
+}
+.wl {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 6px 10px;
+}
+.wl b {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.wl-all {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.wa-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.wa {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.wa + .wa::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 78px;
+  right: 16px;
+  height: 1px;
+  background: var(--line);
+}
+.wa:hover {
+  background: color-mix(in srgb, var(--surface-2) 50%, transparent);
+}
+.wa-th {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.wa-th > img {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.wa-th > .ic {
+  width: 20px;
+  height: 20px;
+}
+.wa-th .w-ring {
+  border-radius: 12px;
+}
+.wa-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.wa-play::before {
+  content: "";
+  margin-left: 3px;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 11px solid rgba(255, 255, 255, 0.95);
+}
+.circle.wa-face {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid var(--surface);
+  font-size: 10px;
+  box-shadow: none;
+}
+.wa-face .circle-dot {
+  display: none;
+}
+.wa-t {
+  display: block;
+  flex: 1;
+  min-width: 0;
+}
+.wa-t b,
+.wa-t > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wa-t b {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.wa-t > span {
+  margin-top: 2px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.wa-t > span.wait {
+  color: var(--warn);
+}
+.wa-bar {
+  height: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+.wa-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--brand);
+  transition: width 0.6s ease;
+}
+.wa-end {
+  min-width: 36px;
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.wa-end-ic {
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+.wa-end-ic.wait {
+  color: var(--warn);
 }
 .w-hd {
   display: flex;
@@ -287,11 +513,11 @@ p {
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  border-radius: 999px;
-  background: var(--green);
-  color: #fff;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 /* One row for each device, as the phone's: a stack of previews, which way
    and to whom, a number, a size, and what it waits on. */
@@ -561,9 +787,14 @@ p {
   margin-top: 8px;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--soft);
+  border-radius: var(--r-m);
+  background: var(--surface);
   text-align: left;
+}
+.dev-card .circle-md {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
 }
 .dev-card:hover {
   border-color: color-mix(in srgb, var(--green) 50%, var(--line));
@@ -574,11 +805,12 @@ p {
 }
 .dev-card b {
   flex: 1;
+  font-size: 15px;
   font-weight: 600;
 }
 .dev-card small {
-  color: var(--mute);
-  font-size: 12px;
+  color: var(--ink-3);
+  font-size: 12.5px;
 }
 .dev-tick {
   width: 18px;
@@ -596,29 +828,31 @@ p {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 520px;
+  max-width: 664px;
   margin: 0 auto;
-  padding: 26px 32px 40px;
+  padding: 20px 32px 40px;
 }
+/* Back: a chevron and the place it goes to, quiet (D3). */
 .back {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   align-self: flex-start;
-  margin-left: -8px;
-  padding: 6px 8px;
+  margin: 0 0 10px -6px;
+  padding: 4px 6px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: none;
-  color: var(--mute);
+  color: var(--ink-3);
+  font-size: 13.5px;
   font-weight: 500;
 }
 .back:hover {
   color: var(--ink);
 }
 .back .ic {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 .page-hd {
   display: flex;
@@ -646,17 +880,32 @@ p {
 .dev-hd {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   align-self: stretch;
-  margin: 18px 0 8px;
+  margin: 18px 0 0;
+}
+.dev-hd .circle-xl {
+  width: 72px;
+  height: 72px;
+  font-size: 26px;
+}
+.dev-hd .circle-xl .circle-dot {
+  width: 18px;
+  height: 18px;
+  border-width: 3px;
 }
 .dev-words {
   flex: 1;
 }
 .dev-words h1 {
   font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.dev-words .state {
+  margin-top: 3px;
+  font-size: 14px;
+  color: var(--ink-3);
 }
 .dev-words .state small {
   margin-left: 8px;
@@ -664,23 +913,34 @@ p {
 #page-list {
   align-self: stretch;
 }
-/* Remove and Switch device, full width, as the phone's. */
+/* Remove, Switch device and Quit: solid, full width, as the phone's
+   (the owner, 2026-11-03; components.css's .btn-danger-solid and
+   .btn-blue-solid). */
 .big-btn {
   align-self: stretch;
-  height: 46px;
-  margin-top: 12px;
+  height: 48px;
+  margin-top: 10px;
   border: 0;
-  border-radius: 23px;
+  border-radius: var(--r-full);
+  font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.005em;
+  transition: filter 0.15s, transform 0.15s;
+}
+.big-btn:hover {
+  filter: brightness(1.06);
+}
+.big-btn:active {
+  transform: scale(0.99);
 }
 .big-red {
-  margin-top: 28px;
-  background: color-mix(in srgb, var(--red) 14%, var(--bg));
-  color: var(--red);
+  margin-top: 24px;
+  background: var(--danger);
+  color: #fff;
 }
 .big-blue {
-  background: color-mix(in srgb, var(--blue) 14%, var(--bg));
-  color: var(--blue);
+  background: var(--online);
+  color: #fff;
 }
 .remove {
   margin-top: 36px;
@@ -757,10 +1017,11 @@ textarea {
 .pg {
   max-width: 880px;
   margin: 0 auto;
-  padding: 26px 40px 60px;
+  padding: 20px 40px 60px;
 }
+/* D7 and after: 600 across, as a device's page. */
 .pg-narrow {
-  max-width: 600px;
+  max-width: 680px;
 }
 .pg-hd {
   margin-bottom: 22px;
@@ -779,8 +1040,8 @@ textarea {
   min-width: 0;
   overflow: hidden;
   font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-weight: 700;
+  letter-spacing: -0.025em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -790,10 +1051,13 @@ textarea {
   gap: 8px;
 }
 .label {
-  margin: 26px 0 8px;
-  color: var(--mute);
-  font-size: 12.5px;
+  align-self: flex-start;
+  margin: 24px 4px 10px;
+  color: var(--ink-3);
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 .note {
   margin-top: 10px;
@@ -1038,9 +1302,14 @@ button.row:focus-visible {
   height: 30px;
 }
 .empty-orb.ok {
-  color: var(--green);
+  /* D12's .shield: the soft green, no shadow. */
+  background: var(--brand-soft);
+  box-shadow: none;
+  color: var(--brand);
 }
 .empty-orb.warn {
+  background: var(--warn-soft);
+  box-shadow: none;
   color: var(--warn);
 }
 .empty-orb.asking {
@@ -1092,28 +1361,39 @@ button.row:focus-visible {
 }
 .grp-box {
   border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--raised);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
   overflow: hidden;
 }
+/* components.css's .row: 56 high, the line between rows starting after
+   the icon. */
 .set {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
   width: 100%;
-  min-height: 54px;
-  padding: 8px 16px;
+  min-height: 56px;
+  padding: 10px 16px;
   border: 0;
-  border-top: 1px solid var(--line);
   background: none;
+  font-size: 15px;
   text-align: left;
 }
-.grp-box > .set:first-child,
-.grp-box > :first-child .set {
-  border-top: 0;
+.grp-box > * + * .set::before,
+.grp-box > .set + .set::before,
+.grp-box > * + .set::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 52px;
+  right: 0;
+  height: 1px;
+  background: var(--line);
 }
 button.set:hover {
-  background: var(--soft);
+  background: color-mix(in srgb, var(--surface-2) 50%, transparent);
 }
 .set-ic {
   color: var(--ink-2);
@@ -1129,7 +1409,8 @@ button.set:hover {
 .set-value {
   max-width: 50%;
   overflow: hidden;
-  color: var(--mute);
+  color: var(--ink-3);
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1186,61 +1467,80 @@ button.set:hover {
   outline-offset: 2px;
 }
 
-/* Buttons. */
+/* Buttons: components.css's .btn -- 48 high, fully round. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 44px;
-  padding: 0 20px;
+  height: 48px;
+  padding: 0 22px;
   border: 1px solid transparent;
-  border-radius: 14px;
+  border-radius: var(--r-full);
   background: none;
+  font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.005em;
   white-space: nowrap;
-  transition: background 0.2s, border-color 0.2s;
+  transition: background 0.2s, border-color 0.2s, filter 0.15s;
 }
 .btn .ic {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
 }
 .btn:disabled {
   opacity: 0.45;
   cursor: default;
 }
 .btn-main {
-  background: var(--green);
-  color: #fff;
+  background: var(--brand);
+  color: var(--on-brand);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 6px 16px -8px color-mix(in srgb, var(--brand) 70%, transparent);
 }
 .btn-main:hover:not(:disabled) {
-  background: var(--green-2);
+  background: var(--brand-strong);
 }
 .btn-quiet {
   border-color: var(--line);
-  background: var(--raised);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
 }
 .btn-quiet:hover:not(:disabled) {
-  background: var(--soft);
+  background: var(--surface-2);
 }
-.btn-danger {
-  background: var(--red);
+.btn-danger,
+.btn-danger-solid {
+  background: var(--danger);
   color: #fff;
 }
+.btn-blue-solid {
+  background: var(--online);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled),
+.btn-danger-solid:hover:not(:disabled),
+.btn-blue-solid:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
 .btn-sm {
-  height: 34px;
+  height: 36px;
   padding: 0 14px;
-  border-radius: 11px;
-  font-size: 13px;
+  font-size: 13.5px;
 }
 .acts {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 22px;
+  gap: 8px;
+  margin-top: 18px;
 }
 .acts-c {
   justify-content: center;
+}
+/* A sheet's two answers, side by side and equal (D21). */
+.sheet .acts,
+.acts-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
 }
 .icon-btn.armed {
   width: auto;
@@ -1252,12 +1552,13 @@ button.set:hover {
   font-size: 12.5px;
 }
 .link {
-  margin-top: 6px;
+  margin-top: 14px;
   padding: 0;
   border: 0;
   background: none;
-  color: var(--green);
-  font-weight: 600;
+  color: var(--brand);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 /* Fields. */
@@ -1310,7 +1611,7 @@ textarea.field {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(10, 14, 12, 0.32);
+  background: var(--scrim);
   backdrop-filter: blur(2px);
   animation: fade 0.18s ease both;
 }
@@ -1323,18 +1624,28 @@ textarea.field {
     opacity: 0;
   }
 }
+/* components.css's .sheet: 380 across (420 wide), its picture, title and
+   words centred over what follows. */
 .sheet {
-  width: min(460px, 100%);
+  width: auto;
+  min-width: 260px;
+  max-width: min(380px, 100%);
   max-height: calc(100vh - 48px);
   overflow-y: auto;
-  padding: 26px;
-  border-radius: 26px;
-  background: var(--raised);
-  box-shadow: var(--shadow);
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
   animation: rise 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 .sheet-wide {
-  width: min(640px, 100%);
+  max-width: min(420px, 100%);
+}
+/* Over the window's main area, not the whole window: the sidebar stays
+   where it was (D4). */
+body:not(.setting-up) .scrim {
+  padding-left: calc(232px + 24px);
 }
 @keyframes rise {
   from {
@@ -1344,9 +1655,28 @@ textarea.field {
 }
 .sh-hd {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 14px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.sh-hd > .tile-lg,
+.sh-hd > .circle {
+  width: 64px;
+  height: 64px;
+  margin-top: 4px;
+}
+.sh-hd > .tile-lg {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.sh-hd > .tile-lg .ic {
+  width: 30px;
+  height: 30px;
 }
 .sh-words {
   display: flex;
@@ -1356,13 +1686,14 @@ textarea.field {
 }
 .sh-words h2 {
   overflow: hidden;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
 }
 .sh-words p {
-  color: var(--mute);
+  color: var(--ink-2);
+  font-size: 14px;
 }
 .sheet .grp {
   margin-top: 4px;
@@ -1619,48 +1950,57 @@ textarea.field {
 }
 
 /* Adding a device. */
+/* D19: two places, as Files' tiles, a big circle at the top. */
 .choices {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  margin-top: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
   width: 100%;
+  margin-top: 0;
 }
 .choice {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 26px 16px 22px;
+  align-items: flex-start;
+  justify-content: space-between;
+  height: 132px;
+  padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 22px;
-  background: var(--raised);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  text-align: left;
   transition: border-color 0.2s;
 }
 .choice:hover {
-  border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+  border-color: color-mix(in srgb, var(--brand) 50%, var(--line));
 }
 .choice-c {
   display: grid;
   place-items: center;
-  width: 60px;
-  height: 60px;
-  margin-bottom: 8px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: var(--green-soft);
-  color: var(--green);
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 .choice-c .ic {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 .choice b {
+  font-size: 15.5px;
   font-weight: 600;
 }
 .choice small {
-  color: var(--mute);
+  color: var(--ink-3);
   font-size: 12.5px;
-  text-align: center;
+}
+.choices + .link {
+  align-self: flex-start;
+  margin: 14px 0 0 4px;
+  font-size: 14px;
+  font-weight: 500;
 }
 .pair {
   display: flex;
@@ -1677,14 +2017,14 @@ textarea.field {
 .qr {
   display: grid;
   place-items: center;
-  width: 232px;
-  height: 232px;
-  margin-bottom: 10px;
-  padding: 14px;
-  border-radius: 22px;
+  width: 216px;
+  height: 216px;
+  margin-top: 24px;
+  padding: 16px;
+  border-radius: var(--r-l);
   background: #fff;
   color: #111;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-2);
   transition: opacity 0.3s;
 }
 .qr svg {
@@ -1700,9 +2040,10 @@ textarea.field {
   opacity: 0.25;
 }
 .digits {
-  font-size: 34px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  margin-top: 22px;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
   font-variant-numeric: tabular-nums;
 }
 .digits.withdrawn {
@@ -1710,8 +2051,78 @@ textarea.field {
   text-decoration: line-through;
 }
 .count {
-  color: var(--mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--ink-3);
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
+}
+.count .ic {
+  width: 14px;
+  height: 14px;
+}
+.btn-later {
+  width: 200px;
+  margin-top: 22px;
+}
+/* A page with one thing on it, centred (D16, D17): title, then it. */
+.center-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 24px;
+  text-align: center;
+}
+.ptitle {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+.center-page .pair {
+  gap: 0;
+  padding: 0;
+}
+/* Six digits in boxes, to compare with the phone's (D18). */
+.six {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 18px 0 12px;
+}
+.six span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 54px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 24px;
+  font-weight: 650;
+}
+.sub-ic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.sub-ic .ic {
+  width: 15px;
+  height: 15px;
+  color: var(--brand);
+}
+.sub-quiet {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+.sub-quiet .ic {
+  width: 14px;
+  height: 14px;
+  color: inherit;
 }
 .asking-box {
   display: flex;
@@ -2015,43 +2426,53 @@ body.setting-up .win {
 .launch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 620px;
+  gap: 14px;
 }
+/* components.css's .place, two to a row (D5). */
 .launch-tile {
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 104px;
+  height: 116px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--raised);
-  color: var(--green);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  color: var(--brand);
   cursor: pointer;
 }
 .launch-tile:hover {
-  border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+  border-color: color-mix(in srgb, var(--brand) 50%, var(--line));
 }
 .launch-tile b {
   color: var(--ink);
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 15.5px;
+  font-weight: 600;
 }
 .launch-lead .ic {
   width: 26px;
   height: 26px;
 }
+.launch-lead .circle {
+  width: 34px;
+  height: 34px;
+  font-size: 14px;
+}
 .launch-side {
   position: absolute;
-  top: 14px;
-  right: 14px;
-  color: var(--mute);
+  top: 16px;
+  right: 16px;
+  color: var(--ink-3);
+}
+.launch-side:has(.btn) {
+  top: 12px;
+  right: 12px;
 }
 .launch-end {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 .launch-open {
   border-color: var(--green);
@@ -2117,9 +2538,15 @@ body.setting-up .win {
   margin-top: 10px;
   padding: 16px;
   border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--raised);
+  border-radius: var(--r-l);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
   text-align: left;
+}
+.profile .circle {
+  width: 60px;
+  height: 60px;
+  font-size: 22px;
 }
 .profile:hover {
   border-color: color-mix(in srgb, var(--green) 40%, var(--line));
@@ -2132,10 +2559,12 @@ body.setting-up .win {
 }
 .profile-words b {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 .profile-words small {
-  color: var(--mute);
+  color: var(--ink-3);
+  font-size: 13.5px;
 }
 .chip-ok {
   background: var(--green-soft);
@@ -2149,15 +2578,29 @@ body.setting-up .win {
 
 /* This computer's storage (S-2). */
 .disk {
-  margin: 8px 0 18px;
+  margin: 0 0 18px;
+}
+/* D8: what is free, large, and of how much beside it. */
+.free {
+  margin-top: 4px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.free small {
+  margin-left: 8px;
+  color: var(--ink-3);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 .disk-bar {
   display: flex;
   overflow: hidden;
   height: 12px;
-  margin-top: 12px;
+  margin-top: 14px;
   border-radius: 6px;
-  background: var(--soft);
+  background: var(--surface-2);
 }
 .disk-bar i {
   display: block;
@@ -2201,8 +2644,8 @@ body.setting-up .win {
   min-width: 300px;
 }
 .choice-person .choice-c {
-  background: color-mix(in srgb, #d8a0b8 22%, var(--bg));
-  color: #d8a0b8;
+  background: #f2e1e8;
+  color: #9b5574;
 }
 .asking-box .circle-xl {
   margin-bottom: 8px;
@@ -2338,4 +2781,347 @@ body.setting-up .win {
 .w-x .ic {
   width: 11px;
   height: 11px;
+}
+/* The ring over a moving file's picture, 26 across as D2's. */
+.wa-th .w-ring {
+  padding: 11px;
+}
+/* A chevron pointing back: the set has only the right one. */
+.ic.flip {
+  transform: scaleX(-1);
+}
+.dev-hd .icon-btn .ic {
+  width: 20px;
+  height: 20px;
+}
+/* The Waiting page (D10): a section for each of Home's rows, its files as
+   72-wide previews, seven to a row. */
+.wsect {
+  margin: 28px 4px 12px;
+}
+.wsect b {
+  display: block;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.wsect span {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.wsect span.wait {
+  color: var(--warn);
+}
+.wgrid {
+  display: grid;
+  grid-template-columns: repeat(7, 72px);
+  gap: 10px;
+}
+.wa-th.wa-cell {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+}
+.wa-cell > img,
+.wa-cell .w-ring {
+  border-radius: 14px;
+}
+.wa-cell .w-ring {
+  padding: 23px;
+}
+.wa-more {
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.wa-cell .w-x {
+  top: 5px;
+  right: 5px;
+}
+/* Recently deleted (D13, D13b): the files in a grid, five to a row. */
+.quiet-line {
+  margin: -14px 0 0;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+.rdg {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+.rd {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+.rd small {
+  overflow: hidden;
+  padding: 0 2px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rd-th {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink-3);
+}
+.rd-th > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.rd-th > .ic {
+  width: 30px;
+  height: 30px;
+}
+.rd-th .wa-play::before {
+  border-top-width: 10px;
+  border-bottom-width: 10px;
+  border-left-width: 16px;
+}
+.rd.sel .rd-th {
+  outline: 3px solid var(--brand);
+  outline-offset: -3px;
+}
+.rd-days {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: grid;
+  place-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: var(--warn);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.rd-tick {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #fff;
+  border-radius: 12px;
+  background: var(--brand);
+  color: #fff;
+}
+.rd-tick.off {
+  background: rgba(0, 0, 0, 0.2);
+}
+.rd-tick .ic {
+  width: 13px;
+  height: 13px;
+}
+.label-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sel-x {
+  margin-left: -8px;
+}
+/* The bar at the foot, over the page, centred on the main area. */
+.selbar {
+  position: fixed;
+  left: calc(50% + 116px);
+  bottom: 24px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+.btn-red-words {
+  color: var(--danger);
+}
+/* A document's face (components.css's .th.doc): lines on white, its type
+   on a tag at the foot. */
+.doc-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14%;
+  padding: 22% 18%;
+  background: #fff;
+}
+.doc-face i {
+  display: block;
+  height: 6%;
+  min-height: 3px;
+  border-radius: 2px;
+  background: #d7d8d2;
+}
+.doc-face em {
+  position: absolute;
+  left: 12%;
+  bottom: 12%;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #fff;
+  font: 700 7.5px/1.3 "Inter", sans-serif;
+  font-style: normal;
+}
+.rd-th .doc-face em {
+  font-size: 10px;
+}
+.wa-th .doc-face {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 9px;
+  gap: 3.5px;
+}
+.wa-th .doc-face i {
+  height: 3px;
+}
+.wa-th.wa-cell .doc-face {
+  border-radius: 14px;
+}
+/* D2: with a queue, the mark sits 36 from the top. */
+.home.queued .home-middle {
+  margin-top: -16px;
+  padding-top: 0;
+}
+/* A card inside a sheet: no shadow of its own (D21). */
+.grp-flat {
+  margin-top: 18px;
+  box-shadow: none;
+}
+.sheet-note {
+  margin-top: 12px;
+  color: var(--ink-2);
+  font-size: 13px;
+  text-align: center;
+}
+.set-warn .set-ic {
+  color: var(--warn);
+}
+.mark-quiet {
+  margin-top: 8px;
+  color: var(--ink-3);
+  font-size: 14px;
+  text-align: center;
+}
+.mark[data-tone="idle"] .ring-track {
+  stroke: var(--line);
+}
+.sh-hd > .circle.circle-lg,
+.sh-hd > .circle.circle-xl {
+  width: 64px;
+  height: 64px;
+  font-size: 24px;
+}
+/* D16: the app's mark, as the sidebar's, large. */
+.appmark {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 24px;
+  background: var(--brand);
+  color: var(--on-brand);
+  box-shadow: 0 12px 30px -10px color-mix(in srgb, var(--brand) 70%, transparent);
+}
+.appmark .ic {
+  width: 38px;
+  height: 38px;
+}
+.appmark + .ptitle {
+  margin-top: 22px;
+}
+.quiet {
+  margin-top: 8px;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+.btn-start {
+  width: 300px;
+  margin-top: 30px;
+}
+.btn-start + .link {
+  margin-top: 14px;
+}
+/* D16's spacing is its own, not the setup column's gap. */
+.setup-in:has(> .appmark) {
+  gap: 0;
+}
+.setup-in > .appmark + .ptitle {
+  margin-top: 22px;
+  font-weight: 700;
+}
+/* Two versions (D15): each a card -- its text, then whose -- and the lines
+   the other lacks marked. In a sheet, no frame around the two. */
+.sheet .conflict {
+  margin-top: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.sheet .conflict-hd {
+  display: none;
+}
+.ver {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface);
+}
+.ver .ver-look {
+  margin-top: 0;
+  border-radius: 0;
+  background: #fbfbf8;
+  color: #333;
+}
+.ver .ver-by {
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.ver-by b {
+  font-weight: 500;
+}
+.ver-gone {
+  background: #f7e1dd;
+}
+.ver-new {
+  background: #dff1e6;
+}
+.btn-soft {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.ver-by b,
+.ver-by small {
+  white-space: nowrap;
+}
+.ver-by b {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

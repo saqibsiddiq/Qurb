@@ -26,17 +26,18 @@ function setupStep(step) {
 
 function welcome(box) {
   const says = h("p", { class: "note" });
-  const startBtn = btn("Start", () => create(startBtn, says), "btn-main btn-wide");
+  const startBtn = btn("Start", () => create(startBtn, says), "btn-main btn-start");
+  // D16: the app's mark, its name, one quiet line, one button.
   box.append(
-    h("span", { class: "empty-orb" }, icon("folder")),
-    h("h1", {}, "QurbSpace"),
-    h("p", { class: "note" }, "Your files, on your own devices"),
-    actions(startBtn),
+    h("span", { class: "appmark" }, icon("search")),
+    h("h1", { class: "ptitle" }, "QurbSpace"),
+    h("p", { class: "quiet" }, "Your files, on your own devices"),
+    startBtn,
     h("button", { class: "link", onclick: () => { SETUP.joining = true; setupStep(joinStep); } }, "I already use QurbSpace"),
     says);
 }
 
-const backTo = (step) => h("button", { class: "back", onclick: () => setupStep(step) }, icon("arrow-left"), "Back");
+const backTo = (step) => h("button", { class: "back", onclick: () => setupStep(step) }, icon("chevron-right", "flip"), "Back");
 
 async function create(next, says) {
   next.disabled = true;

@@ -234,6 +234,8 @@ const ANSWERS = {
     if (pairingAnswer === true) return { state: "paired", name: "Pixel 8", fingerprint: "a9b8c7d6", message: null, kind: "phone" };
     // A guest code is answered by somebody else's phone (decision 0060).
     if (pairingGuest) return { ...waiting, state: "asking", name: "Ammi's phone", number: "418 205", kind: "phone", wants_key: false, guest: true };
+    // `?back`: a phone removed here, asking again (D23).
+    if (params.has("back")) return { ...waiting, state: "asking", name: "Galaxy S23", number: "715 038", kind: "phone", wants_key: false, guest: false, back: "27900000000" };
     return { ...waiting, state: "asking", name: "Pixel 8", number: "232 760", kind: "phone", wants_key: false, guest: false };
   },
 
@@ -345,7 +347,14 @@ const ANSWERS = {
     shared_here: "5400000000",
     deleted_files: 3,
     deleted: "2400000",
+    removed: params.has("removed") ? [{ id: "6d4e9586", name: "Galaxy S23", files: 6637, size: "27900000000" }] : [],
   }),
+  // `?removed`: the phone removed here, its files kept (D22); `?removedby`:
+  // removed by the phone (decision 0084).
+  removed_devices: () => params.has("removed")
+    ? [{ id: "6d4e9586", name: "Galaxy S23", by_them: false, removed_at: now - 60, size: "27900000000" }]
+    : params.has("removedby") ? [{ id: "6d4e9586", name: "Galaxy S23", by_them: true, removed_at: now - 60, size: "0" }] : [],
+  delete_removed: () => 6637,
 
   browse,
   find: ({ text, private: priv }) => {
@@ -621,4 +630,22 @@ window.__TAURI__ = {
     }
     if (at === "phrase") setTimeout(() => document.getElementById("storage-next").click(), 200);
   }, 50);
+})();
+
+// `?then=<script>` runs once the window is up, after `?place=`: how a
+// headless screenshot reaches a screen behind a click -- a device's page,
+// a sheet -- for comparing with its mockup frame. `?dev=<id>` opens that
+// device's page.
+(() => {
+  const then = params.get("then");
+  const dev = params.get("dev");
+  if (!then && !dev) return;
+  setTimeout(async () => {
+    if (dev) {
+      const d = (await window.__TAURI__.core.invoke("devices")).find((x) => x.id === dev);
+      if (d) go("device", d);
+    }
+    // eslint-disable-next-line no-eval
+    if (then) setTimeout(() => eval(then), 300);
+  }, 700);
 })();

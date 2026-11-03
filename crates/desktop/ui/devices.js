@@ -12,7 +12,7 @@ function drawDevicePage(main, d) {
   HOME.page = d;
   main.append(
     h("div", { class: "page" },
-      h("button", { class: "back", onclick: () => go("home") }, icon("arrow-left"), "Home"),
+      h("button", { class: "back", onclick: () => go("home") }, icon("chevron-right", "flip"), "Home"),
       h("div", { class: "dev-hd" },
         circle(d, "circle-xl"),
         h("div", { class: "dev-words" },
@@ -56,8 +56,8 @@ async function listsDevicePage() {
     const chosen = (f?.folders ?? []).filter((x) => x.chosen).length;
     rows.push(
       setting({ ic: "folder", name: "Folders", value: chosen ? String(chosen) : null, onclick: () => go("phone-folders", d) }),
-      setting({ ic: "whatsapp", name: "WhatsApp", value: d.whatsapp ? d.whatsapp.bytes : null }),
-      setting({ ic: "lock-keyhole", name: "Private Vault", onclick: () => go("files") }));
+      setting({ ic: "whatsapp", name: "WhatsApp", value: d.whatsapp ? size(d.whatsapp.bytes) : null }),
+      setting({ ic: "lock-keyhole", name: "Private Vault", value: Number(d.vault ?? 0) > 0 ? size(d.vault) : null, onclick: () => go("files") }));
   } else {
     // A computer: this computer's own folders that it keeps (S-4), as a
     // phone's are set on its computer's page.
@@ -138,39 +138,44 @@ async function drawPhoneFolders(main, d) {
 /** What removing does, said before it is done (brief §35): trust ends here,
  * nothing on the device is touched, and what this computer could no longer
  * get back is named. */
+/** Removing a device, said plainly first (D21; decision 0084): both sides
+ * stop syncing; what it keeps here stays, locked, and is its again when the
+ * same device is added back. Deleting that too is a choice, off unless
+ * chosen. A send waiting for it, or files only on it, are said too. */
 async function askToRemove(d, called) {
   let plan;
   try { plan = await invoke("removal_plan", { device: d.fingerprint }); } catch (e) { toast(String(e), true); return; }
-  const box = sheet({ ic: circle(d, "circle-lg"), title: `Remove ${called ?? plan.name}?`, sub: "It can't sync here any more. Nothing on it is deleted" });
-  const lines = [];
-  if (plan.waiting > 0) lines.push(row({ ic: "send", name: `${count(plan.waiting, "send")} cancelled` }));
-  if (plan.holds_ours) lines.push(row({ ic: "lock-keyhole", name: "It stops keeping your Vault" }));
+  const name = called ?? plan.name;
+  const box = sheet({ ic: circle(d, "circle-lg"), title: `Remove ${name}?`, sub: "It stops syncing with this computer, on both", wide: true });
+  const rows = [];
+  let deleteKept = false;
+  if (plan.kept > 0) {
+    rows.push(setting({ ic: "lock-keyhole", name: `Its ${size(plan.kept_bytes)} here stay, locked` }),
+      setting({ ic: "trash-2", name: "Delete them too", end: toggle(false, (on) => { deleteKept = on; }, "Delete them too") }));
+  }
+  if (plan.waiting > 0) rows.push(setting({ ic: "send", name: `${count(plan.waiting, "send")} cancelled` }));
+  if (plan.holds_ours) rows.push(setting({ ic: "shield-check", name: "It stops keeping your Vault" }));
   if (plan.only_there.length) {
-    lines.push(row({
-      ic: tile("triangle-alert", "tile-warn"), cls: "row-warn",
-      name: `${count(plan.only_there.length, "file")} only on it`,
+    rows.push(setting({
+      ic: "triangle-alert", name: `${count(plan.only_there.length, "file")} only on it`,
       end: h("button", { class: "btn btn-quiet btn-sm", onclick: async (e) => {
         for (const path of plan.only_there) { try { await invoke("fetch", { path }); wanted.add(path); } catch (er) { /* said in Activity */ } }
         e.currentTarget.replaceWith(h("small", { class: "note" }, "Asked for"));
       } }, "Keep here first"),
     }));
   }
-  let deleteKept = null;
-  if (plan.kept > 0) {
-    deleteKept = false;
-    lines.push(setting({ ic: "trash-2", name: `Also delete what's kept for it (${size(plan.kept_bytes)})`, end: toggle(false, (on) => { deleteKept = on; }, "Also delete what's kept for it") }));
-  }
-  box.append(...lines,
-    h("p", { class: "note" }, "Only on this computer"),
+  box.append(
+    rows.length ? h("div", { class: "grp-box grp-flat" }, ...rows) : null,
+    plan.kept > 0 ? h("p", { class: "sheet-note" }, `Add the same ${d.kind === "phone" ? "phone" : "device"} again to open them`) : null,
     actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Remove", async (e) => {
       e.currentTarget.disabled = true;
       try {
-        await invoke("remove_device", { device: d.fingerprint, deleteKept: deleteKept ?? false });
+        await invoke("remove_device", { device: d.fingerprint, deleteKept });
         box.close();
-        toast(`Removed ${plan.name}`);
         go("home");
       } catch (er) { e.currentTarget.disabled = false; toast(String(er), true); }
-    }, "btn-danger")));
+    }, "btn-danger-solid")));
+  icons(box);
 }
 
 // ---------- Adding a device ----------
@@ -198,11 +203,15 @@ function drawAdd(main) {
     h("button", { class: "link", onclick: () => go("pair-enter") }, "Enter a code instead")));
 }
 
+// Add your phone (D17): the code to scan, its six digits, how long it
+// lasts, and Later. The phone that scans asks in a sheet (D18) -- or, a
+// phone removed here coming back, says it is back and what is its again
+// (D23; decision 0084).
 async function drawShowCode(main, { guest, first }) {
   const stage = h("div", { class: "pair" }, h("span", { class: "empty-orb asking" }, icon("qr-code")));
   const leave = () => { stopPairing(); go(first ? "home" : "add"); };
-  main.append(h("div", { class: "pg pg-narrow" },
-    pageHead(guest ? "Add someone else's phone" : "Add your phone", first ? null : { words: "Add a device", go: leave }),
+  main.append(h("div", { class: "center-page" },
+    h("h1", { class: "ptitle" }, guest ? "Add someone else's phone" : "Add your phone"),
     stage));
   let inv;
   try { inv = await invoke("start_pairing", { guest }); } catch (e) { put(stage, oops(e)); return; }
@@ -210,45 +219,49 @@ async function drawShowCode(main, { guest, first }) {
   if (inv.qr) qr.innerHTML = inv.qr;
   else qr.append(icon("qr-code"));
   const digits = h("p", { class: "digits" }, inv.digits ?? "");
-  const left = h("p", { class: "count" });
-  const answer = h("div", {});
+  const time = h("span", {});
+  const left = h("p", { class: "count" }, icon("clock"), time);
   // No sentence of instructions: the phone's own screen says Scan (P-2).
-  put(stage, qr, digits, left, answer, btn("Later", leave, "btn-quiet"));
+  put(stage, qr, digits, left, btn("Later", leave, "btn-quiet btn-later"));
 
   let asked = null;
+  let asking = null;
   const follow = async () => {
     let s;
-    try { s = await invoke("pairing_state"); } catch (e) { left.textContent = String(e); return; }
-    if (place !== "pair-show") { stopPairing(); return; }
+    try { s = await invoke("pairing_state"); } catch (e) { time.textContent = String(e); return; }
+    if (place !== "pair-show") { stopPairing(); asking?.close(); return; }
     if (s.state === "asking") {
       const key = `${s.name}|${s.number}`;
       if (asked === key) return;
       asked = key;
-      qr.classList.add("dim");
-      // The phone that scanned and the six digits to compare (P-3).
-      put(answer, h("div", { class: "asking-box" },
-        h("span", { class: "circle circle-xl" }, (s.name || "?").trim()[0].toUpperCase()),
-        h("b", {}, s.name),
-        h("p", { class: "digits" }, s.number),
-        h("small", {}, icon("smartphone"), " Same on the phone?"),
-        actions(btn("Decline", () => reply(false), "btn-quiet"), btn("Approve", () => reply(true), "btn-main"))));
-      icons(answer);
+      asking?.close();
+      // The phone that scanned and the six digits to compare (D18).
+      asking = sheet({
+        ic: h("span", { class: "circle circle-lg" }, (s.name || "?").trim()[0].toUpperCase()),
+        title: s.back ? `${s.name} is back` : s.name,
+        sub: s.back ? h("p", { class: "sub-ic" }, icon("lock-keyhole"), `Its ${size(s.back)} here are its again`) : null,
+      });
+      asking.append(
+        h("div", { class: "six" }, ...String(s.number).replace(/\s/g, "").split("").map((n) => h("span", {}, n))),
+        h("p", { class: "sub-ic sub-quiet" }, icon("smartphone"), "Same on the phone?"),
+        actions(btn("Decline", () => reply(false), "btn-quiet"), btn("Approve", () => reply(true), "btn-main")));
       return;
     }
     if (s.state === "waiting") {
-      if (asked) { asked = null; put(answer); qr.classList.remove("dim"); }
+      if (asked) { asked = null; asking?.close(); asking = null; }
       if (s.digits_withdrawn) digits.classList.add("withdrawn");
       const secs = Math.max(0, inv.expires_at - Math.floor(Date.now() / 1000));
-      left.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+      time.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
       return;
     }
+    asking?.close();
     clearInterval(pairingWatch);
     pairingWatch = null;
     if (s.state === "paired") { toast(`${s.name ?? "It"} added`); go("home"); }
-    else left.textContent = s.state === "expired" ? "Expired. Show a new one" : (s.message ?? "Didn't work");
+    else time.textContent = s.state === "expired" ? "Expired. Show a new one" : (s.message ?? "Didn't work");
   };
   const reply = async (yes) => {
-    answer.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    asking?.querySelectorAll("button").forEach((b) => (b.disabled = true));
     try { await invoke("answer_pairing", { approve: yes }); } catch (e) { toast(String(e), true); }
   };
   clearInterval(pairingWatch);
