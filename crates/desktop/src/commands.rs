@@ -161,6 +161,11 @@ pub struct WhatsAppKept {
 pub struct Happened {
     id: i64,
     at: i64,
+    /// A batch is one entry (decision 0082's era, V30): how many, since when,
+    /// and the first few names, for Activity's one row per batch.
+    count: u64,
+    started: Option<i64>,
+    names: Vec<String>,
     kind: String,
     path: Option<String>,
     size: Option<String>,
@@ -316,6 +321,9 @@ pub fn security(hosted: Host<'_>) -> Answer<Security> {
                 .map(|r| Happened {
                     id: r.id,
                     at: r.at,
+                    count: r.count,
+                    started: r.started,
+                    names: r.names,
                     kind: r.kind.as_str().to_string(),
                     path: r.path,
                     size: r.size.map(big),
@@ -1319,6 +1327,9 @@ pub fn details(hosted: Host<'_>, path: String) -> Answer<Details> {
                 .map(|r| Happened {
                     id: r.id,
                     at: r.at,
+                    count: r.count,
+                    started: r.started,
+                    names: r.names,
                     kind: r.kind.as_str().to_string(),
                     path: r.path,
                     size: r.size.map(big),
@@ -2516,6 +2527,9 @@ pub fn activity(
         .map(|r| Happened {
             id: r.id,
             at: r.at,
+            count: r.count,
+            started: r.started,
+            names: r.names,
             kind: r.kind.as_str().to_string(),
             path: r.path,
             size: r.size.map(big),
