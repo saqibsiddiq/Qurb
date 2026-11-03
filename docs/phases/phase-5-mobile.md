@@ -3285,6 +3285,19 @@ reconnect on mobile data, 0.4 s on Wi-Fi. APK 20.70 MB.
 phone; the 24-hour relay test, with a gap while the laptop slept, which is to
 choose the built-in relay list.
 
+## The desktop's review and the phone's fixes, built 2026-11-03
+
+The owner reviewed the desktop page by page against the phone and asked for
+four phone fixes; everything agreed was built the same day, recorded with
+its mockups in [the review](../design/desktop-review-2026-11-03.md), the
+Files change in [decision 0083](../decisions/0083-files-open-in-the-file-manager.md).
+On the phone: Waiting is one row per device with the files' previews
+(`Waits.kt`) and a Waiting page; the preview's labels are centred and its
+bars fitted (seen on the emulator); a video plays in the phone's own player;
+Manage storage counts the disk each part takes (the laptop's answer, measured
+26.0 GB for the S23 where 53 GB was listed); Recently deleted is back there.
+**None of it yet tried on the S23**: the owner wants it all tested together.
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —

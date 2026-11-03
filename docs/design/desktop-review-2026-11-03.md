@@ -4,8 +4,10 @@ The phone app was reviewed page by page on 2026-11-02 (recorded in
 [phase 5](../phases/phase-5-mobile.md#the-owners-page-by-page-review-2026-11-02)).
 The desktop follows, with one rule from the owner: **the same philosophy as
 the phone** -- very minimal, intuitive, and the phone's patterns rather than
-desktop-only ones. Mockups are in [mockups/](mockups/). Nothing here is built
-yet; the owner wants the list built first and then tested together.
+desktop-only ones. Mockups are in [mockups/](mockups/). **Everything below
+was built on 2026-11-03** (commits 4bb89b0 to 5d3fb79), checked in the
+fixture window and the emulator, and **not yet tried together on the owner's
+devices**, which is next. Where the build differs from the mockup, it says.
 
 ## Agreed, to build
 
@@ -138,6 +140,28 @@ qurb application is not necessary")
   it (the row chooses), which devices also have it, *Show the 24 words*
   asking first.
 
-## Under review
+**Notifications and updates** ([mockup](mockups/notices-desktop-2026-11-03.html))
 
-- **Notifications and updates**.
+- **N-1.** The phone's words and buttons: "… sent you a file" with *Show*,
+  "Delivered to …", "Could not finish …" with *Try again*, "QurbSpace is still
+  running".
+- **N-2.** An update in place restarts the program once the window is closed,
+  nothing moves and no folder is mounted; the sidebar's button is gone.
+
+**The phone, asked the same day**
+
+- The preview's labels sat beside their icons and its bars used fixed gaps:
+  centred, and fitted to the system bars. Seen fixed on the emulator.
+- Videos play in the phone's own player, streamed from the computer.
+- Manage storage counted file sizes once per identity a phone had had: 53 GB
+  for the 26 GB the laptop held. Now the disk each part takes, each chunk once.
+- Recently deleted is back in Manage storage, with Empty. On the computer,
+  the phone's Vault deletions are listed while the owner's folder is open;
+  they are put back from the phone.
+
+## Built differently, or not built
+
+- Waiting's backup has **no pause**: the engine has none to call.
+- A person's folder is mounted **read-only** (decision 0083).
+- The desktop's Activity entry shows the first few files of a batch, the
+  names the engine keeps (V30), not every file.

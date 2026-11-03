@@ -887,6 +887,9 @@ qurb/
 │   │   ├── src/session.rs   unmade or running, and the phrase in between
 │   │   ├── src/stream.rs    large media from a person's folder, played from
 │   │   │                    the store over 127.0.0.1, never written out
+│   │   ├── src/mount.rs     a person's folder mounted at ~/qurb/<person> while
+│   │   │                    open (FUSE, read-only, Linux), for the file
+│   │   │                    manager (0083)
 │   │   ├── src/notify.rs    the three things worth interrupting somebody about
 │   │   ├── src/commands.rs  every question the window may ask
 │   │   ├── src/autostart.rs starting at login, hidden: the freedesktop
