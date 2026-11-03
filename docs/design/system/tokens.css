@@ -1,0 +1,50 @@
+/* QurbSpace's tokens: the one place each colour, corner and space is
+   written. The apps copy these exactly (colors.xml, app.css); the mockups
+   link this file. See foundation.html. */
+/* ---------------- tokens ---------------- */
+:root, [data-theme="light"] {
+  --bg: #F6F6F3;          /* phone: bg            desktop: --bg */
+  --surface: #FFFFFF;     /* phone: surface       desktop: --raised */
+  --surface-2: #EFEFEA;   /* phone: surface_2     desktop: --soft */
+  --line: #E4E4DE;        /* phone: border        desktop: --line */
+  --ink: #161815;         /* phone: text          desktop: --ink */
+  --ink-2: #5C605A;       /* phone: text_2        desktop: --ink-2 */
+  --ink-3: #8B8E87;       /* phone: text_3        desktop: --mute */
+  --brand: #2F6B57;       /* phone: green         desktop: --green */
+  --brand-strong: #255848;
+  --brand-soft: #E6EFEA;  /* phone: green_soft    desktop: --green-soft */
+  --on-brand: #FFFFFF;
+  --online: #2F7DE1;
+  --warn: #946A24;  --warn-soft: #F6EEDB;
+  --danger: #B0443A; --danger-soft: #F7E8E5;
+  --shadow-1: 0 1px 2px rgba(22,24,21,.05), 0 1px 1px rgba(22,24,21,.03);
+  --shadow-2: 0 2px 6px rgba(22,24,21,.06), 0 12px 32px -12px rgba(22,24,21,.16);
+  --scrim: rgba(22,24,21,.32);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --bg: #0F1311;
+  --surface: #171C19;
+  --surface-2: #1E2420;
+  --line: #2A312D;
+  --ink: #ECF0ED;
+  --ink-2: #B5BDB8;
+  --ink-3: #848E88;
+  --brand: #55AB8B;
+  --brand-strong: #6BBF9F;
+  --brand-soft: #18271F;
+  --on-brand: #08110D;
+  --online: #5B9BFF;
+  --warn: #D9A64A;  --warn-soft: #2A2316;
+  --danger: #EF6B5D; --danger-soft: #2B1715;
+  --shadow-1: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-2: 0 2px 6px rgba(0,0,0,.35), 0 16px 40px -14px rgba(0,0,0,.7);
+  --scrim: rgba(0,0,0,.55);
+  color-scheme: dark;
+}
+/* Shape and space: the same numbers on both apps. */
+:root {
+  --r-s: 10px; --r-m: 14px; --r-l: 18px; --r-xl: 24px; --r-full: 999px;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px;
+}
+

@@ -1,0 +1,68 @@
+/* QurbSpace's components, as both apps draw them, measured in tokens.css's
+   units: px on the desktop, dp on the phone. */
+* { box-sizing: border-box; margin: 0; padding: 0 }
+/* ---------------- components: exactly as the apps draw them ---------------- */
+.ic { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none }
+.btn { height: 48px; padding: 0 22px; border-radius: var(--r-full); border: 0; font: 600 15px/1 Inter; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; letter-spacing: -.005em }
+.btn .ic { width: 18px; height: 18px }
+.btn-primary { background: var(--brand); color: var(--on-brand); box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 6px 16px -8px color-mix(in srgb, var(--brand) 70%, transparent) }
+.btn-secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow-1) }
+.btn-soft { background: var(--brand-soft); color: var(--brand) }
+.btn-danger { background: var(--danger-soft); color: var(--danger) }
+.btn-s { height: 36px; padding: 0 14px; font-size: 13.5px }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--shadow-1); overflow: hidden; width: 100% }
+.row { display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 10px 16px; position: relative }
+.row + .row::before { content: ""; position: absolute; top: 0; left: 52px; right: 0; height: 1px; background: var(--line) }
+.row .ic { color: var(--ink-2) }
+.row .n { flex: 1; font-size: 15px; font-weight: 500 }
+.row .v { color: var(--ink-3); font-size: 14px; display: flex; align-items: center; gap: 6px }
+.row .v .ic { width: 16px; height: 16px; color: var(--ink-3) }
+.label { font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); margin: 0 4px 8px; align-self: flex-start }
+
+.tog { width: 44px; height: 26px; border-radius: 13px; background: var(--brand); position: relative; flex: none }
+.tog::after { content: ""; position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25) }
+.tog.off { background: var(--line) } .tog.off::after { right: auto; left: 3px }
+
+.chip { height: 24px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface-2); color: var(--ink-2); font: 500 12.5px Inter; display: inline-flex; align-items: center; gap: 5px }
+.chip .ic { width: 13px; height: 13px }
+.chip.brand { background: var(--brand-soft); color: var(--brand) }
+.chip.warn { background: var(--warn-soft); color: var(--warn) }
+.chip.select { height: 34px; padding: 0 14px; font-size: 14px; border: 1px solid var(--line); background: var(--surface) }
+.chip.select.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand) }
+
+.av { width: 40px; height: 40px; border-radius: 50%; position: relative; flex: none; display: grid; place-items: center; font: 600 16px Inter; color: var(--brand); background: var(--brand-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand) 25%, transparent) }
+.av.photo { background: linear-gradient(140deg, #d9b98a, #6d5a3f); color: transparent; box-shadow: none }
+.av .dot { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: var(--online); border: 2.5px solid var(--bg) }
+.av.l { width: 64px; height: 64px; font-size: 24px } .av.l .dot { width: 16px; height: 16px; border-width: 3px }
+
+.tile { width: 44px; height: 44px; border-radius: 12px; overflow: hidden; position: relative; flex: none; background: var(--surface-2); display: grid; place-items: center; color: var(--ink-2) }
+.tile.photo { background: linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a) }
+.tile.photo2 { background: linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f) }
+.tile.doc { background: #fff; border: 1px solid var(--line); display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 7px }
+.tile.doc i { display: block; height: 2.5px; width: 100%; background: #d7d8d2; border-radius: 2px }
+.tile.doc b { position: absolute; right: 3px; bottom: 3px; font-size: 7px; color: #fff; background: #c4412f; border-radius: 3px; padding: 1px 3px }
+
+.place { width: 168px; height: 112px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1); padding: 16px; display: flex; flex-direction: column; justify-content: space-between; color: var(--brand) }
+.place .ic { width: 26px; height: 26px }
+.place b { color: var(--ink); font-size: 15.5px; font-weight: 600 }
+
+.field { height: 46px; width: 100%; border-radius: var(--r-full); background: var(--surface); border: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 0 16px; color: var(--ink-3); font-size: 15px }
+
+.mark { width: 168px; height: 168px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-2); display: grid; place-items: center; position: relative; color: var(--brand) }
+.mark::before { content: ""; position: absolute; inset: 10px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--brand) 22%, transparent) }
+.mark .ic { width: 52px; height: 52px; stroke-width: 1.6 }
+
+.sheet { width: 100%; max-width: 380px; background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow-2); padding: 22px; border: 1px solid var(--line) }
+.sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: -8px auto 14px }
+.sheet h4 { font-size: 18px; font-weight: 650; text-align: center; letter-spacing: -.01em }
+.sheet p { color: var(--ink-2); text-align: center; font-size: 14px; margin-top: 6px }
+.sheet .acts { display: grid; gap: 8px; margin-top: 18px }
+
+.tabs { display: flex; justify-content: space-around; width: 100%; max-width: 380px; padding: 8px; border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow-2); border: 1px solid var(--line) }
+.tabs div { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: var(--ink-3); padding: 6px 18px; border-radius: var(--r-l) }
+.tabs .on { color: var(--brand); background: var(--brand-soft) }
+.side { width: 220px; padding: 12px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--line) }
+.side div { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; border-radius: var(--r-s); color: var(--ink-2); font-size: 14px; font-weight: 500 }
+.side .on { background: var(--brand-soft); color: var(--brand); font-weight: 600 }
+

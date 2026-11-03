@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QurbSpace desktop</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+/* The desktop's pages at real size, from the foundation's parts only.
+   Each frame is the window: 1120 × 720. */
+body { font-family: Inter, system-ui, sans-serif; background: color-mix(in srgb, var(--bg) 70%, #8f948c); color: var(--ink); -webkit-font-smoothing: antialiased }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 40px 24px 120px }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap }
+.top h1 { font-size: 28px; font-weight: 700; letter-spacing: -.025em; color: var(--ink) }
+.top p { color: var(--ink-2); margin-top: 6px; font-size: 14.5px; max-width: 760px; line-height: 1.55 }
+.switch { display: inline-flex; padding: 4px; border-radius: var(--r-full); background: var(--surface); gap: 2px; box-shadow: var(--shadow-1) }
+.switch button { border: 0; background: none; font: 500 13px Inter; color: var(--ink-2); padding: 7px 14px; border-radius: var(--r-full); cursor: pointer }
+.switch button.on { background: var(--brand-soft); color: var(--brand) }
+figure { margin-top: 48px }
+figcaption { margin-bottom: 14px }
+figcaption b { font-size: 16px; font-weight: 650; letter-spacing: -.01em }
+figcaption span { display: block; color: var(--ink-2); font-size: 13.5px; margin-top: 4px; line-height: 1.5; max-width: 900px }
+
+/* the window */
+.win { width: 1120px; height: 720px; border-radius: 12px; overflow: hidden; display: flex; background: var(--bg); box-shadow: 0 30px 80px -20px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.08); position: relative }
+.win .tb { position: absolute; top: 0; left: 0; right: 0; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 16px; z-index: 30 }
+.win .tb i { width: 12px; height: 12px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 18%, transparent) }
+.sb { width: 232px; flex: none; padding: 52px 12px 16px; display: flex; flex-direction: column; gap: 2px; background: color-mix(in srgb, var(--surface-2) 55%, var(--bg)); border-right: 1px solid var(--line) }
+.sb .brand { display: flex; align-items: center; gap: 10px; padding: 0 12px 22px; font-weight: 700; font-size: 15px; letter-spacing: -.01em }
+.sb .brand i { width: 26px; height: 26px; border-radius: 8px; background: var(--brand); display: grid; place-items: center; color: var(--on-brand) }
+.sb .brand i .ic { width: 15px; height: 15px; stroke-width: 2.2 }
+.sb .it { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; border-radius: var(--r-s); color: var(--ink-2); font-size: 14px; font-weight: 500 }
+.sb .it.on { background: var(--brand-soft); color: var(--brand); font-weight: 600 }
+.sb .it .ic { width: 19px; height: 19px }
+.main { flex: 1; position: relative; overflow: hidden }
+.page { max-width: 600px; margin: 0 auto; padding: 56px 0 40px }
+.back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 13.5px; font-weight: 500; margin-bottom: 10px }
+.back .ic { width: 16px; height: 16px }
+.ptitle { font-size: 28px; font-weight: 700; letter-spacing: -.025em }
+.gap { height: 24px }
+.lab { margin: 24px 4px 10px; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3) }
+
+/* Home */
+.home { height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: 108px }
+.home .circle-at { position: absolute; top: 44px; right: 36px }
+.state { font-size: 20px; font-weight: 650; letter-spacing: -.015em; margin-top: 26px }
+.home .btn-primary { width: 360px; margin-top: 26px }
+.wait { width: 560px; margin-top: 34px }
+.whd { display: flex; align-items: center; gap: 8px; margin: 0 4px 10px; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3) }
+.badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--brand-soft); color: var(--brand); font-size: 11.5px; letter-spacing: 0; display: grid; place-items: center }
+.stack { position: relative; width: 62px; height: 46px; flex: none }
+.stack .tile { position: absolute; top: 1px; border: 2px solid var(--surface); box-shadow: 0 2px 6px rgba(0,0,0,.15) }
+.stack .tile:nth-child(1) { left: 0; z-index: 3 } .stack .tile:nth-child(2) { left: 9px; z-index: 2; transform: rotate(6deg) } .stack .tile:nth-child(3) { left: 18px; z-index: 1; transform: rotate(12deg) }
+.ringov { position: absolute; inset: 0; background: rgba(0,0,0,.32); display: grid; place-items: center }
+.ringov svg { width: 26px; height: 26px }
+.who { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 600 }
+.who .ic { width: 14px; height: 14px; color: var(--ink-3) }
+.who .av { width: 20px; height: 20px; font-size: 10px }
+.chips { display: flex; gap: 6px; margin-top: 6px }
+.go { color: var(--ink-3) } .go.ic { width: 18px; height: 18px }
+.tile.photo3 { background: linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a) }
+.tile.photo4 { background: linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d) }
+.tile .play { width: 0; height: 0; border-left: 9px solid rgba(255,255,255,.95); border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 2px; position: relative; z-index: 1 }
+
+/* device page */
+.dhead { display: flex; align-items: center; gap: 18px; margin-top: 18px }
+.dhead .av { width: 72px; height: 72px; font-size: 26px } .dhead .av .dot { width: 18px; height: 18px; border-width: 3px }
+.dhead h2 { font-size: 26px; font-weight: 700; letter-spacing: -.02em }
+.dhead p { color: var(--ink-3); font-size: 14px; margin-top: 3px }
+.dhead .info { margin-left: auto; width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; color: var(--ink-2) }
+.reach { margin-top: 16px }
+.full { width: 100% }
+.btn-blue { background: color-mix(in srgb, var(--online) 13%, var(--bg)); color: var(--online) }
+
+/* overlays */
+.scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; backdrop-filter: blur(2px) }
+.over { position: absolute; left: calc(50% + 116px); top: 50%; transform: translate(-50%, -50%); z-index: 21 }
+.sheet.wide { max-width: 420px }
+.devc { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r-m); border: 1px solid var(--line); background: var(--surface); margin-top: 8px }
+.devc b { flex: 1; font-size: 15px; font-weight: 600 }
+.devc small { color: var(--ink-3); font-size: 12.5px }
+.devc.on { border-color: var(--brand); background: var(--brand-soft) }
+.devc.on .ic { color: var(--brand) }
+.devc.add { border-style: dashed; background: none; color: var(--ink-2) }
+.devc.add .av { background: none; box-shadow: inset 0 0 0 1.5px var(--line); color: var(--ink-3) }
+.sheet .label { margin: 16px 4px 0 }
+
+/* files */
+.places { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
+.places .place { width: auto; height: 116px; position: relative }
+.places .place .end { position: absolute; top: 16px; right: 16px; color: var(--ink-3) }
+.places .place .end .ic { width: 16px; height: 16px }
+.places .place.open { border-color: var(--brand); background: var(--brand-soft) }
+.place .av { width: 34px; height: 34px; font-size: 14px }
+.lockb { position: absolute; top: 12px; right: 12px }
+.ask { text-align: center; padding: 6px 4px 0 }
+.orb { width: 72px; height: 72px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); position: relative }
+.orb .ic { width: 28px; height: 28px }
+.orb::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid transparent; border-top-color: var(--brand); animation: spin 1.2s linear infinite }
+@keyframes spin { to { transform: rotate(360deg) } }
+.ask h4 { margin-top: 18px }
+.ask .who { justify-content: center; margin-top: 10px; font-size: 13.5px; font-weight: 500; color: var(--ink-2) }
+
+/* settings */
+.profile { display: flex; align-items: center; gap: 16px; padding: 16px }
+.profile .av { width: 60px; height: 60px }
+.profile b { font-size: 18px; font-weight: 650; display: block; letter-spacing: -.01em }
+.profile small { color: var(--ink-3); font-size: 13.5px }
+.profile .ic { margin-left: auto; color: var(--ink-3) }
+.free { font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin-top: 18px }
+.free small { font-size: 14px; font-weight: 500; color: var(--ink-3); margin-left: 8px; letter-spacing: 0 }
+.bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--surface-2); margin-top: 14px }
+.bar i { display: block; height: 100% }
+.swa { width: 12px; height: 12px; border-radius: 4px; flex: none; margin: 0 4px }
+
+/* activity */
+.fchips { display: flex; gap: 8px; margin-top: 18px }
+.fchips .n { min-width: 18px; height: 18px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-size: 11px; display: grid; place-items: center; padding: 0 5px }
+.arow .n2 { flex: 1; min-width: 0 }
+.arow .n2 b { display: block; font-size: 15px; font-weight: 600 }
+.arow .n2 small { display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 13px; margin-top: 3px }
+.arow .n2 small .av { width: 16px; height: 16px; font-size: 8px }
+.arow .n2 small.bad { color: var(--warn) }
+.arow time { color: var(--ink-3); font-size: 13px }
+.bdg { position: absolute; right: 4px; bottom: -3px; width: 18px; height: 18px; border-radius: 9px; border: 2px solid var(--surface); display: grid; place-items: center; z-index: 5; color: #fff }
+.bdg .ic { width: 10px; height: 10px; stroke-width: 2.4 }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="drive" viewBox="0 0 24 24"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+<symbol id="laptop" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+<symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+<symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
+<symbol id="chat" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></symbol>
+<symbol id="ext" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
+<symbol id="palette" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="7" r="1"/><circle cx="16" cy="10" r="1"/></symbol>
+<symbol id="speed" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="dl" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+<symbol id="alert" viewBox="0 0 24 24"><path d="M12 8v5M12 16h.01"/></symbol>
+<symbol id="logo" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></symbol>
+</defs></svg>
+
+<template id="sb">
+  <aside class="sb"><div class="brand"><i><svg class="ic"><use href="#logo"/></svg></i>QurbSpace</div>
+    <div class="it" data-p="home"><svg class="ic"><use href="#home"/></svg>Home</div>
+    <div class="it" data-p="files"><svg class="ic"><use href="#folder"/></svg>Files</div>
+    <div class="it" data-p="settings"><svg class="ic"><use href="#gear"/></svg>Settings</div></aside>
+</template>
+
+<div class="wrap">
+  <div class="top">
+    <div><h1>QurbSpace for the desktop</h1>
+      <p>Every page at real size, the window 1120 × 720, drawn only from the foundation's parts. The numbers in the foundation are what gets built; the built window is compared with these frames before it's called done.</p></div>
+    <div class="switch"><button class="on" onclick="theme('light',this)">Light</button><button onclick="theme('dark',this)">Dark</button></div>
+  </div>
+
+  <!-- D1 -->
+  <figure><figcaption><b>D1 · Home, all synced</b><span>The mark, a few words, Send. The circle at the top right is the device Send goes to: a click opens its page, a right-click chooses another.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="home"></div>
+    <div class="main"><div class="home">
+      <span class="av photo circle-at" style="width:44px;height:44px"><span class="dot"></span></span>
+      <div class="mark"><svg class="ic"><use href="#check"/></svg></div>
+      <div class="state">Everything is synced</div>
+      <button class="btn btn-primary"><svg class="ic"><use href="#send"/></svg>Send</button>
+    </div></div></div></figure>
+
+  <!-- D2 -->
+  <figure><figcaption><b>D2 · Home, with something waiting</b><span>The mark moves up and shrinks to 128 while a queue shows. One row per device: which way, its circle and name, the files' own previews with a ring on the one moving, a count, a size, and what it waits on.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="home"></div>
+    <div class="main"><div class="home" style="padding-top:72px">
+      <span class="av photo circle-at" style="width:44px;height:44px"><span class="dot"></span></span>
+      <div class="mark" style="width:128px;height:128px"><svg class="ic" style="width:40px;height:40px"><use href="#down"/></svg>
+        <svg style="position:absolute;inset:6px;width:116px;height:116px" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="var(--brand)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="120 289" transform="rotate(-90 50 50)"/></svg></div>
+      <div class="state" style="margin-top:18px">Receiving</div>
+      <button class="btn btn-primary" style="margin-top:20px"><svg class="ic"><use href="#send"/></svg>Send</button>
+      <div class="wait">
+        <div class="whd">Waiting <span class="badge">3</span></div>
+        <div class="card">
+          <div class="row" style="min-height:72px"><span class="stack"><span class="tile photo2"><span class="play"></span><span class="ringov"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3"/><circle cx="18" cy="18" r="14" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="40 88" transform="rotate(-90 18 18)"/></svg></span></span><span class="tile photo"></span><span class="tile photo3"></span></span>
+            <div style="flex:1"><div class="who"><svg class="ic"><use href="#down"/></svg><span class="av photo"></span>Galaxy S23</div><div class="chips"><span class="chip">140</span><span class="chip">2.2 GB</span></div></div><svg class="ic go"><use href="#chev"/></svg></div>
+          <div class="row" style="min-height:72px"><span class="stack"><span class="tile doc"><i></i><i></i><i></i><i style="width:50%"></i><b>PDF</b></span><span class="tile photo4"></span></span>
+            <div style="flex:1"><div class="who"><svg class="ic"><use href="#up"/></svg><span class="av photo"></span>Galaxy S23</div><div class="chips"><span class="chip">2</span><span class="chip warn"><svg class="ic"><use href="#phone"/></svg>Open the app</span></div></div><svg class="ic go"><use href="#chev"/></svg></div>
+          <div class="row" style="min-height:72px"><span class="stack"><span class="tile photo3"></span></span>
+            <div style="flex:1"><div class="who"><svg class="ic"><use href="#up"/></svg><span class="av">S</span>Study desktop</div><div class="chips"><span class="chip">1</span><span class="chip warn"><svg class="ic"><use href="#laptop"/></svg>Off</span></div></div><svg class="ic go"><use href="#chev"/></svg></div>
+        </div>
+      </div>
+    </div></div></div></figure>
+
+  <!-- D3 -->
+  <figure><figcaption><b>D3 · A device's page</b><span>From the circle. Its circle, name and state, and ⓘ for its identity. One card of what it keeps here, then Remove and Switch device, full width, as on the phone.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="home"></div>
+    <div class="main"><div class="page">
+      <div class="back"><svg class="ic"><use href="#back"/></svg>Home</div>
+      <div class="dhead"><span class="av photo"><span class="dot"></span></span><div><h2>Galaxy S23</h2><p>On</p></div><span class="info"><svg class="ic"><use href="#info"/></svg></span></div>
+      <div class="reach"><span class="chip brand"><svg class="ic"><use href="#globe"/></svg>Reachable from anywhere</span></div>
+      <div class="lab">Keeps here</div>
+      <div class="card">
+        <div class="row"><svg class="ic"><use href="#folder"/></svg><span class="n">Folders</span><span class="v">3<svg class="ic"><use href="#chev"/></svg></span></div>
+        <div class="row"><svg class="ic"><use href="#chat"/></svg><span class="n">WhatsApp</span><span class="v">8.4 GB</span></div>
+        <div class="row"><svg class="ic"><use href="#lock"/></svg><span class="n">Private Vault</span><span class="v">1.2 GB<svg class="ic"><use href="#chev"/></svg></span></div>
+      </div>
+      <div class="gap"></div>
+      <button class="btn btn-danger full">Remove</button>
+      <div style="height:10px"></div>
+      <button class="btn btn-blue full">Switch device</button>
+    </div></div></div></figure>
+
+  <!-- D4 -->
+  <figure><figcaption><b>D4 · Switch device</b><span>The phone's chooser as a centred sheet. The chosen one ticked; one that's off says since when; people under their own label; Add a device last.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="home"></div>
+    <div class="main"><div class="home">
+      <span class="av photo circle-at" style="width:44px;height:44px"><span class="dot"></span></span>
+      <div class="mark"><svg class="ic"><use href="#check"/></svg></div>
+      <div class="state">Everything is synced</div>
+      <button class="btn btn-primary"><svg class="ic"><use href="#send"/></svg>Send</button>
+    </div></div>
+    <div class="scrim"></div>
+    <div class="over"><div class="sheet wide">
+      <h4>Switch device</h4>
+      <div class="devc on" style="margin-top:16px"><span class="av photo"><span class="dot"></span></span><b>Galaxy S23</b><svg class="ic"><use href="#check"/></svg></div>
+      <div class="devc"><span class="av">S</span><b>Study desktop</b><small>3 h</small></div>
+      <div class="label">People</div>
+      <div class="devc"><span class="av" style="background:#f2e1e8;color:#9b5574">A</span><b>Ammi's phone</b></div>
+      <div class="devc add"><span class="av"><svg class="ic" style="width:16px;height:16px"><use href="#plus"/></svg></span><b>Add a device</b></div>
+    </div></div></div></figure>
+
+  <!-- D5 -->
+  <figure><figcaption><b>D5 · Files</b><span>Four tiles. Shared and Received open in the file manager (↗); each person's folder shows its lock until their phone says yes.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="files"></div>
+    <div class="main"><div class="page">
+      <div class="ptitle">Files</div>
+      <div class="lab" style="margin-top:28px">This computer</div>
+      <div class="places">
+        <div class="place"><svg class="ic"><use href="#share"/></svg><b>Shared</b><span class="end"><svg class="ic"><use href="#ext"/></svg></span></div>
+        <div class="place"><svg class="ic"><use href="#inbox"/></svg><b>Received</b><span class="end"><svg class="ic"><use href="#ext"/></svg></span></div>
+      </div>
+      <div class="lab">People</div>
+      <div class="places">
+        <div class="place open"><span class="av photo"></span><b>sakib</b><span class="lockb"><button class="btn btn-secondary btn-s"><svg class="ic" style="width:14px;height:14px"><use href="#lock"/></svg>Lock</button></span></div>
+        <div class="place"><span class="av" style="background:#f2e1e8;color:#9b5574">A</span><b>Ammi's phone</b><span class="end"><svg class="ic"><use href="#lock"/></svg></span></div>
+      </div>
+    </div></div></div></figure>
+
+  <!-- D6 -->
+  <figure><figcaption><b>D6 · Opening a locked folder</b><span>The phone is asked, and the window says the one thing to do. Opened in the file manager the moment it says yes.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="files"></div>
+    <div class="main"><div class="page"><div class="ptitle">Files</div></div></div>
+    <div class="scrim"></div>
+    <div class="over"><div class="sheet"><div class="ask">
+      <div class="orb"><svg class="ic"><use href="#phone"/></svg></div>
+      <h4>Open QurbSpace on your phone</h4>
+      <div class="who"><span class="av photo"></span>Galaxy S23</div>
+      <div class="acts"><button class="btn btn-secondary">Cancel</button></div>
+    </div></div></div></div></figure>
+
+  <!-- D7 -->
+  <figure><figcaption><b>D7 · Settings</b><span>The phone's order: this computer as one card, Manage storage, App, Connection, and Quit at the end.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="settings"></div>
+    <div class="main" style="overflow:auto"><div class="page">
+      <div class="ptitle">Settings</div>
+      <div class="card" style="margin-top:22px"><div class="profile"><span class="av photo"></span><div><b>Saqib's laptop</b><small>Name and picture</small></div><svg class="ic"><use href="#chev"/></svg></div></div>
+      <div class="lab">Manage storage</div>
+      <div class="card"><div class="row"><svg class="ic"><use href="#drive"/></svg><span class="n">This computer</span><span class="v">41 GB<svg class="ic"><use href="#chev"/></svg></span></div></div>
+      <div class="lab">App</div>
+      <div class="card">
+        <div class="row"><svg class="ic"><use href="#clock"/></svg><span class="n">Activity</span><span class="v"><svg class="ic"><use href="#chev"/></svg></span></div>
+        <div class="row"><svg class="ic"><use href="#bell"/></svg><span class="n">Notifications</span><span class="tog"></span></div>
+        <div class="row"><svg class="ic"><use href="#palette"/></svg><span class="n">Theme</span><span class="v">System<svg class="ic"><use href="#chev"/></svg></span></div>
+        <div class="row"><svg class="ic"><use href="#power"/></svg><span class="n">Start at login</span><span class="tog"></span></div>
+        <div class="row"><svg class="ic"><use href="#dl"/></svg><span class="n">Update</span><span class="chip brand"><svg class="ic"><use href="#check"/></svg>Up to date</span></div>
+      </div>
+      <div class="lab">Connection</div>
+      <div class="card">
+        <div class="row"><svg class="ic"><use href="#speed"/></svg><span class="n">Speed limit</span><span class="v">Off<svg class="ic"><use href="#chev"/></svg></span></div>
+        <div class="row"><svg class="ic"><use href="#link"/></svg><span class="n">Advanced</span><span class="v"><svg class="ic"><use href="#chev"/></svg></span></div>
+      </div>
+      <div class="gap"></div>
+      <button class="btn btn-danger full">Quit QurbSpace</button>
+    </div></div></div></figure>
+
+  <!-- D8 -->
+  <figure><figcaption><b>D8 · This computer</b><span>Free space against the disk, one bar coloured by what fills it, a row for each part. Recently deleted opens to put files back or empty it.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="settings"></div>
+    <div class="main"><div class="page">
+      <div class="back"><svg class="ic"><use href="#back"/></svg>Settings</div>
+      <div class="ptitle">This computer</div>
+      <div class="free">153 GB free<small>of 473 GB</small></div>
+      <div class="bar"><i style="width:1%;background:var(--brand)"></i><i style="width:5.5%;background:var(--online)"></i><i style="width:.9%;background:#c98aa6"></i><i style="width:.4%;background:var(--warn)"></i></div>
+      <div class="gap"></div>
+      <div class="card">
+        <div class="row"><span class="swa" style="background:var(--brand)"></span><span class="n">Shared</span><span class="v">3.6 GB</span></div>
+        <div class="row"><svg class="ic"><use href="#phone"/></svg><span class="n">Your phones</span><span class="v">26 GB</span></div>
+        <div class="row"><span class="av" style="width:20px;height:20px;font-size:9px;background:#f2e1e8;color:#9b5574">A</span><span class="n">Ammi's phone</span><span class="v">4.2 GB</span></div>
+        <div class="row"><svg class="ic"><use href="#trash"/></svg><span class="n">Recently deleted</span><span class="v">1.5 GB<svg class="ic"><use href="#chev"/></svg></span></div>
+      </div>
+    </div></div></div></figure>
+
+  <!-- D9 -->
+  <figure><figcaption><b>D9 · Activity</b><span>The phone's chips, by day. A batch is one row with its files' previews and a small badge for what happened; under it the other device; words only for a problem.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="settings"></div>
+    <div class="main"><div class="page">
+      <div class="back"><svg class="ic"><use href="#back"/></svg>Settings</div>
+      <div class="ptitle">Activity</div>
+      <div class="fchips"><span class="chip select on">All</span><span class="chip select">Backups</span><span class="chip select">Transfers</span><span class="chip select">Problems <span class="n">1</span></span></div>
+      <div class="lab">Today</div>
+      <div class="card">
+        <div class="row arow" style="min-height:68px"><span class="stack"><span class="tile photo2"><span class="play"></span></span><span class="tile photo"></span><span class="tile photo3"></span><span class="bdg" style="background:var(--online)"><svg class="ic"><use href="#down"/></svg></span></span>
+          <div class="n2"><b>128 files backed up</b><small><span class="av photo"></span>Galaxy S23</small></div><time>09:40</time></div>
+        <div class="row arow" style="min-height:68px"><span class="stack"><span class="tile doc"><i></i><i></i><i></i><i style="width:50%"></i><b>PDF</b></span><span class="bdg" style="background:var(--online)"><svg class="ic"><use href="#up"/></svg></span></span>
+          <div class="n2"><b>Tickets.pdf</b><small><span class="av photo"></span>Galaxy S23</small></div><time>08:12</time></div>
+        <div class="row arow" style="min-height:68px"><span class="stack"><span class="tile doc"><i></i><i></i><i style="width:60%"></i><i></i><b style="background:#2b5fb4">DOC</b></span><span class="bdg" style="background:var(--warn)"><svg class="ic"><use href="#alert"/></svg></span></span>
+          <div class="n2"><b>locked.docx</b><small class="bad">Open in another app, tried 3 times</small></div><time>07:55</time></div>
+      </div>
+      <div class="lab">Yesterday</div>
+      <div class="card">
+        <div class="row arow" style="min-height:68px"><span class="stack"><span class="tile photo4"></span><span class="tile photo3"></span><span class="bdg" style="background:var(--online)"><svg class="ic"><use href="#down"/></svg></span></span>
+          <div class="n2"><b>2 files received</b><small><span class="av" style="background:#f2e1e8;color:#9b5574">A</span>Ammi's phone</small></div><time>19:05</time></div>
+      </div>
+    </div></div></div></figure>
+
+  <p style="margin-top:48px;color:var(--ink-2);font-size:14px;line-height:1.6;max-width:820px"><b style="color:var(--ink)">Next, once these are right:</b> Advanced, the key, Recently deleted, Speed limit, Two versions, the Waiting page, setting up and adding a device, and the notifications, drawn the same way.</p>
+</div>
+
+<script>
+document.querySelectorAll("[data-sb]").forEach((slot) => {
+  const sb = document.getElementById("sb").content.firstElementChild.cloneNode(true);
+  sb.querySelectorAll(".it").forEach((it) => it.classList.toggle("on", it.dataset.p === slot.dataset.sb));
+  slot.replaceWith(sb);
+});
+function theme(t, b) {
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll(".switch button").forEach((x) => x.classList.toggle("on", x === b));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QurbSpace foundation</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+/* ---------------- page ---------------- */
+* { box-sizing: border-box; margin: 0; padding: 0 }
+body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; transition: background .2s }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 40px 24px 96px }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap }
+h1 { font-size: 30px; font-weight: 700; letter-spacing: -.025em }
+.lead { color: var(--ink-2); margin-top: 8px; max-width: 760px; line-height: 1.55; font-size: 15px }
+.switch { display: inline-flex; padding: 4px; border-radius: var(--r-full); background: var(--surface-2); gap: 2px }
+.switch button { border: 0; background: none; font: 500 13px Inter; color: var(--ink-2); padding: 7px 14px; border-radius: var(--r-full); cursor: pointer }
+.switch button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-1) }
+section.part { margin-top: 56px }
+h2 { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3) }
+h3 { font-size: 20px; font-weight: 650; letter-spacing: -.015em; margin-top: 6px }
+.why { color: var(--ink-2); font-size: 14px; line-height: 1.55; margin-top: 6px; max-width: 760px }
+.grid { display: grid; gap: 16px; margin-top: 20px }
+.g4 { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) }
+.g3 { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) }
+.g2 { grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)) }
+.spec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); padding: 18px; box-shadow: var(--shadow-1) }
+.spec .stage { min-height: 96px; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 18px; border-radius: var(--r-m); background: var(--bg) }
+.spec .name { font-weight: 600; font-size: 14px; margin-top: 14px }
+.spec dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin-top: 8px; font-size: 12px }
+.spec dt { color: var(--ink-3) }
+.spec dd { color: var(--ink-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px }
+
+/* swatches */
+.sw { border-radius: var(--r-m); overflow: hidden; border: 1px solid var(--line); background: var(--surface) }
+.sw i { display: block; height: 64px }
+.sw div { padding: 10px 12px; font-size: 12px }
+.sw b { display: block; font-weight: 600; font-size: 13px }
+.sw code { color: var(--ink-3); font-size: 11.5px }
+
+/* type */
+.type-row { display: grid; grid-template-columns: 170px 1fr 220px; align-items: baseline; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line) }
+.type-row:last-child { border-bottom: 0 }
+.type-row code { color: var(--ink-3); font-size: 12px }
+
+.note { margin-top: 64px; padding: 18px 20px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--line); color: var(--ink-2); font-size: 14px; line-height: 1.6 }
+.note b { color: var(--ink) }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="drive" viewBox="0 0 24 24"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>QurbSpace foundation</h1>
+      <p class="lead">The design system both apps are built from. Every colour, size and corner here is a token, written once and copied exactly: px on the desktop, dp and sp on the phone, one to one. Pages are drawn only from these parts, so what you approve here is what ships.</p>
+    </div>
+    <div class="switch"><button class="on" onclick="theme('light',this)">Light</button><button onclick="theme('dark',this)">Dark</button></div>
+  </div>
+
+  <section class="part">
+    <h2>1 · Colour</h2>
+    <h3>One colour does the talking</h3>
+    <p class="why">The deep green marks what to press and what is yours; everything else is warm neutrals. Blue only means "online", amber only "waiting on you", red only "can't be undone".</p>
+    <div class="grid g4" id="swatches"></div>
+  </section>
+
+  <section class="part">
+    <h2>2 · Type</h2>
+    <h3>Inter, five sizes in practice</h3>
+    <p class="why">The phone uses sp and the desktop px, with the same numbers. Tight letter-spacing on large text, never a weight below 400.</p>
+    <div class="spec" style="margin-top:20px;padding:6px 22px">
+      <div class="type-row"><code>display · 28 / 700 / −0.025em</code><span style="font-size:28px;font-weight:700;letter-spacing:-.025em">Files</span><code>page titles</code></div>
+      <div class="type-row"><code>title · 20 / 650 / −0.015em</code><span style="font-size:20px;font-weight:650;letter-spacing:-.015em">Everything is synced</span><code>Home's state, sheet titles</code></div>
+      <div class="type-row"><code>body · 15 / 500</code><span style="font-size:15px;font-weight:500">Galaxy S23</span><code>rows, names, buttons</code></div>
+      <div class="type-row"><code>meta · 13 / 400</code><span style="font-size:13px;color:var(--ink-2)">3 min ago</span><code>secondary lines, values</code></div>
+      <div class="type-row"><code>label · 12 / 600 / +0.07em caps</code><span style="font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)">Manage storage</span><code>section labels</code></div>
+    </div>
+  </section>
+
+  <section class="part">
+    <h2>3 · Space and shape</h2>
+    <h3>A 4-point grid, five corners</h3>
+    <div class="grid g4">
+      <div class="spec"><div class="stage" style="gap:6px;align-items:flex-end">
+        <i style="width:4px;height:4px;background:var(--brand);border-radius:2px"></i><i style="width:8px;height:8px;background:var(--brand);border-radius:2px"></i><i style="width:12px;height:12px;background:var(--brand);border-radius:2px"></i><i style="width:16px;height:16px;background:var(--brand);border-radius:3px"></i><i style="width:24px;height:24px;background:var(--brand);border-radius:4px"></i><i style="width:32px;height:32px;background:var(--brand);border-radius:5px"></i></div>
+        <div class="name">Spacing</div><dl><dt>steps</dt><dd>4 · 8 · 12 · 16 · 20 · 24 · 32</dd><dt>page edge</dt><dd>phone 18 · desktop 48</dd><dt>between sections</dt><dd>24</dd></dl></div>
+      <div class="spec"><div class="stage" style="gap:10px">
+        <i style="width:36px;height:36px;border:2px solid var(--brand);border-radius:10px"></i><i style="width:36px;height:36px;border:2px solid var(--brand);border-radius:14px"></i><i style="width:36px;height:36px;border:2px solid var(--brand);border-radius:18px"></i></div>
+        <div class="name">Corners</div><dl><dt>s · m · l · xl</dt><dd>10 · 14 · 18 · 24</dd><dt>tiles · cards · sheets</dt><dd>12 · 18 · 24</dd><dt>buttons, chips</dt><dd>full</dd></dl></div>
+      <div class="spec"><div class="stage"><div class="card" style="width:120px;height:56px"></div><div class="card" style="width:120px;height:56px;box-shadow:var(--shadow-2)"></div></div>
+        <div class="name">Depth</div><dl><dt>resting</dt><dd>shadow-1, 1px line</dd><dt>lifted</dt><dd>shadow-2: sheets, the mark, the tab bar</dd></dl></div>
+    </div>
+  </section>
+
+  <section class="part">
+    <h2>4 · Components</h2>
+    <h3>Every part a page is made of</h3>
+    <p class="why">Each with its exact measures. The phone and the desktop draw the same part the same way; only the page around it changes.</p>
+    <div class="grid g3">
+
+      <div class="spec"><div class="stage" style="flex-direction:column;align-items:stretch">
+        <button class="btn btn-primary"><svg class="ic"><use href="#send"/></svg>Send</button>
+        <div style="display:flex;gap:8px"><button class="btn btn-secondary" style="flex:1">Cancel</button><button class="btn btn-soft" style="flex:1">Restore</button></div>
+        <button class="btn btn-danger">Remove</button></div>
+        <div class="name">Buttons</div><dl><dt>height</dt><dd>48 (small 36)</dd><dt>radius</dt><dd>full</dd><dt>text</dt><dd>15 / 600</dd><dt>kinds</dt><dd>primary · secondary · soft · danger</dd></dl></div>
+
+      <div class="spec"><div class="stage" style="padding:14px">
+        <div class="card">
+          <div class="row"><svg class="ic"><use href="#drive"/></svg><span class="n">This computer</span><span class="v">41 GB<svg class="ic"><use href="#chev"/></svg></span></div>
+          <div class="row"><svg class="ic"><use href="#bell"/></svg><span class="n">Notifications</span><span class="tog"></span></div>
+          <div class="row"><svg class="ic"><use href="#clock"/></svg><span class="n">Activity</span><span class="v"><svg class="ic"><use href="#chev"/></svg></span></div>
+        </div></div>
+        <div class="name">Setting rows in a card</div><dl><dt>row</dt><dd>min 56, padding 10 16, gap 14</dd><dt>icon</dt><dd>20, ink-2, no tile behind</dd><dt>divider</dt><dd>1px, inset 52 from the left</dd><dt>switch</dt><dd>44 × 26</dd></dl></div>
+
+      <div class="spec"><div class="stage" style="padding:14px">
+        <div class="card">
+          <div class="row"><span class="tile photo"></span><span class="n">Sunset at Clifton.jpg<br><span style="font-size:13px;color:var(--ink-3);font-weight:400">3.8 MB</span></span></div>
+          <div class="row"><span class="tile doc"><i></i><i></i><i></i><i style="width:50%"></i><b>PDF</b></span><span class="n">Tickets.pdf<br><span style="font-size:13px;color:var(--ink-3);font-weight:400">220 KB</span></span></div>
+        </div></div>
+        <div class="name">File rows</div><dl><dt>preview</dt><dd>44, radius 12, the file itself</dd><dt>row</dt><dd>min 64</dd><dt>never</dt><dd>an icon where a preview can be</dd></dl></div>
+
+      <div class="spec"><div class="stage" style="flex-direction:column;align-items:stretch;gap:10px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip">128</span><span class="chip">2.1 GB</span><span class="chip brand"><svg class="ic"><use href="#check"/></svg>Up to date</span><span class="chip warn"><svg class="ic"><use href="#phone"/></svg>Open the app</span></div>
+        <div style="display:flex;gap:6px"><span class="chip select on">All</span><span class="chip select">Backups</span><span class="chip select">Problems</span></div></div>
+        <div class="name">Chips</div><dl><dt>info</dt><dd>24 high, 12.5 / 500</dd><dt>filter</dt><dd>34 high, 14 / 500</dd><dt>colour</dt><dd>neutral; brand = done; amber = waits on you</dd></dl></div>
+
+      <div class="spec"><div class="stage">
+        <span class="av">G<span class="dot"></span></span><span class="av photo"><span class="dot"></span></span><span class="av l photo"><span class="dot"></span></span></div>
+        <div class="name">Device circle</div><dl><dt>sizes</dt><dd>18 · 40 · 64</dd><dt>face</dt><dd>its picture, or its first letter on brand-soft</dd><dt>dot</dt><dd>blue online; none when off</dd></dl></div>
+
+      <div class="spec"><div class="stage">
+        <div class="place"><svg class="ic"><use href="#share"/></svg><b>Shared</b></div>
+        <div class="place"><svg class="ic"><use href="#inbox"/></svg><b>Received</b></div></div>
+        <div class="name">Place tile</div><dl><dt>size</dt><dd>fills a 2-up grid, 112 high</dd><dt>icon</dt><dd>26, brand</dd><dt>words</dt><dd>one, 15.5 / 600</dd></dl></div>
+
+      <div class="spec"><div class="stage"><div class="mark"><svg class="ic"><use href="#check"/></svg></div></div>
+        <div class="name">Status mark</div><dl><dt>size</dt><dd>168 (128 with a queue under it)</dd><dt>ring</dt><dd>3, inset 10; the arc shows progress</dd><dt>icon</dt><dd>52, stroke 1.6</dd></dl></div>
+
+      <div class="spec"><div class="stage" style="padding:14px">
+        <div class="sheet"><div class="grab"></div><h4>Empty Recently deleted?</h4><p>3 files, gone for good</p>
+          <div class="acts"><button class="btn btn-danger">Empty</button><button class="btn btn-secondary">Cancel</button></div></div></div>
+        <div class="name">Sheet</div><dl><dt>radius</dt><dd>24</dd><dt>padding</dt><dd>22</dd><dt>phone</dt><dd>from the bottom, with a grab bar</dd><dt>desktop</dt><dd>centred, 380 wide, no grab bar</dd></dl></div>
+
+      <div class="spec"><div class="stage" style="padding:14px"><div class="field"><svg class="ic"><use href="#search"/></svg>Search</div></div>
+        <div class="name">Field</div><dl><dt>height</dt><dd>46, radius full</dd><dt>text</dt><dd>15, placeholder ink-3</dd></dl></div>
+
+      <div class="spec"><div class="stage" style="padding:14px">
+        <div class="tabs"><div class="on"><svg class="ic"><use href="#home"/></svg>Home</div><div><svg class="ic"><use href="#folder"/></svg>Files</div><div><svg class="ic"><use href="#gear"/></svg>Settings</div></div></div>
+        <div class="name">Phone tab bar</div><dl><dt>height</dt><dd>64, floating, 12 from the edges</dd><dt>on</dt><dd>brand on brand-soft</dd></dl></div>
+
+      <div class="spec"><div class="stage" style="padding:14px">
+        <div class="side"><div class="on"><svg class="ic"><use href="#home"/></svg>Home</div><div><svg class="ic"><use href="#folder"/></svg>Files</div><div><svg class="ic"><use href="#gear"/></svg>Settings</div></div></div>
+        <div class="name">Desktop sidebar</div><dl><dt>width</dt><dd>220</dd><dt>item</dt><dd>38 high, radius 10</dd><dt>on</dt><dd>brand on brand-soft</dd></dl></div>
+    </div>
+  </section>
+
+  <div class="note"><b>How this is used.</b> You mark what you'd change here: a colour, a size, a corner, a component. When the foundation is right, I draw each page from these parts only, phone and desktop, at real size. When a page is approved, it's built by copying these numbers into <code>colors.xml</code> and <code>app.css</code>, and the built screen is compared against the mockup side by side before it's called done.</div>
+</div>
+
+<script>
+const SW = [
+  ["bg","Background"],["surface","Surface"],["surface-2","Surface 2"],["line","Line"],
+  ["ink","Ink"],["ink-2","Ink 2"],["ink-3","Ink 3"],["brand","Brand"],
+  ["brand-soft","Brand soft"],["online","Online"],["warn","Waiting on you"],["danger","Can't be undone"],
+];
+function draw() {
+  const box = document.getElementById("swatches");
+  const css = getComputedStyle(document.documentElement);
+  box.innerHTML = SW.map(([k, n]) => `<div class="sw"><i style="background:var(--${k})"></i><div><b>${n}</b><code>--${k} ${css.getPropertyValue("--" + k).trim()}</code></div></div>`).join("");
+}
+function theme(t, b) {
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll(".switch button").forEach((x) => x.classList.toggle("on", x === b));
+  draw();
+}
+draw();
+</script>
+</body>
+</html>
