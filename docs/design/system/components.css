@@ -99,3 +99,9 @@ svg.end { width: 18px; height: 18px; min-width: 0; color: var(--warn); stroke-wi
 .p4 { background-image: linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d) }
 .f-ph { background: linear-gradient(140deg,#d9b98a,#6d5a3f) }
 .f-desk { background: var(--brand-soft); color: var(--brand) }
+
+/* The phone's solid buttons (Kit.Style.DANGER, BLUE): a fill, white words,
+   fully round, 48 high. Remove, Switch device and Quit are drawn so on both
+   apps (the owner, 2026-11-03). */
+.btn-danger-solid { background: var(--danger); color: #fff }
+.btn-blue-solid { background: var(--online); color: #fff }

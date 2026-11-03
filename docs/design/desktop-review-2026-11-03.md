@@ -165,3 +165,30 @@ qurb application is not necessary")
 - A person's folder is mounted **read-only** (decision 0083).
 - The desktop's Activity entry shows the first few files of a batch, the
   names the engine keeps (V30), not every file.
+
+## The redesign in mockups, 2026-11-03 (evening)
+
+The owner was not happy with the built UI and asked for mockups "as refined
+as figma", copied exactly into the apps. The foundation
+([system/foundation.html](system/foundation.html), its tokens in
+`system/tokens.css` and `system/components.css`) and every desktop page at
+real size ([system/desktop.html](system/desktop.html)). Asked and answered:
+
+- **Waiting** is option A on both apps ([system/waiting.html](system/waiting.html)):
+  one picture with the other device's face on its corner, a title whose verb
+  says the way, one quiet line -- amber only when it waits on you -- and how
+  far it has got.
+- **Remove, Switch device and Quit** are the phone's solid buttons: red and
+  blue fills, white words.
+- **Recently deleted** redesigned as Photos keeps its own: the files in a
+  grid by where they were deleted, days left on the picture in the last
+  week, Restore all and Delete all, Select to choose some (D13, D13b).
+- **Removing a device ends it on both sides, and its files here must be its
+  again when the same phone comes back** (the owner). Today removing forgets
+  the device entirely, so the same phone paired again gets a new record and
+  what was kept for it is locked away with nothing pointing to it. **To build
+  in the engine:** Remove ends the trust and remembers the identity; a phone
+  presenting that identity again (decision 0079) is answered with its old
+  device id. Drawn as D21 (asked before removing), D22 (Home after), D23
+  ("Galaxy S23 is back").
+

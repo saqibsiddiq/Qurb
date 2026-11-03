@@ -171,6 +171,23 @@ figcaption span { display: block; color: var(--ink-2); font-size: 13.5px; margin
 .appic { width: 40px; height: 40px; border-radius: 12px; background: #2F6B57; color: #fff; display: grid; place-items: center; flex: none }
 .appic.warn { background: #F6EEDB; color: #946A24 }
 .appic .ic { width: 20px; height: 20px }
+
+/* Recently deleted, as Photos' (D13) */
+.rdg { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px }
+.rd { display: flex; flex-direction: column; gap: 7px; min-width: 0 }
+.rd .th { width: 100%; height: auto; aspect-ratio: 1; border-radius: 14px }
+.rd .th.doc { padding: 22px 18px; gap: 6px } .rd .th.doc i { height: 5px } .rd .th.doc em { font-size: 10px; left: 10px; bottom: 10px }
+.rd .th .play::before { border-left-width: 16px; border-top-width: 10px; border-bottom-width: 10px }
+.rd small { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px }
+.days { position: absolute; left: 8px; bottom: 8px; height: 22px; padding: 0 8px; border-radius: 11px; background: var(--warn); color: #fff; font-size: 11.5px; font-weight: 600; display: grid; place-items: center }
+.tick { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 12px; background: var(--brand); color: #fff; display: grid; place-items: center; border: 2px solid #fff }
+.tick .ic { width: 13px; height: 13px; stroke-width: 2.6 }
+.tick.off { background: rgba(0,0,0,.2) }
+.rd.sel .th { outline: 3px solid var(--brand); outline-offset: -3px }
+.selbar { position: absolute; left: calc(50% + 116px); bottom: 24px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 18px; border-radius: var(--r-full); background: var(--surface); box-shadow: var(--shadow-2); border: 1px solid var(--line); z-index: 10 }
+.selbar b { font-size: 14px; font-weight: 600; margin-right: 8px }
+.selbar.quietbar { padding: 8px }
+.selbar .btn .ic { margin-right: -2px }
 </style>
 </head>
 <body>
@@ -276,9 +293,9 @@ figcaption span { display: block; color: var(--ink-2); font-size: 13.5px; margin
         <div class="row"><svg class="ic"><use href="#lock"/></svg><span class="n">Private Vault</span><span class="v">1.2 GB<svg class="ic"><use href="#chev"/></svg></span></div>
       </div>
       <div class="gap"></div>
-      <button class="btn btn-danger full">Remove</button>
+      <button class="btn btn-danger-solid full">Remove</button>
       <div style="height:10px"></div>
-      <button class="btn btn-blue full">Switch device</button>
+      <button class="btn btn-blue-solid full">Switch device</button>
     </div></div></div></figure>
 
   <!-- D4 -->
@@ -351,7 +368,7 @@ figcaption span { display: block; color: var(--ink-2); font-size: 13.5px; margin
         <div class="row"><svg class="ic"><use href="#link"/></svg><span class="n">Advanced</span><span class="v"><svg class="ic"><use href="#chev"/></svg></span></div>
       </div>
       <div class="gap"></div>
-      <button class="btn btn-danger full">Quit QurbSpace</button>
+      <button class="btn btn-danger-solid full">Quit QurbSpace</button>
     </div></div></div></figure>
 
   <!-- D8 -->
@@ -414,10 +431,19 @@ figcaption span { display: block; color: var(--ink-2); font-size: 13.5px; margin
   <div class="card" style="margin-top:18px;box-shadow:none"><div class="row"><svg class="ic"><use href="#laptop"/></svg><span class="n">This computer</span><span class="v">System keyring<svg class="ic"><use href="#chev"/></svg></span></div><div class="row"><svg class="ic"><use href="#phone"/></svg><span class="n">Also on</span><span class="v"><span class="av f-ph" style="width:18px;height:18px"></span>Galaxy S23</span></div></div>
   <div class="acts"><button class="btn btn-secondary">Show the 24 words</button></div></div></div></div></figure>
 
-  <figure><figcaption><b>D13 · Recently deleted</b><span>From This computer. The file, who deleted it, ↺ to put it back, × to delete it for good; days left only in the last week, in amber. Your phone's Vault deletions are listed while your folder is open.</span></figcaption>
-  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="settings"></div><div class="main"><div class="page"><div class="back"><svg class="ic"><use href="#back"/></svg>This computer</div>
- <div style="display:flex;align-items:center"><div class="ptitle" style="flex:1">Recently deleted</div><button class="btn btn-danger btn-s">Empty</button></div>
- <div class="gap"></div><div class="card"><div class="w"><span class="th doc" style="width:44px;height:44px"></span><div class="t"><b>Tax 2025.pdf</b><span>This computer</span></div><span class="ibtn"><svg class="ic"><use href="#undo"/></svg></span><span class="ibtn"><svg class="ic"><use href="#x"/></svg></span></div><div class="w"><span class="th p2" style="width:44px;height:44px"></span><div class="t"><b>IMG_0007.jpg</b><span>Galaxy S23</span></div><span class="ibtn"><svg class="ic"><use href="#undo"/></svg></span><span class="ibtn"><svg class="ic"><use href="#x"/></svg></span></div><div class="w"><span class="th p3" style="width:44px;height:44px"></span><div class="t"><b>Notes.md</b><span>This computer</span></div><span class="chip warn"><svg class="ic"><use href="#clock"/></svg>3</span><span class="ibtn"><svg class="ic"><use href="#undo"/></svg></span><span class="ibtn"><svg class="ic"><use href="#x"/></svg></span></div></div></div></div></div></figure>
+  <figure><figcaption><b>D13 · Recently deleted</b><span>As Photos keeps its Recently Deleted: the files themselves, in a grid, by where they were deleted. Days left only in the last week, on the picture, in amber. Restore all or Delete all at the foot; Select to choose some. Your phone's Vault files show here only while your folder is open.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="settings"></div><div class="main"><div class="page" style="max-width:640px"><div class="back"><svg class="ic"><use href="#back"/></svg>This computer</div><div style="display:flex;align-items:center;gap:10px"><div class="ptitle" style="flex:1">Recently deleted</div><button class="btn btn-secondary btn-s">Select</button></div>
+ <p class="quiet" style="margin-top:6px;text-align:left">Kept for 30 days, then deleted for good</p>
+ <div class="lab">This computer</div><div class="rdg"><div class="rd"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><em>PDF</em></span><small>Tax 2025.pdf</small></div><div class="rd"><span class="th p2"></span><small>IMG_0007.jpg</small></div><div class="rd"><span class="th p3"><span class=days>3 days</span></span><small>Garden.jpg</small></div><div class="rd"><span class="th p1"><span class="play"></span></span><small>Clip.mp4</small></div><div class="rd"><span class="th doc"><i></i><i></i><i style="width:60%"></i><i></i><em style="background:#6b7280">MD</em></span><small>Notes.md</small></div></div>
+ <div class="lab" style="display:flex;align-items:center;gap:8px"><span class="av f-ph" style="width:18px;height:18px"></span>Galaxy S23's Vault</div><div class="rdg"><div class="rd"><span class="th p4"></span><small>s2.jpg</small></div><div class="rd"><span class="th doc"><i></i><i></i><i></i><em style="background:#6b7280">XML</em></span><small>q.xml</small></div></div>
+ </div></div><div class="selbar quietbar"><button class="btn btn-soft btn-s">Restore all</button><button class="btn btn-secondary btn-s" style="color:var(--danger)">Delete all</button></div></div></figure>
+
+  <figure><figcaption><b>D13b · Choosing some</b><span>Select, then tap files: a tick on each; the bar says how many, with Restore and Delete.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="settings"></div><div class="main"><div class="page" style="max-width:640px"><div class="back"><svg class="ic"><use href="#back"/></svg>This computer</div><div style="display:flex;align-items:center;gap:10px"><div class="ptitle" style="flex:1">Recently deleted</div><button class="btn btn-secondary btn-s">Cancel</button></div>
+ <p class="quiet" style="margin-top:6px;text-align:left">Kept for 30 days, then deleted for good</p>
+ <div class="lab">This computer</div><div class="rdg"><div class="rd sel"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><em>PDF</em><span class=tick><svg class=ic><use href=#check /></svg></span></span><small>Tax 2025.pdf</small></div><div class="rd"><span class="th p2"><span class=tick off></span></span><small>IMG_0007.jpg</small></div><div class="rd sel"><span class="th p3"><span class=days>3 days</span><span class=tick><svg class=ic><use href=#check /></svg></span></span><small>Garden.jpg</small></div><div class="rd"><span class="th p1"><span class="play"></span><span class=tick off></span></span><small>Clip.mp4</small></div><div class="rd"><span class="th doc"><i></i><i></i><i style="width:60%"></i><i></i><em style="background:#6b7280">MD</em><span class=tick off></span></span><small>Notes.md</small></div></div>
+ <div class="lab" style="display:flex;align-items:center;gap:8px"><span class="av f-ph" style="width:18px;height:18px"></span>Galaxy S23's Vault</div><div class="rdg"><div class="rd"><span class="th p4"><span class=tick off></span></span><small>s2.jpg</small></div><div class="rd"><span class="th doc"><i></i><i></i><i></i><em style="background:#6b7280">XML</em><span class=tick off></span></span><small>q.xml</small></div></div>
+ </div></div><div class="selbar"><b>2 selected</b><button class="btn btn-soft btn-s"><svg class="ic" style="width:15px;height:15px"><use href="#undo"/></svg>Restore</button><button class="btn btn-danger-solid btn-s"><svg class="ic" style="width:15px;height:15px"><use href="#trash"/></svg>Delete</button></div></div></figure>
 
   <figure><figcaption><b>D14 · Speed limit</b><span>One card: ↑ sending, ↓ receiving, a row of choices each.</span></figcaption>
   <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="settings"></div><div class="main"><div class="page"><div class="back"><svg class="ic"><use href="#back"/></svg>Settings</div><div class="ptitle">Speed limit</div><div class="gap"></div>
@@ -464,6 +490,27 @@ figcaption span { display: block; color: var(--ink-2); font-size: 13.5px; margin
  <div class="places"><div class="place" style="height:132px"><span class="bigc"><svg class="ic"><use href="#phone"/></svg></span><b>My phone</b></div>
  <div class="place" style="height:132px"><span class="bigc pink"><svg class="ic"><use href="#users"/></svg></span><b>Someone else's</b></div></div>
  <a class="lnk" style="text-align:left;margin-left:4px">Enter a code instead</a></div></div></div></figure>
+
+  <figure><figcaption><b>D21 · Removing a device</b><span>From its page. Said plainly before it happens: both sides stop syncing; what it keeps here stays, locked, and is its again when the same phone is added back. Deleting it too is a choice, off unless chosen.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="home"></div><div class="main"><div class="page"><div class="dhead"><span class="av photo"><span class="dot"></span></span><div><h2>Galaxy S23</h2><p>On</p></div></div></div></div><div class="scrim"></div><div class="over"><div class="sheet wide">
+ <span class="av f-ph" style="width:64px;height:64px;margin:4px auto 0;display:block"></span><h4 style="margin-top:14px">Remove Galaxy S23?</h4><p>It stops syncing with this computer, on both.</p>
+ <div class="card" style="margin-top:18px;box-shadow:none"><div class="row"><svg class="ic"><use href="#lock"/></svg><span class="n">Its 26 GB here stay, locked</span><span class="v"></span></div><div class="row"><svg class="ic"><use href="#trash"/></svg><span class="n">Delete them too</span><span class="v"></span><span class="tog off"></span></div></div>
+ <p style="font-size:13px;margin-top:12px">Add the same phone again to open them.</p>
+ <div class="acts" style="grid-template-columns:1fr 1fr"><button class="btn btn-secondary">Cancel</button><button class="btn btn-danger-solid">Remove</button></div></div></div></div></figure>
+
+  <figure><figcaption><b>D22 · Home, after removing it</b><span>The only device gone: Home says what was kept and offers the one thing to do.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="home"></div><div class="main"><div class="home"><span class="av circle-at" style="width:44px;height:44px;background:none;box-shadow:inset 0 0 0 1.5px var(--line);color:var(--ink-3)"><svg class="ic" style="width:18px;height:18px"><use href="#plus"/></svg></span>
+ <div class="mark" style="color:var(--ink-3)"><svg class="ic"><use href="#lock"/></svg></div><div class="state">Galaxy S23 was removed</div>
+ <p class="quiet">Its files stay here, locked, until it's added again</p>
+ <button class="btn btn-primary"><svg class="ic"><use href="#phone"/></svg>Add it again</button></div></div></div></figure>
+
+  <figure><figcaption><b>D23 · The same phone, back</b><span>Add your phone, scanned by the phone that was removed: recognised, and said so. Approved, its files are its again, nothing to copy.</span></figcaption>
+  <div class="win"><div class="tb"><i></i><i></i><i></i></div><div data-sb="home"></div><div class="main"><div class="center"><div class="ptitle">Add your phone</div></div></div><div class="scrim"></div><div class="over"><div class="sheet" style="text-align:center">
+ <span class="av f-ph" style="width:64px;height:64px;margin:4px auto 0;display:block"></span><h4 style="margin-top:14px">Galaxy S23 is back</h4>
+ <p style="display:flex;gap:6px;justify-content:center;align-items:center"><svg class="ic" style="width:15px;height:15px;color:var(--brand)"><use href="#lock"/></svg>Its 26 GB here are its again</p>
+ <div class="six"><span>7</span><span>1</span><span>5</span><span>0</span><span>3</span><span>8</span></div>
+ <p style="display:flex;gap:6px;justify-content:center;align-items:center"><svg class="ic" style="width:14px;height:14px"><use href="#phone"/></svg>Same on the phone?</p>
+ <div class="acts" style="grid-template-columns:1fr 1fr"><button class="btn btn-secondary">Decline</button><button class="btn btn-primary">Approve</button></div></div></div></div></figure>
 
   <figure><figcaption><b>D20 · Notifications</b><span>The phone's words: who and what in the title, the file under it, one button. Nothing for ordinary syncing.</span></figcaption>
   <div class="desk"><div class="toasts"><div class="toast"><span class="th p2" style="width:40px;height:40px"></span><div style="flex:1"><b>Galaxy S23 sent you a file</b><span>Sunset at Clifton.jpg</span><div class="tbtn">Show</div></div><small>now</small></div><div class="toast"><span class="th doc" style="width:40px;height:40px;padding:8px 7px"><i></i><i></i><i></i><em>PDF</em></span><div style="flex:1"><b>Delivered to Galaxy S23</b><span>Tickets.pdf</span></div><small>2 min</small></div><div class="toast"><span class="appic warn"><svg class="ic"><use href="#alertc"/></svg></span><div style="flex:1"><b>Could not finish locked.docx</b><span>It's open in another app</span><div class="tbtn">Try again</div></div><small>5 min</small></div><div class="toast"><span class="appic"><svg class="ic"><use href="#logo"/></svg></span><div style="flex:1"><b>QurbSpace is still running</b><span>Quit it in Settings</span></div><small>once</small></div></div></div></figure>
