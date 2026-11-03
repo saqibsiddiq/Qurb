@@ -59,11 +59,21 @@ object Thumbs {
 
     /** Into `icon`: any file on this phone, by where it is -- one a backup
      *  is taking from the phone's own folders (Waiting, 2026-11-03). */
-    fun file(scope: CoroutineScope, icon: ImageView, file: java.io.File, key: String = "file:${file.path}:${file.lastModified()}") {
+    fun file(
+        scope: CoroutineScope,
+        icon: ImageView,
+        file: java.io.File,
+        key: String = "file:${file.path}:${file.lastModified()}",
+        /** What it is called, where its own name says nothing: Recently
+         *  deleted keeps a file's bytes under a number. */
+        name: String = file.name,
+    ) {
         val context = icon.context
-        val path = file.name
+        val path = name
         show(scope, icon, key) {
             if (!file.isFile) return@show null
+            // A file that cannot be read as what its name says -- a PDF that
+            // is not one -- is drawn as its kind, never left blank.
             when (Peek.kind(path)) {
                 "picture" -> decode(file.path)
                 "video" -> media(context) { it.setDataSource(file.path) }?.let { framed(it.first, it.second) }
@@ -72,7 +82,7 @@ object Thumbs {
                 "text", "table" -> text(java.io.FileInputStream(file).use { input ->
                     val buf = ByteArray(TEXT_BYTES); val n = input.read(buf).coerceAtLeast(0); buf.copyOf(n) })
                 else -> if (path.endsWith(".apk", true)) app(context, file) ?: tile(path) else tile(path)
-            }
+            } ?: tile(path)
         }
     }
 

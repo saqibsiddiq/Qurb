@@ -34,7 +34,7 @@ async function drawSettings(main) {
     group("Connection",
       setting({ ic: "arrow-up-down", name: "Speed limit", value: speedWords(s), onclick: () => go("speed") }),
       setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") })),
-    h("button", { class: "big-btn big-red", onclick: () => invoke("quit") }, "Quit QurbSpace"));
+    h("button", { class: "big-btn big-red big-quit", onclick: () => invoke("quit") }, "Quit QurbSpace"));
   showUpdate();
 }
 
@@ -183,7 +183,7 @@ async function drawStorage(main) {
   main.append(h("div", { class: "pg pg-narrow" }, pageHead("This computer", { words: "Settings", go: () => go("settings") }), body));
   let st, parts;
   try { [st, parts] = await Promise.all([invoke("storage"), invoke("storage_parts")]); } catch (e) { put(body, oops(e)); return; }
-  const disk = Number(st.disk), free = Number(st.free_disk);
+  const disk = Number(st.disk), free = Number(st.free_disk), limit = Number(st.limit), used = Number(st.used);
   const phoneBytes = Number(parts.phones_once ?? parts.phones.reduce((n, p) => n + Number(p.whatsapp) + Number(p.folders) + Number(p.vault), 0));
   const kinds = [
     { name: "Shared", bytes: Number(parts.shared_here), colour: "var(--green)" },
@@ -194,18 +194,52 @@ async function drawStorage(main) {
     ...(parts.removed ?? []).map((r) => ({ name: r.name, bytes: Number(r.size), colour: "var(--ink-3)", lead: "lock-keyhole", open: () => deleteRemoved(r) })),
     { name: "Recently deleted", bytes: Number(parts.deleted), colour: "var(--warn)", lead: "trash-2", open: () => go("deleted") },
   ];
-  const whole = Math.max(disk, 1);
+  // Measured against the space given QurbSpace where it is set, as the
+  // phone's Manage storage is (the owner's review of 2026-11-03, item 5);
+  // against the disk otherwise.
+  const whole = Math.max(limit || disk, 1);
+  const left = limit ? Math.max(0, limit - used) : free;
   put(body,
     h("div", { class: "disk" },
-      h("p", { class: "free" }, `${size(free)} free`, h("small", {}, `of ${size(disk)}`)),
+      h("p", { class: "free" }, `${size(left)} free`, h("small", {}, `of ${size(limit || disk)}`)),
       h("div", { class: "disk-bar" }, ...kinds.filter((k) => k.bytes > 0).map((k) =>
         h("i", { style: { width: `${Math.max(0.6, (100 * k.bytes) / whole)}%`, background: k.colour }, title: k.name })))),
+    h("div", { class: "grp-box grp-gap" },
+      setting({ ic: "sliders-horizontal", name: "Space for QurbSpace", value: limit ? size(limit) : "No limit", onclick: () => limitSheet(limit, used, disk) })),
     h("div", { class: "grp-box" }, ...kinds.map((k) => {
       const lead = k.lead ? icon(k.lead, "set-ic") : h("i", { class: "sw", style: { background: k.colour } });
       return h(k.open ? "button" : "div", { class: "set", onclick: k.open },
         lead, h("span", { class: "set-name" }, k.name), h("span", { class: "set-value" }, size(k.bytes)),
         k.open ? icon("chevron-right", "set-go") : null);
     })));
+}
+
+/** How much of this disk QurbSpace may use: a few sizes to pick, no limit,
+ * or one typed. The phone's Manage storage measures against it. */
+function limitSheet(limit, used, disk) {
+  const box = sheet({ ic: "hard-drive", title: "Space for QurbSpace", sub: `It uses ${size(used)} of this ${size(disk)} disk` });
+  const GB = 1e9;
+  const sizes = [50, 100, 250, 500, 1000].map((n) => n * GB).filter((b) => b < disk && b > used);
+  let chosen = limit;
+  const says = h("p", { class: "sheet-note" });
+  const field = h("input", { class: "field field-c", placeholder: "Or type one, like 300 GB", "aria-label": "Space for QurbSpace" });
+  const grid = h("div", { class: "limits" });
+  const draw = () => put(grid, ...[...sizes, 0].map((b) => h("button", {
+    class: `limit${b === chosen ? " on" : ""}`,
+    onclick: () => { chosen = b; field.value = ""; says.textContent = ""; draw(); },
+  }, b ? size(b) : "No limit")));
+  draw();
+  field.addEventListener("input", async () => {
+    if (!field.value.trim()) return;
+    try {
+      chosen = Number(await invoke("read_allowance", { text: field.value }));
+      says.textContent = chosen < used ? `Less than the ${size(used)} it uses now` : "";
+      draw();
+    } catch (e) { says.textContent = String(e); }
+  });
+  box.append(grid, field, says, actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Save", async () => {
+    try { await invoke("set_limit", { bytes: String(chosen) }); box.close(); go("storage"); } catch (e) { says.textContent = String(e); }
+  }, "btn-main")));
 }
 
 /** A removed device's files, kept here locked: said plainly, then deleted

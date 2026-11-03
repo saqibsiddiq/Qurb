@@ -326,7 +326,7 @@ const ANSWERS = {
     files: "5400000000",
     chunks: "912000000",
     used: "6312000000",
-    limit: "10737418240",
+    limit: params.has("nolimit") ? "0" : "100000000000",
     disk: "494384795648",
     free_disk: "201326592000",
     over: false,
@@ -355,6 +355,8 @@ const ANSWERS = {
     ? [{ id: "6d4e9586", name: "Galaxy S23", by_them: false, removed_at: now - 60, size: "27900000000" }]
     : params.has("removedby") ? [{ id: "6d4e9586", name: "Galaxy S23", by_them: true, removed_at: now - 60, size: "0" }] : [],
   delete_removed: () => 6637,
+  set_limit: () => null,
+  read_allowance: ({ text }) => String(Math.round(parseFloat(text) * (/t/i.test(text) ? 1e12 : 1e9))),
 
   browse,
   find: ({ text, private: priv }) => {

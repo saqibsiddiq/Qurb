@@ -208,12 +208,16 @@ p {
   display: flex;
   justify-content: flex-end;
 }
-/* D1: the mark 108 from the top, not centred -- Waiting grows below it. */
+/* In the middle of the window while it is the only thing there (the owner,
+   2026-11-03: off-centre at the frame's 108 from the top looked lopsided in
+   a larger window); at the top while Waiting shows under it. */
 .home-middle {
   display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
-  padding-top: 20px;
+  justify-content: center;
+  padding-bottom: 52px;
 }
 
 /* The status mark: the phone's, as large. */
@@ -3007,8 +3011,10 @@ body.setting-up .win {
 }
 /* D2: with a queue, the mark sits 36 from the top. */
 .home.queued .home-middle {
+  flex: none;
+  justify-content: flex-start;
   margin-top: -16px;
-  padding-top: 0;
+  padding-bottom: 0;
 }
 /* A card inside a sheet: no shadow of its own (D21). */
 .grp-flat {
@@ -3124,4 +3130,49 @@ body.setting-up .win {
 .ver-by b {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+/* Big buttons on a page that is not a column (Settings' Quit): as wide as
+   the cards above them, the words centred, as Remove and Switch device. */
+.pg .big-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.big-quit {
+  margin-top: 28px;
+}
+/* Space for QurbSpace: sizes as round choices, two to a row, the chosen
+   one green; a typed size under them. */
+.grp-gap {
+  margin-bottom: 14px;
+}
+.limits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+.limit {
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  transition: border-color 0.15s, background 0.15s;
+}
+.limit:hover {
+  border-color: color-mix(in srgb, var(--brand) 50%, var(--line));
+}
+.limit.on {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.field-c {
+  margin-top: 12px;
+  border-radius: var(--r-full);
+  text-align: center;
 }

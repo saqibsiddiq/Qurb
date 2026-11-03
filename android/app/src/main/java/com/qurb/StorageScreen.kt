@@ -143,8 +143,8 @@ class DeviceStorageScreen(app: MainActivity, private val computer: PeerInfo, pri
             setTextAppearance(R.style.Text_Hero)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(4) })
         page.addView(TextView(app).apply {
-            // Its disk's free space since computers keep everything (the
-            // owner's review of 2026-11-03, F-3); a limit, where one is set.
+            // Of the space its owner gave QurbSpace there, Settings → This
+            // computer → Space for QurbSpace; of its disk with none set.
             text = if (storage.given > 0uL) "of ${Words.size(storage.given)}" else "${computer.name} didn't say its disk"
             setTextAppearance(R.style.Text_Meta)
             setTextColor(kit.color(R.color.text_3))

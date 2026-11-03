@@ -39,7 +39,8 @@ class DeletedScreen(app: MainActivity, fromSettings: Boolean = false) : Screen(a
         addView(bar, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM).apply {
             val side = app.resources.getDimensionPixelSize(R.dimen.gutter)
-            setMargins(side, 0, side, app.resources.getDimensionPixelSize(R.dimen.nav_clearance) - app.kit.dp(64))
+            // Above the tab bar, which floats over the page's foot.
+            setMargins(side, 0, side, app.resources.getDimensionPixelSize(R.dimen.nav_clearance))
         })
     }
     override val view: View get() = frame
@@ -61,6 +62,20 @@ class DeletedScreen(app: MainActivity, fromSettings: Boolean = false) : Screen(a
         views.subtitle.text = "Kept for 30 days, then deleted for good"
         views.refresh.setColorSchemeResources(R.color.green)
         views.refresh.setOnRefreshListener { refresh() }
+        // Select and All, small and white beside the title, as the frame
+        // has them; and room under the grid for the bar.
+        Kit.Style.SECONDARY.apply(kit, views.action)
+        views.action.layoutParams = views.action.layoutParams.apply { height = kit.dp(36) }
+        views.action.minHeight = kit.dp(36)
+        views.action.minimumHeight = kit.dp(36)
+        views.action.minWidth = 0
+        views.action.minimumWidth = 0
+        views.action.insetTop = 0
+        views.action.insetBottom = 0
+        views.action.setPadding(kit.dp(16), 0, kit.dp(16), 0)
+        views.action.textSize = 14f
+        views.action.elevation = kit.dp(1).toFloat()
+        views.sections.setPadding(0, 0, 0, kit.dp(84))
         bar.apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -221,7 +236,7 @@ class DeletedScreen(app: MainActivity, fromSettings: Boolean = false) : Screen(a
         val picture = ImageView(app).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         square.addView(picture, FrameLayout.LayoutParams(kit.dp(30), kit.dp(30), Gravity.CENTER))
         val bytes = here[d.id]
-        if (bytes != null) Thumbs.file(scope, picture, java.io.File(bytes)) else Thumbs.kind(scope, picture, name)
+        if (bytes != null) Thumbs.file(scope, picture, java.io.File(bytes), "deleted:${d.id}", name = name) else Thumbs.kind(scope, picture, name)
         // The days it has left, only in its last week: the last day counts
         // as one, since a 0 would read as gone.
         val days = (RETENTION_DAYS - (System.currentTimeMillis() / 1000 - d.deletedAt) / 86400).coerceAtLeast(1)

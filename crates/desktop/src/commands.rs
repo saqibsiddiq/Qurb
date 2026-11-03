@@ -2048,18 +2048,19 @@ fn lay_out(hosted: &Hosted, people: &[Person]) {
     let mut notes: Vec<(String, String)> = Vec::new();
     for p in people {
         match p.relation {
-            "owner" => {
-                for device in &p.devices {
-                    notes.push((
-                        device.clone(),
-                        format!(
-                            "{device}\n\nWhat this computer keeps for {device} -- its backups, its WhatsApp \
-                             and its Private Vault -- is kept by Qurb, encrypted, and opens only inside Qurb, \
-                             with a yes on the phone.\n\nOpen Qurb, choose Files, then {device}.\n"
-                        ),
-                    ));
-                }
-            }
+            // One folder under the owner's name, where it is mounted when
+            // opened, each phone's folder and This computer's inside (decision
+            // 0083). It was one placeholder a phone, and opening mounted a
+            // folder that did not exist -- "No such file or directory", the
+            // owner's test of 2026-11-03.
+            "owner" => notes.push((
+                p.name.clone(),
+                format!(
+                    "{name}\n\nYour phones' backups, WhatsApp and Private Vault, kept here encrypted. \
+                     They open with a yes on your phone.\n\nOpen QurbSpace, choose Files, then {name}.\n",
+                    name = p.name
+                ),
+            )),
             _ => notes.push((
                 p.name.clone(),
                 format!(
@@ -2274,6 +2275,10 @@ pub fn open_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
     let people = qurb_cli::layout::people_dir(&root).ok_or("this computer's QurbSpace folder is not laid out by person")?;
     let name = everyone(&hosted)?.into_iter().find(|p| p.id == person).map(|p| p.name).ok_or("no such person")?;
     let at = people.join(qurb_cli::layout::folder_name(&name));
+    // Where it mounts: its placeholder, made now if it is not there yet.
+    if !at.is_dir() {
+        std::fs::create_dir_all(&at).map_err(|e| format!("could not make {}: {e}", at.display()))?;
+    }
     let contents = if person == OWNER {
         let phones = owner_phones(&hosted)?;
         // This computer's own private files, ordinary files on its disk (F-4).
@@ -2932,6 +2937,28 @@ pub fn remove_device(hosted: Host<'_>, device: String, delete_kept: bool) -> Ans
         .map_err(failed)?;
     hosted.nudge();
     Ok(())
+}
+
+/// The space QurbSpace may use on this computer, in bytes, 0 for no limit
+/// (the owner's review of 2026-11-03, item 5: back, after F-3 took it away).
+///
+/// Written to the config file, which the daemon and the phone's Manage
+/// storage read fresh (`qurb_peer::disk::allowance`): the file is the
+/// setting, so a restart keeps it.
+#[tauri::command(async)]
+pub fn set_limit(hosted: Host<'_>, bytes: String) -> Answer<()> {
+    let bytes: u64 = bytes.parse().map_err(|_| "that is not a number of bytes".to_string())?;
+    let dir = qurb_cli::store_dir(&hosted.root());
+    let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
+    config.limit = bytes;
+    config.save(&dir).map_err(failed)
+}
+
+/// What somebody typed as a limit -- "200 GB", "1.5 TB" -- in bytes, or why
+/// it is not one.
+#[tauri::command(async)]
+pub fn read_allowance(text: String) -> Answer<String> {
+    qurb_cli::setup::allowance(&text).map(big).map_err(failed)
 }
 
 /// Ask for a file whose local copy was dropped.

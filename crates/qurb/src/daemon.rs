@@ -383,8 +383,15 @@ impl Daemon {
     pub async fn run(&self) -> Result<()> {
         // Its disk, told to the owner's phone with its storage (item 8 of 2026-11-01).
         qurb_peer::disk::set(crate::disk::space);
-        // No allowance: a computer keeps everything (F-3), so the phone is
-        // told its disk's free space instead (`Request::Storage`).
+        // And the space it gives QurbSpace, the limit set in Settings, read
+        // fresh at every ask so that a change shows on the phone at once;
+        // with none, the phone is told the disk's free space instead
+        // (`Request::Storage`). Never told before 2026-11-03: the owner's
+        // phone showed the whole disk with a limit set.
+        {
+            let (dir, fallback) = (self.store_dir.clone(), self.config.limit);
+            qurb_peer::disk::set_allowance(move || Config::load(&dir).map(|c| c.limit).unwrap_or(fallback));
+        }
         // Before anything else, and held for the whole run. Two daemons on one
         // store contend on the write lock, answer as the same device, and both
         // enforce the same storage cap -- and none of that reports an error,
