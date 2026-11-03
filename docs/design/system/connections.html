@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connecting and disconnecting</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Every way two devices are joined and parted, and every edge case, for the
+   owner's review of 2026-11-03. What the engine does today is marked; what
+   needs building is marked. */
+* { box-sizing: border-box; margin: 0; padding: 0 }
+body { font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; line-height: 1.5 }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 44px 24px 120px }
+h1 { font-size: 30px; font-weight: 700; letter-spacing: -.025em }
+.lead { color: var(--ink-2); font-size: 15px; margin-top: 8px; max-width: 820px }
+h2 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-top: 56px }
+h2 small { display: block; font-size: 14.5px; font-weight: 400; color: var(--ink-2); letter-spacing: 0; margin-top: 4px }
+h3 { font-size: 16px; font-weight: 650; margin-top: 28px; letter-spacing: -.01em }
+.key { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 18px; font-size: 13px; color: var(--ink-2) }
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 11px; font-size: 12px; font-weight: 600; white-space: nowrap }
+.ok { background: var(--brand-soft); color: var(--brand) }
+.build { background: var(--warn-soft); color: var(--warn) }
+.gap { background: var(--danger-soft); color: var(--danger) }
+
+/* states */
+.states { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 20px; align-items: stretch }
+.st { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); padding: 14px; box-shadow: var(--shadow-1) }
+.st b { display: block; font-size: 14.5px; font-weight: 650 }
+.st span { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 4px }
+.st i { display: block; width: 10px; height: 10px; border-radius: 5px; margin-bottom: 10px }
+.arrows { margin-top: 14px; font-size: 13px; color: var(--ink-2); display: grid; gap: 4px }
+.arrows code { font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--ink) }
+
+/* flows */
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px }
+.fs { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 9px 12px; font-size: 13px; max-width: 250px; box-shadow: var(--shadow-1) }
+.fs b { display: block; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 2px }
+.fs.p b::before { content: "▯ " } .fs.d b::before { content: "▭ " }
+.ar { color: var(--ink-3); font-size: 18px }
+.note { font-size: 13px; color: var(--ink-2); margin-top: 8px; max-width: 860px }
+
+/* tables */
+table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; box-shadow: var(--shadow-1) }
+th, td { text-align: left; vertical-align: top; padding: 11px 14px; font-size: 13.5px; border-bottom: 1px solid var(--line) }
+tr:last-child td { border-bottom: 0 }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); background: var(--surface-2) }
+td:first-child { font-weight: 600; width: 24% }
+td:nth-child(2) { color: var(--ink-2); width: 30% }
+td:last-child { width: 96px }
+.say { display: block; margin-top: 4px; color: var(--brand); font-weight: 500 }
+.build-list { margin-top: 16px; display: grid; gap: 10px }
+.bl { display: flex; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 12px 14px; font-size: 13.5px }
+.bl b { font-weight: 650 }
+.bl .n { width: 24px; height: 24px; border-radius: 12px; background: var(--warn-soft); color: var(--warn); font-weight: 700; font-size: 12px; display: grid; place-items: center; flex: none }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Connecting and disconnecting</h1>
+  <p class="lead">Every way two devices are joined and parted, and every edge case, for the review of 3 November. Each says what QurbSpace does <b>today</b>, what it <b>should</b> do, and the words on screen. Screens are in <a href="setup.html">setup.html</a> and <a href="desktop.html">desktop.html</a>.</p>
+  <div class="key"><span class="tag ok">Works today</span>built and tested <span class="tag build">To build</span>designed, not built <span class="tag gap">Gap</span>not solved yet, said so</div>
+
+  <h2>The states a device can be in<small>Seen from one side: what the computer knows about a phone, or the phone about the computer.</small></h2>
+  <div class="states">
+    <div class="st"><i style="background:var(--line)"></i><b>Not paired</b><span>Never met. Nothing shared.</span></div>
+    <div class="st"><i style="background:var(--warn)"></i><b>Pairing</b><span>A code is showing; one side has scanned it; both sides compare six digits.</span></div>
+    <div class="st"><i style="background:var(--online)"></i><b>Paired, on</b><span>Trusted, and reachable now: directly, or through Tor.</span></div>
+    <div class="st"><i style="background:var(--ink-3)"></i><b>Paired, off</b><span>Trusted, not reachable now: asleep, app closed, no network. Waits; nothing is lost.</span></div>
+    <div class="st"><i style="background:var(--danger)"></i><b>Removed</b><span>Trust ended on both sides. Its files kept here, locked, and remembered as its, unless deleted.</span></div>
+  </div>
+  <div class="arrows">
+    <div><code>Not paired → Pairing</code> a code is shown and scanned · <code>Pairing → Paired</code> both approve · <code>Pairing → Not paired</code> declined, expired, five wrong tries</div>
+    <div><code>On ⇄ Off</code> by itself, as devices sleep, wake and move between networks · <code>Paired → Removed</code> either side removes the other</div>
+    <div><code>Removed → Paired</code> the same device pairs again, and gets its files back · <code>Removed → Not paired</code> its files deleted too, or forgotten for good</div>
+  </div>
+
+  <h2>Connecting<small>The ways in, each as it happens screen by screen. ▯ the phone, ▭ the computer.</small></h2>
+
+  <h3>C1 · A new person, computer first <span class="tag ok">Works today</span></h3>
+  <div class="flow">
+    <div class="fs d"><b>Computer</b>Start: key and ~/qurb made</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Add your phone: QR, six digits, 5 minutes</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Scan your computer's code</div><span class="ar">→</span>
+    <div class="fs p"><b>Both</b>The same six digits; the computer approves</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Gets the key; takes its permanent identity</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Connected to saqib; Photos and WhatsApp?</div>
+  </div>
+  <p class="note">The QR code carries the whole invitation and works from anywhere, through the meeting point. The six digits are a shortcut that works only on the same Wi-Fi.</p>
+
+  <h3>C2 · A new person, phone first <span class="tag ok">Works today</span></h3>
+  <div class="flow">
+    <div class="fs p"><b>Phone</b>Start on this phone: key made</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Home says: add your computer</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>I already use QurbSpace: types the phone's six digits</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Approves; the computer gets the key</div>
+  </div>
+  <p class="note">Until a computer is added, the phone's files are only on the phone. Home says so, without alarm, until one is.</p>
+
+  <h3>C3 · The same phone, set up again <span class="tag ok">Works today</span></h3>
+  <div class="flow">
+    <div class="fs p"><b>Phone</b>Welcome back: the key found in Google's backup</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Use my key: the same identity, made again</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Finds the computer through the meeting point</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Knows it; nothing to approve</div>
+  </div>
+  <p class="note">Decision 0079, run on the S23 on 1 November. Without Google's backup (no screen lock, or turned off), it's C5 instead.</p>
+
+  <h3>C4 · A removed phone, added again <span class="tag build">To build</span></h3>
+  <div class="flow">
+    <div class="fs p"><b>Phone</b>saqib removed this phone · Add it again</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Add your phone; the phone scans</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Galaxy S23 is back · its 26 GB are its again</div><span class="ar">→</span>
+    <div class="fs p"><b>Both</b>Approve; it syncs as before</div>
+  </div>
+  <p class="note"><b>Today</b> removing forgets the device entirely; paired again it is a new device, and its files here are orphaned. Needs builds 1 and 2 below.</p>
+
+  <h3>C5 · A new phone, the old one lost or replaced <span class="tag ok">Works today</span></h3>
+  <div class="flow">
+    <div class="fs d"><b>Computer</b>Remove the old phone (its files kept)</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Add your phone</div><span class="ar">→</span>
+    <div class="fs p"><b>New phone</b>Scan; gets the key</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>The same as another device? → the old one</div><span class="ar">→</span>
+    <div class="fs p"><b>New phone</b>Restore: everything, or folders, from the computer</div>
+  </div>
+  <p class="note">A different phone is a different identity, so the computer asks once whether it replaces the old one (decision 0077's "the same as another device"); said yes, the old one's files are listed as the new one's.</p>
+
+  <h3>C6 · A second computer <span class="tag ok">Works today</span></h3>
+  <div class="flow">
+    <div class="fs p"><b>Phone</b>Add a computer: shows a code</div><span class="ar">→</span>
+    <div class="fs d"><b>New computer</b>I already use QurbSpace: six digits</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Approves; the computer gets the key</div>
+  </div>
+  <p class="note">The 24 words are a link on the new computer, for when no phone is at hand.</p>
+
+  <h3>C7 · Someone else's phone, as a guest <span class="tag ok">Works today</span></h3>
+  <div class="flow">
+    <div class="fs d"><b>Computer</b>Add a device → Someone else's</div><span class="ar">→</span>
+    <div class="fs p"><b>Their phone</b>Scans; keeps its own key</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Approves; keeps a sealed folder for them</div>
+  </div>
+  <p class="note">The guest's key never reaches the computer: their folder is sealed, opened only with their yes (decisions 0060, 0067).</p>
+
+  <h2>Disconnecting<small>Either side may end it. Ending is always on both sides, and always said before it happens.</small></h2>
+
+  <h3>X1 · The computer removes the phone <span class="tag build">Partly built</span></h3>
+  <div class="flow">
+    <div class="fs d"><b>Computer</b>Its page → Remove</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Remove Galaxy S23? What it means, listed</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Trust ends; identity remembered; files kept, locked</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Told at once, or at its next try: saqib removed this phone</div>
+  </div>
+  <p class="note">The sheet lists only what applies: sends to it that will be cancelled; that it stops keeping the Vault; files only it has (with <b>Keep here first</b>); and, off unless chosen, deleting what it keeps here. <b>Today</b> the phone is never told; it keeps trying and shows the computer as off (build 3).</p>
+
+  <h3>X2 · The phone removes the computer <span class="tag build">Partly built</span></h3>
+  <div class="flow">
+    <div class="fs p"><b>Phone</b>The computer's page → Remove</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Remove saqib? Files only on the computer won't open here</div><span class="ar">→</span>
+    <div class="fs p"><b>Phone</b>Trust ends; its own files stay on the phone</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Told: Galaxy S23 removed this computer; its files kept, locked</div>
+  </div>
+  <p class="note">A phone whose files were freed to the computer (kept only there) is warned with how many and how big, and offered <b>Bring them here first</b>.</p>
+
+  <h3>X3 · A guest stops visiting, or is removed <span class="tag build">Partly built</span></h3>
+  <div class="flow">
+    <div class="fs p"><b>Their phone</b>Stop visiting saqib's laptop</div><span class="ar">or</span>
+    <div class="fs d"><b>Computer</b>Remove this person</div><span class="ar">→</span>
+    <div class="fs d"><b>Computer</b>Their sealed folder kept, or deleted if chosen</div>
+  </div>
+
+  <h2>Edge cases</h2>
+  <table>
+    <tr><th>When</th><th>What happens</th><th>Words on screen</th><th></th></tr>
+    <tr><td>The code expires (5 minutes)</td><td>Both sides stop; nothing changes. A new code is one tap.</td><td><span class="say">Expired. Show a new one</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Six digits typed wrong five times</td><td>The digits are withdrawn; the QR code still works.</td><td><span class="say">Typed wrongly too often. Scan it instead</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Six digits on different Wi-Fi</td><td>The digits are found only on the same network; scanning works anywhere.</td><td><span class="say">Not found on this Wi-Fi. Scan the code</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>The digits differ on the two screens</td><td>Someone else's code, or a device in between: decline, and nothing is shared.</td><td><span class="say">Only if it shows 715 038</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Two people pairing on one Wi-Fi at once</td><td>Each phone finds its own computer by its digits; a wrong guess waits for another.</td><td>—</td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>The phone's app closed while being approved</td><td>The approval waits for the code's 5 minutes; opened again, the phone finishes.</td><td><span class="say">Open QurbSpace on your phone</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Pairing with no internet</td><td>On the same Wi-Fi, by the six digits. Away from it, the code waits until there is a network.</td><td><span class="say">No internet. On the same Wi-Fi, type the six digits</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>The device being removed is off</td><td>Removed here at once. It is told the moment it next reaches out; until then it is refused.</td><td><span class="say">Removed. Galaxy S23 will be told when it's on</span></td><td><span class="tag build">Build 3</span></td></tr>
+    <tr><td>Removed while files were moving</td><td>Sends to it are cancelled, and listed in the question before. (What happens to a file half received from it is not yet checked.)</td><td><span class="say">2 sends to it are cancelled</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Removing the only device keeping the Vault</td><td>Said first: the phone's Vault then lives only on the phone until another computer keeps it.</td><td><span class="say">It stops keeping your Vault</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Files only on the device being removed</td><td>Listed, with a way to bring them here first.</td><td><span class="say">12 files only on it · Keep here first</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Removed, then the same phone comes back</td><td>Recognised by its identity; its files here are its again; approve once.</td><td><span class="say">Galaxy S23 is back</span></td><td><span class="tag build">Builds 1, 2</span></td></tr>
+    <tr><td>Removed, then the same phone reinstalled with Google's backup</td><td>It makes the same identity, finds the computer refusing it, and says it was removed, with Add it again.</td><td><span class="say">saqib removed this phone</span></td><td><span class="tag build">Build 3</span></td></tr>
+    <tr><td>Removed, files deleted too, then it comes back</td><td>A new device to the computer; nothing of it there. Its own files on the phone are untouched.</td><td>—</td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Kept files remembered, never coming back</td><td>Shown in This computer's storage under its name, locked, with Delete. Never deleted by itself.</td><td><span class="say">Galaxy S23 (removed) · 26 GB · Delete</span></td><td><span class="tag build">Build 4</span></td></tr>
+    <tr><td>Both devices remove each other at once</td><td>Each ends it; each is told by the other; the same as one removing.</td><td>—</td><td><span class="tag build">Build 3</span></td></tr>
+    <tr><td>The phone is reinstalled without Google's backup</td><td>No key on the phone: it joins by scanning the computer (C1), gets the key back, and takes the same identity, since ANDROID_ID survives a reinstall.</td><td><span class="say">Scan your computer's code</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Factory reset, or a new phone</td><td>A new identity (ANDROID_ID changes). Joins as C5: the computer asks whether it replaces the old one.</td><td><span class="say">The same as another device?</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>The computer is reinstalled, its folder kept</td><td>Set up again with I already use QurbSpace and the phone's code: the same key opens the same store. The computer gets a new identity, so the phone asks whether it replaces the old one.</td><td><span class="say">The same as another device?</span></td><td><span class="tag build">Build 5</span></td></tr>
+    <tr><td>The computer is lost or its disk dies</td><td>Files only it held are gone, said plainly on the phone: freed files and backups. The phone's own files stay. A second computer prevents this.</td><td><span class="say">saqib can't be reached · 214 files are only there</span></td><td><span class="tag gap">Gap</span></td></tr>
+    <tr><td>The phone is lost</td><td>Remove it on the computer: it can't sync again. Files on the phone are protected by its screen lock and the app's key, not by removing.</td><td><span class="say">Remove Galaxy S23?</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>Both devices lost</td><td>The 24 words on a new device bring back the key, but only files a surviving device or backup kept. Without them, nothing.</td><td><span class="say">Use 24 words</span></td><td><span class="tag ok">Today</span></td></tr>
+    <tr><td>The key exposed (24 words seen by someone)</td><td>No way yet to change a person's key on every device. Said plainly where the words are shown.</td><td><span class="say">Anyone who sees them can read your files</span></td><td><span class="tag gap">Gap</span></td></tr>
+    <tr><td>A guest's phone comes back after removal</td><td>As C4, for their sealed folder: recognised, their folder theirs again.</td><td><span class="say">Ammi's phone is back</span></td><td><span class="tag build">Builds 1, 2</span></td></tr>
+    <tr><td>Off for weeks</td><td>Still paired; nothing expires. It catches up when it next connects.</td><td><span class="say">Off · 3 weeks</span></td><td><span class="tag ok">Today</span></td></tr>
+  </table>
+
+  <h2>To build<small>In this order. Each a decision record, then tests, then tried on the owner's devices.</small></h2>
+  <div class="build-list">
+    <div class="bl"><span class="n">1</span><div><b>Remove ends trust, and remembers who.</b> The device's record stays, marked removed, with its fingerprint and device id; it is refused, listed nowhere but its locked files.</div></div>
+    <div class="bl"><span class="n">2</span><div><b>The same device, recognised.</b> A pairing presenting a removed device's identity is told it is that device (as <code>Request::Become</code> answers today for one not removed); the approval says "is back" and its files are its again.</div></div>
+    <div class="bl"><span class="n">3</span><div><b>Told it was removed.</b> The remover sends a signed "you were removed" when it can, and refuses with a distinct answer when it can't, so the removed side learns either way and says so instead of showing "off" for ever.</div></div>
+    <div class="bl"><span class="n">4</span><div><b>A removed device's files in storage.</b> Listed under its name in This computer's storage, locked, with Delete; never deleted by themselves.</div></div>
+    <div class="bl"><span class="n">5</span><div><b>A computer set up again, recognised.</b> A permanent identity for computers too, derived from the key and the machine, as phones have; until then, "the same as another device".</div></div>
+  </div>
+</div>
+</body>
+</html>
