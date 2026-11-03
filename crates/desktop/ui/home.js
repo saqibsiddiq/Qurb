@@ -301,10 +301,11 @@ function askAgain(paths, earlier, to) {
 
 // ---------- Everything waiting ----------
 
-/** Waiting in full: what moves now, each send not yet collected with × to
- * stop it, and what finished lately. */
+/** Waiting in full, one section for each of Home's rows (H-1): its files'
+ * previews in a grid, the moving one ringed, a send's with × to stop it;
+ * then what finished lately. */
 async function drawWaitingAll(main) {
-  main.append(h("div", { class: "pg" }, pageHead("Waiting", { words: "Home", go: () => go("home") }), h("div", { id: "waiting-all" })));
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Waiting", { words: "Home", go: () => go("home") }), h("div", { id: "waiting-all" })));
   await listsWaitingAll();
 }
 
@@ -316,20 +317,26 @@ async function listsWaitingAll() {
     invoke("outgoing").catch(() => []),
     invoke("activity", { path: null, limit: 200, before: null }).catch(() => []),
   ]);
-  const moving = [...(s?.incoming ?? []).map((t) => ({ ...t, verb: "From" })), ...(s?.outgoing ?? []).map((t) => ({ ...t, verb: "To" }))];
-  const finished = done.filter((r) => r.kind === "collected" || r.kind === "cancelled" || (r.kind === "received" && (r.detail ?? "").startsWith("sent to this device"))).slice(0, 10);
-  put(box, 
-    moving.length ? label("Moving") : null,
-    ...moving.map((t) => listRow(t.verb === "From" ? "arrow-down" : "arrow-up", base(t.path), `${t.verb} ${t.device}`, Math.min(1, Number(t.done) / Number(t.size || 1)))),
-    sends.length ? label("Not collected yet") : null,
-    ...sends.map((o) => row({ ic: fileIcon(o.path), name: base(o.path), sub: [`For ${o.to}`, size(o.size)],
-      end: h("button", { class: "icon-btn", "aria-label": `Stop sending ${base(o.path)}`, onclick: async () => { await cancel(o); listsWaitingAll(); } }, icon("x")) })),
-    !moving.length && !sends.length ? empty("circle-check", "Nothing waiting") : null,
+  const groups = waitingGroups(s, sends);
+  const finished = done.filter((r) => r.kind === "collected" || (r.kind === "received" && (r.detail ?? "").startsWith("sent to this device"))).slice(0, 12);
+  const section = (g) => {
+    const grid = h("div", { class: "a-grid w-grid" });
+    g.files.slice(0, 23).forEach((path, i) => {
+      const cell = h("span", { class: "w-pic w-pic-row", title: base(path) });
+      previewInto(cell, path);
+      if (i === 0 && g.moving && g.size) cell.append(ringOver(g.done / g.size));
+      const send = g.sends.find((o) => o.path === path);
+      if (send) cell.append(h("button", { class: "w-x", "aria-label": `Stop sending ${base(path)}`, onclick: async () => { await cancel(send); listsWaitingAll(); } }, icon("x")));
+      grid.append(cell);
+    });
+    if (g.files.length > 23) grid.append(h("span", { class: "w-pic w-pic-row a-more" }, `+${(g.files.length - 23).toLocaleString()}`));
+    return [h("div", { class: "w-sect" }, waitingWho(g),
+      g.size ? h("span", { class: "chip" }, size(g.size)) : null,
+      g.waitingOn ? h("span", { class: "chip chip-wait" }, g.waitingOn) : null), grid];
+  };
+  put(box,
+    ...(groups.length ? groups.flatMap(section) : [empty("circle-check", "Nothing waiting")]),
     finished.length ? label("Done") : null,
-    ...finished.map((r) => row({
-      ic: tile(r.kind === "cancelled" ? "x" : "circle-check", r.kind === "cancelled" ? "" : "tile-ok"),
-      name: base(r.path),
-      sub: [r.kind === "collected" ? `To ${r.device}` : r.kind === "cancelled" ? "Stopped" : `From ${r.device ?? "another device"}`, ago(r.at)],
-      onclick: r.kind === "received" ? () => invoke("show_received", { id: r.id }).catch((e) => toast(String(e), true)) : null,
-    })));
+    finished.length ? h("div", { class: "a-grid w-grid" }, ...finished.map((r) => { const c = h("span", { class: "w-pic w-pic-row", title: base(r.path ?? "") }); previewInto(c, r.path ?? ""); return c; })) : null);
+  icons(box);
 }

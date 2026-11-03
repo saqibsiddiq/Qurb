@@ -31,7 +31,7 @@ pub enum Contents {
 }
 
 #[cfg(target_os = "linux")]
-pub use linux::{mount, unmount};
+pub use linux::{any, mount, unmount};
 
 #[cfg(not(target_os = "linux"))]
 pub fn mount(_: &Path, _: qurb_storage::ChunkKey, _: qurb_sync::DeviceId, _: PathBuf, _: Contents, _: PathBuf) -> anyhow::Result<()> {
@@ -40,6 +40,11 @@ pub fn mount(_: &Path, _: qurb_storage::ChunkKey, _: qurb_sync::DeviceId, _: Pat
 
 #[cfg(not(target_os = "linux"))]
 pub fn unmount(_: &qurb_sync::DeviceId) {}
+
+#[cfg(not(target_os = "linux"))]
+pub fn any() -> bool {
+    false
+}
 
 #[cfg(target_os = "linux")]
 mod linux {
@@ -124,6 +129,11 @@ mod linux {
         });
         tracing::info!(person = %person.short(), at = %at.display(), "a person's folder mounted");
         Ok(())
+    }
+
+    /// Whether any person's folder is mounted now.
+    pub fn any() -> bool {
+        mounts().lock().map(|m| !m.is_empty()).unwrap_or(true)
     }
 
     /// Unmount `person`'s folder, if it is mounted.

@@ -8,7 +8,8 @@
 //! after starting and every six hours. Where an update can be put in place
 //! while the window runs -- an AppImage on Linux -- it is, and takes over at
 //! the next start; on Windows, where installing closes the window, it is
-//! fetched and waits to be installed from Settings. Installed by a package
+//! fetched and waits to be installed from Settings. In place, it restarts
+//! itself into the new one once nobody is using the window (N-2). Installed by a package
 //! manager, the window cannot replace itself, and says a newer one exists.
 //!
 //! The check sends nothing about the person: one request for a public file.
@@ -174,8 +175,40 @@ pub fn apply(app: &AppHandle) -> Result<(), String> {
     }
 }
 
+/// How often a waiting update looks for a quiet moment to restart in.
+const QUIET_LOOK: Duration = Duration::from_secs(120);
+
+/// An update in place restarts the program by itself once nobody is using
+/// it -- the window closed, nothing moving, no person's folder open -- as
+/// the phone installs while the app is away (the owner's review of
+/// 2026-11-03, N-2): a computer that is everyone's server would otherwise
+/// keep the old one for weeks, waiting for a button.
+fn restart_when_quiet(app: AppHandle) {
+    use tauri::Manager;
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(QUIET_LOOK).await;
+            if state(&app).state != "installed" {
+                continue;
+            }
+            let shown = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(true);
+            let moving = app
+                .try_state::<std::sync::Arc<crate::session::Hosted>>()
+                .and_then(|hosted| hosted.status())
+                .map(|s| !s.incoming.is_empty() || !s.outgoing.is_empty())
+                .unwrap_or(true);
+            if shown || moving || crate::mount::any() {
+                continue;
+            }
+            tracing::info!("restarting into the update, nobody using the window");
+            app.restart();
+        }
+    });
+}
+
 /// Look a minute after starting, and every six hours after.
 pub fn watch(app: AppHandle) {
+    restart_when_quiet(app.clone());
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST_LOOK).await;
         loop {
