@@ -136,22 +136,18 @@ def running(window):
         "return !document.body.classList.contains('setting-up') && document.getElementById('home-mark')")
 
 
-def folder_and_storage(window, choice):
-    window.until("the setting-up screens", "return document.querySelector('.setup-in .choice')")
-    press(window, choice, ".setup-in")
-    window.until("the folder step", "return document.querySelector('.setup-in .field')")
-    window.js(HELPERS + "__smoke.type('.setup-in .field', arguments[0])", f"{HOME}/qurb")
-    window.until("the folder accepted", *enabled("Continue", ".setup-in"))
-    press(window, "Continue", ".setup-in")
-    window.until("a size chosen", "return document.querySelector('.setup-in .amount.on')")
-    window.until("Continue", *enabled("Continue", ".setup-in"))
-    press(window, "Continue", ".setup-in")
+def first_screen(window):
+    """The first run's one screen (the owner's review of 2026-11-03, P-1):
+    Start, or I already use QurbSpace. No folder or size is asked."""
+    window.until("the setting-up screen", *enabled("Start", ".setup-in"))
 
 
 def set_up(window):
-    folder_and_storage(window, "Start hereThis is my first device")
-    window.until("the ready screen", *enabled("Open QurbSpace", ".setup-in"))
-    press(window, "Open QurbSpace", ".setup-in")
+    first_screen(window)
+    press(window, "Start", ".setup-in")
+    # Straight to adding a phone (P-2), left for later here.
+    window.until("Add your phone", *enabled("Later", ".pair"))
+    press(window, "Later", ".pair")
     running(window)
 
 
@@ -169,7 +165,8 @@ def join_by_code(window):
         found = re.search(r"(qurb1-\S+)", line)
         code = found.group(1) if found else None
 
-    folder_and_storage(window, "Join my phoneWith a code from it")
+    first_screen(window)
+    press(window, "I already use QurbSpace", ".setup-in")
     window.until("the join step", "return document.querySelector('.setup-in .digits-in')")
     window.js(HELPERS + "__smoke.type('.setup-in .digits-in', arguments[0])", code)
     press(window, "Join", ".setup-in")
@@ -262,7 +259,7 @@ def pair(window):
     other = f"{HOME}/other"
 
     go(window, "add")
-    press(window, "Show a codeScan it with your phone")
+    press(window, "My phone")
     digits = window.until("six digits on the screen",
         "const d = document.querySelector('.pair > .digits'); return d && /\\d{3} \\d{3}/.test(d.textContent) && d.textContent")
     qr = window.js("return document.querySelector('.qr').innerHTML.length")
@@ -270,8 +267,8 @@ def pair(window):
     code = digits.replace(" ", "")
     # Joined by the six digits (decision 0066), which fetch the long code over
     # this machine's own network; SMOKE_LONG_CODE=1 for the long code instead.
-    if os.environ.get("SMOKE_LONG_CODE"):
-        code = window.js("return document.querySelector('.pair .code').textContent.split(' ').pop()")
+    # The long code is no longer shown on the screen (P-2); the six digits
+    # fetch it.
 
     # The joining side prints the number before it connects, then waits for
     # the window's answer; the window shows who asks and the number it should
@@ -295,9 +292,9 @@ def pair(window):
     press(window, "Approve", ".asking-box")
     rest, _ = joining.communicate(timeout=60)
     assert joining.returncode == 0, f"qurb join failed: {said}{rest}"
-    named = window.until("the window saying paired",
-        "const h = document.querySelector('.arrived h1'); return h && h.textContent")
-    press(window, "Done", ".arrived")
+    # Added, the window goes Home and says so in a moment's note.
+    named = window.until("the window saying added",
+        "const t = [...document.querySelectorAll('.toast')].map((e) => e.textContent).find((w) => w.endsWith(' added')); return t && t.slice(0, -6)")
     return other, named
 
 

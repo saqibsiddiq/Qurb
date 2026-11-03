@@ -185,21 +185,24 @@ function stopPairing() {
   invoke("stop_pairing").catch(() => {});
 }
 
+// Adding a device (P-2 to P-4): *My phone* or *Someone else's*, both to the
+// code screen; entering a code from a phone a small link.
 function drawAdd(main) {
-  const choice = (ic, words, sub, act) => h("button", { class: "choice", onclick: act },
-    h("span", { class: "choice-c" }, icon(ic)), h("b", {}, words), h("small", {}, sub));
+  const choice = (ic, words, act, cls = "") => h("button", { class: `choice ${cls}`.trim(), onclick: act },
+    h("span", { class: "choice-c" }, icon(ic)), h("b", {}, words));
   main.append(h("div", { class: "pg pg-narrow" },
     pageHead("Add a device", { words: "Home", go: () => go("home") }),
     h("div", { class: "choices" },
-      choice("qr-code", "Show a code", "Scan it with your phone", () => go("pair-show", { guest: false })),
-      choice("keyboard", "Enter a code", "Six digits from the other device", () => go("pair-enter")),
-      choice("users", "Add a person", "Someone else's phone, as a guest", () => go("pair-show", { guest: true })))));
+      choice("smartphone", "My phone", () => go("pair-show", { guest: false })),
+      choice("users", "Someone else's", () => go("pair-show", { guest: true }), "choice-person")),
+    h("button", { class: "link", onclick: () => go("pair-enter") }, "Enter a code instead")));
 }
 
-async function drawShowCode(main, { guest }) {
+async function drawShowCode(main, { guest, first }) {
   const stage = h("div", { class: "pair" }, h("span", { class: "empty-orb asking" }, icon("qr-code")));
+  const leave = () => { stopPairing(); go(first ? "home" : "add"); };
   main.append(h("div", { class: "pg pg-narrow" },
-    pageHead(guest ? "Add a person" : "Show a code", { words: "Add a device", go: () => { stopPairing(); go("add"); } }),
+    pageHead(guest ? "Add someone else's phone" : "Add your phone", first ? null : { words: "Add a device", go: leave }),
     stage));
   let inv;
   try { inv = await invoke("start_pairing", { guest }); } catch (e) { put(stage, oops(e)); return; }
@@ -209,10 +212,8 @@ async function drawShowCode(main, { guest }) {
   const digits = h("p", { class: "digits" }, inv.digits ?? "");
   const left = h("p", { class: "count" });
   const answer = h("div", {});
-  const whole = h("details", { class: "tech" }, h("summary", {}, "The whole code"),
-    h("pre", { class: "code" }, guest ? `qurb visit ${inv.code}` : `qurb join <folder> ${inv.code}`),
-    h("pre", { class: "code" }, inv.spoken));
-  put(stage, qr, h("p", { class: "note" }, guest ? "On their phone, on this Wi-Fi" : "Or type these on your phone, on this Wi-Fi"), digits, left, answer, whole);
+  // No sentence of instructions: the phone's own screen says Scan (P-2).
+  put(stage, qr, digits, left, answer, btn("Later", leave, "btn-quiet"));
 
   let asked = null;
   const follow = async () => {
@@ -224,11 +225,14 @@ async function drawShowCode(main, { guest }) {
       if (asked === key) return;
       asked = key;
       qr.classList.add("dim");
+      // The phone that scanned and the six digits to compare (P-3).
       put(answer, h("div", { class: "asking-box" },
-        h("b", {}, s.guest ? `${s.name} wants to visit` : `${s.name} wants to join`),
-        h("small", {}, "Approve only if it shows"),
+        h("span", { class: "circle circle-xl" }, (s.name || "?").trim()[0].toUpperCase()),
+        h("b", {}, s.name),
         h("p", { class: "digits" }, s.number),
+        h("small", {}, icon("smartphone"), " Same on the phone?"),
         actions(btn("Decline", () => reply(false), "btn-quiet"), btn("Approve", () => reply(true), "btn-main"))));
+      icons(answer);
       return;
     }
     if (s.state === "waiting") {
@@ -240,7 +244,7 @@ async function drawShowCode(main, { guest }) {
     }
     clearInterval(pairingWatch);
     pairingWatch = null;
-    if (s.state === "paired") paired(main, s);
+    if (s.state === "paired") { toast(`${s.name ?? "It"} added`); go("home"); }
     else left.textContent = s.state === "expired" ? "Expired. Show a new one" : (s.message ?? "Didn't work");
   };
   const reply = async (yes) => {

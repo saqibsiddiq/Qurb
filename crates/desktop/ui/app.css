@@ -2195,3 +2195,24 @@ body.setting-up .win {
   color: var(--red);
   font-weight: 600;
 }
+
+/* Setting up and adding a device (P-1 to P-4). */
+.btn-wide {
+  min-width: 300px;
+}
+.choice-person .choice-c {
+  background: color-mix(in srgb, #d8a0b8 22%, var(--bg));
+  color: #d8a0b8;
+}
+.asking-box .circle-xl {
+  margin-bottom: 8px;
+}
+.asking-box small {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.asking-box small .ic {
+  width: 14px;
+  height: 14px;
+}
