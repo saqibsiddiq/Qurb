@@ -1,7 +1,8 @@
-// Home, as agreed component by component (docs/design/desktop.md): the
-// chosen device's circle at the top right, the status mark in the middle
-// with one line under it, Send, and Waiting only while something is queued.
-// Nothing else.
+// Home, as agreed component by component (docs/design/desktop.md) and
+// reviewed against the phone's on 2026-11-03 (docs/design/
+// desktop-review-2026-11-03.md): the chosen device's circle at the top
+// right, the status mark in the middle with one line under it, Send, and
+// Waiting only while something is queued. Nothing else.
 
 const HOME = { devices: [], guests: [], summary: null, sends: [], sending: false, note: null, conflicts: 0, beats: 0 };
 
@@ -10,7 +11,7 @@ const HOME = { devices: [], guests: [], summary: null, sends: [], sending: false
 function chosenDevice() {
   let id = null;
   try { id = localStorage.getItem("qurb.chosen"); } catch (e) { /* this run only */ }
-  return HOME.devices.find((d) => d.fingerprint === id)
+  return [...HOME.devices, ...HOME.guests].find((d) => d.fingerprint === id)
     ?? HOME.devices.find((d) => d.kind === "phone" && d.route)
     ?? HOME.devices[0]
     ?? null;
@@ -18,7 +19,6 @@ function chosenDevice() {
 
 function choose(device) {
   try { localStorage.setItem("qurb.chosen", device.fingerprint); } catch (e) { /* this run only */ }
-  closePanel();
   drawCircle();
   liveHome();
 }
@@ -116,67 +116,139 @@ function markClicked() {
   setTimeout(liveHome, 1500);
 }
 
-// ---------- The circle, and its panel ----------
+// ---------- The circle ----------
+
+// As the phone's (the owner's review of 2026-11-03, H-2): a click opens the
+// chosen device's page, and choosing another is *Switch device* there, or a
+// right-click on the circle, the desktop's long press. The dropdown that did
+// both at once, a click choosing and the › beside it opening, is gone.
 
 function drawCircle() {
   const box = $("home-circle");
   if (!box) return;
   const d = chosenDevice();
   const b = d
-    ? h("button", { class: "circle-btn", onclick: togglePanel, "aria-label": `${d.name}, and your other devices` }, circle(d, "circle-lg"))
-    : h("button", { class: "circle-btn", onclick: togglePanel, "aria-label": "Add a device" }, h("span", { class: "circle circle-lg circle-add" }, icon("plus")));
+    ? h("button", { class: "circle-btn", onclick: () => go("device", d), oncontextmenu: (e) => { e.preventDefault(); switchDevice(); }, "aria-label": `${d.name}'s page` }, circle(d, "circle-lg"))
+    : h("button", { class: "circle-btn", onclick: () => go("add"), "aria-label": "Add a device" }, h("span", { class: "circle circle-lg circle-add" }, icon("plus")));
   put(box, b);
 }
 
-function togglePanel() {
-  if ($("panel")) { closePanel(); return; }
+/** The phone's chooser, as a small window: a card for each device, the
+ * chosen one ticked, one that is off with how long since it was seen, the
+ * people who use this computer under their own label, and Add a device. */
+function switchDevice(then) {
   const chosen = chosenDevice();
-  const row = (d, own) => h("div", { class: "p-row" },
-    h("button", { class: "p-main", onclick: () => (own ? choose(d) : go("device", d)) },
-      circle(d, "circle-md"),
-      h("span", { class: "p-name" }, d.name),
-      own && chosen?.fingerprint === d.fingerprint ? icon("check", "p-tick") : null),
-    h("button", { class: "icon-btn", "aria-label": `${d.name}'s page`, onclick: () => go("device", d) }, icon("chevron-right")));
-  const panel = h("div", { class: "panel", id: "panel", role: "dialog" },
-    ...HOME.devices.map((d) => row(d, true)),
-    HOME.guests.length ? h("p", { class: "p-label" }, "People who use this computer") : null,
-    ...HOME.guests.map((d) => row(d, false)),
-    h("button", { class: "p-add", onclick: () => go("add") },
-      h("span", { class: "circle circle-md circle-add" }, icon("plus")), "Add a device"));
-  $("home-circle").append(panel);
-  setTimeout(() => document.addEventListener("mousedown", away, true));
+  const box = sheet({ title: "Switch device" });
+  const card = (d) => h("button", {
+    class: `dev-card${chosen?.fingerprint === d.fingerprint ? " on" : ""}`,
+    onclick: () => { box.close(); choose(d); then?.(d); },
+  }, circle(d, "circle-md"), h("b", {}, d.name),
+  chosen?.fingerprint === d.fingerprint ? icon("check", "dev-tick")
+    : !d.route && d.last_seen ? h("small", {}, ago(d.last_seen)) : null);
+  box.append(
+    ...HOME.devices.map(card),
+    HOME.guests.length ? label("People") : null,
+    ...HOME.guests.map(card),
+    h("button", { class: "dev-card dev-add", onclick: () => { box.close(); go("add"); } },
+      h("span", { class: "circle circle-md circle-add" }, icon("plus")), h("b", {}, "Add a device")));
+  icons(box);
 }
 
-function away(e) {
-  if (!e.target.closest("#panel") && !e.target.closest(".circle-btn")) closePanel();
-}
-
-function closePanel() {
-  $("panel")?.remove();
-  document.removeEventListener("mousedown", away, true);
-}
+/** Kept for places that still close it on the way out: there is no panel. */
+function closePanel() {}
 
 // ---------- Waiting ----------
+
+// One row for each device files are going to or coming from, as on the
+// phone (the owner's review of 2026-11-03, H-1): which way, the device's
+// circle and name, a stack of the files' previews with a ring over the one
+// moving, a number, a size, and a chip only when it waits on something --
+// "Open the app" for a phone, which takes what it was sent only while
+// QurbSpace is open on it (decision 0082), "Off" for a computer.
+
+/** Everything waiting, grouped by device and direction. */
+function waitingGroups(s, sends) {
+  const groups = new Map();
+  const all = [...HOME.devices, ...HOME.guests];
+  const at = (coming, name, id) => {
+    const key = `${coming ? "in" : "out"}:${id ?? name}`;
+    if (!groups.has(key)) {
+      const device = all.find((d) => d.id === id || d.name === name) ?? null;
+      groups.set(key, { coming, name, device, files: [], size: 0, done: 0, moving: false, sends: [] });
+    }
+    return groups.get(key);
+  };
+  for (const t of s?.incoming ?? []) {
+    const g = at(true, t.device);
+    g.files.push(t.path); g.size += Number(t.size); g.done += Number(t.done); g.moving = true;
+  }
+  for (const t of s?.outgoing ?? []) {
+    const g = at(false, t.device);
+    g.files.push(t.path); g.size += Number(t.size); g.done += Number(t.done); g.moving = true;
+  }
+  for (const o of sends) {
+    const g = at(false, o.to, o.to_id);
+    if (!g.files.includes(o.path)) { g.files.push(o.path); g.size += Number(o.size); }
+    g.sends.push(o);
+  }
+  for (const g of groups.values()) {
+    const d = g.device;
+    g.waitingOn = g.moving || !d || d.route ? null : d.kind === "phone" ? "Open the app" : "Off";
+  }
+  return [...groups.values()];
+}
+
+/** A file's preview into `el` when it can be had here; its kind's icon until. */
+function previewInto(el, path) {
+  el.append(icon(fileIcon(path)));
+  if (kindOf(path) !== "image") return;
+  invoke("preview", { path, small: true }).then((p) => {
+    if (p?.kind === "image") put(el, h("img", { src: p.data, alt: "" }));
+  }).catch(() => {});
+}
+
+/** Up to three previews, fanned, a ring over the first while it moves. */
+function previewStack(files, done) {
+  const box = h("span", { class: "w-stack" });
+  files.slice(0, 3).forEach((path, i) => {
+    const cell = h("span", { class: "w-pic", style: { left: `${i * 8}px`, transform: `rotate(${i * 6}deg)`, zIndex: 3 - i } });
+    previewInto(cell, path);
+    if (i === 0 && done != null && done < 1) cell.append(ringOver(done));
+    box.append(cell);
+  });
+  return box;
+}
+
+function ringOver(done) {
+  const r = 9, c = 2 * Math.PI * r;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "w-ring");
+  svg.innerHTML = `<circle cx="12" cy="12" r="${r}" class="w-ring-track"/><circle cx="12" cy="12" r="${r}" class="w-ring-arc" stroke-dasharray="${Math.max(0.03, done) * c} ${c}"/>`;
+  return svg;
+}
+
+/** ↑ or ↓, the device's circle, its name. */
+function waitingWho(g) {
+  return h("span", { class: "w-who" }, icon(g.coming ? "arrow-down" : "arrow-up", "w-dir"),
+    g.device ? circle(g.device, "circle-xs") : null, h("b", {}, g.name));
+}
 
 function drawWaiting() {
   const box = $("home-waiting");
   if (!box) return;
-  const s = HOME.summary;
-  const moving = [...(s?.incoming ?? []), ...(s?.outgoing ?? [])].map((t) => ({
-    name: t.path.split("/").pop(),
-    progress: Math.min(1, Number(t.done) / Number(t.size || 1)),
-  }));
-  const ready = HOME.sends.map((o) => ({ name: o.path.split("/").pop(), to: o.to, cancel: () => cancel(o) }));
-  const all = [...moving, ...ready];
-  if (!all.length) { put(box); return; }
-  const rows = all.slice(0, 3).map((w) => h("div", { class: "w-row" },
-    h("span", { class: "w-tile" }, icon(w.to ? "send" : "arrow-down")),
-    h("div", { class: "w-main" },
-      h("b", {}, w.name),
-      w.to ? h("small", {}, `Ready for ${w.to}`) : h("span", { class: "w-bar" }, h("i", { style: { width: `${Math.round(w.progress * 100)}%` } }))),
-    w.cancel ? h("button", { class: "icon-btn", "aria-label": `Stop sending ${w.name}`, onclick: w.cancel }, icon("x")) : null));
-  if (all.length > 3) rows.push(h("button", { class: "w-more", onclick: () => go("waiting") }, `${all.length - 3} more`));
-  put(box, h("div", { class: "w-hd" }, "Waiting", h("span", { class: "badge" }, all.length)), ...rows);
+  const groups = waitingGroups(HOME.summary, HOME.sends);
+  if (!groups.length) { put(box); return; }
+  const rows = groups.map((g) => h("button", { class: "w-row", onclick: () => go("waiting") },
+    previewStack(g.files, g.moving && g.size ? g.done / g.size : null),
+    h("span", { class: "w-main" },
+      waitingWho(g),
+      h("span", { class: "w-chips" },
+        h("span", { class: "chip" }, Number(g.files.length).toLocaleString()),
+        g.size ? h("span", { class: "chip" }, size(g.size)) : null,
+        g.waitingOn ? h("span", { class: "chip chip-wait" }, icon(g.device?.kind === "phone" ? "smartphone" : "laptop"), g.waitingOn) : null)),
+    icon("chevron-right", "row-go")));
+  put(box, h("div", { class: "w-hd" }, "Waiting", h("span", { class: "badge" }, groups.length)), h("div", { class: "w-card" }, ...rows));
 }
 
 async function cancel(o) {

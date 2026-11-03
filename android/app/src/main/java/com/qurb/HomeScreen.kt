@@ -198,10 +198,9 @@ class HomeScreen(app: MainActivity) : Screen(app) {
     private fun showWaiting(state: State): Boolean {
         val box = views.waiting
         box.removeAllViews()
-        val files = state.outstanding.files
-        val backupLeft = backupsLeft(state)
-        val restoring = Restore.running
-        val count = files.size + state.sends.size + backupLeft + (if (restoring != null) 1 else 0)
+        val groups = Waits.groups(app, state.peers, state.holders, state.outstanding, state.sends, state.backup,
+            if (backupsLeft(state) > 0) BackingUp.round(app, state.backup, state.served, state.going) else null)
+        val count = groups.size
         box.visibility = if (count == 0) View.GONE else View.VISIBLE
         if (count == 0) return false
 
@@ -228,49 +227,9 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
         ).apply { topMargin = kit.dp(8) })
 
-        // A restore going (the owner's review of 2026-11-02, D-2): from where,
-        // how far, and the file now coming back.
-        if (restoring != null) {
-            val fraction = if (restoring.bytes > 0uL) restoring.bytesDone.toFloat() / restoring.bytes.toFloat() else 0f
-            kit.queueRow(queue, R.drawable.ic_rotate_ccw, "Restoring from ${restoring.from}", "", fraction,
-                detail = restoring.current.ifEmpty { null },
-                after = "${restoring.done} of ${restoring.files}")
-        }
-        for (f in files.take(WAITING_ROWS)) {
-            kit.queueRow(queue, States.icon(f.path), f.path.substringAfterLast('/'), Words.size(f.size))
-        }
-        if (files.size > WAITING_ROWS) {
-            kit.queueRow(queue, R.drawable.ic_upload, "${files.size - WAITING_ROWS} more",
-                Words.size(files.drop(WAITING_ROWS).sumOf { it.size }))
-        }
-        for (w in state.sends.take(WAITING_ROWS)) {
-            kit.queueRow(queue, R.drawable.ic_send, w.path.substringAfterLast('/'), Words.size(w.size))
-        }
-        if (state.sends.size > WAITING_ROWS) {
-            kit.queueRow(queue, R.drawable.ic_send, "${state.sends.size - WAITING_ROWS} more",
-                Words.size(state.sends.drop(WAITING_ROWS).sumOf { it.size }))
-        }
-        // A backup going: where to, how far this round has got and how much
-        // it is, then the files themselves, each with its folder and size
-        // (the owner's list of 2026-10-25, which had only *Folders, 18 files*
-        // and a bar measured against the whole backup, always full).
-        if (backupLeft > 0) {
-            val round = BackingUp.round(app, state.backup, state.served, state.going)
-            val to = state.holders.firstOrNull()?.name
-            // The title and what is going given the row's whole width; how
-            // much under the bar, where a size at the end cut both short.
-            kit.queueRow(queue, R.drawable.ic_hard_drive, if (to != null) "Backing up to $to" else "Backing up",
-                "", round.fraction, detail = round.what, after = round.sizes)
-            val named = state.backup.files.take(WAITING_ROWS)
-            for (f in named) {
-                kit.queueRow(queue, States.icon(f.name), f.name, Words.size(f.size), detail = f.folder.ifEmpty { null })
-            }
-            val rest = backupLeft - named.size
-            if (rest > 0) {
-                kit.queueRow(queue, R.drawable.ic_folder, "${Words.count(rest.toLong())} more",
-                    Words.size(state.backup.bytesLeft - named.sumOf { it.size }))
-            }
-        }
+        // One row for each device (the owner's review of 2026-11-03, H-1),
+        // each opening the Waiting page.
+        for (g in groups) Waits.row(app, scope, queue, g) { app.push(WaitingScreen(app)) }
         return true
     }
 

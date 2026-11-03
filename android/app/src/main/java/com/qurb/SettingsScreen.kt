@@ -50,6 +50,8 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         /** The name set here, or empty. */
         val name: String,
         val picture: android.graphics.Bitmap?,
+        /** Files in this phone's Recently deleted. */
+        val deleted: Int,
     )
 
     override fun refresh() {
@@ -72,6 +74,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
                         app.cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }.toULong(),
                         profile?.name.orEmpty(),
                         profile?.picture?.let { Devices.decode(it) },
+                        runCatching { engine.recentlyDeleted().size }.getOrDefault(0),
                     )
                 }
                 show(state)
@@ -119,7 +122,12 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         kit.label(page, "Manage storage")
         card = kit.card(page)
         kit.setting(card, R.drawable.ic_hard_drive, "Devices") { app.push(StorageScreen(app)) }
-        kit.setting(card, R.drawable.ic_trash_2, "Clear cache", Words.size(state.cache)) { clearCache(state.cache) }
+        // Back since the owner's review of 2026-11-03: a file deleted from
+        // the Private Vault here had nowhere to be put back from.
+        kit.setting(card, R.drawable.ic_trash_2, "Recently deleted", if (state.deleted > 0) state.deleted.toString() else "") {
+            app.push(DeletedScreen(app, fromSettings = true))
+        }
+        kit.setting(card, R.drawable.ic_file_archive, "Clear cache", Words.size(state.cache)) { clearCache(state.cache) }
         // Its own row, never part of the cache: the devices sent to have
         // these, but one may have lost its copy since (decision 0030).
         if (state.sentCopies > 0uL) {

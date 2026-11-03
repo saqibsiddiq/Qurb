@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop Files</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mockup for the owner's review of 2026-11-03: the desktop's Files, made to
+   follow the phone's (agreed 2026-11-01 and 02). Not product code. */
+:root{--bg:#0e1210;--raised:#171c19;--soft:#1b211e;--line:#262e2a;--ink:#edf1ee;--ink2:#b9c1bc;--mute:#87918b;
+  --green:#4fa585;--green2:#5db896;--greenSoft:#172520;--warn:#d9a64a;--blue:#5b9bff;--red:#ef6b5d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:#171816;padding:32px 16px 80px}
+header.page{max-width:1500px;margin:0 auto 10px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:#5F625C;margin-top:6px;font-size:15px;line-height:1.55;max-width:960px}
+.grid{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center;max-width:2100px;margin:30px auto 0}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;color:#5F625C;text-align:center;line-height:1.5;max-width:560px}
+figcaption b{color:#171816;font-weight:600}
+figcaption b:first-child{display:block;font-size:14px;margin-bottom:2px}
+svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.s{width:16px;height:16px}svg.ic.xs{width:13px;height:13px}svg.ic.l{width:24px;height:24px}
+.win{width:1000px;height:640px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;box-shadow:0 24px 60px rgba(0,0,0,.28);font-size:14px;position:relative}
+.tb{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;z-index:5}
+.tb i{width:11px;height:11px;border-radius:50%;background:#3a403c}
+.sb{width:210px;flex:none;border-right:1px solid var(--line);padding:40px 12px 16px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:700;font-size:15px;padding:0 12px 18px}
+.nav{display:flex;align-items:center;gap:12px;height:36px;padding:0 12px;border-radius:9px;color:var(--ink2)}
+.nav.on{background:var(--greenSoft);color:var(--green2);font-weight:600}
+.main{flex:1;position:relative;overflow:hidden;padding:44px 48px 0}
+.top{display:flex;align-items:center;gap:8px}
+.top h1{font-size:26px;font-weight:700;letter-spacing:-.02em;flex:1}
+.ib{width:36px;height:36px;border-radius:18px;display:grid;place-items:center;color:var(--ink)}
+.ib.g{background:var(--greenSoft);color:var(--green2)}
+.path{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:13px;margin-bottom:4px}
+.path .on{color:var(--green2);font-weight:600}
+.search{display:flex;align-items:center;gap:10px;height:42px;border-radius:21px;background:var(--raised);border:1px solid var(--line);padding:0 16px;color:var(--mute);margin-top:16px}
+.lab{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:26px 4px 10px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.tile{background:var(--raised);border:1px solid var(--line);border-radius:18px;padding:16px;height:96px;display:flex;flex-direction:column;justify-content:space-between;color:var(--green2);position:relative}
+.tile .n{color:var(--ink);font-weight:500;font-size:15px}
+.tile .side{position:absolute;right:14px;top:14px;color:var(--mute);font-size:12px}
+.tile.locked{opacity:.55}
+.av{width:30px;height:30px;border-radius:50%;position:relative;display:grid;place-items:center;color:#fff;font-weight:600;font-size:13px}
+.av.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}.av.ammi{background:linear-gradient(135deg,#d8a0b8,#7a4660)}
+.av .d{position:absolute;right:-2px;bottom:-2px;width:10px;height:10px;border-radius:50%;border:2px solid var(--raised);background:var(--blue)}
+.hover{position:absolute;left:12px;right:12px;bottom:-34px;background:#26302b;color:var(--ink);font-size:12px;padding:6px 10px;border-radius:8px;display:flex;gap:10px;box-shadow:0 8px 20px rgba(0,0,0,.4);z-index:3}
+.rows{margin-top:18px}
+.row{display:flex;align-items:center;gap:14px;height:54px;padding:0 10px;border-radius:10px}
+.row.sel{background:var(--greenSoft)}
+.row .nm{flex:1;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .c{width:110px;color:var(--mute);font-size:13px;text-align:right}
+.th{width:38px;height:38px;border-radius:9px;flex:none;position:relative;overflow:hidden;display:grid;place-items:center}
+.th.f{background:var(--greenSoft);color:var(--green2)}
+.th.doc{background:#f4f4f0;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:7px 6px}
+.th.doc i{display:block;height:2.5px;width:100%;background:#d5d7d1;border-radius:2px}
+.th.doc b{position:absolute;bottom:3px;right:3px;font-size:7px;font-weight:700;color:#fff;border-radius:3px;padding:1px 3px}
+.play{width:0;height:0;border-left:9px solid rgba(255,255,255,.95);border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:2px}
+.gr{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:18px}
+.gt{display:flex;flex-direction:column;gap:7px}
+.gt .th{width:100%;height:auto;aspect-ratio:1;border-radius:14px}
+.gt .th.doc{padding:16px 14px;gap:7px}.gt .th.doc i{height:4px}.gt .th.doc b{font-size:9px;bottom:7px;right:7px}
+.gt .th.f svg{width:34px;height:34px}
+.gt .nm{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+.ck{position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:11px;border:2px solid rgba(255,255,255,.85);background:rgba(0,0,0,.25)}
+.ck.on{background:var(--green);border-color:var(--green);display:grid;place-items:center;color:#0b1410}
+.gt.sel .th{outline:3px solid var(--green);outline-offset:-3px}
+.selbar{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;display:flex;gap:4px;background:#1f2623;border:1px solid var(--line);border-radius:16px;padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.6)}
+.selbar div{display:flex;flex-direction:column;align-items:center;gap:4px;width:72px;padding:8px 0;border-radius:10px;font-size:12px;color:var(--ink2)}
+.selbar .red{color:var(--red)}
+.menu{position:absolute;width:220px;background:#1d2420;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.6);padding:6px;z-index:4}
+.mi{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:var(--ink)}
+.mi.on{background:var(--soft)}
+.mi .k{margin-left:auto;color:var(--mute);font-size:12px}
+.mi.red{color:var(--red)}
+.sep{height:1px;background:var(--line);margin:5px 6px}
+.ml{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);padding:8px 10px 4px}
+.day{font-size:13px;font-weight:600;color:var(--ink2);margin:22px 10px 6px}
+.from{display:flex;align-items:center;gap:7px;color:var(--mute);font-size:13px;width:170px}
+.from .av{width:20px;height:20px;font-size:10px}
+.peek{position:absolute;inset:0;background:rgba(5,7,6,.92);z-index:6;display:flex;flex-direction:column}
+.peek .bar{display:flex;align-items:center;gap:12px;padding:14px 18px;color:var(--ink)}
+.peek .bar b{flex:1;font-weight:600}
+.peek .btn{height:34px;padding:0 14px;border-radius:17px;background:var(--green);color:#0b1410;font-weight:600;display:flex;align-items:center;gap:8px}
+.peek .stage{flex:1;display:flex;align-items:center;justify-content:center;gap:24px}
+.peek .pic{width:560px;height:420px;border-radius:10px;background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)}
+.peek .nav2{width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,.08);display:grid;place-items:center;color:var(--ink)}
+.peek .foot{text-align:center;color:var(--mute);font-size:12px;padding:12px}
+.kbd{display:inline-block;border:1px solid #3a423e;border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:11px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="fplus" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/><path d="M12 10v6M9 13h6"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="move" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+<symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+<symbol id="open" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+<symbol id="gridi" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+</defs></svg>
+
+<header class="page">
+  <h1>The desktop's Files, as the phone's</h1>
+  <p>Mockup for the review of 3 November. Every pattern here is one agreed for the phone on 1–2 November, at desktop width: places as tiles with one word each, one identical folder page for Shared, Vault and a phone's backups, previews instead of icons, a selection bar at the bottom, a ⋮ with only Sort and View, and Received as a log by day. Right-click is the desktop's long press; Space is its quick preview.</p>
+</header>
+
+<div class="grid">
+
+<!-- F1 -->
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main">
+    <div class="top"><h1>Files</h1></div>
+    <div class="search"><svg class="ic s"><use href="#search"/></svg>Search</div>
+    <div class="lab">This computer</div>
+    <div class="tiles">
+      <div class="tile"><svg class="ic l"><use href="#share"/></svg><span class="n">Shared</span></div>
+      <div class="tile"><svg class="ic l"><use href="#lock"/></svg><span class="n">Vault</span>
+        <div class="hover"><span>1,204 files</span><span>3.1 GB</span></div></div>
+      <div class="tile"><svg class="ic l"><use href="#inbox"/></svg><span class="n">Received</span></div>
+    </div>
+    <div class="lab" style="margin-top:44px">Phones</div>
+    <div class="tiles">
+      <div class="tile"><span class="av ph">G<span class="d"></span></span><span class="n">Galaxy S23</span><span class="side">37 GB</span></div>
+      <div class="tile locked"><span class="av ammi">A</span><span class="n">Ammi's phone</span><span class="side"><svg class="ic s"><use href="#lock"/></svg></span></div>
+    </div>
+  </div></div>
+<figcaption><b>F1 · Files</b>The phone's Files top, from the computer: <b>This computer</b> (Shared, Vault, Received, one word each) and <b>Phones</b> (each phone's backups here, under the phone's name, with the size it takes; another person's locked). Hovering a tile shows its files and size, as holding one does on the phone. <b>Recently deleted</b> leaves Files for Settings → Storage, as on the phone.</figcaption></figure>
+
+<!-- F2 -->
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main">
+    <div class="path">Files<svg class="ic xs"><use href="#chev"/></svg><span class="on">Shared</span></div>
+    <div class="top"><h1>Shared</h1>
+      <span class="ib"><svg class="ic"><use href="#search"/></svg></span>
+      <span class="ib"><svg class="ic"><use href="#fplus"/></svg></span>
+      <span class="ib g"><svg class="ic"><use href="#plus"/></svg></span>
+      <span class="ib"><svg class="ic"><use href="#dots"/></svg></span></div>
+    <div class="rows">
+      <div class="row"><span class="th f"><svg class="ic s"><use href="#folder"/></svg></span><span class="nm">Camera</span><span class="c">Today</span><span class="c">412 files</span></div>
+      <div class="row"><span class="th f"><svg class="ic s"><use href="#folder"/></svg></span><span class="nm">Work</span><span class="c">Yesterday</span><span class="c">38 files</span></div>
+      <div class="row"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><b style="background:#c4412f">PDF</b></span><span class="nm">Project Plan.pdf</span><span class="c">5 min ago</span><span class="c">2.4 MB</span></div>
+      <div class="row"><span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span><span class="nm">Sunset at Clifton.jpg</span><span class="c">2 h ago</span><span class="c">3.8 MB</span></div>
+      <div class="row"><span class="th" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="play"></span></span><span class="nm">Holiday clip.mp4</span><span class="c">14 h ago</span><span class="c">84 MB</span></div>
+      <div class="row"><span class="th doc"><i></i><i></i><i></i><i style="width:40%"></i><b style="background:#1f7a46">XLS</b></span><span class="nm">Budget 2026.xlsx</span><span class="c">2 days ago</span><span class="c">88 KB</span></div>
+      <div class="row"><span class="th doc"><i></i><i></i><i style="width:70%"></i><i></i><b style="background:#6b7280">MD</b></span><span class="nm">Notes.md</span><span class="c">3 days ago</span><span class="c">1.8 KB</span></div>
+    </div>
+    <div class="menu" style="right:48px;top:92px">
+      <div class="ml">Sort</div>
+      <div class="mi on">Name<span class="k"><svg class="ic s" style="color:var(--green2)"><use href="#check"/></svg></span></div>
+      <div class="mi">Date</div><div class="mi">Size</div><div class="mi">Type</div>
+      <div class="sep"></div>
+      <div class="mi">A to Z<span class="k"><svg class="ic s" style="color:var(--green2)"><use href="#check"/></svg></span></div><div class="mi">Z to A</div>
+      <div class="sep"></div>
+      <div class="ml">View</div>
+      <div class="mi on"><svg class="ic s"><use href="#list"/></svg>List<span class="k"><svg class="ic s" style="color:var(--green2)"><use href="#check"/></svg></span></div>
+      <div class="mi"><svg class="ic s"><use href="#gridi"/></svg>Grid</div>
+    </div>
+  </div></div>
+<figcaption><b>F2 · A folder: Shared, Vault, a phone's backups, all alike</b>The phone's folder page: a path you can click, the title, then search, new folder, + (files or a folder from this computer) and ⋮. The ⋮ has only Sort and View, in three sections, remembered for each folder. Previews in place of icons. No badges: a file kept only on another device is fetched when opened. The desktop adds only what its width allows: date and size in columns.</figcaption></figure>
+
+<!-- F3 -->
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main">
+    <div class="top"><span class="ib"><svg class="ic"><use href="#x"/></svg></span><h1 style="font-size:22px">3 selected</h1><span style="color:var(--green2);font-weight:600">All</span></div>
+    <div class="gr">
+      <div class="gt"><span class="th f"><svg class="ic"><use href="#folder"/></svg></span><span class="nm">Camera</span></div>
+      <div class="gt sel"><span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"><span class="ck on"><svg class="ic xs"><use href="#check"/></svg></span></span><span class="nm">Sunset at Clifton.jpg</span></div>
+      <div class="gt sel"><span class="th" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="play"></span><span class="ck on"><svg class="ic xs"><use href="#check"/></svg></span></span><span class="nm">Holiday clip.mp4</span></div>
+      <div class="gt"><span class="th" style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"><span class="ck"></span></span><span class="nm">Garden.jpg</span></div>
+      <div class="gt sel"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><b style="background:#c4412f">PDF</b><span class="ck on"><svg class="ic xs"><use href="#check"/></svg></span></span><span class="nm">Project Plan.pdf</span></div>
+      <div class="gt"><span class="th" style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"><span class="ck"></span></span><span class="nm">Eid 2026.jpg</span></div>
+      <div class="gt"><span class="th doc"><i></i><i></i><i></i><i style="width:40%"></i><b style="background:#1f7a46">XLS</b><span class="ck"></span></span><span class="nm">Budget 2026.xlsx</span></div>
+    </div>
+    <div class="selbar">
+      <div><svg class="ic"><use href="#move"/></svg>Move</div>
+      <div><svg class="ic"><use href="#copy"/></svg>Copy</div>
+      <div><svg class="ic"><use href="#share"/></svg>Share</div>
+      <div class="red"><svg class="ic"><use href="#trash"/></svg>Delete</div>
+      <div><svg class="ic"><use href="#dots"/></svg>More</div>
+    </div>
+  </div></div>
+<figcaption><b>F3 · Selecting, in the grid view</b>The phone's selection: the title becomes "3 selected" with × and <b>All</b>, and a bar at the bottom offers Move, Copy, Share, Delete, More. On the desktop a click with Ctrl or Shift starts it, as in any file manager. Move and Copy work as on the phone: go to the folder, then <b>Move here</b> / <b>Copy here</b>. Dragging works too.</figcaption></figure>
+
+<!-- F4 -->
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main">
+    <div class="path">Files<svg class="ic xs"><use href="#chev"/></svg><span class="on">Shared</span></div>
+    <div class="top"><h1>Shared</h1>
+      <span class="ib"><svg class="ic"><use href="#search"/></svg></span>
+      <span class="ib"><svg class="ic"><use href="#fplus"/></svg></span>
+      <span class="ib g"><svg class="ic"><use href="#plus"/></svg></span>
+      <span class="ib"><svg class="ic"><use href="#dots"/></svg></span></div>
+    <div class="rows">
+      <div class="row"><span class="th f"><svg class="ic s"><use href="#folder"/></svg></span><span class="nm">Camera</span><span class="c">Today</span><span class="c">412 files</span></div>
+      <div class="row"><span class="th f"><svg class="ic s"><use href="#folder"/></svg></span><span class="nm">Work</span><span class="c">Yesterday</span><span class="c">38 files</span></div>
+      <div class="row"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><b style="background:#c4412f">PDF</b></span><span class="nm">Project Plan.pdf</span><span class="c">5 min ago</span><span class="c">2.4 MB</span></div>
+      <div class="row sel"><span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span><span class="nm">Sunset at Clifton.jpg</span><span class="c">2 h ago</span><span class="c">3.8 MB</span></div>
+      <div class="row"><span class="th" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="play"></span></span><span class="nm">Holiday clip.mp4</span><span class="c">14 h ago</span><span class="c">84 MB</span></div>
+    </div>
+    <div class="menu" style="left:270px;top:300px">
+      <div class="mi"><svg class="ic s"><use href="#open"/></svg>Open</div>
+      <div class="mi on"><svg class="ic s"><use href="#eye"/></svg>Preview<span class="k"><span class="kbd">Space</span></span></div>
+      <div class="sep"></div>
+      <div class="mi"><svg class="ic s"><use href="#pen"/></svg>Rename</div>
+      <div class="mi"><svg class="ic s"><use href="#copy"/></svg>Copy</div>
+      <div class="mi"><svg class="ic s"><use href="#move"/></svg>Move</div>
+      <div class="mi"><svg class="ic s"><use href="#share"/></svg>Share</div>
+      <div class="mi"><svg class="ic s"><use href="#info"/></svg>Details</div>
+      <div class="sep"></div>
+      <div class="mi red"><svg class="ic s"><use href="#trash"/></svg>Delete</div>
+    </div>
+  </div></div>
+<figcaption><b>F4 · Right-click: every option</b>What a long press gives on the phone, in the same order, grouped by separators. A double-click opens, as a tap does on the phone.</figcaption></figure>
+
+<!-- F5 -->
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main">
+    <div class="path">Files<svg class="ic xs"><use href="#chev"/></svg><span class="on">Received</span></div>
+    <div class="top"><h1>Received</h1><span class="ib"><svg class="ic"><use href="#search"/></svg></span><span class="ib"><svg class="ic"><use href="#dots"/></svg></span></div>
+    <div class="day">Today</div>
+    <div class="row"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><b style="background:#c4412f">PDF</b></span><span class="nm">Tickets.pdf</span><span class="from"><span class="av ph">G</span>Galaxy S23</span><span class="c">10:42</span></div>
+    <div class="row"><span class="th" style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"></span><span class="nm">IMG_4471.jpg</span><span class="from"><span class="av ph">G</span>Galaxy S23</span><span class="c">10:41</span></div>
+    <div class="day">Yesterday</div>
+    <div class="row"><span class="th" style="background:linear-gradient(140deg,#e8e0c8,#a99766 60%,#4a4128)"></span><span class="nm">Ammi's recipe card.jpg</span><span class="from"><span class="av ammi">A</span>Ammi's phone</span><span class="c">19:05</span></div>
+    <div class="row"><span class="th doc"><i></i><i></i><i></i><i style="width:45%"></i><b style="background:#2b5fb4">DOC</b></span><span class="nm">CV 2026.docx</span><span class="from"><span class="av ph">G</span>Galaxy S23</span><span class="c">08:12</span></div>
+    <div class="day">28 October</div>
+    <div class="row"><span class="th" style="background:linear-gradient(190deg,#d6d0f4,#7b6ac2 60%,#2f2754)"><span class="play"></span></span><span class="nm">Wedding clip.mp4</span><span class="from"><span class="av ammi">A</span>Ammi's phone</span><span class="c">21:30</span></div>
+  </div></div>
+<figcaption><b>F5 · Received</b>The phone's Received (R-1 to R-4): a log by day, each file with its preview and the sender's picture and name. No Rename. Empty, it says so in the middle of the page.</figcaption></figure>
+
+<!-- F6 -->
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"></div>
+  <div class="peek">
+    <div class="bar"><span class="ib"><svg class="ic"><use href="#x"/></svg></span><b>Sunset at Clifton.jpg</b><span class="btn"><svg class="ic s"><use href="#open"/></svg>Open</span></div>
+    <div class="stage"><span class="nav2"><svg class="ic"><use href="#back"/></svg></span><span class="pic"></span><span class="nav2"><svg class="ic"><use href="#chev"/></svg></span></div>
+    <div class="foot"><span class="kbd">←</span> <span class="kbd">→</span> to go through the folder &nbsp; <span class="kbd">Esc</span> to close</div>
+  </div></div>
+<figcaption><b>F6 · Quick preview</b>Space, or Preview in the menu: the phone's quick preview over the window. Photos, video and songs play here; PDFs by page; text and code; spreadsheets as a table; Word and slides converted by this computer. Arrows go through the folder; <b>Open</b> hands it to an app. (The words under the picture are for this review; the window shows the keys alone.)</figcaption></figure>
+
+</div>
+</body>
+</html>

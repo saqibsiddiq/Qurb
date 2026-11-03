@@ -3,78 +3,67 @@
 
 // ---------- A device's page ----------
 
+// The phone's device page (the owner's review of 2026-11-03, H-2): its
+// circle, name, On or Off and ⓘ; one card of what it keeps here; Remove in
+// red and Switch device in blue. Identity, pairing, the path and an earlier
+// setup are behind ⓘ, off the page; Send is Home's alone.
+
 function drawDevicePage(main, d) {
   HOME.page = d;
-  const own = d.relation === "own";
   main.append(
     h("div", { class: "page" },
       h("button", { class: "back", onclick: () => go("home") }, icon("arrow-left"), "Home"),
-      h("div", { class: "page-hd" },
+      h("div", { class: "dev-hd" },
         circle(d, "circle-xl"),
-        h("h1", {}, d.name),
-        h("p", { class: `state ${d.route ? "on" : "off"}` }, d.route ? (d.route === "relay" ? "Online, through the relay" : "Online") : d.last_seen ? `Off, seen ${ago(d.last_seen)}` : "Not connected yet")),
-      own && chosenDevice()?.fingerprint !== d.fingerprint
-        ? h("button", { class: "btn btn-quiet", onclick: () => { choose(d); go("device", d); } }, icon("send"), "Send here")
-        : null,
-      h("div", { class: "page-list", id: "page-list" }),
-      h("details", { class: "tech" },
-        h("summary", {}, "Details"),
-        h("dl", {},
-          h("dt", {}, "Identity"), h("dd", {}, d.fingerprint),
-          h("dt", {}, "Paired"), h("dd", {}, ago(d.paired_at)),
-          h("dt", {}, "Path"), h("dd", {}, d.route === "relay" ? "Relayed" : d.route === "direct" ? "Direct" : "Not connected"),
-          d.address ? [h("dt", {}, "Address"), h("dd", {}, d.address)] : null)),
-      h("button", { class: "remove", onclick: () => askToRemove(d) }, d.relation === "guest" ? "Remove this person" : "Remove this device")));
+        h("div", { class: "dev-words" },
+          h("h1", {}, d.name),
+          h("p", { class: "state" }, d.route ? "On" : d.last_seen ? h("span", {}, "Off", h("small", {}, ago(d.last_seen))) : "Off")),
+        h("button", { class: "icon-btn", "aria-label": `About ${d.name}`, onclick: () => aboutDevice(d) }, icon("info"))),
+      h("div", { id: "page-list" }),
+      h("button", { class: "big-btn big-red", onclick: () => askToRemove(d) }, d.relation === "guest" ? "Remove this person" : "Remove"),
+      h("button", { class: "big-btn big-blue", onclick: () => switchDevice((to) => go("device", to)) }, "Switch device")));
   listsDevicePage();
+}
+
+/** Who it is, behind ⓘ: its identity, when it was paired, how it is
+ * reached now, and what it was before it was set up again. */
+async function aboutDevice(d) {
+  const all = await invoke("devices").catch(() => []);
+  const box = sheet({ ic: circle(d, "circle-lg"), title: d.name });
+  const earlier = d.earlier ? all.find((e) => e.id === d.earlier) : null;
+  const later = d.relation === "own" && !d.replaced_by
+    ? all.filter((x) => x.relation === "own" && !x.replaced_by && x.id !== d.id && x.paired_at > d.paired_at)
+    : [];
+  box.append(h("div", { class: "grp-box" },
+    setting({ ic: "key-round", name: "Identity", value: d.fingerprint.slice(0, 8) }),
+    setting({ ic: "clock", name: "Paired", value: ago(d.paired_at) }),
+    setting({ ic: "link", name: "Path", value: d.route === "relay" ? "Relayed" : d.route === "direct" ? "Direct" : "Not connected" }),
+    earlier ? setting({ ic: "history", name: "Earlier setup", value: earlier.held ? earlier.held.bytes : "", onclick: () => { box.close(); askToRemove(earlier, `the earlier ${earlier.name}`); } }) : null,
+    earlier?.said_same ? setting({ ic: "git-compare", name: "Not the same device", onclick: () => { box.close(); sameDevice(earlier, null); } }) : null,
+    later.length ? setting({ ic: "git-compare", name: "The same as another device", onclick: () => { box.close(); sameAs(d, later); } }) : null));
+  icons(box);
 }
 
 async function listsDevicePage() {
   const d = HOME.page;
   const box = $("page-list");
   if (!d || !box) return;
-  const all = await invoke("devices").catch(() => []);
-  const out = await invoke("outgoing").catch(() => []);
   const rows = [];
-  if (d.whatsapp) rows.push(listRow("whatsapp", "WhatsApp", `${count(d.whatsapp.files, "file")} kept here`));
-  if (d.kind === "phone" && d.relation === "own") {
-    const f = await invoke("phone_folders", { phone: d.fingerprint }).catch(() => null);
-    const chosen = (f?.folders ?? []).filter((x) => x.chosen);
-    for (const x of chosen) {
-      rows.push(listRow("folder", x.path, x.kept_files >= x.files ? `${count(x.files, "file")} kept here` : `${x.kept_files.toLocaleString()} of ${count(x.files, "file")} kept here`, x.files ? x.kept_files / x.files : 1));
-    }
-    rows.push(h("button", { class: "row", onclick: () => go("phone-folders", d) }, tile("sliders-horizontal"),
-      h("span", { class: "row-main" }, h("b", {}, chosen.length ? "Choose folders" : "Back up its folders")), icon("chevron-right", "row-go")));
-  }
   if (d.relation === "guest") {
-    rows.push(h("button", { class: "row", onclick: () => openGuest(d) }, tile("lock-keyhole"),
-      h("span", { class: "row-main" }, h("b", {}, "Their folder"), h("small", {}, Number(d.kept ?? 0) > 0 ? `${size(d.kept)}, sealed` : "Nothing kept yet")), icon("chevron-right", "row-go")));
+    rows.push(setting({ ic: "lock-keyhole", name: "Their folder", value: Number(d.kept ?? 0) > 0 ? size(d.kept) : null, onclick: () => openGuest(d) }));
+  } else if (d.kind === "phone") {
+    const f = await invoke("phone_folders", { phone: d.fingerprint }).catch(() => null);
+    const chosen = (f?.folders ?? []).filter((x) => x.chosen).length;
+    rows.push(
+      setting({ ic: "folder", name: "Folders", value: chosen ? String(chosen) : null, onclick: () => go("phone-folders", d) }),
+      setting({ ic: "whatsapp", name: "WhatsApp", value: d.whatsapp ? d.whatsapp.bytes : null }),
+      setting({ ic: "lock-keyhole", name: "Private Vault", onclick: () => go("files") }));
+  } else {
+    // A computer: this computer's own folders that it keeps (S-4), as a
+    // phone's are set on its computer's page.
+    rows.push(setting({ ic: "folder", name: "Folders", onclick: () => go("backup") }));
   }
-  // What it was before it was set up again (item 6), and a way to let it go
-  // -- or, when it is counted as this one only on the person's word, to take
-  // that back.
-  const earlier = d.earlier ? all.find((e) => e.id === d.earlier) : null;
-  if (earlier) {
-    rows.push(h("div", { class: "row" }, tile("history"),
-      h("span", { class: "row-main" }, h("b", {}, "From before it was set up again"),
-        h("small", {}, earlier.name !== d.name ? h("span", {}, earlier.name) : null, earlier.held ? `${count(earlier.held.files, "file")}, ${size(earlier.held.bytes)}` : "Nothing kept")),
-      earlier.said_same ? h("button", { class: "btn btn-quiet btn-sm", onclick: () => sameDevice(earlier, null) }, "Not the same") : null,
-      h("button", { class: "btn btn-quiet btn-sm", onclick: () => askToRemove(earlier, `the earlier ${earlier.name}`) }, "Remove")));
-  }
-  // One of the person's devices paired after this one may be this one set up
-  // again under another name, which only they can say (2026-10-31: the S23,
-  // "SM-S911B" first, then "skib phone").
-  const later = d.relation === "own" && !d.replaced_by
-    ? all.filter((x) => x.relation === "own" && !x.replaced_by && x.id !== d.id && x.paired_at > d.paired_at)
-    : [];
-  if (later.length) {
-    rows.push(h("button", { class: "row", onclick: () => sameAs(d, later) }, tile("git-compare"),
-      h("span", { class: "row-main" }, h("b", {}, "The same as another device"), h("small", {}, "Set up again, under another name")),
-      icon("chevron-right", "row-go")));
-  }
-  const waiting = out.filter((o) => o.to_id === d.id);
-  put(box, 
-    ...(rows.length ? [label(d.relation === "guest" ? "Kept here" : "Backed up here"), ...rows] : []),
-    ...(waiting.length ? [label("Waiting for it"), ...waiting.map((o) => listRow(fileIcon(o.path), base(o.path), size(o.size)))] : []));
+  put(box, label("Keeps here"), h("div", { class: "grp-box" }, ...rows));
 }
 
 function listRow(ic, title, sub, progress) {

@@ -266,7 +266,7 @@ p {
 
 /* Waiting, only while something is queued. */
 .waiting {
-  width: min(420px, 100%);
+  width: min(500px, 100%);
   margin-top: 26px;
 }
 .waiting:empty {
@@ -293,25 +293,122 @@ p {
   font-size: 11.5px;
   font-weight: 700;
 }
+/* One row for each device, as the phone's: a stack of previews, which way
+   and to whom, a number, a size, and what it waits on. */
+.w-card {
+  overflow: hidden;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--raised);
+}
 .w-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 0;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  text-align: left;
 }
-.w-tile {
+.w-row + .w-row {
+  border-top: 1px solid var(--line);
+}
+.w-row:hover {
+  background: var(--soft);
+}
+.w-stack {
+  position: relative;
+  flex: none;
+  width: 60px;
+  height: 44px;
+}
+.w-pic {
+  position: absolute;
+  top: 2px;
   display: grid;
   place-items: center;
-  flex: none;
-  width: 36px;
-  height: 36px;
+  overflow: hidden;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--raised);
   border-radius: 11px;
   background: var(--soft);
   color: var(--ink-2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
-.w-tile .ic {
+.w-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.w-pic .ic {
   width: 17px;
   height: 17px;
+}
+.w-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.35);
+}
+.w-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+.w-ring-track {
+  stroke: rgba(255, 255, 255, 0.35);
+}
+.w-ring-arc {
+  stroke: #fff;
+  stroke-linecap: round;
+}
+.w-who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.w-dir {
+  width: 14px;
+  height: 14px;
+  color: var(--mute);
+}
+.w-chips {
+  display: flex;
+  gap: 6px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 21px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: var(--soft);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+.chip .ic {
+  width: 12px;
+  height: 12px;
+}
+.chip-wait {
+  background: color-mix(in srgb, var(--warn) 16%, var(--bg));
+  color: var(--warn);
+}
+.circle-xs {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+}
+.circle-xs .circle-dot {
+  display: none;
 }
 .w-main {
   display: flex;
@@ -455,61 +552,42 @@ p {
 .circle-btn:hover {
   transform: scale(1.05);
 }
-.panel {
-  position: absolute;
-  right: 0;
-  top: 54px;
-  z-index: 20;
-  width: 300px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: var(--raised);
-  box-shadow: var(--shadow);
-  animation: drop 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-@keyframes drop {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.98);
-  }
-}
-.p-row {
+/* Switch device: the phone's chooser, a card for each device. */
+.dev-card {
   display: flex;
-  align-items: center;
-}
-.p-main,
-.p-add {
-  display: flex;
-  flex: 1;
   align-items: center;
   gap: 12px;
-  padding: 8px;
-  border: 0;
-  border-radius: 14px;
-  background: none;
-  text-align: left;
-  font-weight: 500;
-}
-.p-main:hover,
-.p-add:hover {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
   background: var(--soft);
+  text-align: left;
 }
-.p-name {
+.dev-card:hover {
+  border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+}
+.dev-card.on {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.dev-card b {
   flex: 1;
-}
-.p-tick {
-  color: var(--green);
-}
-.p-label {
-  padding: 12px 8px 4px;
-  color: var(--mute);
-  font-size: 12px;
   font-weight: 600;
 }
-.p-add {
-  width: 100%;
-  margin-top: 4px;
+.dev-card small {
+  color: var(--mute);
+  font-size: 12px;
+}
+.dev-tick {
+  width: 18px;
+  height: 18px;
+  color: var(--green);
+}
+.dev-add {
+  border-style: dashed;
+  background: none;
   color: var(--ink-2);
 }
 
@@ -563,6 +641,46 @@ p {
 }
 .page-list {
   width: 100%;
+}
+/* The phone's header: circle, name and state, ⓘ at the end. */
+.dev-hd {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  align-self: stretch;
+  margin: 18px 0 8px;
+}
+.dev-words {
+  flex: 1;
+}
+.dev-words h1 {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.dev-words .state small {
+  margin-left: 8px;
+}
+#page-list {
+  align-self: stretch;
+}
+/* Remove and Switch device, full width, as the phone's. */
+.big-btn {
+  align-self: stretch;
+  height: 46px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 23px;
+  font-weight: 600;
+}
+.big-red {
+  margin-top: 28px;
+  background: color-mix(in srgb, var(--red) 14%, var(--bg));
+  color: var(--red);
+}
+.big-blue {
+  background: color-mix(in srgb, var(--blue) 14%, var(--bg));
+  color: var(--blue);
 }
 .remove {
   margin-top: 36px;

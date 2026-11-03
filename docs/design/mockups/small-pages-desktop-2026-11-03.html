@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop small pages</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mockup for the owner's review of 2026-11-03: two versions, Recently
+   deleted, Speed limit and Key on the desktop, as the phone has them. Not
+   product code. */
+:root{--bg:#0e1210;--raised:#171c19;--soft:#1b211e;--line:#262e2a;--ink:#edf1ee;--ink2:#b9c1bc;--mute:#87918b;
+  --green:#4fa585;--green2:#5db896;--greenSoft:#172520;--warn:#d9a64a;--blue:#5b9bff;--red:#ef6b5d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:#171816;padding:32px 16px 80px}
+header.page{max-width:1500px;margin:0 auto 10px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:#5F625C;margin-top:6px;font-size:15px;line-height:1.55;max-width:980px}
+.grid{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center;max-width:2100px;margin:30px auto 0}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;color:#5F625C;text-align:center;line-height:1.5;max-width:600px}
+figcaption b{color:#171816;font-weight:600}
+figcaption b:first-child{display:block;font-size:14px;margin-bottom:2px}
+svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.s{width:16px;height:16px}svg.ic.xs{width:12px;height:12px}svg.ic.l{width:28px;height:28px}
+.win{width:1000px;height:620px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;box-shadow:0 24px 60px rgba(0,0,0,.28);font-size:14px;position:relative}
+.tb{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;z-index:9}
+.tb i{width:11px;height:11px;border-radius:50%;background:#3a403c}
+.sb{width:210px;flex:none;border-right:1px solid var(--line);padding:40px 12px 16px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:700;font-size:15px;padding:0 12px 18px}
+.nav{display:flex;align-items:center;gap:12px;height:36px;padding:0 12px;border-radius:9px;color:var(--ink2)}
+.nav.on{background:var(--greenSoft);color:var(--green2);font-weight:600}
+.main{flex:1;overflow:hidden;padding:40px 0 0;display:flex;justify-content:center;position:relative}
+.col{width:600px}
+.col h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.back{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:13px;margin-bottom:6px}
+.toprow{display:flex;align-items:center}
+.toprow h1{flex:1}
+.lab{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:22px 6px 8px}
+.card{background:var(--raised);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;padding:10px 14px;min-height:56px}
+.row+.row{border-top:1px solid var(--line)}
+.row .m{flex:1;min-width:0}
+.row .t{font-weight:500}
+.row .w{display:flex;align-items:center;gap:7px;color:var(--mute);font-size:12px;margin-top:3px}
+.av{border-radius:50%;flex:none;display:inline-block;width:16px;height:16px}
+.av.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}.av.lap{background:linear-gradient(160deg,#f4b860 0%,#3d6f8f 55%,#c9a55a 100%)}
+.th{width:40px;height:40px;border-radius:10px;flex:none;display:grid;place-items:center;overflow:hidden;position:relative}
+.th.doc{background:#f4f4f0;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:7px 6px}
+.th.doc i{display:block;height:2.5px;width:100%;background:#d5d7d1;border-radius:2px}
+.th.doc b{position:absolute;bottom:3px;right:3px;font-size:7px;font-weight:700;color:#fff;border-radius:3px;padding:1px 3px}
+.ib{width:32px;height:32px;border-radius:16px;display:grid;place-items:center;color:var(--ink2)}
+.pill{height:22px;padding:0 9px;border-radius:11px;font-size:12px;display:inline-flex;align-items:center;background:#2a2316;color:var(--warn)}
+.btn{height:40px;padding:0 18px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:600}
+.btn.red{background:#2b1715;color:var(--red)}
+.btn.main{background:var(--green);color:#0b1410}
+.btn.quiet{background:var(--soft);color:var(--ink);border:1px solid var(--line)}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:6}
+.sheet{position:absolute;left:50%;top:50%;transform:translate(-40%,-50%);width:560px;background:var(--raised);border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.6);z-index:7}
+.sheet h2{font-size:18px;font-weight:700;text-align:center}
+.sheet .line{color:var(--mute);text-align:center;font-size:13px;margin-top:6px}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.v{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--soft)}
+.v .look{height:150px;background:#fbfbf8;color:#333;font:12px/1.5 ui-monospace,monospace;padding:12px 14px;white-space:pre}
+.v .look .add{background:#dff1e6}.v .look .rm{background:#f7e1dd}
+.v .who{display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:13px}
+.v .who small{color:var(--mute);margin-left:auto}
+.acts{display:flex;flex-direction:column;gap:8px;margin-top:18px}
+.acts .btn{width:100%}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{height:30px;padding:0 12px;border-radius:15px;border:1px solid var(--line);display:flex;align-items:center;color:var(--ink2);font-size:13px;font-weight:500}
+.chip.on{background:var(--greenSoft);border-color:var(--green);color:var(--green2)}
+.status{display:flex;flex-direction:column;align-items:center;margin:16px 0 4px}
+.shield{width:72px;height:72px;border-radius:50%;background:var(--greenSoft);color:var(--green2);display:grid;place-items:center}
+.status b{font-size:18px;margin-top:12px}
+.facts .row{min-height:48px}
+.facts .k{flex:1;display:flex;align-items:center;gap:12px}
+.facts .k .ic{color:var(--ink2)}
+.facts .v2{color:var(--mute);font-size:13px;display:flex;align-items:center;gap:6px}
+.lockline{color:var(--mute);font-size:12px;text-align:center;margin-top:8px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="restore" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="laptop" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></symbol>
+<symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="words" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="compare" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7M11 18H8a2 2 0 0 1-2-2V9"/></symbol>
+</defs></svg>
+
+<header class="page">
+  <h1>The smaller pages, as the phone has them</h1>
+  <p>Mockup for the review of 3 November: <b>Two versions</b> (reached from Home's mark), <b>Recently deleted</b> (now in Manage storage → This computer), <b>Speed limit</b> and <b>Key</b>. Each is what the phone does, with the desktop's explanatory sentences removed.</p>
+</header>
+
+<div class="grid">
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav on"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <h2>Notes.md</h2>
+    <div class="line">Changed on two devices at once</div>
+    <div class="vs">
+      <div class="v"><div class="look"># Groceries
+
+- oat milk
+- lemons
+<span class="rm">- coffee</span>
+- eggs
+<span class="rm">- bread</span></div><div class="who"><span class="av lap"></span>This computer<small>15 min</small></div></div>
+      <div class="v"><div class="look"># Groceries
+
+- oat milk
+- lemons
+<span class="add">- coffee beans</span>
+<span class="add">- bread (the seeded one)</span></div><div class="who"><span class="av ph"></span>Galaxy S23<small>14 min</small></div></div>
+    </div>
+    <div class="acts">
+      <span class="btn quiet"><svg class="ic s"><use href="#check"/></svg>Keep this computer's</span>
+      <span class="btn quiet"><svg class="ic s"><use href="#compare"/></svg>Keep Galaxy S23's</span>
+      <span class="btn quiet"><svg class="ic s"><use href="#copy"/></svg>Keep both</span>
+    </div>
+  </div>
+</div>
+<figcaption><b>K1 · Two versions</b>As on the phone: clicking Home's mark when it says "Two versions" opens a sheet, straight to the file if there's one, or a short list to pick from if there are several. Both versions side by side with their previews, each with its device's picture and how long ago. Three buttons named after the devices instead of "this one" and "the other". Whichever isn't kept goes to Recently deleted. The separate Two versions page goes.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"><div class="col">
+    <div class="back"><svg class="ic xs"><use href="#back"/></svg>This computer</div>
+    <div class="toprow"><h1>Recently deleted</h1><span class="btn red" style="height:34px">Empty</span></div>
+    <div class="card" style="margin-top:18px">
+      <div class="row"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><b style="background:#c4412f">PDF</b></span><div class="m"><div class="t">Tax 2025.pdf</div><div class="w"><span class="av lap"></span>This computer</div></div><span class="ib"><svg class="ic s"><use href="#restore"/></svg></span><span class="ib"><svg class="ic s"><use href="#x"/></svg></span></div>
+      <div class="row"><span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span><div class="m"><div class="t">IMG_0007.jpg</div><div class="w"><span class="av ph"></span>Galaxy S23</div></div><span class="ib"><svg class="ic s"><use href="#restore"/></svg></span><span class="ib"><svg class="ic s"><use href="#x"/></svg></span></div>
+      <div class="row"><span class="th doc"><i></i><i></i><i style="width:60%"></i><i></i><b style="background:#6b7280">MD</b></span><div class="m"><div class="t">Notes.md</div><div class="w"><span class="av lap"></span>This computer</div></div><span class="pill">3 days</span><span class="ib"><svg class="ic s"><use href="#restore"/></svg></span><span class="ib"><svg class="ic s"><use href="#x"/></svg></span></div>
+    </div>
+  </div></div></div>
+<figcaption><b>K2 · Recently deleted</b>Opened from This computer's storage. Each file's preview and name, and which device deleted it. ↺ puts it back, × deletes it for good. "N days left" shows only in the last week, in amber. <b>Empty</b> at the top asks first. Gone: the place and age under each name.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"><div class="col">
+    <div class="back"><svg class="ic xs"><use href="#back"/></svg>Settings</div>
+    <h1>Speed limit</h1>
+    <div class="card" style="margin-top:18px">
+      <div class="row" style="min-height:64px"><svg class="ic s" style="color:var(--ink2)"><use href="#up"/></svg><div class="chips"><span class="chip on">Off</span><span class="chip">1 MB/s</span><span class="chip">5 MB/s</span><span class="chip">10 MB/s</span><span class="chip">25 MB/s</span></div></div>
+      <div class="row" style="min-height:64px"><svg class="ic s" style="color:var(--ink2)"><use href="#down"/></svg><div class="chips"><span class="chip">Off</span><span class="chip">1 MB/s</span><span class="chip on">5 MB/s</span><span class="chip">10 MB/s</span><span class="chip">25 MB/s</span></div></div>
+    </div>
+  </div></div></div>
+<figcaption><b>K3 · Speed limit</b>Nearly as it is: one card, ↑ sending and ↓ receiving, each a row of chips. Gone: the two headings and the sentence under them; the arrows say it. "None" becomes "Off", as the Settings row says.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"></div>
+  <div class="scrim"></div>
+  <div class="sheet" style="width:440px">
+    <div class="status"><span class="shield"><svg class="ic l"><use href="#shield"/></svg></span><b>Your key is safe</b></div>
+    <div class="card facts" style="margin-top:16px">
+      <div class="row"><span class="k"><svg class="ic s"><use href="#laptop"/></svg>This computer</span><span class="v2">System keyring<svg class="ic s"><use href="#chev"/></svg></span></div>
+      <div class="row"><span class="k"><svg class="ic s"><use href="#phone"/></svg>Also on</span><span class="v2"><span class="av ph"></span>Galaxy S23</span></div>
+    </div>
+    <div class="acts"><span class="btn quiet"><svg class="ic s"><use href="#words"/></svg>Show the 24 words</span></div>
+    <div class="lockline">Asks first: anyone who sees them can read your files</div>
+  </div>
+</div>
+<figcaption><b>K4 · Key</b>The phone's key sheet, opened from Advanced → Key: whether it's safe, where this computer keeps it, which devices also have it, and <b>Show the 24 words</b>, which asks first, as the phone does without a screen lock. Where it's kept (file, system keyring, or a passphrase) is chosen by clicking that row, not shown as three rows. The Identity row is already in Advanced.</figcaption></figure>
+
+</div>
+</body>
+</html>

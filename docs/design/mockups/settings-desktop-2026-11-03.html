@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop Settings</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mockup for the owner's review of 2026-11-03: the desktop's Settings in the
+   phone's shape (agreed for the phone 2026-11-02). Not product code. */
+:root{--bg:#0e1210;--raised:#171c19;--soft:#1b211e;--line:#262e2a;--ink:#edf1ee;--ink2:#b9c1bc;--mute:#87918b;
+  --green:#4fa585;--green2:#5db896;--greenSoft:#172520;--warn:#d9a64a;--blue:#5b9bff;--red:#ef6b5d;--violet:#a78bfa}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:#171816;padding:32px 16px 80px}
+header.page{max-width:1500px;margin:0 auto 10px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:#5F625C;margin-top:6px;font-size:15px;line-height:1.55;max-width:980px}
+.grid{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center;max-width:2100px;margin:30px auto 0}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;color:#5F625C;text-align:center;line-height:1.5;max-width:600px}
+figcaption b{color:#171816;font-weight:600}
+figcaption b:first-child{display:block;font-size:14px;margin-bottom:2px}
+svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.s{width:17px;height:17px}svg.ic.xs{width:13px;height:13px}
+.win{width:1000px;height:760px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;box-shadow:0 24px 60px rgba(0,0,0,.28);font-size:14px;position:relative}
+.tb{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;z-index:5}
+.tb i{width:11px;height:11px;border-radius:50%;background:#3a403c}
+.sb{width:210px;flex:none;border-right:1px solid var(--line);padding:40px 12px 16px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:700;font-size:15px;padding:0 12px 18px}
+.nav{display:flex;align-items:center;gap:12px;height:36px;padding:0 12px;border-radius:9px;color:var(--ink2)}
+.nav.on{background:var(--greenSoft);color:var(--green2);font-weight:600}
+.main{flex:1;overflow:hidden;padding:40px 0 0;display:flex;justify-content:center}
+.col{width:520px}
+.col h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.back{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:13px;margin-bottom:6px}
+.lab{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:22px 6px 8px}
+.card{background:var(--raised);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;height:48px;padding:0 16px}
+.row+.row{border-top:1px solid var(--line)}
+.row .ic{color:var(--ink2)}
+.row .n{flex:1;font-weight:500}
+.row .v{color:var(--mute);font-size:13px;display:flex;align-items:center;gap:6px}
+.row .v .ic{color:var(--mute)}
+.row.red .n,.row.red .ic{color:var(--red)}
+.tog{width:36px;height:21px;border-radius:11px;background:var(--green);position:relative}.tog::after{content:"";position:absolute;right:2px;top:2px;width:17px;height:17px;border-radius:50%;background:#fff}
+.tog.off{background:#3a423e}.tog.off::after{right:auto;left:2px}
+.prof{display:flex;align-items:center;gap:16px;padding:16px}
+.av{width:60px;height:60px;border-radius:50%;background:linear-gradient(160deg,#f4b860 0%,#3d6f8f 55%,#c9a55a 100%);flex:none}
+.prof b{font-size:18px;font-weight:600;display:block}
+.prof small{color:var(--mute);font-size:13px}
+.upd{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:11px;background:var(--greenSoft);color:var(--green2);font-size:12px;font-weight:500}
+.quit{margin-top:22px;height:44px;border-radius:22px;background:#2b1715;color:var(--red);display:grid;place-items:center;font-weight:600}
+.disk{padding:16px}
+.disk .top{display:flex;align-items:baseline;gap:8px}
+.disk .top b{font-size:22px;font-weight:700}
+.disk .top span{color:var(--mute);font-size:13px}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--soft);margin-top:12px}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12px;color:var(--ink2)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:50%}
+.sw{width:12px;height:12px;border-radius:4px;flex:none}
+.mini{width:26px;height:26px;border-radius:50%;flex:none}
+.mini.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}.mini.ammi{background:linear-gradient(135deg,#d8a0b8,#7a4660)}
+.note{max-width:980px;margin:34px auto 0;font-size:13px;color:#5F625C;line-height:1.6}
+.note b{color:#171816}
+table.map{max-width:980px;margin:16px auto 0;border-collapse:collapse;font-size:13px;width:100%}
+table.map td,table.map th{border-bottom:1px solid #d6d8d2;padding:7px 10px;text-align:left;vertical-align:top}
+table.map th{color:#171816;font-weight:600}
+table.map td:first-child{color:#5F625C;width:38%}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="drive" viewBox="0 0 24 24"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+<symbol id="palette" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.65-.75 1.65-1.69 0-.44-.18-.84-.44-1.13-.29-.29-.44-.65-.44-1.13a1.64 1.64 0 0 1 1.67-1.67h2c3.05 0 5.56-2.5 5.56-5.55C21.97 6.01 17.46 2 12 2z"/></symbol>
+<symbol id="download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+<symbol id="power" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
+<symbol id="speed" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+<symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+<symbol id="cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</defs></svg>
+
+<header class="page">
+  <h1>The desktop's Settings, in the phone's shape</h1>
+  <p>Mockup for the review of 3 November. The phone's Settings, as agreed on 2 November, applied to the desktop: one profile card for name and picture; <b>Manage storage</b>; <b>App</b> with Update in place of Version; <b>Connection</b>; and Identity, Key, the meeting point and Version moved into <b>Advanced</b>. The table at the bottom says where each of today's rows goes.</p>
+</header>
+
+<div class="grid">
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"><div class="col">
+    <h1>Settings</h1>
+    <div class="card" style="margin-top:18px"><div class="prof"><span class="av"></span><div style="flex:1"><b>Saqib's laptop</b><small>Name and picture</small></div><svg class="ic s" style="color:var(--mute)"><use href="#chev"/></svg></div></div>
+    <div class="lab">Manage storage</div>
+    <div class="card">
+      <div class="row"><svg class="ic s"><use href="#drive"/></svg><span class="n">This computer</span><span class="v">41 GB<svg class="ic s"><use href="#chev"/></svg></span></div>
+    </div>
+    <div class="lab">App</div>
+    <div class="card">
+      <div class="row"><svg class="ic s"><use href="#clock"/></svg><span class="n">Activity</span><span class="v"><svg class="ic s"><use href="#chev"/></svg></span></div>
+      <div class="row"><svg class="ic s"><use href="#bell"/></svg><span class="n">Notifications</span><span class="tog"></span></div>
+      <div class="row"><svg class="ic s"><use href="#palette"/></svg><span class="n">Theme</span><span class="v">System<svg class="ic s"><use href="#chev"/></svg></span></div>
+      <div class="row"><svg class="ic s"><use href="#power"/></svg><span class="n">Start at login</span><span class="tog"></span></div>
+      <div class="row"><svg class="ic s"><use href="#download"/></svg><span class="n">Update</span><span class="upd"><svg class="ic xs"><use href="#check"/></svg>Up to date</span></div>
+    </div>
+    <div class="lab">Connection</div>
+    <div class="card">
+      <div class="row"><svg class="ic s"><use href="#speed"/></svg><span class="n">Speed limit</span><span class="v">Off<svg class="ic s"><use href="#chev"/></svg></span></div>
+      <div class="row"><svg class="ic s"><use href="#link"/></svg><span class="n">Advanced</span><span class="v"><svg class="ic s"><use href="#chev"/></svg></span></div>
+    </div>
+    <div class="quit">Quit QurbSpace</div>
+  </div></div></div>
+<figcaption><b>S1 · Settings</b>The phone's order and words. Name and Picture become one profile card, as on the phone (SE-2). No dark tiles behind the icons. Version becomes <b>Update</b>, saying "Up to date" or offering the new one. <b>Start at login</b> is the one desktop-only row. Quit is a red button at the end, like Remove on a device's page. Rows that left are listed in the table below.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"><div class="col">
+    <div class="back"><svg class="ic xs"><use href="#back"/></svg>Settings</div>
+    <h1>This computer</h1>
+    <div class="card" style="margin-top:18px"><div class="disk">
+      <div class="top"><b>212 GB free</b><span>of 476 GB</span></div>
+      <div class="bar"><i style="width:3%;background:#4fa585"></i><i style="width:6%;background:#5b9bff"></i><i style="width:1%;background:#d8a0b8"></i><i style="width:0.6%;background:#d9a64a"></i><i style="width:45%;background:#3a423e"></i></div>
+      <div class="legend"><span><i style="background:#4fa585"></i>Shared</span><span><i style="background:#5b9bff"></i>sakib</span><span><i style="background:#d8a0b8"></i>Ammi's phone</span><span><i style="background:#d9a64a"></i>Recently deleted</span><span><i style="background:#3a423e"></i>Other</span></div>
+    </div></div>
+    <div class="card" style="margin-top:12px">
+      <div class="row"><span class="sw" style="background:#4fa585"></span><span class="n">Shared</span><span class="v">12 GB</span></div>
+      <div class="row"><span class="mini ph"></span><span class="n">sakib</span><span class="v">26 GB</span></div>
+      <div class="row"><span class="mini ammi"></span><span class="n">Ammi's phone</span><span class="v">4.2 GB</span></div>
+      <div class="row"><svg class="ic s" style="color:#d9a64a"><use href="#trash"/></svg><span class="n">Recently deleted</span><span class="v">2.8 GB<svg class="ic s"><use href="#chev"/></svg></span></div>
+    </div>
+  </div></div></div>
+<figcaption><b>S2 · Manage storage → This computer</b>The phone's Storage card for a computer, seen from the computer itself: free space, one bar coloured by what fills it, and a row for each part with its size. <b>Recently deleted</b> lives here now (F-1): it opens the list to put files back or empty it.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"><div class="col">
+    <div class="back"><svg class="ic xs"><use href="#back"/></svg>Settings</div>
+    <h1>Advanced</h1>
+    <div class="lab">This computer</div>
+    <div class="card">
+      <div class="row"><svg class="ic s"><use href="#info"/></svg><span class="n">Identity</span><span class="v">410c ac55</span></div>
+      <div class="row"><svg class="ic s"><use href="#key"/></svg><span class="n">Key</span><span class="v">Safe<svg class="ic s"><use href="#chev"/></svg></span></div>
+      <div class="row"><svg class="ic s"><use href="#inbox"/></svg><span class="n">Received files</span><span class="v">~/Downloads/qurb<svg class="ic s"><use href="#chev"/></svg></span></div>
+    </div>
+    <div class="lab">Connection</div>
+    <div class="card">
+      <div class="row"><svg class="ic s"><use href="#link"/></svg><span class="n">Meeting point</span><span class="v">Public relays<svg class="ic s"><use href="#chev"/></svg></span></div>
+      <div class="row"><svg class="ic s"><use href="#cloud"/></svg><span class="n">Relay</span><span class="v">None<svg class="ic s"><use href="#chev"/></svg></span></div>
+    </div>
+    <div class="lab">App</div>
+    <div class="card">
+      <div class="row"><svg class="ic s"><use href="#info"/></svg><span class="n">Version</span><span class="v">0.2.0-beta.6</span></div>
+    </div>
+  </div></div></div>
+<figcaption><b>S3 · Advanced</b>The phone's Advanced: Identity and Key; where received files go (rarely changed, so moved here); the meeting point (the public Nostr relays since decision 0082, so "Rendezvous" says what it is now) and Relay; Version.</figcaption></figure>
+
+</div>
+
+<table class="map">
+<tr><th>Today's row</th><th>Where it goes</th></tr>
+<tr><td>Name, Picture (two rows, plus the big picture above)</td><td>One profile card at the top, as on the phone</td></tr>
+<tr><td>Key</td><td>Advanced</td></tr>
+<tr><td>Start at login</td><td>App</td></tr>
+<tr><td>Back up folders (this computer's folders, kept by your other computers)</td><td>The page of the computer that keeps them, opened from Home's circle: its <b>Keeps here</b> card gets a Folders row, as a phone's backups are set on its computer's page. Nothing about backups stays in Settings.</td></tr>
+<tr><td>New files go to the Vault</td><td><b>Removed.</b> With Files opening in the file manager (F-1 to F-4), a file put in Shared is shared and a file put in your folder is private; the folder you choose says it.</td></tr>
+<tr><td>Received files (where they go)</td><td>Advanced</td></tr>
+<tr><td>Storage</td><td>Manage storage → This computer</td></tr>
+<tr><td>Recently deleted</td><td>Inside This computer's storage page</td></tr>
+<tr><td>Activity, Notifications, Theme</td><td>App, unchanged</td></tr>
+<tr><td>Version</td><td>Update in App; the number itself in Advanced</td></tr>
+<tr><td>Speed limit, Advanced</td><td>Connection, unchanged</td></tr>
+<tr><td>Quit QurbSpace</td><td>A red button at the end</td></tr>
+</table>
+</body>
+</html>

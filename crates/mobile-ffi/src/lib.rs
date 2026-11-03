@@ -2118,6 +2118,13 @@ impl Qurb {
         Ok(self.engine()?.store_mut().forget_deleted(id)?)
     }
 
+    /// Recently deleted emptied for good, every file in it (Settings →
+    /// Manage storage, the owner's review of 2026-11-03). Returns the bytes
+    /// let go of.
+    pub fn empty_recently_deleted(&self) -> Result<u64, QurbError> {
+        Ok(self.engine()?.store_mut().empty_trash(std::time::Duration::ZERO)?.1)
+    }
+
     /// What removing a paired device would do here, for the question asked
     /// before doing it. See [`qurb_storage::Store::removal_plan`].
     pub fn removal_plan(&self, fingerprint: String) -> Result<Removal, QurbError> {

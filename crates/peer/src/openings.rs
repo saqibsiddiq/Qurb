@@ -20,8 +20,11 @@ use std::time::{Duration, Instant, SystemTime};
 /// How long an open folder stays open without being used.
 pub const IDLE: Duration = Duration::from_secs(10 * 60);
 
-/// How long an ask waits for the phone before it lapses.
-pub const ASK_LIFETIME: Duration = Duration::from_secs(5 * 60);
+/// How long an ask waits for the phone before it lapses: long enough for
+/// the phone's next background pass, about every fifteen minutes, to find it
+/// and say so (the owner's review of 2026-11-03, H-4). There is no instant
+/// wake-up since decision 0082; five minutes lapsed before most phones looked.
+pub const ASK_LIFETIME: Duration = Duration::from_secs(20 * 60);
 
 /// A moment, on both clocks. The monotonic one alone stops while a computer
 /// sleeps -- Linux's does -- so until 2026-10-18 a folder open when the lid

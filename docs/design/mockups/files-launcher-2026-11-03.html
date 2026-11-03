@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop Files launcher</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mockup for the owner's review of 2026-11-03: the desktop's Files as a
+   launcher -- each place opens in the computer's own file manager. Not
+   product code. */
+:root{--bg:#0e1210;--raised:#171c19;--soft:#1b211e;--line:#262e2a;--ink:#edf1ee;--ink2:#b9c1bc;--mute:#87918b;
+  --green:#4fa585;--green2:#5db896;--greenSoft:#172520;--warn:#d9a64a;--blue:#5b9bff;--red:#ef6b5d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:#171816;padding:32px 16px 80px}
+header.page{max-width:1500px;margin:0 auto 10px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:#5F625C;margin-top:6px;font-size:15px;line-height:1.55;max-width:960px}
+.grid{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center;max-width:2100px;margin:30px auto 0}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;color:#5F625C;text-align:center;line-height:1.5;max-width:560px}
+figcaption b{color:#171816;font-weight:600}
+figcaption b:first-child{display:block;font-size:14px;margin-bottom:2px}
+svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.s{width:16px;height:16px}svg.ic.xs{width:13px;height:13px}svg.ic.l{width:26px;height:26px}
+.win{width:1000px;height:600px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;box-shadow:0 24px 60px rgba(0,0,0,.28);font-size:14px;position:relative}
+.tb{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;z-index:5}
+.tb i{width:11px;height:11px;border-radius:50%;background:#3a403c}
+.sb{width:210px;flex:none;border-right:1px solid var(--line);padding:40px 12px 16px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:700;font-size:15px;padding:0 12px 18px}
+.nav{display:flex;align-items:center;gap:12px;height:36px;padding:0 12px;border-radius:9px;color:var(--ink2)}
+.nav.on{background:var(--greenSoft);color:var(--green2);font-weight:600}
+.main{flex:1;position:relative;overflow:hidden;padding:44px 56px 0}
+.main h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.lab{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:30px 4px 10px}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:620px}
+.tile{background:var(--raised);border:1px solid var(--line);border-radius:18px;padding:18px;height:108px;display:flex;flex-direction:column;justify-content:space-between;color:var(--green2);position:relative}
+.tile .n{color:var(--ink);font-weight:500;font-size:16px}
+.tile .side{position:absolute;right:16px;top:16px;color:var(--mute);display:flex;align-items:center;gap:8px;font-size:12px}
+.tile.open{border-color:var(--green);background:var(--greenSoft)}
+.tile.wait{border-color:#3a423e}
+.lockbtn{height:28px;padding:0 12px;border-radius:14px;background:var(--soft);color:var(--ink);display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;border:1px solid var(--line)}
+.av{width:34px;height:34px;border-radius:50%;position:relative;display:grid;place-items:center;color:#fff;font-weight:600;font-size:14px}
+.av.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}.av.ammi{background:linear-gradient(135deg,#d8a0b8,#7a4660)}
+.spin{width:34px;height:34px;position:absolute;left:18px;top:18px}
+.ext{display:inline-flex;align-items:center;gap:4px;color:var(--mute)}
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:3}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-40%,-50%);width:340px;background:var(--raised);border:1px solid var(--line);border-radius:20px;padding:26px 24px 20px;box-shadow:0 30px 80px rgba(0,0,0,.6);z-index:4;text-align:center}
+.mphone{width:64px;height:64px;border-radius:50%;margin:0 auto;background:var(--greenSoft);color:var(--green2);display:grid;place-items:center;position:relative}
+.mphone svg.r{position:absolute;inset:-6px;width:76px;height:76px}
+.modal h2{font-size:17px;font-weight:700;margin-top:16px}
+.modal .who{display:inline-flex;align-items:center;gap:8px;margin-top:10px;color:var(--ink2);font-size:13px}
+.modal .who .av{width:22px;height:22px;font-size:10px}
+.modal .cancel{margin-top:20px;height:40px;border-radius:20px;background:var(--soft);display:grid;place-items:center;font-weight:500;color:var(--ink2)}
+/* a generic file manager beside it */
+.fm{position:absolute;right:-130px;top:230px;width:520px;height:380px;border-radius:12px;background:#f6f6f4;color:#222;box-shadow:0 30px 70px rgba(0,0,0,.45);z-index:6;overflow:hidden;font-size:13px}
+.fm .t{height:40px;background:#ececea;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #dcdcd8}
+.fm .t i{width:10px;height:10px;border-radius:50%;background:#cfcfcb}
+.fm .addr{flex:1;height:26px;border-radius:6px;background:#fff;border:1px solid #dcdcd8;display:flex;align-items:center;padding:0 10px;color:#555;gap:6px}
+.fm .body{display:flex;height:calc(100% - 40px)}
+.fm .side{width:150px;background:#efefec;padding:10px 8px;color:#555}
+.fm .side div{padding:6px 8px;border-radius:6px}
+.fm .side .on{background:#dde8e2;color:#1f5a46;font-weight:600}
+.fm .files{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:18px;align-content:start}
+.fm .f{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.fm .f .ico{width:62px;height:52px;border-radius:6px;display:grid;place-items:center}
+.fm .f .ico.fd{background:#7fb39d}
+.fm .cap{position:absolute;left:0;right:0;bottom:0;padding:6px 14px;font-size:11px;color:#777;background:#ececea;border-top:1px solid #dcdcd8}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="unlock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.9-1"/></symbol>
+<symbol id="ext" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+</defs></svg>
+
+<header class="page">
+  <h1>The desktop's Files, as a launcher</h1>
+  <p>Mockup for the review of 3 November, after the owner's answer: QurbSpace keeps no file browser of its own. Files is four tiles at most, and each opens in the computer's own file manager. A person's folder asks their phone first, then opens like any folder, decrypted only in memory while it's open.</p>
+</header>
+
+<div class="grid">
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main">
+    <h1>Files</h1>
+    <div class="lab">This computer</div>
+    <div class="tiles">
+      <div class="tile"><svg class="ic l"><use href="#share"/></svg><span class="n">Shared</span><span class="side ext"><svg class="ic xs"><use href="#ext"/></svg></span></div>
+      <div class="tile"><svg class="ic l"><use href="#inbox"/></svg><span class="n">Received</span><span class="side ext"><svg class="ic xs"><use href="#ext"/></svg></span></div>
+    </div>
+    <div class="lab">People</div>
+    <div class="tiles">
+      <div class="tile"><span class="av ph">S</span><span class="n">sakib</span><span class="side"><svg class="ic s"><use href="#lock"/></svg></span></div>
+      <div class="tile"><span class="av ammi">A</span><span class="n">Ammi's phone</span><span class="side"><svg class="ic s"><use href="#lock"/></svg></span></div>
+    </div>
+  </div></div>
+<figcaption><b>L1 · Files</b>Shared and Received open straight away, each in the file manager (the small ↗ says so). Each person's folder shows its lock. Nothing else on the page: no search, sizes or subtitles. Search, previews and the rest are the file manager's.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main">
+    <h1>Files</h1>
+    <div class="lab">This computer</div>
+    <div class="tiles">
+      <div class="tile"><svg class="ic l"><use href="#share"/></svg><span class="n">Shared</span></div>
+      <div class="tile"><svg class="ic l"><use href="#inbox"/></svg><span class="n">Received</span></div>
+    </div>
+    <div class="lab">People</div>
+    <div class="tiles">
+      <div class="tile wait"><span class="av ph">S</span><span class="n">sakib</span></div>
+      <div class="tile"><span class="av ammi">A</span><span class="n">Ammi's phone</span></div>
+    </div>
+  </div>
+  <div class="scrim"></div>
+  <div class="modal">
+    <div class="mphone"><svg class="ic l"><use href="#phone"/></svg>
+      <svg class="r" viewBox="0 0 76 76"><circle cx="38" cy="38" r="35" fill="none" stroke="#262e2a" stroke-width="3"/><circle cx="38" cy="38" r="35" fill="none" stroke="#5db896" stroke-width="3" stroke-linecap="round" stroke-dasharray="60 160" transform="rotate(-90 38 38)"/></svg></div>
+    <h2>Open QurbSpace on your phone</h2>
+    <div class="who"><span class="av ph">G</span>Galaxy S23</div>
+    <div class="cancel">Cancel</div>
+  </div>
+</div>
+<figcaption><b>L2 · Clicking a locked folder</b>The phone is asked, and the window says the one thing to do (H-3). It waits up to 20 minutes (H-4). The phone shows its notification on its next pass, or at once if QurbSpace is opened. A no or Cancel closes this and nothing opens.</figcaption></figure>
+
+<figure><div class="win" style="overflow:visible"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav on"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main" style="overflow:visible">
+    <h1>Files</h1>
+    <div class="lab">This computer</div>
+    <div class="tiles">
+      <div class="tile"><svg class="ic l"><use href="#share"/></svg><span class="n">Shared</span></div>
+      <div class="tile"><svg class="ic l"><use href="#inbox"/></svg><span class="n">Received</span></div>
+    </div>
+    <div class="lab">People</div>
+    <div class="tiles">
+      <div class="tile open"><span class="av ph">S</span><span class="n">sakib</span><span class="side"><span class="lockbtn"><svg class="ic xs"><use href="#lock"/></svg>Lock</span></span></div>
+      <div class="tile"><span class="av ammi">A</span><span class="n">Ammi's phone</span><span class="side"><svg class="ic s"><use href="#lock"/></svg></span></div>
+    </div>
+  </div>
+  <div class="fm">
+    <div class="t"><i></i><i></i><i></i><div class="addr"><svg class="ic xs"><use href="#folder"/></svg>~/qurb/sakib</div></div>
+    <div class="body">
+      <div class="side"><div>Home</div><div>Documents</div><div>Downloads</div><div class="on">qurb</div></div>
+      <div class="files">
+        <div class="f"><span class="ico fd"></span>Vault</div>
+        <div class="f"><span class="ico fd"></span>WhatsApp</div>
+        <div class="f"><span class="ico fd"></span>DCIM</div>
+        <div class="f"><span class="ico fd"></span>Documents</div>
+        <div class="f"><span class="ico fd"></span>Download</div>
+        <div class="f"><span class="ico fd"></span>This computer</div>
+      </div>
+    </div>
+    <div class="cap">Your file manager, opened by QurbSpace</div>
+  </div>
+</div>
+<figcaption><b>L3 · Open</b>After the yes, the folder opens in the file manager: your phone's Vault, its backups, and this computer's own files. The tile turns green with <b>Lock</b>. Ten minutes unused, or Lock, and it goes back to a locked placeholder; nothing decrypted is left on disk.</figcaption></figure>
+
+</div>
+</body>
+</html>

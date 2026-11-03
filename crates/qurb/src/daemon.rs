@@ -320,12 +320,8 @@ impl Daemon {
         }
     }
 
-    /// Collect garbage, then bring disk use under the configured limit.
-    ///
-    /// In that order, and the order is the point: collection frees superseded
-    /// and expired content, which costs the user nothing. Only once that has
-    /// happened is it fair to start dropping local copies of files they still
-    /// have.
+    /// Collect garbage: superseded and expired content, which costs the
+    /// user nothing.
     ///
     /// Everything here is best-effort. A device that cannot tidy up should
     /// keep syncing, which is what it is for.
@@ -347,35 +343,10 @@ impl Daemon {
             Err(e) => tracing::warn!(error = %e, "housekeeping failed"),
         }
 
-        let limit = self.limit();
-        if limit == 0 {
-            return;
-        }
-
-        match engine.enforce_limit(limit) {
-            Ok(stats) if stats.dropped > 0 || !stats.within() => {
-                tracing::info!(
-                    dropped = stats.dropped,
-                    freed = stats.freed,
-                    used = stats.used_after,
-                    limit,
-                    "checked the storage limit"
-                );
-                if !stats.within() {
-                    // Said plainly rather than buried: the device is over its
-                    // limit and is keeping the excess on purpose, because
-                    // everything left is content no other device is known to
-                    // hold. Dropping it would be losing it.
-                    tracing::warn!(
-                        over_by = stats.still_over,
-                        refused = stats.refused,
-                        "over the storage limit, and keeping it: nothing left is safe to drop"
-                    );
-                }
-            }
-            Ok(_) => {}
-            Err(e) => tracing::warn!(error = %e, "checking the storage limit failed"),
-        }
+        // No storage limit enforced here: a computer is everyone's server and
+        // keeps everything in Shared (the owner's review of 2026-11-03, F-3),
+        // so the folder the file manager shows is always whole. Dropping
+        // local copies to stay under a size is what phones do.
     }
 
     fn open_store(&self) -> Result<Store> {
@@ -408,10 +379,8 @@ impl Daemon {
     pub async fn run(&self) -> Result<()> {
         // Its disk, told to the owner's phone with its storage (item 8 of 2026-11-01).
         qurb_peer::disk::set(crate::disk::space);
-        // And what it gives QurbSpace, read fresh as `limit` is.
-        let store_dir = self.store_dir.clone();
-        let fallback = self.config.limit;
-        qurb_peer::disk::set_allowance(move || Config::load(&store_dir).map(|c| c.limit).unwrap_or(fallback));
+        // No allowance: a computer keeps everything (F-3), so the phone is
+        // told its disk's free space instead (`Request::Storage`).
         // Before anything else, and held for the whole run. Two daemons on one
         // store contend on the write lock, answer as the same device, and both
         // enforce the same storage cap -- and none of that reports an error,

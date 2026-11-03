@@ -143,7 +143,9 @@ class DeviceStorageScreen(app: MainActivity, private val computer: PeerInfo, pri
             setTextAppearance(R.style.Text_Hero)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = kit.dp(4) })
         page.addView(TextView(app).apply {
-            text = if (storage.given > 0uL) "of ${Words.size(storage.given)} given to QurbSpace" else "No limit set on ${computer.name}"
+            // Its disk's free space since computers keep everything (the
+            // owner's review of 2026-11-03, F-3); a limit, where one is set.
+            text = if (storage.given > 0uL) "of ${Words.size(storage.given)}" else "${computer.name} didn't say its disk"
             setTextAppearance(R.style.Text_Meta)
             setTextColor(kit.color(R.color.text_3))
         })
@@ -160,12 +162,6 @@ class DeviceStorageScreen(app: MainActivity, private val computer: PeerInfo, pri
                 row.root.setOnClickListener { empty(part.bytes) }
             }
         }
-        page.addView(TextView(app).apply {
-            text = "How much QurbSpace may use is set on ${computer.name}."
-            setTextAppearance(R.style.Text_Meta)
-            setTextColor(kit.color(R.color.text_3))
-            setPadding(kit.dp(6), kit.dp(10), kit.dp(6), 0)
-        })
         views.refresh.isRefreshing = false
     }
 
@@ -200,7 +196,7 @@ object Storage {
     fun left(s: ComputerStorage): ULong = if (s.given > s.used) s.given - s.used else 0uL
 
     fun free(s: ComputerStorage) =
-        if (s.given > 0uL) "${Words.size(left(s))} free of ${Words.size(s.given)}" else "No limit set"
+        if (s.given > 0uL) "${Words.size(left(s))} free of ${Words.size(s.given)}" else "${Words.size(s.used)} used"
 
     /** Each kind by its share of what QurbSpace is given (or uses, with no limit). */
     fun bar(app: MainActivity, s: ComputerStorage, height: Int): View {

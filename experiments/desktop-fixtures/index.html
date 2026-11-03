@@ -15,9 +15,12 @@
 // fixture kept the old one, which showed up as a bug that did not exist.
 // Fetching it means there is nothing to keep in step.
 const REAL = "../../crates/desktop/ui/";
+// Asked fresh each load: the browser would otherwise keep showing a script
+// as it was before an edit.
+const FRESH = `?t=${Date.now()}`;
 
 (async () => {
-  const response = await fetch(REAL + "index.html");
+  const response = await fetch(REAL + "index.html", { cache: "no-store" });
   if (!response.ok) {
     document.getElementById("loading").textContent =
       "could not read the window's markup — serve this from the repository root";
@@ -28,13 +31,13 @@ const REAL = "../../crates/desktop/ui/";
 
   const style = document.createElement("link");
   style.rel = "stylesheet";
-  style.href = REAL + "app.css";
+  style.href = REAL + "app.css" + FRESH;
   document.head.append(style);
 
   // The real page's own script tags are taken out and run after the stub, in
   // their order: the window's scripts read `window.__TAURI__` as they start.
   // The head's too: theme.js sets the theme before anything draws.
-  const scripts = [...page.querySelectorAll("script[src]")].map((s) => REAL + s.getAttribute("src"));
+  const scripts = [...page.querySelectorAll("script[src]")].map((s) => REAL + s.getAttribute("src") + FRESH);
   page.body.querySelectorAll("script").forEach((s) => s.remove());
   document.body.replaceChildren(...page.body.children);
 

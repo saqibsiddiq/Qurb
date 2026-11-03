@@ -771,7 +771,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun cancelSend(w: Waiting) {
+    fun cancelSend(w: Waiting) {
         kit.sheet()
             .header(States.icon(w.path), "Stop sending ${w.path.substringAfterLast('/')}?")
             .text("${w.to} hasn't collected it yet, so it never arrives there.")

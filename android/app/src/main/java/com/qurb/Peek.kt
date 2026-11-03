@@ -39,7 +39,8 @@ import uniffi.qurb_mobile.KeptFolder
 /**
  * Quick preview of every kind of file (the owner's review of 2026-11-02),
  * full screen over the folder, a swipe to the next and the one before:
- * a photo; a video or a song played here, from the computer as it plays; a
+ * a photo; a song played here, from the computer as it plays (a video goes
+ * to the phone's own player, the owner's choice of 2026-11-03); a
  * PDF by its pages; text and code with line numbers; a CSV as a table; Word,
  * a sheet or slides by their pages, turned into a PDF by the computer
  * (LibreOffice there); anything else, its kind and size and *Open in an app*.
@@ -88,8 +89,37 @@ object Peek {
     }
 
     fun show(app: MainActivity, scope: CoroutineScope, items: List<Item>, at: Int) {
-        if (items.getOrNull(at) == null) return
+        val item = items.getOrNull(at) ?: return
+        if (kind(item.name) == "video") {
+            playElsewhere(app, scope, item)
+            return
+        }
         Viewer(app, scope, items, at).dialog.show()
+    }
+
+    /**
+     * A video in the phone's own player (the owner, 2026-11-03), not the
+     * preview's: one on a computer streamed to it as it plays, seeking
+     * included ([StreamProvider]); one on this phone opened as any file is.
+     */
+    fun playElsewhere(app: MainActivity, scope: CoroutineScope, item: Item) {
+        val stream = item.stream ?: run { item.open(); return }
+        scope.launch {
+            val uri = runCatching { stream() }.getOrNull()
+            if (uri == null) {
+                item.open()
+                return@launch
+            }
+            val type = app.contentResolver.getType(uri)?.takeIf { it.startsWith("video/") } ?: "video/*"
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW)
+                .setDataAndType(uri, type)
+                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                app.startActivity(intent)
+            } catch (e: android.content.ActivityNotFoundException) {
+                app.say("No app here plays videos")
+            }
+        }
     }
 
     /** A Vault or Received file, here or fetched for the preview. */
@@ -157,6 +187,15 @@ object Peek {
             bar.addView(button(R.drawable.ic_external_link, "Open in an app") { dialog.dismiss(); items[at].open() })
             root.addView(bar, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
             root.addView(foot, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            // Clear of the status bar and the gesture bar by their real
+            // heights, which differ by phone, rather than by a guess.
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+                val sys = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout())
+                bar.setPadding(app.kit.dp(8), sys.top + app.kit.dp(8), app.kit.dp(8), app.kit.dp(8))
+                foot.setPadding(app.kit.dp(8), app.kit.dp(14), app.kit.dp(8), sys.bottom + app.kit.dp(12))
+                insets
+            }
             // A swipe left is the next, right the one before.
             val swipes = GestureDetector(app, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onDown(e: MotionEvent) = true
@@ -169,6 +208,7 @@ object Peek {
             })
             stage.setOnTouchListener { _, e -> swipes.onTouchEvent(e) }
             dialog.setContentView(root)
+            dialog.window?.let { androidx.core.view.WindowCompat.setDecorFitsSystemWindows(it, false) }
             dialog.setOnDismissListener { stop() }
             show()
         }
@@ -210,7 +250,15 @@ object Peek {
                         setImageResource(look.first)
                         imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
                     }, LinearLayout.LayoutParams(app.kit.dp(22), app.kit.dp(22)))
-                    addView(TextView(app).apply { text = look.second; setTextColor(Color.WHITE); textSize = 11f; setPadding(0, app.kit.dp(4), 0, 0) })
+                    // Its own width, centred under the icon: added bare, a
+                    // vertical row stretched it to the cell and wrote it from
+                    // the left, each word off to one side of its icon
+                    // (the owner, 2026-11-03).
+                    addView(TextView(app).apply {
+                        text = look.second; setTextColor(Color.WHITE); textSize = 11f
+                        gravity = Gravity.CENTER
+                        setPadding(0, app.kit.dp(4), 0, 0)
+                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                     setOnClickListener { dialog.dismiss(); act() }
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             }
@@ -220,7 +268,8 @@ object Peek {
             loading = scope.launch {
                 try {
                     when (kind(item.name)) {
-                        "video", "song" -> play(item, wanted)
+                        "video" -> put(video(item))
+                        "song" -> play(item, wanted)
                         "picture" -> {
                             val picture = withContext(Dispatchers.IO) { item.local()?.let { picture(it) } }
                             if (wanted == at) put(picture?.let { image(it) })
@@ -367,6 +416,22 @@ object Peek {
                 clipToPadding = false
                 addView(HorizontalScrollView(app).apply { addView(table) })
             }
+        }
+
+        /** A video reached by swiping: a play button, the phone's player
+         *  doing the playing. */
+        private fun video(item: Item): View = FrameLayout(app).apply {
+            addView(ImageButton(app).apply {
+                setImageResource(R.drawable.ic_play)
+                imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(0x55FFFFFF)
+                }
+                contentDescription = "Play ${item.name}"
+                setPadding(app.kit.dp(22), app.kit.dp(22), app.kit.dp(22), app.kit.dp(22))
+                setOnClickListener { playElsewhere(app, scope, item) }
+            }, FrameLayout.LayoutParams(app.kit.dp(80), app.kit.dp(80), Gravity.CENTER))
         }
 
         /** What cannot be shown here: its kind, size, and *Open in an app*. */

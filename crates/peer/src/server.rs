@@ -932,10 +932,25 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             // Measured against what this computer gives QurbSpace, not its
             // whole disk (the owner's review of 2026-11-02, SE-6).
             let usage = store.usage()?;
-            let (given, used) = (crate::disk::allowance(), usage.files + usage.chunks);
-            let mut parts = vec![(crate::wire::Part::Shared, String::new(), store.usage()?.files)];
+            let used = usage.files + usage.chunks;
+            // Against what it gives QurbSpace where that is set; otherwise --
+            // a computer keeps everything (the owner's review of 2026-11-03,
+            // F-3) -- against what its disk has free.
+            let given = match crate::disk::allowance() {
+                0 => match crate::disk::space(store.root()) {
+                    (0, _) => 0,
+                    (_, available) => used + available,
+                },
+                set => set,
+            };
+            let mut parts = vec![(crate::wire::Part::Shared, String::new(), usage.files)];
             let db = store.db();
             let outside = qurb_storage::db::OUTSIDE;
+            let backups = [format!("{outside}/whatsapp"), format!("{outside}/storage")];
+            let backups: Vec<&str> = backups.iter().map(String::as_str).collect();
+            // Each part as the disk it takes, each chunk counted once
+            // (`Db::stored_for`): a phone set up again is several devices
+            // here, holding the same files.
             let mut seen: Vec<qurb_sync::DeviceId> = Vec::new();
             for p in db.trusted_peers()? {
                 if p.relation != qurb_storage::db::Relation::Own
@@ -945,19 +960,13 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
                     continue;
                 }
                 for (name, ids) in qurb_storage::person::own_phones(db, &p.device_id)? {
-                    let (mut backups, mut all) = (0u64, 0u64);
-                    for id in ids {
-                        if seen.contains(&id) {
-                            continue;
-                        }
-                        seen.push(id);
-                        all += db.held_for(&id)?.1;
-                        backups += db.held_outside_for(&id, &format!("{outside}/whatsapp"))?.1;
-                        backups += db.held_outside_for(&id, &format!("{outside}/storage"))?.1;
-                    }
+                    let ids: Vec<_> = ids.into_iter().filter(|id| !seen.contains(id)).collect();
+                    seen.extend(ids.iter().copied());
+                    let all = db.stored_for(&ids, &[])?;
                     if all > 0 {
-                        parts.push((crate::wire::Part::Backups, name.clone(), backups));
-                        parts.push((crate::wire::Part::Vault, name, all.saturating_sub(backups)));
+                        let kept = db.stored_for(&ids, &backups)?.min(all);
+                        parts.push((crate::wire::Part::Backups, name.clone(), kept));
+                        parts.push((crate::wire::Part::Vault, name, all - kept));
                     }
                 }
             }
@@ -965,7 +974,7 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
                 if p.relation != qurb_storage::db::Relation::Guest || db.became(&p.device_id)?.is_some() {
                     continue;
                 }
-                let held = db.held_for(&p.device_id)?.1;
+                let held = db.stored_for(&[p.device_id], &[])?;
                 if held > 0 {
                     parts.push((crate::wire::Part::Guest, p.name, held));
                 }

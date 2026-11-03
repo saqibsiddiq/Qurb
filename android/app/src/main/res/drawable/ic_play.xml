@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A filled play triangle with rounded corners, drawn by hand in Phosphor's
+     256 grid: a video's play button in the preview (Peek.kt). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:pathData="M92,44.6C78.7,36.5 62,46.1 62,61.7V194.3c0,15.6 16.7,25.2 30,17.1L200.6,145.1c12.8,-7.8 12.8,-26.4 0,-34.2Z"
+        android:fillColor="@color/text_2" />
+</vector>

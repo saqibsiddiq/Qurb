@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devices and Waiting</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mockup for the owner's review of 2026-11-03: Waiting, on both apps, and
+   the desktop's devices (what the circle at the top right opened). Not
+   product code. */
+:root{
+  /* phone, light */
+  --p-bg:#F7F7F4;--p-surface:#fff;--p-surface2:#F0F0EC;--p-text:#171816;--p-text2:#5F625C;--p-text3:#8A8D86;
+  --p-border:#E2E3DD;--p-green:#2F6B57;--p-greenSoft:#E8F0EC;
+  /* desktop, dark: the window's own tokens (app.css) */
+  --bg:#0e1210;--raised:#171c19;--soft:#1b211e;--line:#262e2a;--ink:#edf1ee;--ink2:#b9c1bc;--mute:#87918b;
+  --green:#4fa585;--green2:#5db896;--greenSoft:#172520;--warn:#d9a64a;--blue:#5b9bff;--red:#ef6b5d;--violet:#a78bfa;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:#171816;padding:32px 16px 80px}
+header.page{max-width:1500px;margin:0 auto 10px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:#5F625C;margin-top:6px;font-size:15px;line-height:1.5;max-width:960px}
+h2.part{max-width:1500px;margin:44px auto 6px;font-size:20px;font-weight:700;letter-spacing:-.01em}
+p.part{max-width:1500px;margin:0 auto 22px;color:#5F625C;font-size:14px;line-height:1.55;max-width:960px}
+.grid{display:flex;flex-wrap:wrap;gap:36px 28px;justify-content:center;max-width:1500px;margin:0 auto}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;color:#5F625C;text-align:center;line-height:1.45;max-width:360px}
+figcaption b{color:#171816;font-weight:600}
+figcaption b:first-child{display:block;font-size:14px;margin-bottom:2px}
+svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.s{width:16px;height:16px}svg.ic.xs{width:13px;height:13px}svg.ic.l{width:26px;height:26px}
+
+/* ---------- phone ---------- */
+.phone{width:340px;height:720px;border-radius:44px;background:#111;padding:10px;box-shadow:0 20px 50px rgba(0,0,0,.18)}
+.screen{position:relative;width:100%;height:100%;border-radius:36px;overflow:hidden;color:var(--p-text);
+  background:radial-gradient(120% 60% at 0% 0%,#E3EEE8 0%,transparent 60%),radial-gradient(100% 50% at 100% 100%,#F3EEE2 0%,transparent 60%),var(--p-bg)}
+.status{height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-size:13px;font-weight:600}
+.pbody{height:calc(100% - 34px - 64px);overflow:hidden;padding:0 18px}
+.ptop{display:flex;justify-content:flex-end;margin-top:6px}
+.pav{width:40px;height:40px;border-radius:50%;background:linear-gradient(160deg,#f4b860 0%,#3d6f8f 55%,#c9a55a 100%);position:relative}
+.pav .dot{position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;border-radius:50%;background:#2F7DE1;border:2.5px solid #fff}
+.pmark{width:128px;height:128px;border-radius:50%;margin:18px auto 0;display:grid;place-items:center;background:var(--p-surface);box-shadow:0 10px 30px -10px rgba(0,0,0,.18);position:relative;color:var(--p-green)}
+.pmark svg.ring{position:absolute;inset:6px;width:116px;height:116px}
+.pstate{text-align:center;font-size:20px;font-weight:600;margin-top:14px}
+.psend{display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border-radius:25px;background:var(--p-green);color:#fff;font-weight:600;margin:18px 0 0}
+.plabel{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--p-text3);text-transform:uppercase;margin:24px 4px 8px}
+.pcount{min-width:20px;height:20px;border-radius:10px;background:var(--p-greenSoft);color:var(--p-green);font-size:11px;display:grid;place-items:center;padding:0 6px;letter-spacing:0}
+.pcard{background:var(--p-surface);border:1px solid var(--p-border);border-radius:22px;overflow:hidden}
+.job{display:flex;align-items:center;gap:12px;padding:12px 14px;position:relative}
+.job+.job{border-top:1px solid var(--p-border)}
+.jt{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none}
+.jt.g{background:var(--p-greenSoft);color:var(--p-green)}
+.jt.b{background:#E7EFFB;color:#2F7DE1}
+.jt.a{background:#F6EEDD;color:#946a24}
+.jt.v{background:#EFEAFB;color:#6d4fd8}
+.jm{flex:1;min-width:0}
+.jn{font-size:15px;font-weight:600;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.jn .to{width:18px;height:18px;border-radius:50%;flex:none}
+.to.lap{background:linear-gradient(160deg,#f4b860 0%,#3d6f8f 55%,#c9a55a 100%)}
+.to.desk{background:linear-gradient(135deg,#9ab0a6,#3f5d52)}
+.to.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}
+.chips{display:flex;gap:6px;margin-top:5px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:4px;height:22px;border-radius:11px;padding:0 8px;font-size:12px;font-weight:500;background:var(--p-surface2);color:var(--p-text2)}
+.chip.g{background:var(--p-greenSoft);color:var(--p-green)}
+.chip.a{background:#F6EEDD;color:#946a24}
+.bar{height:4px;border-radius:2px;background:var(--p-surface2);margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--p-green);border-radius:2px}
+.jr{color:var(--p-text3)}
+.tabs{position:absolute;left:0;right:0;bottom:0;height:64px;display:flex;justify-content:space-around;align-items:center;border-top:1px solid var(--p-border);background:rgba(255,255,255,.7);color:var(--p-text3);font-size:11px}
+.tabs div{display:flex;flex-direction:column;align-items:center;gap:3px}.tabs .on{color:var(--p-green);font-weight:600}
+.pback{display:flex;align-items:center;gap:8px;color:var(--p-text2);font-size:16px;margin-top:10px;height:28px}
+.ptitle{font-size:30px;font-weight:700;letter-spacing:-.02em;margin-top:12px}
+.sect{display:flex;align-items:center;gap:10px;margin:20px 4px 8px}
+.sect .jt{width:30px;height:30px;border-radius:9px}
+.sect b{font-size:15px;flex:1}
+.sect .act{font-size:13px;font-weight:600;color:var(--p-green)}
+.frow{display:flex;align-items:center;gap:12px;padding:9px 14px}
+.frow+.frow{border-top:1px solid var(--p-border)}
+.ft{width:36px;height:36px;border-radius:10px;background:var(--p-surface2);display:grid;place-items:center;color:var(--p-text2);flex:none}
+.fm{flex:1;min-width:0}
+.fn{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fs{font-size:12px;color:var(--p-text3);margin-top:1px}
+.x{width:30px;height:30px;border-radius:15px;display:grid;place-items:center;color:var(--p-text3)}
+.hint{display:flex;align-items:center;gap:8px;margin:10px 4px 0;color:var(--p-text3);font-size:13px}
+
+/* ---------- desktop ---------- */
+.win{width:1000px;height:640px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;box-shadow:0 24px 60px rgba(0,0,0,.28);font-size:14px;position:relative}
+.win .tb{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;z-index:3}
+.win .tb i{width:11px;height:11px;border-radius:50%;background:#3a403c}
+.sb{width:230px;flex:none;border-right:1px solid var(--line);padding:40px 12px 16px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:700;font-size:15px;padding:0 12px 18px}
+.nav{display:flex;align-items:center;gap:12px;height:36px;padding:0 12px;border-radius:9px;color:var(--ink2)}
+.nav.on{background:var(--greenSoft);color:var(--green2);font-weight:600}
+.sbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);padding:18px 12px 6px}
+.dev{display:flex;align-items:center;gap:11px;height:40px;padding:0 10px;border-radius:9px;color:var(--ink);position:relative}
+.dev.on{background:var(--soft)}
+.dev .n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.av{width:26px;height:26px;border-radius:50%;flex:none;position:relative;display:grid;place-items:center;font-size:12px;font-weight:600;color:#fff}
+.av.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}
+.av.desk{background:linear-gradient(135deg,#9ab0a6,#3f5d52)}
+.av.ammi{background:linear-gradient(135deg,#d8a0b8,#7a4660)}
+.av .d{position:absolute;right:-2px;bottom:-2px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg)}
+.d.on{background:var(--blue)}.d.off{background:#5c645f}.d.tor{background:var(--violet)}.d.bad{background:var(--red)}
+.add{color:var(--mute)}
+.add .av{background:transparent;border:1.5px dashed #3c4540;color:var(--mute)}
+.tip{position:absolute;left:150px;top:6px;background:#26302b;color:var(--ink);font-size:12px;padding:6px 10px;border-radius:8px;white-space:nowrap;box-shadow:0 8px 20px rgba(0,0,0,.4);display:flex;align-items:center;gap:6px;z-index:2}
+.sbfoot{margin-top:auto;padding:10px 12px 0;border-top:1px solid var(--line)}
+.reach{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2)}
+.reach .ic{color:var(--green2)}
+.main{flex:1;position:relative;overflow:hidden}
+.home{display:flex;flex-direction:column;align-items:center;padding-top:64px}
+.mark{width:150px;height:150px;border-radius:50%;background:var(--raised);display:grid;place-items:center;box-shadow:0 1px 2px rgba(0,0,0,.4),0 16px 40px -16px rgba(0,0,0,.75);position:relative;color:var(--green2)}
+.mark svg.ring{position:absolute;inset:8px;width:134px;height:134px}
+.mwords{font-size:18px;font-weight:600;margin-top:18px}
+.split{display:flex;margin-top:22px;width:380px;height:46px;border-radius:12px;overflow:hidden;background:var(--green);color:#0b1410;font-weight:600}
+.split .a{flex:1;display:flex;align-items:center;justify-content:center;gap:9px}
+.split .b{width:52px;display:flex;align-items:center;justify-content:center;gap:2px;border-left:1px solid rgba(0,0,0,.18)}
+.split .av{width:22px;height:22px}
+.wait{width:520px;margin-top:30px}
+.wl{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:0 4px 8px}
+.wl .c{min-width:18px;height:18px;border-radius:9px;background:var(--greenSoft);color:var(--green2);font-size:11px;display:grid;place-items:center;padding:0 5px;letter-spacing:0}
+.wl .all{margin-left:auto;text-transform:none;letter-spacing:0;color:var(--green2);font-size:13px}
+.dcard{background:var(--raised);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.djob{display:flex;align-items:center;gap:12px;padding:11px 14px}
+.djob+.djob{border-top:1px solid var(--line)}
+.djob .jt{width:36px;height:36px;border-radius:10px}
+.djob .jt.g{background:var(--greenSoft);color:var(--green2)}
+.djob .jt.b{background:#16233a;color:var(--blue)}
+.djob .jt.a{background:#2a2316;color:var(--warn)}
+.djob .jn{font-size:14px}
+.dchip{display:inline-flex;align-items:center;gap:4px;height:21px;border-radius:11px;padding:0 8px;font-size:12px;font-weight:500;background:var(--soft);color:var(--ink2)}
+.dchip.a{background:#2a2316;color:var(--warn)}
+.dchip.g{background:var(--greenSoft);color:var(--green2)}
+.dchip.v{background:#221d33;color:var(--violet)}
+.dbar{height:4px;border-radius:2px;background:var(--soft);margin-top:8px;overflow:hidden}
+.dbar i{display:block;height:100%;background:var(--green);border-radius:2px}
+.dx{width:28px;height:28px;border-radius:14px;display:grid;place-items:center;color:var(--mute)}
+.pg{padding:46px 56px 0;max-width:760px}
+.crumb{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:13px}
+.ph1{font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:6px}
+.hero{display:flex;align-items:center;gap:18px;margin-top:6px}
+.hero .av{width:68px;height:68px;font-size:26px}
+.hero .av .d{width:16px;height:16px;border-width:3px}
+.hero h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.hero .chips{margin-top:7px}
+.acts{display:flex;gap:10px;margin-top:22px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:10px;background:var(--soft);color:var(--ink);font-weight:500;border:1px solid var(--line)}
+.btn.main{background:var(--green);color:#0b1410;border:none;font-weight:600}
+.dl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:26px 4px 8px;display:flex;align-items:center}
+.dl .r{margin-left:auto;text-transform:none;letter-spacing:0;color:var(--green2);font-size:13px;font-weight:500}
+.drow{display:flex;align-items:center;gap:12px;padding:11px 14px}
+.drow+.drow{border-top:1px solid var(--line)}
+.drow .jt{width:34px;height:34px;border-radius:10px;background:var(--soft);color:var(--ink2);display:grid;place-items:center;flex:none}
+.drow .jt.g{background:var(--greenSoft);color:var(--green2)}
+.drow b{font-weight:500}
+.drow small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.drow .end{margin-left:auto;color:var(--mute);display:flex;align-items:center;gap:8px;font-size:13px}
+.drow.red{color:var(--red)}.drow.red .jt{background:#2b1715;color:var(--red)}
+.tog{width:34px;height:20px;border-radius:10px;background:var(--green);position:relative}.tog::after{content:"";position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff}
+.tog.off{background:#3a423e}.tog.off::after{right:auto;left:2px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:1500px;margin:0 auto}
+.note{max-width:960px;margin:14px auto 0;font-size:13px;color:#5F625C;line-height:1.55}
+.note b{color:#171816}
+.old{opacity:.9}
+.menu{position:absolute;right:58px;top:362px;width:240px;background:#1d2420;border:1px solid var(--line);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.6);padding:6px;z-index:2}
+.mi{display:flex;align-items:center;gap:10px;height:40px;padding:0 10px;border-radius:8px}
+.mi.on{background:var(--soft)}
+.mi .n{flex:1}
+.dtop{position:absolute;top:40px;right:36px}
+.av.big{width:40px;height:40px;font-size:16px}.av.big .d{width:13px;height:13px;border-width:2.5px}
+.dsend{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:22px;width:380px;height:46px;border-radius:23px;background:var(--green);color:#0b1410;font-weight:600}
+.sub{color:var(--ink2);font-size:13px;margin-top:4px}
+.rchip{display:inline-flex;align-items:center;gap:6px;height:28px;border-radius:14px;padding:0 12px;background:var(--greenSoft);color:var(--green2);font-size:12px;font-weight:500;margin-top:16px}
+.bigbtn{height:44px;border-radius:22px;display:grid;place-items:center;font-weight:600;margin-top:12px}
+.bigbtn.red{background:#2b1715;color:var(--red);margin-top:24px}
+.bigbtn.blue{background:#16233a;color:var(--blue)}
+.drow .end{margin-left:auto}
+.main.dim::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-30%,-50%);width:360px;background:var(--raised);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 30px 80px rgba(0,0,0,.6);z-index:4}
+.mh{font-size:17px;font-weight:700;margin:0 4px 12px}
+.mlabel{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:14px 4px 8px}
+.dc{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:var(--soft);margin-top:8px}
+.dc .av{width:36px;height:36px;font-size:14px}
+.dc.chosen{border-color:var(--green);background:var(--greenSoft)}
+.dc .dn{flex:1;font-weight:600}
+.dc .since{color:var(--mute);font-size:12px}
+.dc.add{background:transparent;border-style:dashed;color:var(--mute)}
+.dc.add .av{background:transparent;border:1.5px dashed #3c4540;color:var(--mute)}
+.stk{position:relative;width:62px;height:46px;flex:none}
+.stk .th{position:absolute;top:2px;width:42px;height:42px;border-radius:10px;border:2px solid var(--p-surface);box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.stk .th:nth-child(1){left:0;z-index:3}.stk .th:nth-child(2){left:10px;z-index:2;transform:rotate(6deg)}.stk .th:nth-child(3){left:20px;z-index:1;transform:rotate(12deg)}
+.win .stk .th{border-color:var(--raised)}
+.th{display:grid;place-items:center;position:relative;overflow:hidden}
+.th .pr{position:absolute;inset:8px;width:auto;height:auto}
+.th:has(.pr)::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.3)}
+.th .play{width:0;height:0;border-left:10px solid rgba(255,255,255,.95);border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:3px;z-index:1}
+.th.doc{background:#fff;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:7px 6px}
+.th.doc i{display:block;height:2.5px;width:100%;background:#d5d7d1;border-radius:2px}
+.th.doc b{position:absolute;bottom:3px;right:3px;font-size:7px;font-weight:700;background:#c4412f;color:#fff;border-radius:3px;padding:1px 3px}
+.tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.th.big{width:auto;height:auto;aspect-ratio:1;border-radius:12px}
+.th.big .pr{inset:28%}
+.th.big .play{border-left-width:14px;border-top-width:8px;border-bottom-width:8px}
+.th.big.doc{padding:14px 12px;gap:6px}.th.big.doc i{height:4px}.th.big.doc b{font-size:9px;bottom:6px;right:6px}
+.th.more{background:var(--p-surface2);color:var(--p-text2);font-weight:600;font-size:15px;border:1px solid var(--p-border)}
+.tb2{position:absolute;right:5px;bottom:5px;width:20px;height:20px;border-radius:10px;background:rgba(255,255,255,.92);color:#5F625C;display:grid;place-items:center;z-index:2}
+.tb2.x2{top:5px;bottom:auto}
+.pav.ringed{box-shadow:0 0 0 2px var(--p-bg),0 0 0 4.5px var(--p-green)}
+.sect .chip{height:22px}
+.dir{display:inline-grid;place-items:center;color:var(--p-text3)}
+.win .dir{color:var(--mute)}
+.jn .to{width:18px;height:18px;border-radius:50%;flex:none}
+.dav{width:18px;height:18px;border-radius:50%;flex:none;display:inline-block}
+.dav.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}.dav.desk{background:linear-gradient(135deg,#9ab0a6,#3f5d52)}
+.sect .jn{flex:1;font-size:15px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></symbol>
+    <symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></symbol>
+    <symbol id="down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+    <symbol id="drive" viewBox="0 0 24 24"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/></symbol>
+    <symbol id="cloudoff" viewBox="0 0 24 24"><path d="m2 2 20 20"/><path d="M5.78 5.78A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.31-.2"/><path d="M21.53 16.84A4.5 4.5 0 0 0 17.5 10h-1.79A7.01 7.01 0 0 0 10.24 5.2"/></symbol>
+    <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+    <symbol id="monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="chevd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+    <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+    <symbol id="chat" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/></symbol>
+    <symbol id="image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+    <symbol id="doc" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h6"/></symbol>
+    <symbol id="video" viewBox="0 0 24 24"><path d="m16 13 5.22 3.48a.5.5 0 0 0 .78-.42V7.94a.5.5 0 0 0-.76-.43L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+    <symbol id="sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
+    <symbol id="history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></symbol>
+    <symbol id="merge" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7M11 18H8a2 2 0 0 1-2-2V9"/></symbol>
+    <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+    <symbol id="onion" viewBox="0 0 24 24"><path d="M12 2c0 3-6 5-6 11a6 6 0 0 0 12 0c0-6-6-8-6-11z"/><path d="M12 7c0 2-3 4-3 7a3 3 0 0 0 6 0c0-3-3-5-3-7z"/></symbol>
+    <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol>
+    <symbol id="lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="restore" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="pause" viewBox="0 0 24 24"><path d="M10 4H6v16h4zM18 4h-4v16h4z"/></symbol>
+  </defs>
+</svg>
+
+<header class="page">
+  <h1>Waiting, and the desktop's devices</h1>
+  <p>Mockup for the review of 3 November. Part A redesigns <b>Waiting</b> on both apps. Part B makes the desktop's device circle work as the phone's does. Grey words in the captions explain; they aren't on screen.</p>
+</header>
+
+<!-- ======================= PART A ======================= -->
+<h2 class="part">A. Waiting, with previews</h2>
+<p class="part">How others do it. <b>Google Photos</b> puts a progress ring around the profile picture while it backs up, and its backup page shows the photo going up right now next to how many are left; queued photos get a small badge on their own thumbnail. <b>WhatsApp</b> and <b>Telegram</b> show the file itself with a ring over it and × to stop. <b>Quick Share</b> rings the recipient's picture.
+<br><br><b>The change:</b> no icons, and no kinds of job. Waiting has <b>one row per device</b> that files are going to or coming from, with an arrow for which way. Backups, new files and sends to the same device are one stack of previews, the one moving now on top with a ring over it. A number, a size, and a chip only when it's waiting on something (<b>Off</b>, <b>Open the app</b>).</p>
+
+<div class="grid">
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span>●●●</span></div>
+      <div class="pbody">
+        <div class="ptop"><div class="pav ringed"><span class="dot"></span></div></div>
+        <div class="pmark">
+          <svg class="ring" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#E2E3DD" stroke-width="4"/><circle cx="50" cy="50" r="46" fill="none" stroke="#2F6B57" stroke-width="4" stroke-linecap="round" stroke-dasharray="180 289" transform="rotate(-90 50 50)"/></svg>
+          <svg class="ic l"><use href="#up"/></svg>
+        </div>
+        <div class="pstate">Backing up</div>
+        <div class="psend"><svg class="ic s"><use href="#send"/></svg>Send</div>
+        <div class="plabel">Waiting <span class="pcount">3</span></div>
+        <div class="pcard">
+          <div class="job"><span class="stk"><span class="th " style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"><span class="play"></span><svg class="pr" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="58.4 94.2" transform="rotate(-90 18 18)"/></svg></span><span class="th " style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"></span><span class="th " style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"></span></span>
+            <div class="jm"><div class="jn"><span class="dir"><svg class="ic xs"><use href="#up"/></svg></span><span class="to lap"></span>saqib</div>
+              <div class="chips"><span class="chip">140</span><span class="chip">2.2 GB</span></div></div>
+            <svg class="ic s jr"><use href="#chev"/></svg></div>
+          <div class="job"><span class="stk"><span class="th doc "><i></i><i></i><i></i><i style="width:50%"></i><b>PDF</b></span><span class="th " style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"></span></span>
+            <div class="jm"><div class="jn"><span class="dir"><svg class="ic xs"><use href="#up"/></svg></span><span class="to desk"></span>Study desktop</div>
+              <div class="chips"><span class="chip">2</span><span class="chip a"><svg class="ic xs"><use href="#monitor"/></svg>Off</span></div></div>
+            <svg class="ic s jr"><use href="#chev"/></svg></div>
+          <div class="job"><span class="stk"><span class="th " style="background:linear-gradient(140deg,#e8e0c8,#a99766 60%,#4a4128)"><svg class="pr" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="42.4 94.2" transform="rotate(-90 18 18)"/></svg></span><span class="th " style="background:linear-gradient(190deg,#d6d0f4,#7b6ac2 60%,#2f2754)"></span><span class="th " style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="play"></span></span></span>
+            <div class="jm"><div class="jn"><span class="dir"><svg class="ic xs"><use href="#down"/></svg></span><span class="to lap"></span>saqib</div>
+              <div class="chips"><span class="chip">41 of 90</span></div></div>
+            <svg class="ic s jr"><use href="#chev"/></svg></div>
+        </div>
+      </div>
+      <div class="tabs"><div class="on"><svg class="ic s"><use href="#home"/></svg>Home</div><div><svg class="ic s"><use href="#folder"/></svg>Files</div><div><svg class="ic s"><use href="#gear"/></svg>Settings</div></div>
+    </div></div>
+    <figcaption><b>A1 · Phone Home</b>One row per device, with an arrow for which way: ↑ to it, ↓ from it. "↑ saqib" holds everything on its way to the laptop: backups and new files together. "↓ saqib" is a restore coming back.</figcaption>
+  </figure>
+  <figure>
+    <div class="phone"><div class="screen">
+      <div class="status"><span>9:41</span><span>●●●</span></div>
+      <div class="pbody">
+        <div class="pback"><svg class="ic s"><use href="#back"/></svg>Home</div>
+        <div class="ptitle">Waiting</div>
+        <div class="sect"><b class="jn"><span class="dir"><svg class="ic xs"><use href="#up"/></svg></span><span class="to lap"></span>saqib</b><span class="chip">2.2 GB</span><span class="act"><svg class="ic s"><use href="#pause"/></svg></span></div>
+        <div class="tgrid"><span class="th big" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"><span class="play"></span><svg class="pr" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="56.5 94.2" transform="rotate(-90 18 18)"/></svg></span><span class="th big" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="tb2"><svg class="ic xs"><use href="#clock"/></svg></span></span><span class="th big" style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"><span class="tb2"><svg class="ic xs"><use href="#clock"/></svg></span></span><span class="th big" style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"><span class="tb2"><svg class="ic xs"><use href="#clock"/></svg></span></span><span class="th big" style="background:linear-gradient(140deg,#e8e0c8,#a99766 60%,#4a4128)"><span class="tb2"><svg class="ic xs"><use href="#clock"/></svg></span></span><span class="th big more">+135</span></div>
+        <div class="sect"><b class="jn"><span class="dir"><svg class="ic xs"><use href="#up"/></svg></span><span class="to desk"></span>Study desktop</b><span class="chip a"><svg class="ic xs"><use href="#monitor"/></svg>Off</span></div>
+        <div class="tgrid"><span class="th doc big"><i></i><i></i><i></i><i style="width:50%"></i><b>PDF</b><span class="tb2 x2"><svg class="ic xs"><use href="#x"/></svg></span></span><span class="th big" style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"><span class="tb2 x2"><svg class="ic xs"><use href="#x"/></svg></span></span></div>
+        <div class="sect"><b class="jn"><span class="dir"><svg class="ic xs"><use href="#down"/></svg></span><span class="to lap"></span>saqib</b><span class="chip">41 of 90</span></div>
+        <div class="tgrid"><span class="th big" style="background:linear-gradient(140deg,#e8e0c8,#a99766 60%,#4a4128)"><svg class="pr" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="56.5 94.2" transform="rotate(-90 18 18)"/></svg></span><span class="th big" style="background:linear-gradient(190deg,#d6d0f4,#7b6ac2 60%,#2f2754)"><span class="tb2"><svg class="ic xs"><use href="#clock"/></svg></span></span><span class="th big" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="play"></span><span class="tb2"><svg class="ic xs"><use href="#clock"/></svg></span></span></div>
+      </div>
+      <div class="tabs"><div class="on"><svg class="ic s"><use href="#home"/></svg>Home</div><div><svg class="ic s"><use href="#folder"/></svg>Files</div><div><svg class="ic s"><use href="#gear"/></svg>Settings</div></div>
+    </div></div>
+    <figcaption><b>A2 · Phone: Waiting page</b>One section per row of Home, in the same order: previews in a grid, the moving one ringed, the queued ones with a small clock, sends with × to stop them, and a pause for the laptop's.</figcaption>
+  </figure>
+  <figure>
+    <div class="win">
+      <div class="tb"><i></i><i></i><i></i></div>
+      <aside class="sb"><div class="brand">QurbSpace</div><div class="nav on"><svg class="ic s"><use href="#home"/></svg>Home</div><div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div><div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+      <div class="main"><div class="dtop"><span class="av ph big">G<span class="d on"></span></span></div><div class="home" style="padding-top:40px">
+        <div class="mark">
+          <svg class="ring" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#262e2a" stroke-width="3.5"/><circle cx="50" cy="50" r="46" fill="none" stroke="#4fa585" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="120 289" transform="rotate(-90 50 50)"/></svg>
+          <svg class="ic l"><use href="#down"/></svg>
+        </div>
+        <div class="mwords">Receiving</div>
+        <div class="dsend"><svg class="ic s"><use href="#send"/></svg>Send</div>
+        <div class="wait">
+          <div class="wl">Waiting <span class="c">3</span></div>
+          <div class="dcard">
+            <div class="djob"><span class="stk"><span class="th " style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"><span class="play"></span><svg class="pr" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3"/><circle cx="18" cy="18" r="15" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="37.7 94.2" transform="rotate(-90 18 18)"/></svg></span><span class="th " style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"></span><span class="th " style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"></span></span>
+              <div class="jm"><div class="jn"><span class="dir"><svg class="ic xs"><use href="#down"/></svg></span><span class="dav ph"></span>Galaxy S23</div>
+                <div class="chips"><span class="dchip">140</span><span class="dchip">2.2 GB</span></div></div>
+              <svg class="ic s" style="color:var(--mute)"><use href="#chev"/></svg></div>
+            <div class="djob"><span class="stk"><span class="th doc "><i></i><i></i><i></i><i style="width:50%"></i><b>PDF</b></span><span class="th " style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"></span></span>
+              <div class="jm"><div class="jn"><span class="dir"><svg class="ic xs"><use href="#up"/></svg></span><span class="dav ph"></span>Galaxy S23</div>
+                <div class="chips"><span class="dchip">2</span><span class="dchip a"><svg class="ic xs"><use href="#phone"/></svg>Open the app</span></div></div>
+              <svg class="ic s" style="color:var(--mute)"><use href="#chev"/></svg></div>
+            <div class="djob"><span class="stk"><span class="th " style="background:linear-gradient(190deg,#d6d0f4,#7b6ac2 60%,#2f2754)"></span></span>
+              <div class="jm"><div class="jn"><span class="dir"><svg class="ic xs"><use href="#up"/></svg></span><span class="dav desk"></span>Study desktop</div>
+                <div class="chips"><span class="dchip">1</span><span class="dchip a"><svg class="ic xs"><use href="#monitor"/></svg>Off</span></div></div>
+              <svg class="ic s" style="color:var(--mute)"><use href="#chev"/></svg></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <figcaption><b>A3 · Desktop Home</b>The same rows from the laptop's side: ↓ from the phone, its backups and new files coming in; ↑ to the phone, files sent and waiting until it opens QurbSpace; ↑ to the desktop, which is off.</figcaption>
+  </figure>
+</div>
+
+<!-- ======================= PART B ======================= -->
+<h2 class="part">B. The desktop's devices, as on the phone</h2>
+<p class="part">Today the circle opens a dropdown where clicking a name chooses it and the › beside it opens its page, two actions in one row. The phone does it more simply, so the desktop copies the phone exactly: <b>click the circle → that device's page</b>. On the page, <b>Switch device</b> (blue) opens the list to choose another, just as holding the circle does on the phone. On the desktop, right-clicking the circle opens the list directly, the desktop's version of a long press. The page itself is the phone's: picture, name, On/Off and ⓘ, then one card of what it keeps here, then Remove and Switch device.</p>
+
+<div class="grid">
+  <figure>
+    <div class="win">
+      <div class="tb"><i></i><i></i><i></i></div>
+      <aside class="sb"><div class="brand">QurbSpace</div><div class="nav on"><svg class="ic s"><use href="#home"/></svg>Home</div><div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div><div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+      <div class="main"><div class="pg">
+        <div class="crumb"><svg class="ic s"><use href="#back"/></svg>Home</div>
+        <div class="hero" style="margin-top:18px"><span class="av ph">G<span class="d on"></span></span>
+          <div style="flex:1"><h1>Galaxy S23</h1><div class="sub">On</div></div>
+          <svg class="ic" style="color:var(--ink2)"><use href="#info"/></svg></div>
+        <div class="rchip"><svg class="ic xs"><use href="#globe"/></svg>Reachable from anywhere</div>
+        <div class="dl">Keeps here</div>
+        <div class="dcard">
+          <div class="drow"><span class="jt g"><svg class="ic s"><use href="#folder"/></svg></span><b>Folders</b><span class="end">3<svg class="ic s"><use href="#chev"/></svg></span></div>
+          <div class="drow"><span class="jt g"><svg class="ic s"><use href="#chat"/></svg></span><b>WhatsApp</b><span class="end">8.4 GB</span></div>
+          <div class="drow"><span class="jt g"><svg class="ic s"><use href="#lock"/></svg></span><b>Private Vault</b><span class="end">1.2 GB</span></div>
+        </div>
+        <div class="bigbtn red">Remove</div>
+        <div class="bigbtn blue">Switch device</div>
+      </div></div>
+    </div>
+    <figcaption><b>B1 · Clicking the circle: the device's page</b>The phone's device page, seen from the computer. Its folders, WhatsApp and Private Vault are what it keeps here; Folders opens the list to choose from. ⓘ holds its identity, when it was paired, and an earlier setup when there is one, kept off the page.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="win">
+      <div class="tb"><i></i><i></i><i></i></div>
+      <aside class="sb"><div class="brand">QurbSpace</div><div class="nav on"><svg class="ic s"><use href="#home"/></svg>Home</div><div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div><div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+      <div class="main dim"><div class="dtop"><span class="av ph big">G<span class="d on"></span></span></div><div class="home" style="padding-top:40px">
+        <div class="mark"><svg class="ic l"><use href="#check"/></svg></div>
+        <div class="mwords">All synced</div>
+        <div class="dsend"><svg class="ic s"><use href="#send"/></svg>Send</div>
+      </div></div>
+      <div class="modal">
+        <div class="mh">Switch device</div>
+        <div class="dc chosen"><span class="av ph">G<span class="d on"></span></span><div class="dn">Galaxy S23</div><svg class="ic s" style="color:var(--green2)"><use href="#check"/></svg></div>
+        <div class="dc"><span class="av desk">S<span class="d off"></span></span><div class="dn">Study desktop</div><span class="since">3 h</span></div>
+        <div class="mlabel">People</div>
+        <div class="dc"><span class="av ammi">A<span class="d on"></span></span><div class="dn">Ammi's phone</div></div>
+        <div class="dc add"><span class="av"><svg class="ic xs"><use href="#plus"/></svg></span><div class="dn">Add a device</div></div>
+      </div>
+    </div>
+    <figcaption><b>B2 · Switch device</b>The phone's sheet, as a small centred window: one card per device, the chosen one ticked, an off one with how long ago it was seen, people under their own label, and Add a device last. Choosing one sets the circle and where Send sends.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="win">
+      <div class="tb"><i></i><i></i><i></i></div>
+      <aside class="sb"><div class="brand">QurbSpace</div><div class="nav on"><svg class="ic s"><use href="#home"/></svg>Home</div><div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div><div class="nav"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+      <div class="main"><div class="pg">
+        <div class="crumb"><svg class="ic s"><use href="#back"/></svg>Home</div>
+        <div class="hero" style="margin-top:18px"><span class="av ammi">A<span class="d on"></span></span>
+          <div style="flex:1"><h1>Ammi's phone</h1><div class="sub">On</div></div>
+          <svg class="ic" style="color:var(--ink2)"><use href="#info"/></svg></div>
+        <div class="dl">Keeps here</div>
+        <div class="dcard">
+          <div class="drow"><span class="jt g"><svg class="ic s"><use href="#lock"/></svg></span><b>Their folder</b><span class="end">4.2 GB<svg class="ic s"><use href="#chev"/></svg></span></div>
+        </div>
+        <div class="bigbtn red">Remove</div>
+        <div class="bigbtn blue">Switch device</div>
+      </div></div>
+    </div>
+    <figcaption><b>B3 · A person's phone</b>The same page for someone who uses this computer: one row, their sealed folder, which opens in Files with a yes on their phone. Nothing else to manage.</figcaption>
+  </figure>
+</div>
+
+<p class="note"><b>Questions for you:</b> (1) Is "Only here" the right name for files that no other device has yet, or should they not be in Waiting at all? (2) Should a backup in Waiting have a pause button?</p>
+</body>
+</html>

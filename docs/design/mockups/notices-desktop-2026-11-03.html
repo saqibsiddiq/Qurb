@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop notifications and updates</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mockup for the owner's review of 2026-11-03: the desktop's notifications
+   in the phone's words (Notices.kt), and updating. Not product code. */
+:root{--bg:#0e1210;--raised:#171c19;--soft:#1b211e;--line:#262e2a;--ink:#edf1ee;--ink2:#b9c1bc;--mute:#87918b;
+  --green:#4fa585;--green2:#5db896;--greenSoft:#172520;--warn:#d9a64a;--blue:#5b9bff;--red:#ef6b5d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:#171816;padding:32px 16px 80px}
+header.page{max-width:1500px;margin:0 auto 10px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:#5F625C;margin-top:6px;font-size:15px;line-height:1.55;max-width:980px}
+.grid{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center;max-width:2100px;margin:30px auto 0}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;color:#5F625C;text-align:center;line-height:1.5;max-width:620px}
+figcaption b{color:#171816;font-weight:600}
+figcaption b:first-child{display:block;font-size:14px;margin-bottom:2px}
+svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.s{width:16px;height:16px}svg.ic.xs{width:12px;height:12px}
+.desk{width:1000px;height:600px;border-radius:14px;overflow:hidden;position:relative;background:linear-gradient(135deg,#2c3e50,#4b6a64 60%,#7a8c6c);box-shadow:0 24px 60px rgba(0,0,0,.28)}
+.panel{position:absolute;top:0;left:0;right:0;height:28px;background:rgba(0,0,0,.55);color:#ddd;font-size:12px;display:flex;align-items:center;justify-content:space-between;padding:0 14px}
+.stack{position:absolute;top:44px;right:16px;display:flex;flex-direction:column;gap:10px;width:380px}
+.toast{background:rgba(28,32,30,.96);color:var(--ink);border-radius:14px;padding:12px 14px;display:flex;gap:12px;box-shadow:0 12px 30px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.06)}
+.toast .app{width:36px;height:36px;border-radius:10px;background:var(--greenSoft);color:var(--green2);display:grid;place-items:center;flex:none;position:relative}
+.toast .app .av{position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:50%;border:2px solid #1c201e}
+.toast .m{flex:1;min-width:0}
+.toast b{display:block;font-size:14px}
+.toast small{display:block;color:var(--ink2);font-size:13px;margin-top:2px}
+.toast .a{display:flex;gap:8px;margin-top:10px}
+.toast .a span{height:28px;padding:0 12px;border-radius:14px;background:var(--soft);border:1px solid var(--line);display:flex;align-items:center;font-size:12px;font-weight:600}
+.toast .a span.g{background:var(--green);color:#0b1410;border:none}
+.toast .tm{color:var(--mute);font-size:11px}
+.av{display:inline-block;border-radius:50%}
+.av.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}
+.th{width:36px;height:36px;border-radius:9px;flex:none}
+.win{width:1000px;height:600px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;box-shadow:0 24px 60px rgba(0,0,0,.28);font-size:14px;position:relative}
+.tb{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px}
+.tb i{width:11px;height:11px;border-radius:50%;background:#3a403c}
+.sb{width:210px;flex:none;border-right:1px solid var(--line);padding:40px 12px 16px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:700;font-size:15px;padding:0 12px 18px}
+.nav{display:flex;align-items:center;gap:12px;height:36px;padding:0 12px;border-radius:9px;color:var(--ink2)}
+.nav.on{background:var(--greenSoft);color:var(--green2);font-weight:600}
+.main{flex:1;padding:40px 0 0;display:flex;justify-content:center}
+.col{width:520px}
+.col h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.lab{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:22px 6px 8px}
+.card{background:var(--raised);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;min-height:52px;padding:0 16px}
+.row+.row{border-top:1px solid var(--line)}
+.row .n{flex:1;font-weight:500}
+.row .ic{color:var(--ink2)}
+.state{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:12px;font-size:12px;font-weight:500}
+.state.ok{background:var(--greenSoft);color:var(--green2)}
+.state.go{background:var(--soft);color:var(--ink2);position:relative;overflow:hidden}
+.state.go i{position:absolute;left:0;bottom:0;height:2px;background:var(--green)}
+.state.do{background:var(--green);color:#0b1410;font-weight:600}
+.state.man{background:#2a2316;color:var(--warn)}
+.states{display:grid;grid-template-columns:auto 1fr;gap:12px 18px;align-items:center;margin-top:10px;font-size:13px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M15.5 15.5 20 20"/></symbol>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+</defs></svg>
+
+<header class="page">
+  <h1>Notifications and updates</h1>
+  <p>Mockup for the review of 3 November. The desktop says the same few things as the phone, in the phone's words (Notifications draft 1): a file someone sent you, a file you sent arriving, and something that failed. Each gets the button the phone gives it. Updates follow the phone's rule: install when no one is using the window.</p>
+</header>
+
+<div class="grid">
+
+<figure><div class="desk">
+  <div class="panel"><span>Activities</span><span>Tue 09:41</span><span>⚡ 🔊</span></div>
+  <div class="stack">
+    <div class="toast"><span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span>
+      <div class="m"><b>Galaxy S23 sent you a file</b><small>Sunset at Clifton.jpg</small><div class="a"><span class="g">Show</span></div></div><span class="tm">now</span></div>
+    <div class="toast"><span class="app"><svg class="ic s"><use href="#check"/></svg><span class="av ph"></span></span>
+      <div class="m"><b>Delivered to Galaxy S23</b><small>Tickets.pdf</small></div><span class="tm">2 min</span></div>
+    <div class="toast"><span class="app" style="background:#2a2316;color:var(--warn)">!</span>
+      <div class="m"><b>Could not finish locked.docx</b><small>It's open in another app</small><div class="a"><span>Try again</span></div></div><span class="tm">5 min</span></div>
+    <div class="toast"><span class="app"><svg class="ic s"><use href="#logo"/></svg></span>
+      <div class="m"><b>QurbSpace is still running</b><small>Quit it in Settings</small></div><span class="tm">once</span></div>
+  </div>
+</div>
+<figcaption><b>N1 · The four notifications</b>Who did it in the title, the file under it, as on the phone. A file sent to you shows its preview and a <b>Show</b> button, which opens it in the file manager. A failure says why in a few words, with <b>Try again</b>. Closing the window says once that QurbSpace keeps running. Nothing else interrupts: no notification for ordinary syncing, or for updates.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"><div class="col">
+    <h1>Settings</h1>
+    <div class="lab">App</div>
+    <div class="card"><div class="row"><svg class="ic s"><use href="#download"/></svg><span class="n">Update</span><span class="state ok"><svg class="ic xs"><use href="#check"/></svg>Up to date</span></div></div>
+    <div class="lab" style="margin-top:30px">The same row as an update comes</div>
+    <div class="states">
+      <span class="state go">Fetching 0.2.0-beta.7<i style="width:40%"></i></span><span>Downloading by itself, a thin bar along the chip</span>
+      <span class="state do"><svg class="ic xs"><use href="#refresh"/></svg>Restart</span><span>Ready: restarts by itself next time the window is closed and nothing is moving; the chip does it now</span>
+      <span class="state man">0.2.0-beta.7 out</span><span>Installed by a package manager: update it there</span>
+      <span class="state ok"><svg class="ic xs"><use href="#check"/></svg>Up to date</span><span>Clicking it looks again</span>
+    </div>
+  </div></div></div>
+<figcaption><b>N2 · Update</b>One row in Settings → App (S-1), its chip saying where things stand. As the phone does, the update installs itself while no one is using the window: the desktop restarts itself once the window is closed and nothing is moving, so a computer running as everyone's server stays current. <b>Restart</b> does it now. The "Restart to update" button in the sidebar goes.</figcaption></figure>
+
+</div>
+</body>
+</html>

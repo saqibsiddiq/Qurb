@@ -54,10 +54,15 @@ object Thumbs {
      *  photo; a video's frame and length; a song's cover; a PDF's first page;
      *  text's first lines; an app's icon; else its kind written on a tile. */
     fun local(scope: CoroutineScope, icon: ImageView, path: String, modifiedAt: Long) {
-        val key = "local:$path:$modifiedAt"
+        file(scope, icon, java.io.File(Engine.root(icon.context), path), "local:$path:$modifiedAt")
+    }
+
+    /** Into `icon`: any file on this phone, by where it is -- one a backup
+     *  is taking from the phone's own folders (Waiting, 2026-11-03). */
+    fun file(scope: CoroutineScope, icon: ImageView, file: java.io.File, key: String = "file:${file.path}:${file.lastModified()}") {
         val context = icon.context
+        val path = file.name
         show(scope, icon, key) {
-            val file = java.io.File(Engine.root(context), path)
             if (!file.isFile) return@show null
             when (Peek.kind(path)) {
                 "picture" -> decode(file.path)
@@ -69,6 +74,11 @@ object Thumbs {
                 else -> if (path.endsWith(".apk", true)) app(context, file) ?: tile(path) else tile(path)
             }
         }
+    }
+
+    /** Into `icon`: a file whose bytes are not here to read, by its kind. */
+    fun kind(scope: CoroutineScope, icon: ImageView, name: String) {
+        show(scope, icon, "kind:${name.substringAfterLast('.', "").lowercase()}") { tile(name) }
     }
 
     /** Into `icon`, once it is read: a file of a computer's folder, read in

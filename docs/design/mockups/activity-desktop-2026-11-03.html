@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop Activity</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mockup for the owner's review of 2026-11-03: the desktop's Activity as
+   the phone's (2026-11-02), with previews as Waiting has them. Not product
+   code. */
+:root{--bg:#0e1210;--raised:#171c19;--soft:#1b211e;--line:#262e2a;--ink:#edf1ee;--ink2:#b9c1bc;--mute:#87918b;
+  --green:#4fa585;--green2:#5db896;--greenSoft:#172520;--warn:#d9a64a;--blue:#5b9bff;--red:#ef6b5d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:#171816;padding:32px 16px 80px}
+header.page{max-width:1500px;margin:0 auto 10px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:#5F625C;margin-top:6px;font-size:15px;line-height:1.55;max-width:980px}
+.grid{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center;max-width:2100px;margin:30px auto 0}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;color:#5F625C;text-align:center;line-height:1.5;max-width:600px}
+figcaption b{color:#171816;font-weight:600}
+figcaption b:first-child{display:block;font-size:14px;margin-bottom:2px}
+svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.s{width:16px;height:16px}svg.ic.xs{width:12px;height:12px}
+.win{width:1000px;height:700px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;box-shadow:0 24px 60px rgba(0,0,0,.28);font-size:14px;position:relative}
+.tb{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px;z-index:5}
+.tb i{width:11px;height:11px;border-radius:50%;background:#3a403c}
+.sb{width:210px;flex:none;border-right:1px solid var(--line);padding:40px 12px 16px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:700;font-size:15px;padding:0 12px 18px}
+.nav{display:flex;align-items:center;gap:12px;height:36px;padding:0 12px;border-radius:9px;color:var(--ink2)}
+.nav.on{background:var(--greenSoft);color:var(--green2);font-weight:600}
+.main{flex:1;overflow:hidden;padding:40px 0 0;display:flex;justify-content:center}
+.col{width:600px}
+.col h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.back{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:13px;margin-bottom:6px}
+.chips{display:flex;gap:8px;margin-top:16px}
+.chip{height:32px;padding:0 14px;border-radius:16px;background:var(--raised);border:1px solid var(--line);display:flex;align-items:center;gap:6px;color:var(--ink2);font-weight:500}
+.chip.on{background:var(--greenSoft);border-color:var(--green);color:var(--green2)}
+.chip .n{background:#3a2a17;color:var(--warn);border-radius:9px;font-size:11px;padding:1px 6px}
+.day{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:22px 6px 8px}
+.card{background:var(--raised);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;padding:10px 14px;min-height:62px}
+.row+.row{border-top:1px solid var(--line)}
+.row .m{flex:1;min-width:0}
+.row .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .w{display:flex;align-items:center;gap:7px;color:var(--mute);font-size:12px;margin-top:3px}
+.row .w .av{width:16px;height:16px}
+.row .w.bad{color:var(--warn)}
+.row .tm{color:var(--mute);font-size:12px}
+.badge{position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:9px;display:grid;place-items:center;border:2px solid var(--raised);z-index:5}
+.badge.g{background:var(--green);color:#0b1410}.badge.b{background:var(--blue);color:#0b1410}.badge.w{background:var(--warn);color:#0b1410}.badge.r{background:#5c645f;color:#fff}
+.av{border-radius:50%;flex:none;display:inline-block}
+.av.ph{background:linear-gradient(135deg,#c9b38f,#6f5a3d)}.av.ammi{background:linear-gradient(135deg,#d8a0b8,#7a4660)}
+.stk{position:relative;width:54px;height:42px;flex:none}
+.stk .th{position:absolute;top:1px;width:40px;height:40px;border-radius:10px;border:2px solid var(--raised);box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.stk .th:nth-child(1){left:0;z-index:3}.stk .th:nth-child(2){left:7px;z-index:2;transform:rotate(6deg)}.stk .th:nth-child(3){left:14px;z-index:1;transform:rotate(12deg)}
+.th{display:grid;place-items:center;overflow:hidden;position:relative}
+.th.doc{background:#f4f4f0;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:7px 6px}
+.th.doc i{display:block;height:2.5px;width:100%;background:#d5d7d1;border-radius:2px}
+.th.doc b{position:absolute;bottom:3px;right:3px;font-size:7px;font-weight:700;color:#fff;border-radius:3px;padding:1px 3px}
+.play{width:0;height:0;border-left:9px solid rgba(255,255,255,.95);border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:2px}
+.one{position:relative;width:54px;height:42px;flex:none}
+.one .th{width:40px;height:40px;border-radius:10px}
+.one .badge{right:10px}
+.stk .badge{right:-2px}
+.dev{width:40px;height:40px;border-radius:50%}
+.more{margin-top:14px;text-align:center;color:var(--green2);font-weight:500}
+/* entry page */
+.hero{display:flex;align-items:center;gap:16px;margin-top:10px}
+.hero h1{font-size:24px}
+.hero small{display:block;color:var(--mute);margin-top:4px}
+.facts .row{min-height:46px}
+.facts .k{flex:1;color:var(--ink2)}
+.facts .v{color:var(--ink)}
+.tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:10px}
+.tiles .th{width:auto;aspect-ratio:1;border-radius:12px}
+.tiles .th.more2{background:var(--soft);border:1px solid var(--line);color:var(--ink2);font-weight:600}
+.big .stk{width:70px;height:56px}.big .stk .th{width:54px;height:54px;border-radius:13px}
+.note{max-width:980px;margin:34px auto 0;font-size:13px;color:#5F625C;line-height:1.6}
+.note b{color:#171816}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+<symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="alert" viewBox="0 0 24 24"><path d="M12 8v5M12 16h.01"/></symbol>
+<symbol id="link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></symbol>
+<symbol id="compare" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7M11 18H8a2 2 0 0 1-2-2V9"/></symbol>
+</defs></svg>
+
+<header class="page">
+  <h1>The desktop's Activity, as the phone's</h1>
+  <p>Mockup for the review of 3 November. Today the desktop lists every event as its own row, with a line of words under each ("Arrived, Galaxy S23, 1 h ago, 250 KB"). The phone's Activity, agreed on 2 November, has chips, days, and a batch as one entry that opens. Here it is on the desktop, with the files' previews as Waiting has them, and a small badge for what happened.</p>
+</header>
+
+<div class="grid">
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"><div class="col">
+    <div class="back"><svg class="ic xs"><use href="#back"/></svg>Settings</div>
+    <h1>Activity</h1>
+    <div class="chips"><span class="chip on">All</span><span class="chip">Backups</span><span class="chip">Transfers</span><span class="chip">Problems <span class="n">1</span></span></div>
+    <div class="day">Today</div>
+    <div class="card">
+      <div class="row"><span class="stk"><span class="th" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="play"></span></span><span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span><span class="th" style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"></span><span class="badge g"><svg class="ic xs"><use href="#down"/></svg></span></span>
+        <div class="m"><div class="t">128 files backed up</div><div class="w"><span class="av ph"></span>Galaxy S23</div></div><span class="tm">09:40</span></div>
+      <div class="row"><span class="one"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><b style="background:#c4412f">PDF</b></span><span class="badge b"><svg class="ic xs"><use href="#up"/></svg></span></span>
+        <div class="m"><div class="t">Tickets.pdf</div><div class="w"><span class="av ph"></span>Galaxy S23</div></div><span class="tm">08:12</span></div>
+      <div class="row"><span class="one"><span class="th doc"><i></i><i></i><i style="width:60%"></i><i></i><b style="background:#2b5fb4">DOC</b></span><span class="badge w"><svg class="ic xs"><use href="#alert"/></svg></span></span>
+        <div class="m"><div class="t">locked.docx</div><div class="w bad">Open in another app; tried 3 times</div></div><span class="tm">07:55</span></div>
+    </div>
+    <div class="day">Yesterday</div>
+    <div class="card">
+      <div class="row"><span class="stk"><span class="th" style="background:linear-gradient(140deg,#e8e0c8,#a99766 60%,#4a4128)"></span><span class="th" style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"></span><span class="badge b"><svg class="ic xs"><use href="#down"/></svg></span></span>
+        <div class="m"><div class="t">2 files received</div><div class="w"><span class="av ammi"></span>Ammi's phone</div></div><span class="tm">19:05</span></div>
+      <div class="row"><span class="one"><span class="th doc"><i></i><i></i><i></i><i style="width:40%"></i><b style="background:#6b7280">MD</b></span><span class="badge w"><svg class="ic xs"><use href="#compare"/></svg></span></span>
+        <div class="m"><div class="t">Notes.md</div><div class="w"><span class="av ph"></span>Two versions</div></div><span class="tm">14:30</span></div>
+      <div class="row"><span class="one"><span class="dev av ph"></span><span class="badge g" style="right:10px"><svg class="ic xs"><use href="#link"/></svg></span></span>
+        <div class="m"><div class="t">Galaxy S23 added</div></div><span class="tm">11:02</span></div>
+    </div>
+  </div></div></div>
+<figcaption><b>Y1 · Activity</b>The phone's four chips, the Problems chip counting what failed. By day, newest first. A batch is one row ("128 files backed up"), showing its files' previews with a badge for what happened: ↓ arrived, ↑ sent, ⚠ problem, two versions, linked. Under the name, only the other device's picture and name. Words only for a problem, in amber, because that's the one thing worth reading.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <aside class="sb"><div class="brand">QurbSpace</div>
+    <div class="nav"><svg class="ic s"><use href="#home"/></svg>Home</div>
+    <div class="nav"><svg class="ic s"><use href="#folder"/></svg>Files</div>
+    <div class="nav on"><svg class="ic s"><use href="#gear"/></svg>Settings</div></aside>
+  <div class="main"><div class="col">
+    <div class="back"><svg class="ic xs"><use href="#back"/></svg>Activity</div>
+    <div class="hero big"><span class="stk"><span class="th" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="play"></span></span><span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span><span class="th" style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"></span></span>
+      <div><h1>128 files backed up</h1><small>Today, 09:12 to 09:40</small></div></div>
+    <div class="card facts" style="margin-top:20px">
+      <div class="row"><span class="k">From</span><span class="v" style="display:flex;align-items:center;gap:8px"><span class="av ph" style="width:18px;height:18px"></span>Galaxy S23</span></div>
+      <div class="row"><span class="k">Size</span><span class="v">2.1 GB</span></div>
+    </div>
+    <div class="day">Files</div>
+    <div class="tiles">
+      <span class="th" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"><span class="play"></span></span>
+      <span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span>
+      <span class="th" style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"></span>
+      <span class="th" style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"></span>
+      <span class="th" style="background:linear-gradient(140deg,#e8e0c8,#a99766 60%,#4a4128)"></span>
+      <span class="th" style="background:linear-gradient(190deg,#d6d0f4,#7b6ac2 60%,#2f2754)"></span>
+      <span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><b style="background:#c4412f">PDF</b></span>
+      <span class="th" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span>
+      <span class="th" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"></span>
+      <span class="th" style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"></span>
+      <span class="th" style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"></span>
+      <span class="th more2">+117</span>
+    </div>
+  </div></div></div>
+<figcaption><b>Y2 · An entry</b>The phone's entry page: when, from where, how big, and its files as a grid of previews (a click opens one in the file manager, in its folder). For a problem, <b>Why</b> and <b>Tried</b> come first, with <b>Try again</b> where it can be.</figcaption></figure>
+
+</div>
+<p class="note"><b>Unchanged underneath:</b> the history keeps at most 2,000 entries and 90 days, and merges a batch into one entry as it's written. That's in the engine the desktop shares, so it already applies here.</p>
+</body>
+</html>

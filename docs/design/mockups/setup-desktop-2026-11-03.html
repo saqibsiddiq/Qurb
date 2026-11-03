@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desktop setup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Mockup for the owner's review of 2026-11-03: setting the desktop up and
+   adding a device, shortened after decision 0082 and F-1 to F-4. Not
+   product code. */
+:root{--bg:#0e1210;--raised:#171c19;--soft:#1b211e;--line:#262e2a;--ink:#edf1ee;--ink2:#b9c1bc;--mute:#87918b;
+  --green:#4fa585;--green2:#5db896;--greenSoft:#172520;--warn:#d9a64a;--blue:#5b9bff;--red:#ef6b5d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,system-ui,sans-serif;background:#E9EBE6;color:#171816;padding:32px 16px 80px}
+header.page{max-width:1500px;margin:0 auto 10px}
+header.page h1{font-size:26px;font-weight:700;letter-spacing:-.02em}
+header.page p{color:#5F625C;margin-top:6px;font-size:15px;line-height:1.55;max-width:980px}
+.grid{display:flex;flex-wrap:wrap;gap:40px 28px;justify-content:center;max-width:2100px;margin:30px auto 0}
+figure{display:flex;flex-direction:column;align-items:center;gap:12px}
+figcaption{font-size:13px;color:#5F625C;text-align:center;line-height:1.5;max-width:470px}
+figcaption b{color:#171816;font-weight:600}
+figcaption b:first-child{display:block;font-size:14px;margin-bottom:2px}
+svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+svg.ic.s{width:16px;height:16px}svg.ic.l{width:28px;height:28px}
+.win{width:640px;height:500px;border-radius:14px;overflow:hidden;background:var(--bg);color:var(--ink);box-shadow:0 24px 60px rgba(0,0,0,.28);font-size:14px;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.tb{position:absolute;top:0;left:0;right:0;height:30px;display:flex;align-items:center;gap:7px;padding:0 12px}
+.tb i{width:11px;height:11px;border-radius:50%;background:#3a403c}
+.logo{width:72px;height:72px;border-radius:22px;background:var(--greenSoft);color:var(--green2);display:grid;place-items:center}
+h2{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-top:18px}
+.sub{color:var(--mute);margin-top:8px;font-size:14px}
+.btn{height:46px;border-radius:23px;display:grid;place-items:center;font-weight:600;width:300px}
+.btn.main{background:var(--green);color:#0b1410;margin-top:30px}
+.btn.quiet{color:var(--ink2);margin-top:8px}
+.qr{width:190px;height:190px;border-radius:18px;background:#fff;padding:14px;margin-top:20px;position:relative}
+.qr .cells{width:100%;height:100%;background:
+  repeating-linear-gradient(90deg,#111 0 9px,transparent 9px 18px),repeating-linear-gradient(0deg,#111 0 9px,transparent 9px 14px);opacity:.85;
+  -webkit-mask:radial-gradient(circle at 30% 40%,#000 30%,transparent 31%),linear-gradient(#000,#000);}
+.qr .eye{position:absolute;width:44px;height:44px;border:8px solid #111;border-radius:8px;background:#fff}
+.qr .eye::after{content:"";position:absolute;inset:6px;background:#111;border-radius:3px}
+.digits{font-size:26px;font-weight:600;letter-spacing:.12em;margin-top:16px;font-variant-numeric:tabular-nums}
+.small{color:var(--mute);font-size:12px;margin-top:6px;display:flex;align-items:center;gap:6px;justify-content:center}
+.choices{display:flex;gap:14px;margin-top:26px}
+.choice{width:200px;height:130px;border-radius:20px;background:var(--raised);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-weight:600}
+.choice .c{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--greenSoft);color:var(--green2)}
+.choice .c.p{background:#2a1d25;color:#d8a0b8}
+.back{position:absolute;top:44px;left:28px;display:flex;align-items:center;gap:6px;color:var(--mute);font-size:13px}
+.av{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#c9b38f,#6f5a3d)}
+.cmp{display:flex;gap:10px;margin-top:22px}
+.cmp span{width:42px;height:54px;border-radius:10px;background:var(--soft);border:1px solid var(--line);display:grid;place-items:center;font-size:24px;font-weight:600}
+.two{display:flex;gap:10px;margin-top:26px}
+.two .btn{width:160px}
+.two .btn.main{margin-top:0}
+.two .btn.quiet{background:var(--soft);margin-top:0}
+.field{display:flex;gap:8px;margin-top:24px}
+.field span{width:44px;height:56px;border-radius:12px;background:var(--raised);border:1px solid var(--line);display:grid;place-items:center;font-size:24px;font-weight:600}
+.field span.cur{border-color:var(--green)}
+.or{color:var(--mute);font-size:13px;margin-top:18px}
+.note{max-width:980px;margin:34px auto 0;font-size:13px;color:#5F625C;line-height:1.6}
+.note b{color:#171816}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M15.5 15.5 20 20"/></symbol>
+<symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+<symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+<symbol id="wifi" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></symbol>
+</defs></svg>
+
+<header class="page">
+  <h1>Setting up the desktop, and adding a device</h1>
+  <p>Mockup for the review of 3 November. Today the first run has up to five screens. Two of them no longer fit: <b>the folder</b> (everything now lives in <code>~/qurb</code>, and Files opens it in the file manager) and <b>the space it may take</b> (a computer keeps everything, F-3). What's left is two screens: <b>Start</b>, then <b>add your phone</b>. Adding a device later uses the same code screen.</p>
+</header>
+
+<div class="grid">
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <span class="logo"><svg class="ic l"><use href="#logo"/></svg></span>
+  <h2>QurbSpace</h2>
+  <div class="sub">Your files, on your own devices</div>
+  <div class="btn main">Start</div>
+  <div class="btn quiet">I already use QurbSpace</div>
+</div>
+<figcaption><b>P1 · First run</b>One button. <b>Start</b> makes the key and <code>~/qurb</code> without asking anything. <b>I already use QurbSpace</b> goes to P5. Gone: choosing the folder, and how much space it may take.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <h2 style="margin-top:0">Add your phone</h2>
+  <div class="qr"><div class="cells"></div><span class="eye" style="left:12px;top:12px"></span><span class="eye" style="right:12px;top:12px"></span><span class="eye" style="left:12px;bottom:12px"></span></div>
+  <div class="digits">482 913</div>
+  <div class="small"><svg class="ic s"><use href="#clock"/></svg>4:32</div>
+  <div class="btn quiet" style="margin-top:14px">Later</div>
+</div>
+<figcaption><b>P2 · Add your phone</b>The second and last step of setup, and what <b>Add a device → My phone</b> shows later. Scan it with QurbSpace on the phone, or type the six digits there on the same Wi-Fi. No sentence of instructions; the phone's own screen says "Scan".</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <span class="av"></span>
+  <h2>Galaxy S23</h2>
+  <div class="cmp"><span>7</span><span>1</span><span>5</span><span>0</span><span>3</span><span>8</span></div>
+  <div class="small" style="margin-top:12px"><svg class="ic s"><use href="#phone"/></svg>Same on the phone?</div>
+  <div class="two"><div class="btn quiet">Decline</div><div class="btn main">Approve</div></div>
+</div>
+<figcaption><b>P3 · Approving it</b>The phone that scanned, with its picture and name, and six digits to compare with the phone's screen, as the phone's own approval shows. Approve, and Home opens with the phone's circle at the top.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <div class="back"><svg class="ic s"><use href="#back"/></svg>Home</div>
+  <h2 style="margin-top:0">Add a device</h2>
+  <div class="choices">
+    <div class="choice"><span class="c"><svg class="ic"><use href="#phone"/></svg></span>My phone</div>
+    <div class="choice"><span class="c p"><svg class="ic"><use href="#person"/></svg></span>Someone else's</div>
+  </div>
+  <div class="or">Enter a code instead</div>
+</div>
+<figcaption><b>P4 · Add a device, later</b>From <b>Switch device → Add a device</b>. Two cards: <b>My phone</b> (it gets your key and is one of your devices) or <b>Someone else's</b> (a person who uses this computer, with their own sealed folder). Both lead to P2. Entering a code from a phone is a small link, not a third card.</figcaption></figure>
+
+<figure><div class="win"><div class="tb"><i></i><i></i><i></i></div>
+  <div class="back"><svg class="ic s"><use href="#back"/></svg>Back</div>
+  <span class="logo"><svg class="ic l"><use href="#phone"/></svg></span>
+  <h2>The code from your phone</h2>
+  <div class="field"><span>4</span><span>8</span><span class="cur"></span><span></span><span></span><span></span></div>
+  <div class="small" style="margin-top:14px"><svg class="ic s"><use href="#wifi"/></svg>Same Wi-Fi</div>
+  <div class="btn main" style="margin-top:22px;opacity:.5">Join</div>
+</div>
+<figcaption><b>P5 · I already use QurbSpace</b>For a second computer, or this one set up again: the phone shows a code (its circle → Add a device → Show a code) and it's typed here. This computer then gets the same key from the phone, so there's no list of words to type. Done, it opens on Home.</figcaption></figure>
+
+</div>
+<p class="note"><b>Kept as it is:</b> the unlock screen, for the rare computer whose key is protected by a passphrase. <b>Where the folder choice goes:</b> nowhere visible; <code>~/qurb</code> is fixed. <b>Not changed:</b> how pairing works underneath. The phone already scans and types codes this way.</p>
+</body>
+</html>

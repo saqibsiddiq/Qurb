@@ -4636,6 +4636,41 @@ impl Db {
         Ok((files, bytes))
     }
 
+    /// The disk this device's store takes for any of `owners`: the chunks of
+    /// their live files, compressed as they are stored, each counted once
+    /// however many files or devices share it. Beneath `under` alone when
+    /// given (each a path prefix). What a computer's storage says, where
+    /// adding up file sizes listed 53 GB for the 26 GB the owner's laptop
+    /// held for his phone (2026-11-03): its WhatsApp counted once for each
+    /// time the phone was set up, and every file at its full size.
+    pub fn stored_for(&self, owners: &[DeviceId], under: &[&str]) -> Result<u64> {
+        if owners.is_empty() {
+            return Ok(0);
+        }
+        // Device ids are fixed-size bytes, written into the query as blobs.
+        let ids = owners
+            .iter()
+            .map(|o| format!("X'{}'", o.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>()))
+            .collect::<Vec<_>>()
+            .join(",");
+        let paths = if under.is_empty() {
+            String::new()
+        } else {
+            let likes = under
+                .iter()
+                .map(|p| format!("f.path LIKE '{}' ESCAPE '\\'", escape_like(&format!("{}/%", p.trim_end_matches('/'))).replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(" OR ");
+            format!(" AND ({likes})")
+        };
+        let sql = format!(
+            "SELECT coalesce(sum(stored_size), 0) FROM chunks WHERE hash IN (
+               SELECT fc.chunk_hash FROM files f JOIN file_chunks fc ON fc.file_id = f.id
+                WHERE f.scope IN ({ids}) AND f.held = 1 AND f.deleted_at IS NULL{paths})"
+        );
+        Ok(self.conn.query_row(&sql, [], |r| r.get::<_, i64>(0))? as u64)
+    }
+
     /// Every file this device keeps for `owner`, live, with its content: what
     /// a phone browsing its folder here may fetch (decision 0067, step 4).
     pub fn held_entries(&self, owner: &DeviceId) -> Result<Vec<(String, u64, i64, blake3::Hash)>> {
