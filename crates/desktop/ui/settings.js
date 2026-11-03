@@ -450,29 +450,109 @@ const HAPPENED = {
   removed: ["x", "Removed"],
 };
 
+// Activity, as the phone's (the owner's review of 2026-11-03, Y-1, Y-2):
+// chips -- All, Backups, Transfers, Problems --; by day; a batch one row
+// ("128 files backed up") with its files' previews and a badge for what
+// happened, the other device under it, the time at the end; words only for
+// a problem. A row opens its entry.
+
+const ACTIVITY_CHIPS = [
+  ["all", "All", () => true],
+  ["backups", "Backups", (r) => r.kind === "stored" && (r.path ?? "").startsWith(".qurb-outside/")],
+  ["transfers", "Transfers", (r) => ["received", "sent", "collected", "cancelled"].includes(r.kind)],
+  ["problems", "Problems", (r) => r.kind === "failed"],
+];
+
+/** A row's title: one file's name, or what a batch was. */
+function activityTitle(r) {
+  const n = Number(r.count ?? 1);
+  if (n > 1) {
+    const what = { stored: "backed up", received: "received", sent: "sent", collected: "collected", deleted: "deleted", restored: "restored", evicted: "freed" }[r.kind];
+    if (what) return `${count(n, "file")} ${what}`;
+  }
+  return r.path ? base(r.path) : r.kind === "paired" ? `${r.device ?? "A device"} added` : (r.device ?? HAPPENED[r.kind]?.[1] ?? r.kind);
+}
+
+const BADGE = { received: ["arrow-down", "b-in"], stored: ["arrow-down", "b-in"], sent: ["arrow-up", "b-out"], collected: ["arrow-up", "b-out"],
+  failed: ["circle-alert", "b-bad"], conflicted: ["git-compare", "b-bad"], paired: ["link", "b-ok"], deleted: ["trash-2", "b-quiet"], restored: ["rotate-ccw", "b-ok"] };
+
+function activityRow(r) {
+  const names = r.names?.length ? r.names : r.path ? [r.path] : [];
+  const lead = names.length ? previewStack(names, null) : h("span", { class: "w-stack" }, h("span", { class: "w-pic" }, icon(HAPPENED[r.kind]?.[0] ?? "info")));
+  const [bi, bc] = BADGE[r.kind] ?? ["info", "b-quiet"];
+  lead.append(h("span", { class: `a-badge ${bc}` }, icon(bi)));
+  const bad = r.kind === "failed";
+  return h("button", { class: "w-row", onclick: () => activityEntry(r) },
+    lead,
+    h("span", { class: "w-main" },
+      h("b", {}, activityTitle(r)),
+      bad ? h("small", { class: "a-bad" }, r.detail ?? "Didn't finish")
+        : r.device ? h("small", { class: "a-who" }, r.device) : null),
+    h("small", { class: "a-time" }, new Date(r.at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
+}
+
+function dayOf(at) {
+  const d = new Date(at * 1000), today = new Date();
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return "Today";
+  const y = new Date(today); y.setDate(today.getDate() - 1);
+  if (same(d, y)) return "Yesterday";
+  return d.toLocaleDateString([], { day: "numeric", month: "long" });
+}
+
 async function drawActivity(main) {
-  const list = h("div", { class: "rows" });
+  const chips = h("div", { class: "a-chips" });
+  const list = h("div", {});
   const older = btn("Older", () => more(), "btn-quiet");
-  main.append(h("div", { class: "pg" }, pageHead("Activity", { words: "Settings", go: () => go("settings") }), list, h("div", { class: "acts acts-c" }, older)));
-  let oldest = null;
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Activity", { words: "Settings", go: () => go("settings") }), chips, list, h("div", { class: "acts acts-c" }, older)));
+  let rows = [], oldest = null, chosen = "all";
+  const draw = () => {
+    const keep = ACTIVITY_CHIPS.find(([k]) => k === chosen)[2];
+    const problems = rows.filter((r) => r.kind === "failed").length;
+    put(chips, ...ACTIVITY_CHIPS.map(([k, words]) => h("button", { class: `a-chip${k === chosen ? " on" : ""}`, onclick: () => { chosen = k; draw(); } },
+      words, k === "problems" && problems ? h("span", { class: "a-n" }, problems) : null)));
+    const shown = rows.filter(keep);
+    if (!shown.length) { put(list, empty("history", "Nothing yet")); return; }
+    const days = [];
+    for (const r of shown) {
+      const day = dayOf(r.at);
+      if (days.at(-1)?.day !== day) days.push({ day, rows: [] });
+      days.at(-1).rows.push(r);
+    }
+    put(list, ...days.flatMap((d) => [label(d.day), h("div", { class: "w-card" }, ...d.rows.map(activityRow))]));
+  };
   const more = async () => {
     older.disabled = true;
     try {
-      const rows = await invoke("activity", { path: null, limit: 60, before: oldest });
-      if (!rows.length && oldest === null) list.append(empty("history", "Nothing yet"));
-      oldest = rows.length ? rows[rows.length - 1].id : oldest;
-      older.hidden = rows.length < 60;
-      for (const r of rows) {
-        const [ic, words] = HAPPENED[r.kind] ?? ["info", r.kind];
-        list.append(row({
-          ic: tile(ic, r.kind === "failed" ? "tile-warn" : ""),
-          name: r.path ? base(r.path) : (r.device ?? ""),
-          sub: [r.device && r.path ? `${words}, ${r.device}` : words, ago(r.at), r.size ? size(r.size) : null],
-          title: r.detail && r.detail !== r.device ? r.detail : undefined,
-        }));
-      }
+      const got = await invoke("activity", { path: null, limit: 60, before: oldest });
+      rows = rows.concat(got);
+      oldest = got.length ? got[got.length - 1].id : oldest;
+      older.hidden = got.length < 60;
+      draw();
     } catch (e) { list.append(oops(e)); }
     older.disabled = false;
   };
   more();
+}
+
+/** An entry, as the phone's: when, with which device, how big, its files;
+ * for a problem, why first. */
+function activityEntry(r) {
+  const names = r.names?.length ? r.names : r.path ? [r.path] : [];
+  const when = r.started && r.started !== r.at
+    ? `${new Date(r.started * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} to ${new Date(r.at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : new Date(r.at * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const box = sheet({ ic: names.length ? previewStack(names, null) : tile(HAPPENED[r.kind]?.[0] ?? "info"), title: activityTitle(r), sub: when });
+  box.append(h("div", { class: "grp-box" },
+    r.kind === "failed" ? setting({ ic: "circle-alert", name: "Why", value: r.detail ?? "Not said" }) : null,
+    r.device ? setting({ ic: "monitor-smartphone", name: "With", value: r.device }) : null,
+    r.size ? setting({ ic: "hard-drive", name: "Size", value: size(r.size) }) : null,
+    Number(r.count) > 1 ? setting({ ic: "file", name: "Files", value: Number(r.count).toLocaleString() }) : null));
+  if (names.length > 1) {
+    const grid = h("div", { class: "a-grid" });
+    names.slice(0, 11).forEach((n) => { const c = h("span", { class: "w-pic w-pic-row" }); previewInto(c, n); grid.append(c); });
+    if (Number(r.count) > names.length) grid.append(h("span", { class: "w-pic w-pic-row a-more" }, `+${(Number(r.count) - Math.min(names.length, 11)).toLocaleString()}`));
+    box.append(label("Files"), grid);
+  }
+  icons(box);
 }

@@ -107,6 +107,7 @@ async function listsHome() {
 
 function markClicked() {
   if (HOME.summary?.peers === 0) { go("add"); return; }
+  if (HOME.mark?.go === "conflicts") { conflictsSheet(); return; }
   if (HOME.mark?.go) { go(HOME.mark.go); return; }
   invoke("sync_now").catch(() => {});
   const mark = $("home-mark");

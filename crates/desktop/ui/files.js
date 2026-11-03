@@ -619,6 +619,21 @@ function askEmpty() {
   }, "btn-danger")));
 }
 
+/** Two versions, as the phone's sheet from Home's mark (K-1): straight to
+ * the file when there is one, a short list to choose from when several. */
+async function conflictsSheet() {
+  const found = await invoke("conflicts").catch(() => []);
+  if (!found.length) { toast("Every file has one version"); return; }
+  const one = (c) => {
+    const box = sheet({ wide: true, title: base(c.path), sub: "Changed on two devices at once" });
+    box.append(conflictBlock(c));
+    icons(box);
+  };
+  if (found.length === 1) return one(found[0]);
+  const box = sheet({ ic: "git-compare", title: `${found.length} files have two versions` });
+  box.append(h("div", { class: "rows" }, ...found.map((c) => row({ ic: fileIcon(c.path), name: base(c.path), sub: folderOf(c.path) || "Shared", onclick: () => { box.close(); one(c); } }))));
+}
+
 /** Two versions of a file (brief §14): both kept, side by side, and a choice. */
 async function drawConflicts(main) {
   const body = h("div", {});
@@ -632,12 +647,11 @@ async function drawConflicts(main) {
 
 function conflictBlock(c) {
   const side = (words, v) => {
-    const col = h("div", { class: "ver" }, label(words));
+    const col = h("div", { class: "ver" });
     if (!v) { col.append(h("p", { class: "note" }, "Gone since")); return col; }
-    col.append(h("div", { class: "ver-by" }, icon(v.kind === "phone" ? "smartphone" : "laptop"), h("b", {}, named(v.by))),
-      h("small", { class: "ver-sub" }, h("span", {}, ago(v.at)), h("span", {}, size(v.size))));
+    // The preview first, then whose and how long ago, under it (K-1).
     const look = h("div", { class: "ver-look" });
-    col.append(look);
+    col.append(look, h("div", { class: "ver-by" }, icon(v.kind === "phone" ? "smartphone" : "laptop"), h("b", {}, named(v.by)), h("small", {}, ago(v.at))));
     if (!v.here) { look.append(h("p", { class: "note" }, "Not on this computer yet")); return col; }
     invoke("preview", { path: v.path }).then((p) => {
       if (p.kind === "image") look.append(h("img", { src: p.data, alt: "" }));
@@ -656,10 +670,13 @@ function conflictBlock(c) {
         const kept = await invoke("settle_conflict", { other: c.other.path, keep: how });
         block.replaceWith(row({ ic: tile("circle-check", "tile-ok"), name: how === "both" ? "Kept both" : `Kept ${base(kept)}`, sub: how === "both" ? `The other is ${base(kept)}` : "The other is in Recently deleted" }));
       } catch (e) { block.querySelectorAll(".acts button").forEach((x) => (x.disabled = false)); toast(String(e), true); }
-    }, how === "this" ? "btn-main" : "btn-quiet");
+    }, "btn-quiet");
     if (needsOther && !c.other.here) { b.disabled = true; b.title = "Not on this computer yet"; }
     return b;
   };
-  block.append(actions(keep("Keep both", "both", true), keep("Keep the other", "other", true), keep("Keep this one", "this", false)));
+  // Named after the devices, not "this one" and "the other" (K-1).
+  const other = c.other ? named(c.other.by) : "the other";
+  block.append(h("div", { class: "keeps" },
+    keep("Keep this computer's", "this", false), keep(`Keep ${other}'s`, "other", true), keep("Keep both", "both", true)));
   return block;
 }

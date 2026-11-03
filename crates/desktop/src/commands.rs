@@ -197,18 +197,6 @@ pub struct Situation {
     problem: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct Folder {
-    path: String,
-    exists: bool,
-    set_up: bool,
-    writable: bool,
-    existing_files: usize,
-    /// Whether the count stopped short. See `setup::COUNT_CAP`.
-    counted_all: bool,
-    disk: String,
-    free: String,
-}
 
 #[derive(Serialize)]
 pub struct Settings {
@@ -358,26 +346,6 @@ pub fn protect_key(
         })
 }
 
-/// What is true of a folder somebody is considering.
-///
-/// Answered for paths that do not exist yet, because the commonest first action
-/// is to type somewhere new. Called on every keystroke, so it counts at most a
-/// couple of thousand files before giving up.
-#[tauri::command(async)]
-pub fn inspect_folder(path: String) -> Answer<Folder> {
-    let expanded = expand(&path);
-    let looked = qurb_cli::setup::inspect(&expanded);
-    Ok(Folder {
-        path: looked.path.display().to_string(),
-        exists: looked.exists,
-        set_up: looked.set_up,
-        writable: looked.writable,
-        existing_files: looked.existing_files,
-        counted_all: looked.existing_files < qurb_cli::setup::COUNT_CAP,
-        disk: big(looked.disk),
-        free: big(looked.free),
-    })
-}
 
 /// Make a new device and start it.
 ///
@@ -413,11 +381,6 @@ fn start_at_login_from_now() {
     }
 }
 
-/// What somebody typed as a custom allowance, in bytes — or why it is not one.
-#[tauri::command(async)]
-pub fn read_allowance(text: String) -> Answer<String> {
-    qurb_cli::setup::allowance(&text).map(big).map_err(failed)
-}
 
 fn bytes_of(allowance: &str) -> Answer<u64> {
     match allowance.parse::<u64>() {
@@ -1375,24 +1338,7 @@ pub fn vault_keepers(hosted: Host<'_>) -> Answer<Vec<String>> {
         .map_err(failed)
 }
 
-/// What could be freed without losing anything, and the largest files that
-/// would free it (brief §20).
-#[derive(Serialize)]
-pub struct Freeable {
-    count: usize,
-    bytes: String,
-    files: Vec<Entry>,
-}
 
-#[tauri::command(async)]
-pub fn freeable(hosted: Host<'_>) -> Answer<Freeable> {
-    let found = hosted.with_store(|store| Ok(store.db().freeable(50)?)).map_err(failed)?;
-    Ok(Freeable {
-        count: found.count,
-        bytes: big(found.bytes),
-        files: found.files.into_iter().map(as_entry).collect(),
-    })
-}
 
 /// Delete a file from qurb, on every device, keeping it in Recently deleted
 /// for thirty days (decision 0042).
@@ -2441,15 +2387,6 @@ pub fn show_root(hosted: Host<'_>) -> Answer<()> {
     reveal(&qurb_cli::layout::people_dir(&root).unwrap_or(root))
 }
 
-/// Whether files added here go to this device's Private Vault rather than
-/// the shared area. The running daemon picks it up at its next pass.
-#[tauri::command(async)]
-pub fn set_privacy(hosted: Host<'_>, private: bool) -> Answer<()> {
-    let dir = qurb_cli::store_dir(&hosted.root());
-    let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
-    config.own_files_private = private;
-    config.save(&dir).map_err(failed)
-}
 
 /// Whether this desktop raises its three notifications.
 #[tauri::command(async)]
@@ -2543,38 +2480,9 @@ pub fn activity(
         .collect())
 }
 
-/// Files this computer made that no other device has yet, for Home's
-/// *Waiting* (the owner's item 8 of 2026-10-14): the first few, and how many
-/// in all.
-#[derive(Serialize)]
-pub struct NotElsewhere {
-    first: Vec<Pending>,
-    files: usize,
-    size: String,
-}
 
-#[derive(Serialize)]
-pub struct Pending {
-    path: String,
-    size: String,
-}
 
-/// How many of them Home names; the rest are counted.
-const NOT_ELSEWHERE_NAMED: usize = 3;
 
-#[tauri::command(async)]
-pub fn not_elsewhere(hosted: Host<'_>) -> Answer<NotElsewhere> {
-    // Counted, and the first few named, rather than the whole list built
-    // to count it: Home asks every few seconds (2026-10-28).
-    let ((files, size), first) = hosted
-        .with_store(|store| Ok((store.db().undelivered_count()?, store.db().undelivered_first(NOT_ELSEWHERE_NAMED)?)))
-        .map_err(failed)?;
-    Ok(NotElsewhere {
-        files: files as usize,
-        size: big(size),
-        first: first.into_iter().map(|(path, size)| Pending { path, size: big(size) }).collect(),
-    })
-}
 
 /// *Sync now*: every device tried at once, and told there is news.
 #[tauri::command(async)]
@@ -2938,20 +2846,6 @@ pub fn fetch(hosted: Host<'_>, path: String) -> Answer<bool> {
     hosted.with_store(|store| Ok(store.db().want(&path)?)).map_err(failed)
 }
 
-/// Change how much disk this folder may use.
-///
-/// Written to the config file, which the daemon re-reads every maintenance
-/// pass. Not sent to the daemon directly: the file is the setting, and a
-/// window that told the daemon without writing it down would lose the change on
-/// the next restart.
-#[tauri::command(async)]
-pub fn set_limit(hosted: Host<'_>, bytes: String) -> Answer<()> {
-    let bytes: u64 = bytes.parse().map_err(|_| "that is not a number of bytes".to_string())?;
-    let dir = qurb_cli::store_dir(&hosted.root());
-    let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
-    config.limit = bytes;
-    config.save(&dir).map_err(failed)
-}
 
 /// This computer's own folders, backed up to its other computers (the
 /// owner's list of 2026-10-28; `qurb_cli::backup`): each folder, what of it

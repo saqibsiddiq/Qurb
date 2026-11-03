@@ -91,7 +91,8 @@ pub fn watch(hosted: Arc<Hosted>) {
                 .filter_map(|row| worth_saying(row, row.device.as_ref().and_then(named)))
                 .take(AT_ONCE)
             {
-                off_the_runtime(move || show(&notice));
+                let hosted = Arc::clone(&hosted);
+                off_the_runtime(move || show(&notice, Some(hosted)));
             }
         }
     });
@@ -111,6 +112,17 @@ fn latest(hosted: &Hosted) -> Option<i64> {
 struct Notice {
     title: String,
     body: String,
+    /// Its one button, as the phone's has (the owner's review of 2026-11-03,
+    /// N-1).
+    action: Option<Action>,
+}
+
+/// What a notification's button does.
+enum Action {
+    /// Show the file in the file manager, at this folder.
+    Show(std::path::PathBuf),
+    /// Sync now, which tries what failed again.
+    TryAgain,
 }
 
 /// `who` is the other device's name, already resolved: history records a device
@@ -126,6 +138,8 @@ fn worth_saying(row: &Activity, who: Option<String>) -> Option<Notice> {
         // followed by "; saved to <path>" when it went to Downloads rather
         // than into the folder. Both strings are written in
         // `qurb_engine::peer`, and a change to either has to happen in both.
+        // The phone's words (Notifications draft 1): who and what in the
+        // title, the file or the reason under it, and one button.
         Event::Received
             if row.detail.as_deref().is_some_and(|d| d.starts_with("sent to this device")) =>
         {
@@ -133,52 +147,54 @@ fn worth_saying(row: &Activity, who: Option<String>) -> Option<Notice> {
                 .detail
                 .as_deref()
                 .and_then(|d| d.split_once("; saved to "))
-                .map(|(_, path)| path);
+                .map(|(_, path)| std::path::PathBuf::from(path));
             Some(Notice {
                 title: match &who {
                     Some(name) => format!("{name} sent you a file"),
                     None => "Somebody sent you a file".to_string(),
                 },
-                // Where it is, because on a desktop it is an ordinary file in
-                // Downloads rather than something in qurb's own window.
-                body: match saved.and_then(|p| std::path::Path::new(p).parent()) {
-                    Some(folder) => format!("{what}\nSaved to {}", tidy(folder)),
-                    None => what,
-                },
+                body: what.rsplit('/').next().unwrap_or(&what).to_string(),
+                action: saved.and_then(|p| p.parent().map(|f| Action::Show(f.to_path_buf()))),
             })
         }
 
         Event::Collected => Some(Notice {
-            title: "Delivered".to_string(),
-            body: match &who {
-                Some(name) => format!("{name} has {what}"),
-                None => format!("{what} was collected"),
+            title: match &who {
+                Some(name) => format!("Delivered to {name}"),
+                None => "Delivered".to_string(),
             },
+            body: what.rsplit('/').next().unwrap_or(&what).to_string(),
+            action: None,
         }),
 
-        Event::Failed => Some(Notice {
-            title: "Qurb could not finish something".to_string(),
-            body: match &row.detail {
-                Some(why) => format!("{what}: {why}"),
-                None => what,
-            },
-        }),
+        Event::Failed => {
+            let name = what.rsplit('/').next().unwrap_or(&what).to_string();
+            let why = row.detail.clone().unwrap_or_default();
+            // A send called off: choosing it again is sending it again, so no
+            // button.
+            match why.strip_prefix("not sent: ") {
+                Some(reason) => Some(Notice { title: format!("Could not send {name}"), body: upper(reason), action: None }),
+                None => Some(Notice {
+                    title: if name.is_empty() { "QurbSpace could not finish something".to_string() } else { format!("Could not finish {name}") },
+                    body: upper(&why),
+                    action: Some(Action::TryAgain),
+                }),
+            }
+        }
 
         _ => None,
     }
 }
 
-/// A folder as a person would write it: `~/Downloads/qurb` rather than the
-/// whole path from the root of the disk.
-fn tidy(folder: &std::path::Path) -> String {
-    match std::env::var_os("HOME").map(std::path::PathBuf::from) {
-        Some(home) => match folder.strip_prefix(&home) {
-            Ok(rest) => format!("~/{}", rest.display()),
-            Err(_) => folder.display().to_string(),
-        },
-        None => folder.display().to_string(),
+/// The first letter a capital, as a line on its own is written.
+fn upper(words: &str) -> String {
+    let mut chars = words.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
     }
 }
+
 
 /// Run a blocking desktop call on a thread of its own, not on the watcher's.
 ///
@@ -198,17 +214,43 @@ fn off_the_runtime(call: impl FnOnce() + Send + 'static) {
 /// notification refused: all of them mean "this person will not see a popup",
 /// and none of them is a reason to stop syncing. The event is in the Activity
 /// screen regardless, which is the durable record — this is only the nudge.
-fn show(notice: &Notice) {
-    let outcome = notify_rust::Notification::new()
-        .summary(&notice.title)
-        .body(&notice.body)
-        .appname("Qurb")
-        .icon("folder-remote")
-        .show();
-
-    if let Err(e) = outcome {
-        tracing::debug!(error = %e, "could not raise a notification");
+fn show(notice: &Notice, hosted: Option<Arc<Hosted>>) {
+    let mut n = notify_rust::Notification::new();
+    n.summary(&notice.title).body(&notice.body).appname("QurbSpace").icon("folder-remote");
+    if let Some(action) = &notice.action {
+        n.action("default", "").action("act", match action {
+            Action::Show(_) => "Show",
+            Action::TryAgain => "Try again",
+        });
     }
+    let shown = match n.show() {
+        Ok(shown) => shown,
+        Err(e) => {
+            tracing::debug!(error = %e, "could not raise a notification");
+            return;
+        }
+    };
+    // Its button, waited for here, off the runtime (`off_the_runtime`).
+    #[cfg(all(unix, not(target_os = "macos")))]
+    if let Some(action) = &notice.action {
+        shown.wait_for_action(|chosen| {
+            if chosen != "act" && chosen != "default" {
+                return;
+            }
+            match action {
+                Action::Show(folder) => {
+                    let _ = qurb_cli::platform::open(folder);
+                }
+                Action::TryAgain => {
+                    if let Some(hosted) = &hosted {
+                        hosted.sync_now();
+                    }
+                }
+            }
+        });
+    }
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    let _ = (shown, hosted);
 }
 
 /// Said once, the first time the window is closed: that closing it did not
@@ -219,10 +261,10 @@ pub fn still_running() {
     if SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
         return;
     }
-    show(&Notice {
-        title: "qurb is still syncing".into(),
-        body: "Open it again from the applications menu. To stop it, use Quit in Settings.".into(),
-    });
+    show(
+        &Notice { title: "QurbSpace is still running".into(), body: "Quit it in Settings".into(), action: None },
+        None,
+    );
 }
 
 #[cfg(test)]
@@ -253,10 +295,10 @@ mod tests {
         assert_eq!(notice.body, "holiday.jpg");
     }
 
-    /// On a desktop a delivery goes to Downloads, and the notification says
-    /// where -- the file is not in qurb's window to be found there.
+    /// On a desktop a delivery goes to Downloads: the file's name, and *Show*
+    /// opens that folder (N-1).
     #[test]
-    fn a_file_saved_to_downloads_says_where() {
+    fn a_file_saved_to_downloads_can_be_shown() {
         let sent = row(
             Event::Received,
             "photo.jpg",
@@ -264,7 +306,8 @@ mod tests {
         );
         let notice = worth_saying(&sent, Some("phone".into())).expect("announced");
         assert_eq!(notice.title, "phone sent you a file");
-        assert_eq!(notice.body, "photo.jpg\nSaved to /data/Downloads/qurb");
+        assert_eq!(notice.body, "photo.jpg");
+        assert!(matches!(&notice.action, Some(Action::Show(f)) if f == std::path::Path::new("/data/Downloads/qurb")));
     }
 
     /// A device that has since been forgotten still sent you something, and the
@@ -288,14 +331,17 @@ mod tests {
     fn failures_are_worth_saying_and_carry_the_reason() {
         let failed = row(Event::Failed, "locked.docx", Some("permission denied"));
         let notice = worth_saying(&failed, None).expect("a failure should be announced");
-        assert!(notice.body.contains("permission denied"));
+        assert_eq!(notice.title, "Could not finish locked.docx");
+        assert_eq!(notice.body, "Permission denied");
+        assert!(matches!(notice.action, Some(Action::TryAgain)));
     }
 
     #[test]
     fn a_collection_closes_the_loop_by_name() {
         let taken = row(Event::Collected, "tickets.pdf", None);
         let notice = worth_saying(&taken, Some("phone".into())).expect("announced");
-        assert_eq!(notice.body, "phone has tickets.pdf");
+        assert_eq!(notice.title, "Delivered to phone");
+        assert_eq!(notice.body, "tickets.pdf");
     }
 
     #[test]

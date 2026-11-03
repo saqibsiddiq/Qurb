@@ -2216,3 +2216,92 @@ body.setting-up .win {
   width: 14px;
   height: 14px;
 }
+
+/* Activity, as the phone's (Y-1, Y-2). */
+.a-chips {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+.a-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--raised);
+  color: var(--ink-2);
+  font-weight: 500;
+}
+.a-chip.on {
+  border-color: var(--green);
+  background: var(--green-soft);
+  color: var(--green);
+}
+.a-n {
+  padding: 0 6px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--warn) 18%, var(--bg));
+  color: var(--warn);
+  font-size: 11px;
+}
+.a-badge {
+  position: absolute;
+  right: 2px;
+  bottom: -2px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--raised);
+  border-radius: 9px;
+  color: #fff;
+}
+.a-badge .ic {
+  width: 10px;
+  height: 10px;
+}
+.b-in { background: var(--blue); }
+.b-out { background: var(--blue); }
+.b-ok { background: var(--green); }
+.b-bad { background: var(--warn); }
+.b-quiet { background: #5c645f; }
+.a-who,
+.a-time {
+  color: var(--mute);
+  font-size: 12px;
+}
+.a-bad {
+  color: var(--warn);
+  font-size: 12px;
+}
+.a-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 40px);
+  gap: 8px;
+}
+.a-more {
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+/* Two versions as a sheet (K-1). */
+.sheet .conflict-hd {
+  display: none;
+}
+.ver-by small {
+  margin-left: auto;
+  color: var(--mute);
+}
+.keeps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.keeps .btn {
+  width: 100%;
+}
