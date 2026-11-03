@@ -66,3 +66,36 @@
 .side div { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; border-radius: var(--r-s); color: var(--ink-2); font-size: 14px; font-weight: 500 }
 .side .on { background: var(--brand-soft); color: var(--brand); font-weight: 600 }
 
+
+/* Waiting's row (the owner, 2026-11-03: option A, for both apps). One
+   picture with the other device's face on its corner, a title whose verb
+   says the way, one quiet line -- amber only when it waits on you -- and
+   how far it has got. */
+.wl { display: flex; align-items: baseline; justify-content: space-between; margin: 0 6px 10px }
+.wl b { font-size: 15px; font-weight: 650; letter-spacing: -.01em }
+.wl a { font-size: 13.5px; font-weight: 500; color: var(--brand); text-decoration: none }
+.w { display: flex; align-items: center; gap: 14px; padding: 12px 16px; position: relative }
+.w + .w::before { content: ""; position: absolute; top: 0; left: 78px; right: 16px; height: 1px; background: var(--line) }
+.th { width: 48px; height: 48px; border-radius: 12px; position: relative; flex: none; background-size: cover }
+.th .face { position: absolute; right: -5px; bottom: -5px; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--surface); display: grid; place-items: center; font: 600 10px Inter }
+.th .ring { position: absolute; inset: 0; border-radius: 12px; background: rgba(0,0,0,.28); display: grid; place-items: center }
+.th .ring svg { width: 26px; height: 26px }
+.th.doc { background: #fff; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 3.5px; padding: 10px 9px }
+.th.doc i { display: block; height: 3px; background: #d7d8d2; border-radius: 2px }
+.th.doc em { position: absolute; left: 6px; bottom: 6px; font: 700 7.5px Inter; font-style: normal; color: #fff; background: #c4412f; border-radius: 3px; padding: 1px 4px }
+.th .play { position: absolute; inset: 0; display: grid; place-items: center }
+.th .play::before { content: ""; border-left: 11px solid rgba(255,255,255,.95); border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 3px }
+.w .t { flex: 1; min-width: 0 }
+.w .t b { display: block; font-size: 15px; font-weight: 600; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.w .t span { display: block; font-size: 13px; color: var(--ink-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.w .t span.wait { color: var(--warn) }
+.w .t .bar { height: 3px; border-radius: 2px; background: var(--surface-2); margin-top: 8px; overflow: hidden }
+.w .t .bar i { display: block; height: 100%; background: var(--brand); border-radius: 2px }
+.w .end { font-size: 13px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; min-width: 36px; text-align: right }
+svg.end { width: 18px; height: 18px; min-width: 0; color: var(--warn); stroke-width: 2 }
+.p1 { background-image: linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f) }
+.p2 { background-image: linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a) }
+.p3 { background-image: linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a) }
+.p4 { background-image: linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d) }
+.f-ph { background: linear-gradient(140deg,#d9b98a,#6d5a3f) }
+.f-desk { background: var(--brand-soft); color: var(--brand) }
