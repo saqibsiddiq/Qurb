@@ -193,7 +193,11 @@ connections opened in the test's few minutes; to be shared.
   connection drops, and a request cut off mid-way is asked once more; the
   owner had had to leave the folder and open it again. Screens asking for
   the same computer at once share one dial (four had each dialled through
-  Tor).
+  Tor). Tried on the S23 on 2026-11-03 inside the laptop's
+  folder, Wi-Fi off and on twice: each next tap dialled again, 1.7 s to the
+  laptop's public address on mobile data, 0.4 s on the home Wi-Fi, no error.
+  The laptop's public address had changed overnight (192.140.152.113 to .70);
+  the relays carried the new one.
 - Size: the engine 17.04 to 17.29 MB, APK 20.45 to **20.70 MB**. A first
   build of these fixes came to 18.87 MB: the compiler copied Tor's whole
   bootstrap into the idle timer's task, found by building without each change

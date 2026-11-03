@@ -3278,7 +3278,8 @@ redialled after 45 s of silence.
 On 2026-11-03: the phone's connections share one set of relay connections;
 Tor builds nothing ahead and sleeps when unused; and a computer's folder
 dials again by itself after a change of network, where the owner had had to
-leave and reopen it. APK 20.70 MB.
+leave and reopen it -- tried on the S23, 1.7 s to
+reconnect on mobile data, 0.4 s on Wi-Fi. APK 20.70 MB.
 
 **Not yet done:** Tor's throughput and its cost in data and battery on the
 phone; the 24-hour relay test, with a gap while the laptop slept, which is to
