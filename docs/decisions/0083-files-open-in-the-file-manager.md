@@ -37,6 +37,14 @@ keep everything in Shared: yes to both.
   copies to stay under a size, so the folder the file manager shows is always
   whole. The limit stays a phone's. The phone's Manage storage measures a
   computer against its disk's free space instead.
+  **Amended 2026-11-03 (the owner's test that night, item 5):** a limit is
+  back on the computer, *Space for QurbSpace* on This computer, and the
+  phone's Manage storage measures against it where set. It is a figure, not
+  enforced: the daemon still drops nothing to stay under it, and nothing
+  refuses a file past it. Said here, not hidden.
+- **Your folder is one placeholder under your name** (amended the same
+  night): opening it mounted `~/qurb/<your name>` while the placeholders were
+  one per phone, and failed "No such file or directory".
 
 ## Consequences
 
