@@ -21,6 +21,7 @@ use std::sync::Arc;
 mod autostart;
 mod commands;
 mod instance;
+mod mount;
 mod notify;
 mod session;
 mod stream;
@@ -148,6 +149,8 @@ fn run() -> Result<()> {
             commands::find_people,
             commands::ask_person_folder,
             commands::lock_person_folder,
+            commands::open_person_folder,
+            commands::open_place,
             commands::open_person_file,
             commands::cancel_send,
             commands::removal_plan,

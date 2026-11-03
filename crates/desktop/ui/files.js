@@ -31,50 +31,91 @@ const inFiles = (area, dir = "") => go("files", { area, dir });
 
 // ---------- The top ----------
 
+// Files is a launcher (the owner's review of 2026-11-03, F-1 to F-5): each
+// place opens in the computer's own file manager, which browses, previews
+// and searches better than a window of ours would. *This computer*: Shared
+// and Received, ordinary folders. *People*: each person's folder, locked
+// until their phone says yes, then mounted where its placeholder is
+// (mount.rs) and opened like any folder. Nothing else on the page.
+
 function drawFilesTop(main) {
-  const field = h("input", { class: "find-in", type: "search", placeholder: "Search", spellcheck: "false", "aria-label": "Search your files" });
   const body = h("div", { id: "files-body" });
-  main.append(h("div", { class: "pg" },
-    pageHead("Files", null),
-    h("label", { class: "find" }, icon("search"), field),
-    body));
-  let typing = null;
-  field.addEventListener("input", () => {
-    clearTimeout(typing);
-    typing = setTimeout(() => { FILES.query = field.value.trim(); drawTopBody(body); }, 180);
-  });
-  field.value = FILES.query;
+  main.append(h("div", { class: "pg" }, pageHead("Files", null), body));
   drawTopBody(body);
 }
 
-async function drawTopBody(body) {
-  if (FILES.query) return drawFound(body, FILES.query);
-  const [people, conflicts, deleted] = await Promise.all([
-    invoke("people").catch(() => []),
-    invoke("conflicts").catch(() => []),
-    invoke("recently_deleted").catch(() => []),
-  ]);
+async function drawTopBody(body = $("files-body")) {
+  if (!body) return;
+  const people = await invoke("people").catch(() => []);
   FILES.people = people;
-  FILES.conflicts = conflicts;
-  if (FILES.query || place !== "files") return;
-  put(body, 
-    conflicts.length ? row({ ic: tile("git-compare", "tile-warn"), name: conflicts.length === 1 ? `${base(conflicts[0].path)} has two versions` : `${conflicts.length} files have two versions`, cls: "row-warn", onclick: () => go("conflicts"), end: icon("chevron-right", "row-go") }) : null,
+  if (place !== "files" || !body.isConnected) return;
+  const opening = (which) => () => invoke("open_place", { which }).catch((e) => toast(String(e), true));
+  put(body,
     label("This computer"),
-    h("div", { class: "cards" },
-      card("folder", "Shared", "On all your devices", () => inFiles("shared")),
-      card("lock-keyhole", "Vault", "Only here", () => inFiles("vault")),
-      card("download", "Received", "Sent to this computer", () => go("received")),
-      card("trash-2", "Recently deleted", deleted.length ? count(deleted.length, "file") : "Kept 30 days", () => go("deleted"))),
+    h("div", { class: "launch" },
+      launchTile(icon("folder"), "Shared", opening("shared"), icon("external-link", "launch-end")),
+      launchTile(icon("download"), "Received", opening("received"), icon("external-link", "launch-end"))),
     people.length ? label("People") : null,
-    people.length ? h("div", { class: "cards" }, ...people.map((p) => card(
-      p.state === "open" ? "folder-open" : "lock-keyhole",
-      p.name,
-      Number(p.size) > 0 ? size(p.size) : "Nothing kept yet",
-      () => inFiles(p.id)))) : null);
+    people.length ? h("div", { class: "launch" }, ...people.map(personTile)) : null);
 }
 
 function card(ic, name, sub, onclick) {
   return h("button", { class: "card", onclick }, tile(ic), h("span", { class: "card-words" }, h("b", {}, name), h("small", {}, sub)));
+}
+
+function launchTile(lead, name, onclick, end, cls = "") {
+  return h("div", { class: `launch-tile ${cls}`.trim(), role: "button", tabindex: "0", onclick,
+    onkeydown: (e) => { if (e.key === "Enter") onclick(); } },
+    h("span", { class: "launch-lead" }, lead), h("b", {}, name), end ? h("span", { class: "launch-side" }, end) : null);
+}
+
+/** A person's folder: its lock while locked; open, green, with *Lock*. */
+function personTile(p) {
+  const face = h("span", { class: "circle circle-md" }, (p.name || "?").trim()[0].toUpperCase());
+  if (p.state === "open") {
+    return launchTile(face, p.name, () => openPerson(p),
+      h("button", { class: "btn btn-quiet btn-sm", onclick: async (e) => {
+        e.stopPropagation();
+        try { await invoke("lock_person_folder", { person: p.id }); } catch (er) { toast(String(er), true); }
+        drawTopBody();
+      } }, icon("lock-keyhole"), "Lock"), "launch-open");
+  }
+  return launchTile(face, p.name, () => askToOpen(p), icon("lock-keyhole", "launch-end"));
+}
+
+async function openPerson(p) {
+  try { await invoke("open_person_folder", { person: p.id }); } catch (e) { toast(String(e), true); }
+  drawTopBody();
+}
+
+/** Ask their phone, and say the one thing to do (H-3): open QurbSpace on
+ * it. Opened in the file manager the moment the phone says yes; the ask
+ * waits twenty minutes (H-4). */
+async function askToOpen(p) {
+  try { await invoke("ask_person_folder", { person: p.id }); } catch (e) { toast(String(e), true); return; }
+  const phone = (p.devices ?? [])[0];
+  let watching = null;
+  const box = sheet({ onclose: () => clearInterval(watching) });
+  box.append(h("div", { class: "asking-phone" },
+    h("span", { class: "asking-orb" }, icon("smartphone"), h("i", { class: "asking-spin" })),
+    h("h2", {}, phone ? "Open QurbSpace on your phone" : "Open QurbSpace on their phone"),
+    phone ? h("p", { class: "note" }, phone) : null),
+    actions(btn("Cancel", async () => {
+      box.close();
+      await invoke("lock_person_folder", { person: p.id }).catch(() => {});
+      drawTopBody();
+    }, "btn-quiet")));
+  watching = setInterval(async () => {
+    const now = (await invoke("people").catch(() => [])).find((x) => x.id === p.id);
+    if (now?.state === "open") {
+      box.close();
+      openPerson(now);
+    } else if (now && now.state === "locked") {
+      // Said no, or the ask lapsed.
+      box.close();
+      drawTopBody();
+    }
+  }, 2000);
 }
 
 /** Search: the shared folder and the Vault at once. */

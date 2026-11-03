@@ -2204,12 +2204,46 @@ pub fn ask_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
     Ok(())
 }
 
+/// Open a person's folder in the file manager, mounted at its placeholder
+/// while it is open (the owner's review of 2026-11-03, F-2): nothing of it
+/// written out, unmounted when it locks. Asked for only once their phone has
+/// said yes.
+#[tauri::command(async)]
+pub fn open_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
+    let id = person_of(&hosted, &person)?;
+    if !qurb_peer::openings::is_open(&id) {
+        return Err("the folder is locked".to_string());
+    }
+    let root = hosted.root();
+    let people = qurb_cli::layout::people_dir(&root).ok_or("this computer's QurbSpace folder is not laid out by person")?;
+    let name = everyone(&hosted)?.into_iter().find(|p| p.id == person).map(|p| p.name).ok_or("no such person")?;
+    let at = people.join(qurb_cli::layout::folder_name(&name));
+    let contents = if person == OWNER {
+        let phones = owner_phones(&hosted)?;
+        // This computer's own private files, ordinary files on its disk (F-4).
+        let own = hosted
+            .with_store(|store| Ok(store.db().folder_entries_under("")?))
+            .map_err(failed)?
+            .into_iter()
+            .filter(|e| e.private && root.join(&e.path).is_file())
+            .map(|e| (e.path.clone(), root.join(&e.path), e.size, e.mtime_ns / 1_000_000_000))
+            .collect();
+        crate::mount::Contents::Owner(owner_folders(&phones), own)
+    } else {
+        crate::mount::Contents::Guest
+    };
+    let (store_dir, key) = hosted.with_store(|store| Ok((store.root().to_path_buf(), store.chunk_key()))).map_err(failed)?;
+    crate::mount::mount(&store_dir, key, id, at.clone(), contents, opened_dir(&id)).map_err(failed)?;
+    reveal(&at)
+}
+
 /// Lock a person's folder: forgotten until asked again, and what was opened
 /// from it removed.
 #[tauri::command(async)]
 pub fn lock_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
     let id = person_of(&hosted, &person)?;
     qurb_peer::openings::lock(&id);
+    crate::mount::unmount(&id);
     crate::stream::forget(&id);
     let _ = std::fs::remove_dir_all(opened_dir(&id));
     Ok(())
@@ -2310,6 +2344,24 @@ fn open_sealed(hosted: &Host<'_>, person: &qurb_sync::DeviceId, key: [u8; 32], p
         return Err(failed(e));
     }
     reveal(&to)
+}
+
+/// Open one of this computer's places in the file manager (the owner's review
+/// of 2026-11-03, F-1): `shared`, the synced folder; `received`, where files
+/// sent here go -- inside the QurbSpace folder when that is how it is set.
+#[tauri::command(async)]
+pub fn open_place(hosted: Host<'_>, which: String) -> Answer<()> {
+    let root = hosted.root();
+    match which.as_str() {
+        "shared" => reveal(&root),
+        "received" => {
+            let config = qurb_cli::Config::load(&qurb_cli::store_dir(&root)).map_err(failed)?;
+            let dir = config.downloads.resolve(&root).map_err(|e| e.to_string())?.unwrap_or_else(|| root.clone());
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            reveal(&dir)
+        }
+        _ => Err("no such place".to_string()),
+    }
 }
 
 /// Open the folder a file is in, in the file manager.

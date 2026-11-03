@@ -2009,3 +2009,101 @@ body.setting-up .win {
   width: 16px;
   height: 16px;
 }
+
+/* Files as a launcher (the owner's review of 2026-11-03, F-5): a tile for
+   each place, each opening in the file manager. */
+.launch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 620px;
+}
+.launch-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 104px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--raised);
+  color: var(--green);
+  cursor: pointer;
+}
+.launch-tile:hover {
+  border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+}
+.launch-tile b {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+}
+.launch-lead .ic {
+  width: 26px;
+  height: 26px;
+}
+.launch-side {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  color: var(--mute);
+}
+.launch-end {
+  width: 15px;
+  height: 15px;
+}
+.launch-open {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+.launch-side .btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.launch-side .btn-sm .ic {
+  width: 13px;
+  height: 13px;
+}
+/* Waiting on the phone's yes. */
+.asking-phone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px 0;
+  text-align: center;
+}
+.asking-phone h2 {
+  margin-top: 12px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.asking-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+}
+.asking-orb .ic {
+  width: 26px;
+  height: 26px;
+}
+.asking-spin {
+  position: absolute;
+  inset: -6px;
+  border: 3px solid transparent;
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 1.1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

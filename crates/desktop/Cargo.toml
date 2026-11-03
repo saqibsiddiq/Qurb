@@ -49,5 +49,11 @@ serde_json = "1"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# A person's folder mounted while it is open, so the file manager shows it
+# (the owner's review of 2026-11-03, F-2). Without libfuse: mounted through
+# the system's own fusermount3.
+[target.'cfg(target_os = "linux")'.dependencies]
+fuser = { version = "0.18", default-features = false }
+
 [dev-dependencies]
 tempfile = "3"

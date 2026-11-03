@@ -96,7 +96,7 @@ pub fn people_dir(root: &Path) -> Option<PathBuf> {
 }
 
 /// A name as a folder: no separators, not hidden, not empty, not `Shared`.
-fn folder_name(name: &str) -> String {
+pub fn folder_name(name: &str) -> String {
     let cleaned: String = name.chars().map(|c| if matches!(c, '/' | '\\' | '\0') { '-' } else { c }).collect();
     let cleaned = cleaned.trim().trim_start_matches('.').to_string();
     match cleaned.as_str() {
@@ -114,6 +114,11 @@ pub fn place_people(dir: &Path, people: &[(String, String)]) -> Result<()> {
     let wanted: Vec<(String, &String)> = people.iter().map(|(name, note)| (folder_name(name), note)).collect();
     for (name, note) in &wanted {
         let folder = dir.join(name);
+        // Open now: the window has mounted the person's folder over its
+        // placeholder (the owner's review of 2026-11-03, F-2). Left as it is.
+        if mounted(&folder) {
+            continue;
+        }
         let file = folder.join(NOTE);
         if std::fs::read_to_string(&file).ok().as_deref() == Some(note.as_str()) {
             continue;
@@ -140,6 +145,24 @@ pub fn place_people(dir: &Path, people: &[(String, String)]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Whether something is mounted at `folder`: its device differs from its
+/// parent's.
+pub fn mounted(folder: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let (Ok(here), Some(Ok(above))) = (std::fs::metadata(folder), folder.parent().map(std::fs::metadata)) else {
+            return false;
+        };
+        here.dev() != above.dev()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = folder;
+        false
+    }
 }
 
 /// A placeholder is read-only, so that nothing put in it is taken for kept.

@@ -72,12 +72,13 @@ function listRow(ic, title, sub, progress) {
       progress != null && progress < 1 ? h("span", { class: "w-bar" }, h("i", { style: { width: `${Math.round(progress * 100)}%` } })) : null));
 }
 
-/** A guest's folder is a person's folder in Files (decision 0067). */
+/** A guest's folder: opened in the file manager once their phone says yes,
+ * as Files opens it (F-2). */
 async function openGuest(d) {
   const people = await invoke("people").catch(() => []);
   const p = people.find((x) => x.relation === "guest" && (x.devices ?? []).includes(d.name)) ?? people.find((x) => x.id.startsWith(d.fingerprint));
-  if (p) inFiles(p.id);
-  else toast("Nothing kept for them yet");
+  if (!p) { toast("Nothing kept for them yet"); return; }
+  if (p.state === "open") openPerson(p); else askToOpen(p);
 }
 
 /** Which later device this one became: chosen, then counted as one. */

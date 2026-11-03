@@ -13,7 +13,7 @@ const PLACES = {
   "pair-show": { draw: drawShowCode, parent: "home" },
   "pair-enter": { draw: drawEnterCode, parent: "home" },
   waiting: { draw: drawWaitingAll, live: listsWaitingAll, parent: "home" },
-  files: { draw: drawFiles },
+  files: { draw: drawFiles, lists: () => FILES.area === null && drawTopBody() },
   received: { draw: drawReceived, parent: "files" },
   deleted: { draw: drawDeleted, parent: "files" },
   conflicts: { draw: drawConflicts, parent: "files" },
