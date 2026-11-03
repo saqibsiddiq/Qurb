@@ -1974,6 +1974,13 @@ impl Store {
         self.root().join("trash").join(id.to_string())
     }
 
+    /// Where a Recently deleted entry's bytes are kept on this device, for
+    /// its picture: none when they are kept elsewhere (a vault file whose
+    /// chunks a computer holds) or the entry is gone.
+    pub fn deleted_bytes_at(&self, id: i64) -> Option<PathBuf> {
+        Some(self.trash_file(id)).filter(|f| f.is_file())
+    }
+
     /// Take a file out of the folder into the trash, instead of deleting it.
     ///
     /// `disk` is where the file is now; `entry` describes it for the list. Its

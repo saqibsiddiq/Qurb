@@ -108,16 +108,34 @@ object Approval {
      * none. Setup's last step and the page over Devices.
      */
     fun fill(page: WaitingForBinding, with: PairingWith) {
+        val activity = page.root.context as AppCompatActivity
+        val kit = Kit(activity)
         val name = with.name
-        page.waitTitle.text = if (name != null) "Approve on $name" else "Approve on your other device"
-        page.waitSays.text = if (name != null) "$name shows this number too" else "It shows this number too"
-        page.waitNumber.text = with.number
-        page.waitNumber.contentDescription = with.number.replace(" ", "")
-        page.waitMark.show(StatusMark.Look.SYNCING, when (with.kind) {
-            "computer", "replica" -> R.drawable.mark_laptop
-            "phone" -> R.drawable.mark_smartphone
-            else -> R.drawable.mark_monitor_smartphone
-        })
+        page.waitTitle.text = name ?: "Your other device"
+        page.waitFace.removeAllViews()
+        page.waitFace.addView(kit.avatar(name ?: "?", null, null, 72))
+        // The six digits, each in its box, as the computer shows them.
+        val digits = with.number.filter(Char::isDigit)
+        page.waitNumber.removeAllViews()
+        for ((i, digit) in digits.withIndex()) page.waitNumber.addView(TextView(activity).apply {
+            text = digit.toString()
+            gravity = Gravity.CENTER
+            textSize = 24f
+            typeface = ResourcesCompat.getFont(activity, R.font.inter_semibold)
+            setTextColor(kit.color(R.color.text))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = kit.dp(12).toFloat()
+                setColor(kit.color(R.color.surface))
+                setStroke(kit.dp(1), kit.color(R.color.border))
+            }
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(kit.dp(42), kit.dp(54)).apply { if (i > 0) marginStart = kit.dp(8) })
+        page.waitNumber.contentDescription = digits
+        page.waitSays.text = when (with.kind) {
+            "computer", "replica" -> "Same on the computer?"
+            "phone" -> "Same on the phone?"
+            else -> "Same on the other device?"
+        }
     }
 
     /**

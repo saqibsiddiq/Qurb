@@ -76,9 +76,11 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         val served: ULong,
         /** The file a collecting device is taking now, by name. */
         val going: String?,
+        /** Devices removed, by this phone or it by them (decision 0084). */
+        val removed: List<uniffi.qurb_mobile.RemovedDevice> = emptyList(),
     ) {
         fun with(backup: BackupWaiting, served: ULong, going: String?) =
-            State(peers, holders, outstanding, conflicts, sends, backup, served, going)
+            State(peers, holders, outstanding, conflicts, sends, backup, served, going, removed)
     }
 
     override fun refresh() {
@@ -95,6 +97,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                         engine.backupWaiting(WAITING_ROWS.toUInt()),
                         runCatching { engine.serving().bytes }.getOrDefault(0uL),
                         runCatching { engine.servingFile() }.getOrNull(),
+                        runCatching { engine.removedDevices() }.getOrDefault(emptyList()),
                     )
                 }
                 show(state)
@@ -137,7 +140,18 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             .maxOrNull()
         views.markBadge.removeAllViews()
         views.review.visibility = View.GONE
+        views.stateLine.visibility = View.GONE
+        // Its computer removed this phone, and said so (decision 0084; the
+        // setup stories' "saqib removed this phone"): what stays there, and
+        // the one thing to do, add it again.
+        val removedBy = state.removed.firstOrNull { it.byThem }.takeIf { chosen == null }
+        views.add.text = if (removedBy != null) "Add it again" else "Add a device"
         when {
+            removedBy != null -> {
+                hero(StatusMark.Look.OFF, R.drawable.ic_lock_keyhole, "${removedBy.name} removed this phone")
+                views.stateLine.text = "Your files there are kept, locked"
+                views.stateLine.visibility = View.VISIBLE
+            }
             chosen == null -> hero(StatusMark.Look.FIRST, R.drawable.mark_plus, "Add a device")
             app.syncing -> hero(StatusMark.Look.SYNCING, R.drawable.mark_refresh_cw, "Syncing")
             state.conflicts.isNotEmpty() -> {
@@ -204,18 +218,27 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         box.visibility = if (count == 0) View.GONE else View.VISIBLE
         if (count == 0) return false
 
+        // "Waiting", and See all at its end (option A).
         val heading = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(kit.dp(6), 0, kit.dp(6), 0)
         }
         heading.addView(TextView(app).apply {
             text = "Waiting"
-            setTextAppearance(R.style.Text_Label)
+            setTextAppearance(R.style.Text_Name)
+            textSize = 15f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 650, false)
             androidx.core.view.ViewCompat.setAccessibilityHeading(this, true)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        heading.addView(TextView(app).apply {
+            text = "See all"
+            setTextAppearance(R.style.Text_Meta)
+            textSize = 13.5f
+            setTextColor(kit.color(R.color.green))
+            setPadding(kit.dp(8), kit.dp(6), 0, kit.dp(6))
+            setOnClickListener { app.push(WaitingScreen(app)) }
         })
-        heading.addView(kit.badge(count), LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { marginStart = kit.dp(8) })
         box.addView(heading)
 
         val queue = LinearLayout(app).apply {
@@ -225,7 +248,7 @@ class HomeScreen(app: MainActivity) : Screen(app) {
         }
         box.addView(queue, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { topMargin = kit.dp(8) })
+        ).apply { topMargin = kit.dp(4) })
 
         // One row for each device (the owner's review of 2026-11-03, H-1),
         // each opening the Waiting page.

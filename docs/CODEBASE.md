@@ -942,6 +942,9 @@ qurb/
 │       │                                      choose another), its state as a
 │       │                                      mark that syncs, one big Send,
 │       │                                      what is waiting while anything is
+│       │                                      (Waits.kt: option A, a row a
+│       │                                      device, its picture and face);
+│       │                                      "saqib removed this phone" (0084)
 │       │                  Devices.kt          devices' pictures, for their
 │       │                                      circles
 │       │                  BackupsScreen.kt    Backups: the device chosen on Home,
@@ -1025,8 +1028,10 @@ qurb/
 │       │                                      from Settings, each file told once,
 │       │                                      30 days
 │       │                  DeletedScreen.kt    Recently deleted: thirty days to
-│       │                                      change your mind, the days left on
-│       │                                      a clock
+│       │                                      change your mind; a grid by where
+│       │                                      deleted, days left in amber in the
+│       │                                      last week, Select, a bar of Restore
+│       │                                      and Delete (the desktop's D13)
 │       │                  ShowCode.kt         this phone showing a pairing code,
 │       │                                      a page as Figma has it: the QR
 │       │                                      code drawn as dots, its six digits,
@@ -1043,12 +1048,15 @@ qurb/
 │       │                                      before a computer may open this
 │       │                                      phone's folder there (0060)
 │       │                  Words.kt            how the app says things, in one place
-│       │                  SetupActivity.kt    set up, use the key in the Google
-│       │                                      backup, or join by scanning a code
-│       │                                      or typing its six digits (six
-│       │                                      boxes), or the 24 words (24 boxes);
-│       │                                      then the number to compare while
-│       │                                      the other device, named, approves
+│       │                  SetupActivity.kt    Welcome: scan the computer's code,
+│       │                                      or start on this phone; Welcome
+│       │                                      back: use the key in the Google
+│       │                                      backup, or start fresh. The digits
+│       │                                      boxed while the computer approves,
+│       │                                      then Connected, with Photos and
+│       │                                      WhatsApp to back up (the setup
+│       │                                      stories of 2026-11-03); typing six
+│       │                                      digits or the 24 words still there
 │       │                  Backup.kt           the key, kept in Block Store
 │       │                  ScanActivity.kt     reading a pairing QR code, a
 │       │                                      device's or a guest's, and naming

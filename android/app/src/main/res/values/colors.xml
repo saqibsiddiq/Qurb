@@ -5,19 +5,24 @@
 
      Layouts and drawables name roles, never hex values. -->
 <resources>
-    <color name="bg">#F7F7F4</color>
+    <!-- The roles above that tokens.css names (docs/design/system/
+         tokens.css, the owner's mockups of 2026-11-03) are its values exactly:
+         bg, surface, surface_2, border, text, text_2, text_3, green (brand),
+         green_hover (brand-strong), green_soft, online, attention (warn),
+         attention_bg, error (danger), error_bg. -->
+    <color name="bg">#F6F6F3</color>
     <color name="surface">#FFFFFF</color>
-    <color name="surface_2">#F0F0EC</color>
-    <color name="text">#171816</color>
-    <color name="text_2">#5F625C</color>
-    <color name="text_3">#8A8D86</color>
-    <color name="border">#E2E3DD</color>
+    <color name="surface_2">#EFEFEA</color>
+    <color name="text">#161815</color>
+    <color name="text_2">#5C605A</color>
+    <color name="text_3">#8B8E87</color>
+    <color name="border">#E4E4DE</color>
     <color name="border_strong">#D2D4CD</color>
 
     <color name="green">#2F6B57</color>
-    <color name="green_hover">#285B4A</color>
+    <color name="green_hover">#255848</color>
     <color name="green_pressed">#214B3D</color>
-    <color name="green_soft">#E8F0EC</color>
+    <color name="green_soft">#E6EFEA</color>
     <!-- A device's circle: deeper than green_soft, which all but vanishes on
          the page in light mode, and ringed so that it reads as a shape. -->
     <color name="avatar_fill">#D2E5DB</color>
@@ -34,9 +39,9 @@
     <color name="offline">#D64545</color>
     <color name="healthy_bg">#E8F3EC</color>
     <color name="attention">#946A24</color>
-    <color name="attention_bg">#F7F0DD</color>
-    <color name="error">#A3423A</color>
-    <color name="error_bg">#F7E9E7</color>
+    <color name="attention_bg">#F6EEDB</color>
+    <color name="error">#B0443A</color>
+    <color name="error_bg">#F7E8E5</color>
     <color name="neutral">#626A68</color>
     <color name="neutral_bg">#ECEEEC</color>
 

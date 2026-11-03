@@ -5,30 +5,35 @@
      Roles not named here keep their light value, and are ones that work on
      both: the glow, and white on green. -->
 <resources>
-    <color name="bg">#121311</color>
-    <color name="surface">#1C1D1B</color>
-    <color name="surface_2">#242622</color>
-    <color name="text">#ECEDE8</color>
-    <color name="text_2">#B0B3AB</color>
-    <color name="text_3">#868980</color>
-    <color name="border">#2E302C</color>
+    <!-- The roles above that tokens.css names (docs/design/system/
+         tokens.css, the owner's mockups of 2026-11-03) are its values exactly:
+         bg, surface, surface_2, border, text, text_2, text_3, green (brand),
+         green_hover (brand-strong), green_soft, online, attention (warn),
+         attention_bg, error (danger), error_bg. -->
+    <color name="bg">#0F1311</color>
+    <color name="surface">#171C19</color>
+    <color name="surface_2">#1E2420</color>
+    <color name="text">#ECF0ED</color>
+    <color name="text_2">#B5BDB8</color>
+    <color name="text_3">#848E88</color>
+    <color name="border">#2A312D</color>
     <color name="border_strong">#3C3F3A</color>
 
-    <color name="green">#3F8C70</color>
-    <color name="green_hover">#4A9A7D</color>
+    <color name="green">#55AB8B</color>
+    <color name="green_hover">#6BBF9F</color>
     <color name="green_pressed">#357A61</color>
-    <color name="green_soft">#1C2A24</color>
+    <color name="green_soft">#18271F</color>
     <color name="avatar_fill">#223A30</color>
     <color name="avatar_ring">#33584A</color>
 
     <color name="healthy">#74C29B</color>
-    <color name="online">#5B9BF0</color>
+    <color name="online">#5B9BFF</color>
     <color name="offline">#EC6B6B</color>
     <color name="healthy_bg">#19291F</color>
-    <color name="attention">#DCB064</color>
-    <color name="attention_bg">#2D2617</color>
-    <color name="error">#E5847A</color>
-    <color name="error_bg">#331F1D</color>
+    <color name="attention">#D9A64A</color>
+    <color name="attention_bg">#2A2316</color>
+    <color name="error">#EF6B5D</color>
+    <color name="error_bg">#2B1715</color>
     <color name="neutral">#A2AAA7</color>
     <color name="neutral_bg">#232625</color>
 

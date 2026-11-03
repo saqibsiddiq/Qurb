@@ -19,14 +19,13 @@ import uniffi.qurb_mobile.PeerInfo
 import uniffi.qurb_mobile.Waiting
 
 /**
- * Waiting, as the owner's review of 2026-11-03 has it (H-1, the mockup
- * docs/design/mockups/devices-waiting-2026-11-03.html): one row for each
- * device files are going to or coming from, an arrow for which way, never
- * one row per file. The files themselves show, a stack of their previews,
- * where the rows had icons; a number, a size, a bar while it moves, and a
- * chip only when it waits on something. Backups and the files only this
- * phone has go to the same computer and are one row: "only here" is not a
- * category of its own.
+ * Waiting: one row for each device files are going to or coming from, never
+ * one row per file (the owner's review of 2026-11-03, H-1), drawn as option
+ * A (docs/design/system/waiting.html, chosen that evening): one picture with
+ * the other device's face on its corner, a title whose verb says the way,
+ * one quiet line -- amber only when it waits on you -- and how far it has
+ * got. Backups and the files only this phone has go to the same computer and
+ * are one row: "only here" is not a category of its own.
  */
 object Waits {
 
@@ -57,7 +56,28 @@ object Waits {
         val progress: String? = null,
         /** The sends in it, each of which may be stopped. */
         val sends: List<Waiting> = emptyList(),
-    )
+        /** A backup, said "Backing up" rather than "Sending". */
+        val backup: Boolean = false,
+    ) {
+        /** The title: the way, then how many. */
+        fun title(): String {
+            val verb = when { coming -> "Receiving"; backup -> "Backing up"; else -> "Sending" }
+            return "$verb ${Words.files(count.toInt())}"
+        }
+
+        /** Whether it waits on a phone, which takes what it was sent only
+         *  while QurbSpace is open on it (decision 0082). */
+        fun waitsOnPhone() = waitingOn != null && peer?.kind == "phone"
+
+        /** The one quiet line: to or from whom, and how much; or what it
+         *  waits on. */
+        fun line(): String = when {
+            waitingOn != null && waitsOnPhone() -> "Open QurbSpace on $name"
+            waitingOn != null -> "To $name, when it's on"
+            progress != null -> "From $name, $progress"
+            else -> "${if (coming) "From" else "To"} $name" + (if (bytes > 0uL) ", ${Words.size(bytes)}" else "")
+        }
+    }
 
     /** The rows, from what Home reads. */
     fun groups(
@@ -89,6 +109,7 @@ object Waits {
                 bytes = outstanding.bytes + (if (keeper == null) 0uL else backup.bytesLeft),
                 fraction = round?.takeIf { backupFiles > 0 }?.fraction,
                 waitingOn = keeper?.takeIf { Engine.isOff(app, it) }?.let { "Off" },
+                backup = backupFiles > 0,
             )
         }
         // To each device something was sent to, not collected yet.
@@ -132,100 +153,108 @@ object Waits {
         return java.io.File(Folders.root(), if (rest.isEmpty()) name else "$rest/$name")
     }
 
-    /** A group's row: its stack, which way and to whom, how much, its bar. */
+    /** A group's row, as option A: its picture with the device's face,
+     *  the title, the quiet line and its bar, and how far, or what it waits
+     *  on, at the end. */
     fun row(app: MainActivity, scope: CoroutineScope, parent: ViewGroup, g: Group, onTap: () -> Unit): View {
         val kit = app.kit
         val row = LinearLayout(app).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = kit.dp(68)
-            setPadding(kit.dp(12), kit.dp(10), kit.dp(14), kit.dp(10))
+            minimumHeight = kit.dp(72)
+            setPadding(kit.dp(16), kit.dp(12), kit.dp(16), kit.dp(12))
             background = ContextCompat.getDrawable(app, R.drawable.row_bg)
             setOnClickListener { onTap() }
         }
-        row.addView(stack(app, scope, g.previews, g.fraction?.takeIf { g.fraction < 1f }),
-            LinearLayout.LayoutParams(kit.dp(62), kit.dp(48)).apply { marginEnd = kit.dp(10) })
-        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
-        words.addView(who(app, g))
-        val chips = LinearLayout(app).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        chips.addView(chip(app, g.progress ?: Words.count(g.count)))
-        if (g.progress == null && g.bytes > 0uL) chips.addView(chip(app, Words.size(g.bytes)))
-        g.waitingOn?.let { chips.addView(chip(app, it, waiting = true)) }
-        words.addView(chips, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { topMargin = kit.dp(5) })
-        row.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        row.addView(ImageView(app).apply {
-            setImageResource(R.drawable.ic_chevron_right)
-            imageTintList = ColorStateList.valueOf(kit.color(R.color.text_3))
-        }, LinearLayout.LayoutParams(kit.dp(18), kit.dp(18)))
-        row.contentDescription = listOfNotNull(
-            "${if (g.coming) "From" else "To"} ${g.name}", Words.files(g.count.toInt()),
-            Words.size(g.bytes), g.waitingOn, g.fraction?.let { "${(it * 100).toInt()}% there" },
-        ).joinToString(", ")
+        val moving = g.fraction?.takeIf { it < 1f }
+        row.addView(picture(app, scope, g, 48, moving),
+            LinearLayout.LayoutParams(kit.dp(53), kit.dp(53)).apply { marginEnd = kit.dp(9) })
+        row.addView(words(app, g, bar = moving), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        end(app, g, moving)?.let { row.addView(it) }
+        row.contentDescription = listOfNotNull(g.title(), g.line(), g.fraction?.let { "${(it * 100).toInt()}% there" })
+            .joinToString(", ")
         parent.addView(row)
         return row
     }
 
-    /** ↑ or ↓, the device's circle, its name. */
-    fun who(app: MainActivity, g: Group): View {
+    /** The title and the quiet line, amber when it waits on the person, and
+     *  the bar under them while it moves. */
+    fun words(app: MainActivity, g: Group, bar: Float? = null, big: Boolean = false): LinearLayout {
         val kit = app.kit
-        return LinearLayout(app).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(ImageView(app).apply {
-                setImageResource(if (g.coming) R.drawable.ic_arrow_down else R.drawable.ic_arrow_up)
-                imageTintList = ColorStateList.valueOf(kit.color(R.color.text_3))
-            }, LinearLayout.LayoutParams(kit.dp(14), kit.dp(14)).apply { marginEnd = kit.dp(5) })
-            addView(kit.avatar(g.name, null, g.peer?.let { Devices.picture(it) }, 18),
-                LinearLayout.LayoutParams(kit.dp(18), kit.dp(18)).apply { marginEnd = kit.dp(7) })
-            addView(TextView(app).apply {
-                text = g.name
-                setTextAppearance(R.style.Text_Name)
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-            })
+        val words = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        words.addView(TextView(app).apply {
+            text = g.title()
+            setTextAppearance(R.style.Text_Name)
+            textSize = if (big) 16f else 15f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 600, false)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        })
+        words.addView(TextView(app).apply {
+            text = g.line()
+            setTextAppearance(R.style.Text_Meta)
+            textSize = 13f
+            setTextColor(kit.color(if (g.waitsOnPhone()) R.color.attention else R.color.text_3))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = kit.dp(2) })
+        if (bar != null) words.addView(android.widget.ProgressBar(app, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 1000
+            progress = (bar * 1000).toInt()
+            progressTintList = ColorStateList.valueOf(kit.color(R.color.green))
+            progressBackgroundTintList = ColorStateList.valueOf(kit.color(R.color.surface_2))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, kit.dp(3)).apply { topMargin = kit.dp(8) })
+        return words
+    }
+
+    /** How far, as a number; or the phone, amber, that has to be opened; or
+     *  the clock, for a computer that is off. */
+    private fun end(app: MainActivity, g: Group, moving: Float?): View? {
+        val kit = app.kit
+        if (moving != null) return TextView(app).apply {
+            text = "${(moving * 100).toInt()}%"
+            setTextAppearance(R.style.Text_Meta)
+            textSize = 13f
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 600, false)
+            setTextColor(kit.color(R.color.text_2))
+            fontFeatureSettings = "tnum"
+            gravity = Gravity.END
+            minWidth = kit.dp(36)
+        }
+        if (g.waitingOn == null) return null
+        return ImageView(app).apply {
+            setImageResource(if (g.waitsOnPhone()) R.drawable.ic_smartphone else R.drawable.ic_clock)
+            imageTintList = ColorStateList.valueOf(kit.color(if (g.waitsOnPhone()) R.color.attention else R.color.text_3))
+            layoutParams = LinearLayout.LayoutParams(kit.dp(18), kit.dp(18)).apply { marginStart = kit.dp(10) }
         }
     }
 
-    /** A few words in a small rounded box: a count, a size, what it waits on. */
-    fun chip(app: MainActivity, words: String, waiting: Boolean = false): View = TextView(app).apply {
-        text = words
-        setTextAppearance(R.style.Text_Meta)
-        if (waiting) setTextColor(app.kit.color(R.color.attention))
-        background = GradientDrawable().apply {
-            cornerRadius = app.kit.dp(11).toFloat()
-            setColor(app.kit.color(if (waiting) R.color.attention_bg else R.color.neutral_bg))
-        }
-        setPadding(app.kit.dp(8), app.kit.dp(2), app.kit.dp(8), app.kit.dp(2))
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { marginEnd = app.kit.dp(6) }
-    }
-
-    /** Up to three previews, fanned, the first on top with a ring over it
-     *  while it moves (`done`), as WhatsApp shows a file on its way. */
-    fun stack(app: MainActivity, scope: CoroutineScope, previews: List<Preview>, done: Float?): View {
+    /** One picture, the first file's, with the device's face on its corner,
+     *  and a ring over it while it moves. */
+    fun picture(app: MainActivity, scope: CoroutineScope, g: Group, side: Int, done: Float?): View {
         val kit = app.kit
         val box = FrameLayout(app).apply { clipChildren = false; clipToPadding = false }
-        val shown = previews.take(PREVIEWS).ifEmpty { listOf(Preview.Kind("")) }
-        for ((i, p) in shown.withIndex().reversed()) {
-            val cell = FrameLayout(app).apply {
-                background = ContextCompat.getDrawable(app, R.drawable.file_tile)
-                clipToOutline = true
-                rotation = i * 6f
-                elevation = kit.dp(3 - i).toFloat()
-            }
-            val picture = ImageView(app)
-            cell.addView(picture, FrameLayout.LayoutParams(kit.dp(22), kit.dp(22), Gravity.CENTER))
-            bind(scope, picture, p)
-            if (i == 0 && done != null) cell.addView(Ring(app, done), FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            box.addView(cell, FrameLayout.LayoutParams(kit.dp(44), kit.dp(44), Gravity.CENTER_VERTICAL).apply {
-                marginStart = kit.dp(i * 8)
-            })
+        val cell = FrameLayout(app).apply {
+            background = ContextCompat.getDrawable(app, R.drawable.file_tile)
+            clipToOutline = true
         }
+        val picture = ImageView(app)
+        cell.addView(picture, FrameLayout.LayoutParams(kit.dp(22), kit.dp(22), Gravity.CENTER))
+        bind(scope, picture, g.previews.firstOrNull() ?: Preview.Kind(""))
+        if (done != null) cell.addView(Ring(app, done), FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        box.addView(cell, FrameLayout.LayoutParams(kit.dp(side), kit.dp(side)))
+        // The face: 22 across, ringed in the card's colour.
+        val face = FrameLayout(app).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(kit.color(R.color.surface))
+            }
+            setPadding(kit.dp(2), kit.dp(2), kit.dp(2), kit.dp(2))
+            addView(kit.avatar(g.name, null, g.peer?.let { Devices.picture(it) }, 18))
+        }
+        box.addView(face, FrameLayout.LayoutParams(kit.dp(22), kit.dp(22), Gravity.END or Gravity.BOTTOM))
         return box
     }
 
@@ -249,7 +278,7 @@ object Waits {
 
         override fun onDraw(canvas: android.graphics.Canvas) {
             canvas.drawColor(0x55000000)
-            val r = minOf(width, height) * 0.28f
+            val r = minOf(13f * dp, minOf(width, height) * 0.28f)
             val cx = width / 2f
             val cy = height / 2f
             canvas.drawCircle(cx, cy, r, track)
@@ -309,15 +338,9 @@ class WaitingScreen(app: MainActivity) : Screen(app) {
     }
 
     private fun section(page: LinearLayout, g: Waits.Group) {
-        val head = LinearLayout(app).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(Waits.who(app, g), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(Waits.chip(app, g.progress ?: Words.size(g.bytes)))
-            g.waitingOn?.let { addView(Waits.chip(app, it, waiting = true)) }
-        }
-        page.addView(head, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            .apply { topMargin = kit.dp(22); bottomMargin = kit.dp(4) })
+        // As its row on Home: the title, the quiet line (option A).
+        page.addView(Waits.words(app, g, big = true), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = kit.dp(26); bottomMargin = kit.dp(10); marginStart = kit.dp(4) })
         val previews = g.previews
         val more = g.count - previews.size
         val cells = previews.size + if (more > 0) 1 else 0

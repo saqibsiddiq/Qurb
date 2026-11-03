@@ -384,6 +384,25 @@ class MainActivity : AppCompatActivity() {
         }
         continueSending(intent)
         fromNotice(intent)
+        fromSetup(intent)
+    }
+
+    /**
+     * Straight from setup's Connected: Photos chosen there is backed up once
+     * Android allows reading the phone's folders, and WhatsApp once its
+     * folder is picked -- each asked here, where those flows live.
+     */
+    private fun fromSetup(intent: Intent?) {
+        intent ?: return
+        val photos = intent.getBooleanExtra(SetupActivity.SETUP_PHOTOS, false)
+        val whatsApp = intent.getBooleanExtra(SetupActivity.SETUP_WHATSAPP, false)
+        intent.removeExtra(SetupActivity.SETUP_PHOTOS)
+        intent.removeExtra(SetupActivity.SETUP_WHATSAPP)
+        if (photos && !Folders.allowed(this)) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) startActivity(Folders.allowing(this))
+            else requestPermissions(Folders.OLDER, 0)
+        }
+        if (whatsApp) pickWhatsApp()
     }
 
     override fun onNewIntent(intent: Intent) {

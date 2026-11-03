@@ -193,18 +193,37 @@ object Thumbs {
     }.getOrNull()
 
     /** Anything else: its kind written on a white tile, ZIP. */
+    /** A document as the mockups draw one (components.css's .th.doc): a
+     *  white page of grey lines, its type on a coloured tag at the foot. */
     private fun tile(name: String): Bitmap? {
         val ext = name.substringAfterLast('.', "").uppercase().take(4)
         if (ext.isEmpty()) return null
         val out = Bitmap.createBitmap(SIDE, SIDE, Bitmap.Config.ARGB_8888)
         out.eraseColor(android.graphics.Color.WHITE)
-        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = 40f
-            color = 0xFF5F625C.toInt()
-            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
-            textAlign = android.graphics.Paint.Align.CENTER
+        val canvas = android.graphics.Canvas(out)
+        val line = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFD7D8D2.toInt() }
+        val left = SIDE * 0.18f
+        for ((i, width) in listOf(1f, 1f, 1f, 0.55f).withIndex()) {
+            val top = SIDE * (0.22f + i * 0.13f)
+            canvas.drawRoundRect(left, top, left + (SIDE - 2 * left) * width, top + SIDE * 0.045f, 6f, 6f, line)
         }
-        android.graphics.Canvas(out).drawText(ext, SIDE / 2f, SIDE / 2f + 14f, paint)
+        val tag = when (ext) {
+            "PDF" -> 0xFFC4412F
+            "DOC", "DOCX", "ODT" -> 0xFF2B5FB8
+            "XLS", "XLSX", "ODS", "CSV" -> 0xFF1F7A4A
+            "PPT", "PPTX" -> 0xFFC2661F
+            else -> 0xFF6B7280
+        }.toInt()
+        val words = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = SIDE * 0.1f
+            color = android.graphics.Color.WHITE
+            typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+        }
+        val w = words.measureText(ext)
+        val bottom = SIDE * 0.86f
+        canvas.drawRoundRect(left - 6f, bottom - SIDE * 0.13f, left + w + 10f, bottom, 8f, 8f,
+            android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = tag })
+        canvas.drawText(ext, left + 2f, bottom - SIDE * 0.035f, words)
         return out
     }
 

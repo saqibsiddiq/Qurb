@@ -2132,6 +2132,13 @@ impl Qurb {
     /// Put a recently deleted file back, as a change made here, so it returns
     /// on every device. Returns where it went: its old path, or beside it when
     /// something is there now.
+    /// Where a Recently deleted file's bytes are on this phone, for its
+    /// picture in the grid; none when they are not here.
+    pub fn deleted_file(&self, id: i64) -> Option<String> {
+        let engine = self.look().ok()?;
+        engine.store().deleted_bytes_at(id).map(|p| p.to_string_lossy().into_owned())
+    }
+
     pub fn restore_deleted(&self, id: i64) -> Result<String, QurbError> {
         Ok(self.engine()?.store_mut().restore_from_trash(id)?)
     }

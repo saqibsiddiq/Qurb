@@ -41,67 +41,65 @@
                 android:src="@drawable/qurb_mark" />
 
             <TextView
+                android:id="@+id/welcomeTitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="22dp"
                 android:accessibilityHeading="true"
-                android:text="Qurb"
+                android:text="QurbSpace"
                 android:textAppearance="@style/Text.Hero" />
 
             <TextView
+                android:id="@+id/welcomeLine"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:gravity="center"
                 android:text="Your files, on your own devices"
                 android:textAppearance="@style/Text.Body"
-                android:textColor="@color/text_2" />
+                android:textColor="@color/text_3" />
+
+            <!-- Welcome back: where the key is, in place of the line above. -->
+            <TextView
+                android:id="@+id/found"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:drawablePadding="6dp"
+                android:gravity="center_vertical"
+                android:text="Your key is in your Google backup"
+                android:textAppearance="@style/Text.Body"
+                android:textColor="@color/text_3"
+                android:visibility="gone"
+                app:drawableStartCompat="@drawable/ic_shield_check"
+                app:drawableTint="@color/green" />
 
             <Space
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1.3" />
 
-            <TextView
-                android:id="@+id/found"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                android:drawablePadding="8dp"
-                android:gravity="center_vertical"
-                android:text="Your key is in your Google backup"
-                android:textAppearance="@style/Text.Meta"
-                android:textColor="@color/text_2"
-                android:visibility="gone"
-                app:drawableStartCompat="@drawable/ic_cloud"
-                app:drawableTint="@color/text_2" />
-
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/start"
                 style="@style/Widget.Qurb.Button"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:text="Start here"
-                android:visibility="invisible" />
+                android:text="Scan your computer's code"
+                android:visibility="invisible"
+                app:icon="@drawable/ic_qr_code"
+                app:iconGravity="textStart"
+                app:iconSize="18dp" />
 
+            <!-- The other way, a link: start on this phone; with a key
+                 found, start fresh. -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/other"
-                style="@style/Widget.Qurb.Button.Secondary"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginTop="12dp"
-                android:text="I already use Qurb"
-                android:visibility="invisible" />
-
-            <!-- With a key found: joining, as I already use Qurb does. -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/joinInstead"
                 style="@style/Widget.Qurb.Button.Text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Join with a code"
-                android:visibility="gone" />
+                android:layout_marginTop="6dp"
+                android:text="Start on this phone"
+                android:visibility="invisible" />
         </LinearLayout>
 
         <!-- Join: where the other device shows its code, as icons; scan it,
@@ -309,6 +307,69 @@
 
         <!-- Joining: the number to compare, and where to approve it. Its own
              layout, since joining from Devices shows it too. -->
+        <!-- Connected to saqib (the setup stories of 2026-11-03): the
+             computer's face, what that means, and what to back up to it. -->
+        <LinearLayout
+            android:id="@+id/connectedPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="0.6" />
+
+            <FrameLayout
+                android:id="@+id/connectedFace"
+                android:layout_width="72dp"
+                android:layout_height="72dp" />
+
+            <TextView
+                android:id="@+id/connectedTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:accessibilityHeading="true"
+                android:gravity="center"
+                android:textAppearance="@style/Text.Title" />
+
+            <TextView
+                android:id="@+id/connectedLine"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:text="Everything you add here reaches it"
+                android:textAppearance="@style/Text.Body"
+                android:textColor="@color/text_3" />
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:id="@+id/connectedChoices"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <Space
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/connectedDone"
+                style="@style/Widget.Qurb.Button"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Done" />
+        </LinearLayout>
+
         <include
             android:id="@+id/waitPanel"
             layout="@layout/waiting_for"

@@ -17,43 +17,63 @@
         android:layout_height="0dp"
         android:layout_weight="0.7" />
 
-    <com.qurb.StatusMark
-        android:id="@+id/waitMark"
-        android:layout_width="96dp"
-        android:layout_height="96dp"
+    <!-- The other device's face, its name, the six digits boxed, and the
+         question (the setup stories of 2026-11-03: "the same six digits"). -->
+    <FrameLayout
+        android:id="@+id/waitFace"
+        android:layout_width="72dp"
+        android:layout_height="72dp"
         android:importantForAccessibility="no" />
 
     <TextView
         android:id="@+id/waitTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="18dp"
         android:accessibilityHeading="true"
         android:gravity="center"
-        android:text="Approve on your other device"
-        android:textAppearance="@style/Text.Hero" />
+        android:textAppearance="@style/Text.Title" />
 
-    <TextView
+    <LinearLayout
         android:id="@+id/waitNumber"
-        android:layout_width="match_parent"
-        android:layout_height="82dp"
-        android:layout_marginTop="24dp"
-        android:background="@drawable/group_quiet"
-        app:fontFamily="@font/inter_semibold"
-        android:fontFeatureSettings="tnum"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="22dp"
         android:gravity="center"
-        android:letterSpacing="0.08"
-        android:textColor="@color/text"
-        android:textSize="40sp" />
+        android:orientation="horizontal" />
 
     <TextView
         android:id="@+id/waitSays"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="14dp"
         android:gravity="center"
-        android:text="It shows this number too"
-        android:textAppearance="@style/Text.Meta" />
+        android:textAppearance="@style/Text.Meta"
+        android:textColor="@color/text_3" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:indeterminate="true"
+            app:indicatorColor="@color/green"
+            app:indicatorSize="14dp"
+            app:trackThickness="2dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Waiting for it"
+            android:textAppearance="@style/Text.Meta"
+            android:textColor="@color/text_3" />
+    </LinearLayout>
 
     <Space
         android:layout_width="match_parent"

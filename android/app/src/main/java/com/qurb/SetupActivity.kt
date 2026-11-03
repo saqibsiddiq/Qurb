@@ -87,11 +87,13 @@ class SetupActivity : AppCompatActivity() {
         // Begun under the old rules and never finished: a key was made and its
         // words never typed back. Start here keeps that key; joining puts it
         // aside -- which a phone set up as new by mistake needs to do.
-        views.start.setOnClickListener { if (keyFound) fromBackup() else create() }
-        views.other.setOnClickListener { if (keyFound) askToStartAgain() else show(views.joinPanel) }
-        // With a key found, joining is still a way in: for a key left from a
-        // setup nobody uses any more, which joining replaces.
-        views.joinInstead.setOnClickListener { show(views.joinPanel) }
+        // Welcome, as the setup stories of 2026-11-03 have it: the computer
+        // first, everyone's own server, so the one button scans its code;
+        // starting on the phone alone is the link under it. With a key found,
+        // Welcome back: Use my key, and Start fresh.
+        views.start.setOnClickListener { if (keyFound) fromBackup() else scanner.launch(Intent(this, ScanActivity::class.java)) }
+        views.other.setOnClickListener { if (keyFound) askToStartAgain() else create() }
+        views.connectedDone.setOnClickListener { afterConnected() }
         // A step goes back a step, by its link or the phone's back.
         views.joinBack.setOnClickListener { show(null) }
         views.digitsBack.setOnClickListener { show(views.joinPanel) }
@@ -112,10 +114,12 @@ class SetupActivity : AppCompatActivity() {
             // the rest of a backup: Use my key first, and Start again here.
             if (Backup.find(this@SetupActivity) != null) {
                 keyFound = true
+                views.welcomeTitle.text = "Welcome back"
+                views.welcomeLine.visibility = View.GONE
                 views.found.visibility = View.VISIBLE
                 views.start.text = "Use my key"
-                views.other.text = "Start again here"
-                views.joinInstead.visibility = View.VISIBLE
+                views.start.icon = null
+                views.other.text = "Start fresh"
             }
             // Shown only once Block Store has answered (ten seconds at most):
             // shown before, Start here could become Use my key under a finger,
@@ -152,7 +156,7 @@ class SetupActivity : AppCompatActivity() {
     /** One step, or Welcome for none. */
     private fun show(panel: View?) {
         views.welcome.visibility = if (panel == null) View.VISIBLE else View.GONE
-        for (p in listOf(views.joinPanel, views.digitsPanel, views.restorePanel, views.waitPanel.root)) p.visibility = View.GONE
+        for (p in listOf(views.joinPanel, views.digitsPanel, views.restorePanel, views.waitPanel.root, views.connectedPanel)) p.visibility = View.GONE
         panel?.visibility = View.VISIBLE
         stepBack.isEnabled = panel != null
         if (panel != views.digitsPanel) hideKeyboard()
@@ -341,6 +345,55 @@ class SetupActivity : AppCompatActivity() {
             views.progress.visibility = View.GONE
             show(views.waitPanel.root)
             Engine.join(this, code)
+            joinedWith = with
+        }
+    }
+
+    /** The device joined, for Connected to saqib. */
+    private var joinedWith: uniffi.qurb_mobile.PairingWith? = null
+
+    /** What Connected asked to back up, carried into the app to finish. */
+    private var wantsPhotos = true
+    private var wantsWhatsApp = false
+
+    /**
+     * Connected (the setup stories of 2026-11-03): the computer's face, what
+     * being connected means, and what to back up to it -- Photos on, WhatsApp
+     * off unless chosen. A phone joined to another phone goes straight in.
+     */
+    private fun connected(): Boolean {
+        val with = joinedWith ?: return false
+        if (with.kind == "phone") return false
+        val name = with.name ?: "your computer"
+        views.connectedFace.removeAllViews()
+        views.connectedFace.addView(kit.avatar(name, null, null, 72))
+        views.connectedTitle.text = "Connected to $name"
+        views.connectedChoices.removeAllViews()
+        val card = kit.card(views.connectedChoices)
+        for ((label, icon, on) in listOf(Triple("Photos", R.drawable.ic_image, wantsPhotos), Triple("WhatsApp", R.drawable.ic_whatsapp, wantsWhatsApp))) {
+            kit.toggle(card, label, "", on) { checked -> if (label == "Photos") wantsPhotos = checked else wantsWhatsApp = checked }.apply {
+                this.label.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
+                this.label.compoundDrawablePadding = dp(14)
+                this.label.compoundDrawableTintList = android.content.res.ColorStateList.valueOf(kit.color(R.color.text_2))
+            }
+        }
+        busy(false)
+        show(views.connectedPanel)
+        stepBack.isEnabled = false
+        return true
+    }
+
+    /** Done: Photos chosen here, and into the app, which asks for what
+     *  Android must allow for each choice. */
+    private fun afterConnected() {
+        lifecycleScope.launch {
+            if (wantsPhotos) withContext(Dispatchers.IO) {
+                runCatching { Engine.open(this@SetupActivity).chooseFolder(CAMERA, true) }
+            }
+            startActivity(Intent(this@SetupActivity, MainActivity::class.java)
+                .putExtra(SETUP_PHOTOS, wantsPhotos)
+                .putExtra(SETUP_WHATSAPP, wantsWhatsApp))
+            finish()
         }
     }
 
@@ -391,6 +444,7 @@ class SetupActivity : AppCompatActivity() {
     }
 
     private fun done() {
+        if (connected()) return
         startActivity(Intent(this, MainActivity::class.java))
         finish()
     }
@@ -398,9 +452,18 @@ class SetupActivity : AppCompatActivity() {
     private fun busy(working: Boolean) {
         views.progress.visibility = if (working) View.VISIBLE else View.GONE
         listOf(
-            views.start, views.other, views.joinInstead, views.scan, views.typeDigits, views.joinConfirm, views.joinBack,
+            views.start, views.other, views.scan, views.typeDigits, views.joinConfirm, views.joinBack,
             views.digitsBack, views.useWords, views.restoreConfirm, views.restoreBack,
         ).forEach { it.isEnabled = !working }
         if (!working) ready()
+    }
+
+    companion object {
+        /** Where the camera keeps its pictures, the folder Photos backs up. */
+        private const val CAMERA = "DCIM/Camera"
+
+        /** Into the app from Connected: back up Photos, and WhatsApp. */
+        const val SETUP_PHOTOS = "setup-photos"
+        const val SETUP_WHATSAPP = "setup-whatsapp"
     }
 }

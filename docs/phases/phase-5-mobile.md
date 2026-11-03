@@ -3298,6 +3298,50 @@ Manage storage counts the disk each part takes (the laptop's answer, measured
 26.0 GB for the S23 where 53 GB was listed); Recently deleted is back there.
 **None of it yet tried on the S23**: the owner wants it all tested together.
 
+## Both apps rebuilt to the mockups, and removal said to both sides (2026-11-03, night)
+
+The owner was not happy with the built screens and had them drawn as
+mockups first (`docs/design/system/`), then asked for everything discussed
+to be built.
+
+- **Removing a device** is said to the removed side and remembered
+  ([decision 0084](../decisions/0084-removal-is-said-and-remembered.md)): a
+  `Removed` answer to everything it asks, a goodbye on an open connection,
+  its files here kept locked under its id, and the same device coming back
+  recognised and given them again. Tested in `crates/peer/tests/removal.rs`;
+  the workspace's tests all pass (112 test binaries, the owner's laptop).
+- **The desktop** writes the tokens exactly and was compared frame by frame,
+  D1 to D23, light and dark, with the window rendered from the fixtures in
+  headless Chromium at 1120 × 720
+  ([the review log](../design/desktop-review-2026-11-03.md) lists each, and
+  the deliberate differences).
+- **The phone**: `colors.xml` (light and night) carries `tokens.css`'s values;
+  Waiting is option A, Home's rows and the Waiting page's sections; Recently
+  deleted is the grid of P-RD1 to P-RD3, a deleted file's picture read from
+  where its bytes are kept (`Qurb.deleted_file`); a document's tile is drawn
+  as a page with its type on a coloured tag; setup follows the stories --
+  Welcome scans the computer's code, *Start on this phone* the link; Welcome
+  back, *Use my key* and *Start fresh*; the six digits boxed under the
+  computer's face while it approves; then *Connected to saqib*, with Photos
+  (on) and WhatsApp to back up, finished in the app, which asks Android for
+  what each needs; Home says "saqib removed this phone" with *Add it again*.
+
+**Measured:** nothing on hardware. On the emulator (qurb-34g, Android 14,
+release build 0.2.0-beta.7, fresh install) Welcome and the empty Recently
+deleted were compared side by side with their frames and match; the grid,
+Waiting, the boxed digits, Connected and the removed Home need a paired
+computer and were not seen running.
+
+**Left undone, deliberately or not yet:**
+
+- *Finding saqib* and *Connected, your files are as you left them* after
+  *Use my key*: a phone with its key back still has to pair with its
+  computer; finding it by the key alone is not built.
+- *Add a computer* (showing a code on the phone for a computer that joins):
+  the existing show-code page stands.
+- A computer's permanent identity (decision 0084).
+- The removed phone's lock is the regular icon scaled (decision 0084).
+
 ## Deliberately left undone
 
 - **Keychain, on iOS.** The Android half is done and verified on a device —
