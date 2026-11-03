@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QurbSpace phone</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+/* The phone's pages at real size: 360 × 780 dp, one CSS px a dp, from the
+   foundation's parts only -- the same parts the desktop's pages use. */
+body { font-family: Inter, system-ui, sans-serif; background: color-mix(in srgb, var(--bg) 70%, #8f948c); color: var(--ink); -webkit-font-smoothing: antialiased }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 40px 24px 120px }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap }
+.top h1 { font-size: 28px; font-weight: 700; letter-spacing: -.025em }
+.top p { color: var(--ink-2); margin-top: 6px; font-size: 14.5px; max-width: 800px; line-height: 1.55 }
+.switch { display: inline-flex; padding: 4px; border-radius: var(--r-full); background: var(--surface); gap: 2px; box-shadow: var(--shadow-1) }
+.switch button { border: 0; background: none; font: 500 13px Inter; color: var(--ink-2); padding: 7px 14px; border-radius: var(--r-full); cursor: pointer }
+.switch button.on { background: var(--brand-soft); color: var(--brand) }
+.row3 { display: flex; flex-wrap: wrap; gap: 36px; margin-top: 40px }
+figure { width: 380px }
+figcaption { margin-top: 16px }
+figcaption b { font-size: 15px; font-weight: 650; letter-spacing: -.01em; display: block }
+figcaption span { color: var(--ink-2); font-size: 13px; line-height: 1.5; display: block; margin-top: 4px }
+
+/* the phone */
+.phone { width: 380px; height: 800px; border-radius: 46px; background: #0d0d0d; padding: 10px; box-shadow: 0 30px 70px -20px rgba(0,0,0,.5) }
+.screen { position: relative; width: 360px; height: 780px; border-radius: 38px; overflow: hidden; background: var(--bg) }
+.sbar { height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font-size: 14px; font-weight: 600 }
+.body { padding: 0 18px }
+.back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 15px; margin-top: 8px; height: 32px }
+.back .ic { width: 18px; height: 18px }
+.ttl { display: flex; align-items: center; gap: 10px; margin-top: 10px; min-height: 44px }
+.ttl h2 { flex: 1; font-size: 28px; font-weight: 700; letter-spacing: -.025em }
+.quiet { color: var(--ink-3); font-size: 13.5px; margin-top: 2px }
+.lab { margin: 20px 4px 10px; font-size: 12px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); display: flex; align-items: center; gap: 8px }
+.ibtn { width: 40px; height: 40px; border-radius: 20px; display: grid; place-items: center; color: var(--ink); margin-left: -10px }
+.ibtn .ic { width: 22px; height: 22px }
+
+/* the grid: three across */
+.rdg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px }
+.rd { display: flex; flex-direction: column; gap: 6px; min-width: 0 }
+.rd .th { width: 100%; height: auto; aspect-ratio: 1; border-radius: 14px }
+.rd .th.doc { padding: 18px 14px; gap: 5px } .rd .th.doc i { height: 4px } .rd .th.doc em { font-size: 9px; left: 8px; bottom: 8px }
+.rd .th .play::before { border-left-width: 14px; border-top-width: 9px; border-bottom-width: 9px }
+.rd small { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 2px }
+.days { position: absolute; left: 6px; bottom: 6px; height: 20px; padding: 0 7px; border-radius: 10px; background: var(--warn); color: #fff; font-size: 11px; font-weight: 600; display: grid; place-items: center }
+.tick { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 11px; background: var(--brand); color: #fff; display: grid; place-items: center; border: 2px solid #fff }
+.tick .ic { width: 12px; height: 12px; stroke-width: 2.6 }
+.tick.off { background: rgba(0,0,0,.2) }
+.rd.sel .th { outline: 3px solid var(--brand); outline-offset: -3px }
+
+/* the bar at the foot, over the tab bar's place */
+.foot { position: absolute; left: 12px; right: 12px; bottom: 16px; display: flex; gap: 10px; padding: 10px; border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow-2); border: 1px solid var(--line) }
+.foot .btn { flex: 1; height: 46px }
+.fade { position: absolute; left: 0; right: 0; bottom: 0; height: 120px; background: linear-gradient(transparent, var(--bg) 60%) }
+
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; height: 520px }
+.orb { width: 88px; height: 88px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-2); display: grid; place-items: center; color: var(--brand) }
+.orb .ic { width: 34px; height: 34px; stroke-width: 1.6 }
+.empty b { font-size: 18px; font-weight: 650; margin-top: 20px; letter-spacing: -.01em }
+
+/* Settings' row that opens it */
+.mini { margin-top: 18px }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="undo" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="drive" viewBox="0 0 24 24"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="archive" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+  <div class="top">
+    <div><h1>QurbSpace for the phone</h1>
+      <p>Every page at real size, 360 × 780 dp, drawn only from the foundation's parts, the same ones the desktop's pages use. Starting with Recently deleted, drawn to match the desktop's (D13, D13b).</p></div>
+    <div class="switch"><button class="on" onclick="theme('light',this)">Light</button><button onclick="theme('dark',this)">Dark</button></div>
+  </div>
+
+  <div class="row3">
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="sbar"><span>9:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="ttl" style="margin-top:40px"><h2>Settings</h2></div>
+          <div class="lab">Manage storage</div>
+          <div class="card">
+            <div class="row"><svg class="ic"><use href="#drive"/></svg><span class="n">Devices</span><span class="v"><svg class="ic"><use href="#chev"/></svg></span></div>
+            <div class="row"><svg class="ic"><use href="#trash"/></svg><span class="n">Recently deleted</span><span class="v">5<svg class="ic"><use href="#chev"/></svg></span></div>
+            <div class="row"><svg class="ic"><use href="#archive"/></svg><span class="n">Clear cache</span><span class="v">84 MB</span></div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>P-RD0 · Where it's opened</b><span>Settings → Manage storage, with how many files are in it.</span></figcaption>
+    </figure>
+
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="sbar"><span>9:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="back"><svg class="ic"><use href="#back"/></svg>Settings</div>
+          <div class="ttl"><h2>Recently deleted</h2><button class="btn btn-secondary btn-s">Select</button></div>
+          <p class="quiet">Kept for 30 days, then deleted for good</p>
+          <div class="lab">Vault</div>
+          <div class="rdg">
+            <div class="rd"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><em>PDF</em></span><small>Tax 2025.pdf</small></div>
+            <div class="rd"><span class="th p2"></span><small>IMG_0007.jpg</small></div>
+            <div class="rd"><span class="th p3"><span class="days">3 days</span></span><small>Garden.jpg</small></div>
+            <div class="rd"><span class="th p1"><span class="play"></span></span><small>Clip.mp4</small></div>
+            <div class="rd"><span class="th doc"><i></i><i></i><i style="width:60%"></i><i></i><em style="background:#6b7280">MD</em></span><small>Notes.md</small></div>
+          </div>
+        </div>
+        <div class="fade"></div>
+        <div class="foot"><button class="btn btn-primary">Restore all</button><button class="btn btn-secondary" style="color:var(--danger)">Delete all</button></div>
+      </div></div>
+      <figcaption><b>P-RD1 · Recently deleted</b><span>The desktop's page at phone width: the files themselves, three across, days left on the picture only in the last week. Restore all, green as Send, and Delete all at the foot. A tap opens a file; holding one starts selecting.</span></figcaption>
+    </figure>
+
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="sbar"><span>9:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="back" style="visibility:hidden">Settings</div>
+          <div class="ttl"><span class="ibtn"><svg class="ic"><use href="#x"/></svg></span><h2>2 selected</h2><button class="btn btn-secondary btn-s">All</button></div>
+          <p class="quiet">Kept for 30 days, then deleted for good</p>
+          <div class="lab">Vault</div>
+          <div class="rdg">
+            <div class="rd sel"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><em>PDF</em><span class="tick"><svg class="ic"><use href="#check"/></svg></span></span><small>Tax 2025.pdf</small></div>
+            <div class="rd"><span class="th p2"><span class="tick off"></span></span><small>IMG_0007.jpg</small></div>
+            <div class="rd sel"><span class="th p3"><span class="days">3 days</span><span class="tick"><svg class="ic"><use href="#check"/></svg></span></span><small>Garden.jpg</small></div>
+            <div class="rd"><span class="th p1"><span class="play"></span><span class="tick off"></span></span><small>Clip.mp4</small></div>
+            <div class="rd"><span class="th doc"><i></i><i></i><i style="width:60%"></i><i></i><em style="background:#6b7280">MD</em><span class="tick off"></span></span><small>Notes.md</small></div>
+          </div>
+        </div>
+        <div class="fade"></div>
+        <div class="foot"><button class="btn btn-primary"><svg class="ic"><use href="#undo"/></svg>Restore</button><button class="btn btn-danger-solid"><svg class="ic"><use href="#trash"/></svg>Delete</button></div>
+      </div></div>
+      <figcaption><b>P-RD2 · Choosing some</b><span>As on the desktop: × and "2 selected" in the title, All beside it; the bar holds only Restore, green, and Delete, red. Delete asks once more before anything goes for good.</span></figcaption>
+    </figure>
+
+    <figure>
+      <div class="phone"><div class="screen">
+        <div class="sbar"><span>9:41</span><span>●●●</span></div>
+        <div class="body">
+          <div class="back"><svg class="ic"><use href="#back"/></svg>Settings</div>
+          <div class="ttl"><h2>Recently deleted</h2></div>
+          <div class="empty"><div class="orb"><svg class="ic"><use href="#trash"/></svg></div><b>Nothing deleted lately</b><p class="quiet" style="margin-top:6px">Deleted files wait here for 30 days</p></div>
+        </div>
+      </div></div>
+      <figcaption><b>P-RD3 · Empty</b><span>In the middle of the page, as Received's empty page is: the mark, one line, one quiet line.</span></figcaption>
+    </figure>
+  </div>
+</div>
+<script>
+function theme(t, b) {
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll(".switch button").forEach((x) => x.classList.toggle("on", x === b));
+}
+</script>
+</body>
+</html>
