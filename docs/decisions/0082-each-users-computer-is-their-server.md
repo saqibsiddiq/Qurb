@@ -175,3 +175,27 @@ small), and what Tor costs the phone in data and battery while the app is
 open: Arti builds circuits ahead of need once started. Also seen: each
 connection the phone opens holds its own six relay connections, 85 relay
 connections opened in the test's few minutes; to be shared.
+
+### Fixed, 2026-11-03
+
+- **One set of relay connections per process** (`nostr.rs`, `Pool`): every
+  session on a device shares the same six, closed when the last session
+  ends. The live test's two sessions in one process share them and still
+  hear each other in 0.23 s.
+- **Tor rests when unused.** No circuits are built ahead for the open
+  internet, which qurb never uses; a bridge closes after 40 s with no packet
+  (QUIC sends one every 10 s while alive); and a phone's Tor sleeps
+  (Arti's soft dormant mode) 60 s after its last bridge closes, woken by the
+  next dial. A computer's Tor, hosting, never sleeps. **Not yet measured:**
+  Tor's data and battery use on the phone, before or after.
+- **A computer's folder survives a change of network.** The connection is
+  dialled again on its next use after the phone changes network or the
+  connection drops, and a request cut off mid-way is asked once more; the
+  owner had had to leave the folder and open it again. Screens asking for
+  the same computer at once share one dial (four had each dialled through
+  Tor).
+- Size: the engine 17.04 to 17.29 MB, APK 20.45 to **20.70 MB**. A first
+  build of these fixes came to 18.87 MB: the compiler copied Tor's whole
+  bootstrap into the idle timer's task, found by building without each change
+  in turn, and avoided by reading the client directly.
+

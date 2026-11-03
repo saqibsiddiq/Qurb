@@ -715,8 +715,10 @@ pub struct Qurb {
     /// a whole connection from nothing every time -- an endpoint, the relay,
     /// discovery -- 1.3 s of the 4.8 s it took on the S23 over Wi-Fi.
     kept_open: Mutex<std::collections::HashMap<String, Arc<KeptFolder>>>,
+    /// Held while a computer is being reached ([`Qurb::open_kept_folder`]).
+    opening: Mutex<std::collections::HashMap<String, Arc<Mutex<()>>>>,
     /// [`reach_state`](Self::reach_state), by computer, for this run.
-    reach_states: Mutex<std::collections::HashMap<String, String>>,
+    reach_states: Arc<Mutex<std::collections::HashMap<String, String>>>,
     /// The app's way to open again a document it sent from where it is
     /// (decision 0060), given to every store handle opened here.
     documents: Mutex<Option<Arc<dyn qurb_storage::Documents>>>,
@@ -1831,11 +1833,15 @@ impl Qurb {
     /// browse it, within `seconds` (decision 0067, step 4). The computer has
     /// to be on and running Qurb.
     pub fn open_kept_folder(&self, fingerprint: String, seconds: u32) -> Result<Arc<KeptFolder>, QurbError> {
+        // One dial per computer at a time: the screens that ask together --
+        // a folder and its thumbnails -- share the first's connection. On the
+        // S23 on 2026-11-02 four asked at once and each dialled through Tor.
+        let opening = Arc::clone(self.opening.lock().expect("opening poisoned").entry(fingerprint.clone()).or_default());
+        let _opening = opening.lock().expect("opening poisoned");
         // The connection made last time, while it lasts.
         if let Some(open) = self.kept_open.lock().expect("kept_open poisoned").get(&fingerprint) {
-            if !open.client.is_closed() {
-                return Ok(Arc::clone(open));
-            }
+            // One the network took is dialled again by its next use.
+            return Ok(Arc::clone(open));
         }
         let opened = self.reach_kept_folder(&fingerprint, seconds)?;
         self.kept_open.lock().expect("kept_open poisoned").insert(fingerprint, Arc::clone(&opened));
@@ -1858,7 +1864,7 @@ impl Qurb {
     }
 
     pub fn network_changed(&self) {
-        self.kept_open.lock().expect("kept_open poisoned").clear();
+        NETWORK.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn prepare_computers(&self, seconds: u32) {
@@ -1887,102 +1893,33 @@ impl Qurb {
                 qurb_peer::Fingerprint::from_bytes(found.fingerprint),
                 found.name.clone(),
                 qurb_peer::trusted_fingerprints(engine.store()).map_err(|e| QurbError::Storage { detail: e.to_string() })?,
-                db.meetings().unwrap_or_default(),
+                db.meetings().unwrap_or_default().into_iter().map(|(peer, secret)| (peer.fingerprint, secret)).collect(),
                 *engine.store().device_id()?.as_bytes(),
             )
         };
-        let identity = self.identity()?;
         let runtime = self.runtime()?;
         let relay = runtime.block_on(qurb_peer::relay_for(self.relay.as_deref(), &self.signal_url));
-        let trust = qurb_peer::tls::TrustList::new(trusted);
-        // A port of its own: a sync pass may be using the usual one.
-        let connector = runtime
-            .block_on(async {
-                tokio::time::timeout(
-                    budget,
-                    qurb_peer::Connector::start(
-                        "0.0.0.0:0".parse().expect("a literal address"),
-                        identity,
-                        self.master.clone(),
-                        &trust,
-                        self.signal_url.clone(),
-                        qurb_peer::Finding::everything(relay),
-                    ),
-                )
-                .await
-            })
-            .map_err(|_| QurbError::Network { detail: format!("{name} did not answer in time") })?
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
-        {
-            let _guard = runtime.enter();
-            for (peer, secret) in meetings {
-                connector.meet(qurb_peer::Fingerprint::from_bytes(peer.fingerprint), secret);
-            }
-        }
-        let served = self.shared_store()?;
-        let generation = qurb_peer::Generation::new();
-        let mut accepting = Vec::new();
-        for endpoint in [Some(connector.endpoint().clone()), connector.relay_endpoint().cloned()].into_iter().flatten() {
-            let store = Arc::clone(&served);
-            let generation = Arc::clone(&generation);
-            let trust = trust.clone();
-            let watcher = Arc::clone(&self.serving);
-            accepting.push(runtime.spawn(async move {
-                while let Some(incoming) = endpoint.accept().await {
-                    let store = Arc::clone(&store);
-                    let generation = Arc::clone(&generation);
-                    let trust = trust.clone();
-                    let watcher: Arc<dyn qurb_peer::Served> = watcher.clone();
-                    tokio::spawn(async move {
-                        if let Ok(connection) = incoming.await {
-                            qurb_peer::server::serve_connection_watched(connection, store, generation, watcher, &trust)
-                                .await;
-                        }
-                    });
-                }
-            }));
-        }
-        let connector = Arc::new(connector);
-        // The timeout made inside the runtime: made outside, its timer has no
-        // runtime to belong to and panics. It did, on the S23, every time
-        // until 2026-10-15; the emulator showed the panic as "isn't reachable".
-        let client = runtime
-            .block_on(async { tokio::time::timeout(budget, connector.reach(peer)).await })
-            .map_err(|_| QurbError::Network { detail: format!("{name} isn't reachable: it has to be on, with Qurb running") })?
-            .map_err(|e| {
-                // It answered the introduction and no direct path got through:
-                // the network blocks it (decision 0082, the IPv6 nudge), which
-                // is not the same as being off.
-                if matches!(e, qurb_peer::Error::Unreachable { .. }) {
-                    self.note_reach(fingerprint, "blocked");
-                }
-                QurbError::Network { detail: format!("{name} isn't reachable: {e}") }
-            });
-        // Reached at an address of the open internet: reachable from anywhere.
-        if let Ok(client) = &client {
-            let ip = client.remote_address().ip();
-            let private = match ip {
-                std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_loopback() || v4.is_link_local() || v4.octets()[0] == 100,
-                std::net::IpAddr::V6(v6) => v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00 || (v6.segments()[0] & 0xffc0) == 0xfe80,
-            };
-            if !private {
-                self.note_reach(fingerprint, "anywhere");
-            }
-        }
-        let client = match client {
-            Ok(client) => client,
-            Err(e) => {
-                for task in &accepting {
-                    task.abort();
-                }
-                return Err(e);
-            }
+        let dial = Dial {
+            runtime: Arc::clone(&runtime),
+            identity: self.identity()?,
+            master: self.master.clone(),
+            trust: qurb_peer::tls::TrustList::new(trusted),
+            signal_url: self.signal_url.clone(),
+            relay,
+            meetings,
+            served: self.shared_store()?,
+            serving: Arc::clone(&self.serving),
+            peer,
+            name: name.clone(),
+            fingerprint: fingerprint.to_string(),
+            reach_states: Arc::clone(&self.reach_states),
+            budget,
         };
+        let link = dial.connect()?;
         Ok(Arc::new(KeptFolder {
             runtime,
-            client,
-            _connector: connector,
-            accepting,
+            dial,
+            link: std::sync::Mutex::new(link),
             reader: std::sync::Mutex::new(self.open_store()?),
             name,
             me,
@@ -2640,9 +2577,6 @@ fn happenings(
 /// applied to, and neither a `MutexGuard` nor a four-argument constructor
 /// taking an optional callback interface can cross an FFI boundary.
 impl Qurb {
-    fn note_reach(&self, fingerprint: &str, state: &str) {
-        self.reach_states.lock().expect("reach_states poisoned").insert(fingerprint.to_string(), state.to_string());
-    }
 
     /// Keep one folder where it lies, a few seconds at a time until
     /// `deadline`, adding what was done to `run` (decisions 0062 and 0063).
@@ -2830,7 +2764,8 @@ impl Qurb {
             runtime: Mutex::new(None),
             serving: Arc::new(ServingStats::default()),
             kept_open: Mutex::new(std::collections::HashMap::new()),
-            reach_states: Mutex::new(std::collections::HashMap::new()),
+            opening: Mutex::new(std::collections::HashMap::new()),
+            reach_states: Arc::new(Mutex::new(std::collections::HashMap::new())),
             documents: Mutex::new(None),
             open_asks: Mutex::new(std::collections::HashMap::new()),
             approved: Mutex::new(std::collections::HashMap::new()),
@@ -4240,16 +4175,156 @@ pub struct StoragePart {
 #[derive(uniffi::Object)]
 pub struct KeptFolder {
     runtime: Arc<tokio::runtime::Runtime>,
+    /// How to reach the computer again: after the phone changes network, or
+    /// the connection drops, the next use dials it afresh, and the page
+    /// showing the folder never knows. Before 2026-11-02 the owner had to
+    /// leave the folder and open it again (decision 0082).
+    dial: Dial,
+    link: std::sync::Mutex<Link>,
+    reader: std::sync::Mutex<Store>,
+    name: String,
+    me: [u8; 32],
+}
+
+/// Counted up each time the phone changes network ([`Qurb::network_changed`]);
+/// a connection made on an earlier count is dialled again before it is used.
+static NETWORK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// One connection to a computer, with what it started.
+struct Link {
     client: qurb_peer::PeerClient,
     /// Held so that what it started -- announcing, the rendezvous connection
-    /// -- lives as long as the folder is open.
+    /// -- lives as long as the connection.
     _connector: Arc<qurb_peer::Connector>,
     /// Answering the computer too, as a sync pass does: reaching a device
     /// behind a router is both sides dialling.
     accepting: Vec<tokio::task::JoinHandle<()>>,
-    reader: std::sync::Mutex<Store>,
+    /// The phone's network when it was made ([`NETWORK`]).
+    network: u64,
+}
+
+impl Link {
+    fn stale(&self) -> bool {
+        self.client.is_closed() || self.network != NETWORK.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn close(&self) {
+        self.client.close();
+        for task in &self.accepting {
+            task.abort();
+        }
+    }
+}
+
+/// What reaching a computer takes, kept so that it can be done again.
+struct Dial {
+    runtime: Arc<tokio::runtime::Runtime>,
+    identity: qurb_peer::Identity,
+    master: MasterKey,
+    trust: qurb_peer::tls::TrustList,
+    signal_url: String,
+    relay: Option<qurb_peer::RelayAt>,
+    meetings: Vec<([u8; 32], [u8; 32])>,
+    served: Arc<std::sync::Mutex<Store>>,
+    serving: Arc<ServingStats>,
+    peer: qurb_peer::Fingerprint,
     name: String,
-    me: [u8; 32],
+    fingerprint: String,
+    reach_states: Arc<Mutex<std::collections::HashMap<String, String>>>,
+    budget: std::time::Duration,
+}
+
+impl Dial {
+    fn note_reach(&self, state: &str) {
+        self.reach_states.lock().expect("reach_states poisoned").insert(self.fingerprint.clone(), state.to_string());
+    }
+
+    fn connect(&self) -> Result<Link, QurbError> {
+        let network = NETWORK.load(std::sync::atomic::Ordering::Relaxed);
+        let (runtime, budget, name) = (&self.runtime, self.budget, &self.name);
+        // A port of its own: a sync pass may be using the usual one.
+        let connector = runtime
+            .block_on(async {
+                tokio::time::timeout(
+                    budget,
+                    qurb_peer::Connector::start(
+                        "0.0.0.0:0".parse().expect("a literal address"),
+                        self.identity.clone(),
+                        self.master.clone(),
+                        &self.trust,
+                        self.signal_url.clone(),
+                        qurb_peer::Finding::everything(self.relay.clone()),
+                    ),
+                )
+                .await
+            })
+            .map_err(|_| QurbError::Network { detail: format!("{name} did not answer in time") })?
+            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        {
+            let _guard = runtime.enter();
+            for (peer, secret) in &self.meetings {
+                connector.meet(qurb_peer::Fingerprint::from_bytes(*peer), *secret);
+            }
+        }
+        let generation = qurb_peer::Generation::new();
+        let mut accepting = Vec::new();
+        for endpoint in [Some(connector.endpoint().clone()), connector.relay_endpoint().cloned()].into_iter().flatten() {
+            let store = Arc::clone(&self.served);
+            let generation = Arc::clone(&generation);
+            let trust = self.trust.clone();
+            let watcher = Arc::clone(&self.serving);
+            accepting.push(runtime.spawn(async move {
+                while let Some(incoming) = endpoint.accept().await {
+                    let store = Arc::clone(&store);
+                    let generation = Arc::clone(&generation);
+                    let trust = trust.clone();
+                    let watcher: Arc<dyn qurb_peer::Served> = watcher.clone();
+                    tokio::spawn(async move {
+                        if let Ok(connection) = incoming.await {
+                            qurb_peer::server::serve_connection_watched(connection, store, generation, watcher, &trust)
+                                .await;
+                        }
+                    });
+                }
+            }));
+        }
+        let connector = Arc::new(connector);
+        // The timeout made inside the runtime: made outside, its timer has no
+        // runtime to belong to and panics. It did, on the S23, every time
+        // until 2026-10-15; the emulator showed the panic as "isn't reachable".
+        let client = runtime
+            .block_on(async { tokio::time::timeout(budget, connector.reach(self.peer)).await })
+            .map_err(|_| QurbError::Network { detail: format!("{name} isn't reachable: it has to be on, with Qurb running") })?
+            .map_err(|e| {
+                // It answered the introduction and no direct path got through:
+                // the network blocks it (decision 0082, the IPv6 nudge), which
+                // is not the same as being off.
+                if matches!(e, qurb_peer::Error::Unreachable { .. }) {
+                    self.note_reach("blocked");
+                }
+                QurbError::Network { detail: format!("{name} isn't reachable: {e}") }
+            });
+        // Reached at an address of the open internet: reachable from anywhere.
+        if let Ok(client) = &client {
+            let ip = client.remote_address().ip();
+            let private = match ip {
+                std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_loopback() || v4.is_link_local() || v4.octets()[0] == 100,
+                std::net::IpAddr::V6(v6) => v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00 || (v6.segments()[0] & 0xffc0) == 0xfe80,
+            };
+            if !private {
+                self.note_reach("anywhere");
+            }
+        }
+        match client {
+            Ok(client) => Ok(Link { client, _connector: connector, accepting, network }),
+            Err(e) => {
+                for task in &accepting {
+                    task.abort();
+                }
+                Err(e)
+            }
+        }
+    }
 }
 
 #[uniffi::export]
@@ -4270,10 +4345,7 @@ impl KeptFolder {
     /// too old to say, or one that does not tell this phone.
     pub fn storage(&self) -> Result<Option<ComputerStorage>, QurbError> {
         use qurb_peer::wire::Part;
-        let told = self
-            .runtime
-            .block_on(self.client.storage())
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let told = self.run(|c| async move { c.storage().await })?;
         Ok(told.map(|(given, used, parts)| ComputerStorage {
             given,
             used,
@@ -4301,10 +4373,8 @@ impl KeptFolder {
     /// too large, not Office).
     pub fn convert(&self, file: KeptFile, to: String) -> Result<bool, QurbError> {
         let content = unhex(&file.content).ok_or_else(|| QurbError::Other { detail: "not a file of the folder".into() })?;
-        let pdf = self
-            .runtime
-            .block_on(self.client.convert(content, &file.name))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let name = &file.name;
+        let pdf = self.run(|c| { let content = content.clone(); async move { c.convert(content, name).await } })?;
         match pdf {
             Some(pdf) => {
                 std::fs::write(&to, pdf).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
@@ -4316,15 +4386,12 @@ impl KeptFolder {
 
     /// The computer's Recently deleted emptied for good.
     pub fn empty_deleted(&self) -> Result<(), QurbError> {
-        changed(self.runtime.block_on(self.client.empty_deleted()))
+        changed(self.run(|c| async move { c.empty_deleted().await }))
     }
 
     pub fn places(&self) -> Result<Vec<ComputerPlace>, QurbError> {
         use qurb_peer::wire::Place;
-        let answer = self
-            .runtime
-            .block_on(self.client.places())
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let answer = self.run(|c| async move { c.places().await })?;
         let places = match answer {
             Some(places) => places,
             None => vec![("Shared".to_string(), Place::Shared), ("Private".to_string(), Place::Mine)],
@@ -4344,10 +4411,8 @@ impl KeptFolder {
     }
 
     pub fn list(&self, dir: String) -> Result<KeptListing, QurbError> {
-        let answer = self
-            .runtime
-            .block_on(self.client.kept(&dir))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let dir = &dir;
+        let answer = self.run(|c| async move { c.kept(dir).await })?;
         let Some((folders, files)) = answer else {
             return Err(QurbError::NotFound { detail: format!("{} keeps no folder for this phone", self.name) });
         };
@@ -4358,10 +4423,8 @@ impl KeptFolder {
     /// item 6): its own, reached live, nothing of it kept on this phone. A
     /// file in it is fetched and streamed as one of this phone's folder is.
     pub fn shared(&self, dir: String) -> Result<KeptListing, QurbError> {
-        let answer = self
-            .runtime
-            .block_on(self.client.shared(&dir))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let dir = &dir;
+        let answer = self.run(|c| async move { c.shared(dir).await })?;
         let Some((folders, files)) = answer else {
             return Err(QurbError::NotFound { detail: format!("{} shares no folder with this phone", self.name) });
         };
@@ -4373,39 +4436,38 @@ impl KeptFolder {
     /// named by its place, the newest first.
     pub fn search(&self, shared: bool, query: String) -> Result<Vec<KeptFile>, QurbError> {
         let within = if shared { qurb_peer::wire::Within::Shared } else { qurb_peer::wire::Within::Kept };
-        let answer = self
-            .runtime
-            .block_on(self.client.search(within, &query))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let query = &query;
+        let answer = self.run(|c| { let within = within.clone(); async move { c.search(within, query).await } })?;
         let files = answer.ok_or_else(|| QurbError::NotFound { detail: format!("{} cannot be searched from here", self.name) })?;
         Ok(self.files(files))
     }
 
     /// Make a folder in the computer's shared folder, at `path`.
     pub fn make_folder(&self, path: String) -> Result<(), QurbError> {
-        changed(self.runtime.block_on(self.client.shared_mkdir(&path)))
+        let path = &path;
+        changed(self.run(|c| async move { c.shared_mkdir(path).await }))
     }
 
     /// Rename or move a file or folder of the computer's shared folder.
     pub fn rename(&self, from: String, to: String) -> Result<(), QurbError> {
-        changed(self.runtime.block_on(self.client.shared_move(&from, &to)))
+        let (from, to) = (&from, &to);
+        changed(self.run(|c| async move { c.shared_move(from, to).await }))
     }
 
     /// Copy a file or folder of the computer's shared folder to `to`, done
     /// there, nothing sent over the connection. Returns where it went,
     /// numbered when the name was taken.
     pub fn copy(&self, from: String, to: String) -> Result<String, QurbError> {
-        let placed = self
-            .runtime
-            .block_on(self.client.shared_copy(&from, &to))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let (from, to) = (&from, &to);
+        let placed = self.run(|c| async move { c.shared_copy(from, to).await })?;
         placed.map_err(|why| QurbError::Refused { detail: why })
     }
 
     /// Delete a file or folder of the computer's shared folder, into its
     /// Recently deleted for 30 days.
     pub fn delete(&self, path: String) -> Result<(), QurbError> {
-        changed(self.runtime.block_on(self.client.shared_delete(&path)))
+        let path = &path;
+        changed(self.run(|c| async move { c.shared_delete(path).await }))
     }
 
     /// Add the file at `source`, an absolute path on this phone, to the
@@ -4413,10 +4475,8 @@ impl KeptFolder {
     /// in place. `progress` hears the bytes sent after each piece. Returns
     /// where it was put: numbered when the name was taken.
     pub fn add_file(&self, source: String, to: String, progress: Arc<dyn Progress>) -> Result<String, QurbError> {
-        let placed = self
-            .runtime
-            .block_on(self.client.shared_upload(std::path::Path::new(&source), &to, |sent| progress.sent(sent)))
-            .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+        let (source, to, progress) = (std::path::Path::new(&source), &to, &progress);
+        let placed = self.run(|c| async move { c.shared_upload(source, to, |sent| progress.sent(sent)).await })?;
         placed.map_err(|why| QurbError::Refused { detail: why })
     }
 
@@ -4433,9 +4493,18 @@ impl KeptFolder {
         let fetched = (|| {
             let mut out = std::fs::File::create(&partial).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
             let reader = self.reader.lock().map_err(|_| QurbError::Other { detail: "the folder is closed".into() })?;
-            self.runtime
-                .block_on(self.client.fetch_content_into(&reader, content, &mut out))
-                .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+            let client = self.client()?;
+            let fetched = self.runtime.block_on(client.fetch_content_into(&reader, content.clone(), &mut out));
+            if fetched.is_err() && client.is_closed() {
+                // The connection went part of the way: once more, from the start.
+                out = std::fs::File::create(&partial).map_err(|e| QurbError::Storage { detail: e.to_string() })?;
+                let client = self.client()?;
+                self.runtime
+                    .block_on(client.fetch_content_into(&reader, content, &mut out))
+                    .map_err(|e| QurbError::Network { detail: e.to_string() })?;
+            } else {
+                fetched.map_err(|e| QurbError::Network { detail: e.to_string() })?;
+            }
             out.sync_all().map_err(|e| QurbError::Storage { detail: e.to_string() })?;
             std::fs::rename(&partial, &to).map_err(|e| QurbError::Storage { detail: e.to_string() })
         })();
@@ -4456,7 +4525,7 @@ impl KeptFolder {
         let content = unhex(&file.content).ok_or_else(|| QurbError::Other { detail: "not a file of the folder".into() })?;
         let ranged = self
             .runtime
-            .block_on(qurb_peer::Ranged::open(self.client.clone(), content))
+            .block_on(qurb_peer::Ranged::open(self.client()?, content))
             .map_err(|e| QurbError::Network { detail: e.to_string() })?
             .ok_or_else(|| QurbError::NotFound { detail: format!("{} no longer keeps {}", self.name, file.name) })?;
         Ok(Arc::new(KeptStream { runtime: Arc::clone(&self.runtime), ranged }))
@@ -4465,14 +4534,45 @@ impl KeptFolder {
     /// Stop: the connection closes, and nothing more is answered. Not
     /// `close`, which every generated object already has.
     pub fn disconnect(&self) {
-        self.client.close();
-        for task in &self.accepting {
-            task.abort();
+        if let Ok(link) = self.link.lock() {
+            link.close();
         }
     }
 }
 
 impl KeptFolder {
+    /// The connection, dialled again first if the network changed or it
+    /// dropped. One dial at a time: a second caller waits for the first's.
+    fn client(&self) -> Result<qurb_peer::PeerClient, QurbError> {
+        let mut link = self.link.lock().map_err(|_| QurbError::Other { detail: "the folder is closed".into() })?;
+        if link.stale() {
+            tracing::info!(computer = %self.name, "dialling again: the network changed or the connection went");
+            let fresh = self.dial.connect()?;
+            link.close();
+            *link = fresh;
+        }
+        Ok(link.client.clone())
+    }
+
+    /// `op` over the connection; and once more on a fresh one if the
+    /// connection went while it was asked, which is what moving between
+    /// networks mid-request does.
+    fn run<T, F, Fut>(&self, op: F) -> Result<T, QurbError>
+    where
+        F: Fn(qurb_peer::PeerClient) -> Fut,
+        Fut: std::future::Future<Output = qurb_peer::Result<T>>,
+    {
+        let client = self.client()?;
+        match self.runtime.block_on(op(client.clone())) {
+            Ok(answer) => Ok(answer),
+            Err(_) if client.is_closed() => {
+                let client = self.client()?;
+                self.runtime.block_on(op(client)).map_err(|e| QurbError::Network { detail: e.to_string() })
+            }
+            Err(e) => Err(QurbError::Network { detail: e.to_string() }),
+        }
+    }
+
     fn files(&self, files: Vec<qurb_peer::wire::KeptEntry>) -> Vec<KeptFile> {
         files
             .into_iter()
@@ -4490,10 +4590,8 @@ impl KeptFolder {
 
 /// A change asked of a computer's shared folder: made, or refused with its
 /// reason for the person.
-fn changed(answer: qurb_peer::Result<std::result::Result<(), String>>) -> Result<(), QurbError> {
-    answer
-        .map_err(|e| QurbError::Network { detail: e.to_string() })?
-        .map_err(|why| QurbError::Refused { detail: why })
+fn changed(answer: Result<std::result::Result<(), String>, QurbError>) -> Result<(), QurbError> {
+    answer?.map_err(|why| QurbError::Refused { detail: why })
 }
 
 /// Told how far a file being added to a computer has gone, in bytes

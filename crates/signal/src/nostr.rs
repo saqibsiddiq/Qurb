@@ -205,26 +205,15 @@ pub(crate) async fn open(
 ) -> Result<(mpsc::UnboundedSender<FromClient>, mpsc::UnboundedReceiver<FromServer>, Vec<tokio::task::JoinHandle<()>>)> {
     let relays = relays_of(url);
     let keys = std::sync::Arc::new(Keys::of(&group));
-    let topics = keys.topics_now();
-    let (post, _) = broadcast::channel::<String>(64);
-    let (heard_tx, mut heard) = mpsc::unbounded_channel::<String>();
-    let (ready_tx, mut ready) = mpsc::unbounded_channel::<()>();
-
-    let mut tasks = Vec::new();
-    for relay in relays {
-        tasks.push(tokio::spawn(stay_on(relay, topics.clone(), post.subscribe(), heard_tx.clone(), ready_tx.clone())));
-    }
-    drop(ready_tx);
+    let pool = Pool::get(relays, keys.topics_now());
+    let mut heard = pool.heard.subscribe();
+    let post = pool.post.clone();
 
     // At least one relay listening, or this carrier is no use now.
-    match tokio::time::timeout(RELAY_OPEN, ready.recv()).await {
-        Ok(Some(())) => {}
-        _ => {
-            for task in &tasks {
-                task.abort();
-            }
-            return Err(Error::NoAnswer(RELAY_OPEN));
-        }
+    let mut listening = pool.listening.subscribe();
+    match tokio::time::timeout(RELAY_OPEN, listening.wait_for(|n| *n > 0)).await {
+        Ok(Ok(_)) => {}
+        _ => return Err(Error::NoAnswer(RELAY_OPEN)),
     }
 
     let (outgoing, mut to_send) = mpsc::unbounded_channel::<FromClient>();
@@ -235,6 +224,8 @@ pub(crate) async fn open(
     let _ = received.send(FromServer::Peers { members: Vec::new() });
 
     let core = tokio::spawn(async move {
+        // The relays stay open while a session uses them.
+        let _pool = pool;
         let mut here = endpoints;
         // Where a device that asked for us is: told back to us when we agree.
         let mut asked: HashMap<MemberId, Endpoints> = HashMap::new();
@@ -268,7 +259,11 @@ pub(crate) async fn open(
                     None => return,
                 },
                 content = heard.recv() => {
-                    let Some(content) = content else { return };
+                    let content = match content {
+                        Ok(content) => content,
+                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(broadcast::error::RecvError::Closed) => return,
+                    };
                     let Some(said) = keys.open(&content) else { continue };
                     if said.from == member || now().saturating_sub(said.at) > FRESH_FOR || told.contains(&said.n) {
                         continue;
@@ -300,8 +295,55 @@ pub(crate) async fn open(
             }
         }
     });
-    tasks.push(core);
-    Ok((outgoing, incoming, tasks))
+    Ok((outgoing, incoming, vec![core]))
+}
+
+/// One set of relay connections for every session of this process: on the
+/// S23 on 2026-11-02 each connection the phone made held six of its own, 85
+/// opened in a few minutes. Kept while any session holds it; its relays
+/// closed when the last lets go. One per set of relays and day's topics.
+struct Pool {
+    post: broadcast::Sender<String>,
+    heard: broadcast::Sender<String>,
+    /// How many of its relays are listening now.
+    listening: tokio::sync::watch::Sender<usize>,
+    relays: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl Pool {
+    fn get(relays: Vec<String>, topics: Vec<String>) -> std::sync::Arc<Pool> {
+        static POOLS: std::sync::Mutex<Vec<(Vec<String>, Vec<String>, std::sync::Weak<Pool>)>> =
+            std::sync::Mutex::new(Vec::new());
+        let mut pools = POOLS.lock().unwrap_or_else(|e| e.into_inner());
+        pools.retain(|(_, _, pool)| pool.strong_count() > 0);
+        let found = pools
+            .iter()
+            .filter(|(r, t, _)| *r == relays && *t == topics)
+            .filter_map(|(_, _, pool)| pool.upgrade())
+            // Its relays ended with the runtime that ran them: not to be shared.
+            .find(|pool| pool.relays.iter().any(|relay| !relay.is_finished()));
+        if let Some(pool) = found {
+            return pool;
+        }
+        let (post, _) = broadcast::channel(64);
+        let (heard, _) = broadcast::channel(256);
+        let listening = tokio::sync::watch::Sender::new(0);
+        let tasks = relays
+            .iter()
+            .map(|relay| tokio::spawn(stay_on(relay.clone(), topics.clone(), post.subscribe(), heard.clone(), listening.clone())))
+            .collect();
+        let pool = std::sync::Arc::new(Pool { post, heard, listening, relays: tasks });
+        pools.push((relays, topics, std::sync::Arc::downgrade(&pool)));
+        pool
+    }
+}
+
+impl Drop for Pool {
+    fn drop(&mut self) {
+        for relay in &self.relays {
+            relay.abort();
+        }
+    }
 }
 
 /// One relay, kept: connected, subscribed to the group's topics, posting what
@@ -317,8 +359,8 @@ async fn stay_on(
     relay: String,
     topics: Vec<String>,
     mut post: broadcast::Receiver<String>,
-    heard: mpsc::UnboundedSender<String>,
-    ready: mpsc::UnboundedSender<()>,
+    heard: broadcast::Sender<String>,
+    listening: tokio::sync::watch::Sender<usize>,
 ) {
     let mut wait = Duration::from_secs(2);
     loop {
@@ -335,7 +377,7 @@ async fn stay_on(
         if sink.send(Message::Text(request.into())).await.is_err() {
             continue;
         }
-        let _ = ready.send(());
+        listening.send_modify(|n| *n += 1);
         wait = Duration::from_secs(2);
         tracing::debug!(%relay, "listening on a nostr relay");
         let mut beat = tokio::time::interval(BEAT);
@@ -359,7 +401,10 @@ async fn stay_on(
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                    Err(broadcast::error::RecvError::Closed) => return,
+                    Err(broadcast::error::RecvError::Closed) => {
+                        listening.send_modify(|n| *n = n.saturating_sub(1));
+                        return;
+                    }
                 },
                 incoming = source.next() => {
                     let Some(Ok(message)) = incoming else { break };
@@ -370,9 +415,8 @@ async fn stay_on(
                             if let Ok(serde_json::Value::Array(parts)) = serde_json::from_str::<serde_json::Value>(&text) {
                                 if parts.first().and_then(|p| p.as_str()) == Some("EVENT") {
                                     if let Some(content) = parts.get(2).and_then(|e| e.get("content")).and_then(|c| c.as_str()) {
-                                        if heard.send(content.to_string()).is_err() {
-                                            return;
-                                        }
+                                        // None listening is no reason to stop.
+                                        let _ = heard.send(content.to_string());
                                     }
                                 }
                             }
@@ -385,6 +429,7 @@ async fn stay_on(
                 }
             }
         }
+        listening.send_modify(|n| *n = n.saturating_sub(1));
         tracing::debug!(%relay, "a nostr relay went; trying again");
         tokio::time::sleep(wait).await;
     }

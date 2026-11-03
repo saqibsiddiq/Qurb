@@ -3275,10 +3275,14 @@ about 19 s**, the laptop announcing its onion alone. A laptop woken from sleep
 had sat deaf on dead relay connections; relays are now pinged every 20 s and
 redialled after 45 s of silence.
 
+On 2026-11-03: the phone's connections share one set of relay connections;
+Tor builds nothing ahead and sleeps when unused; and a computer's folder
+dials again by itself after a change of network, where the owner had had to
+leave and reopen it. APK 20.70 MB.
+
 **Not yet done:** Tor's throughput and its cost in data and battery on the
-phone; sharing one set of relay connections between the phone's connections
-(each now opens its own six); the 24-hour relay test, with a gap while the
-laptop slept, which is to choose the built-in relay list.
+phone; the 24-hour relay test, with a gap while the laptop slept, which is to
+choose the built-in relay list.
 
 ## Deliberately left undone
 
