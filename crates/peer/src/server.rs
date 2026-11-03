@@ -157,7 +157,7 @@ impl PeerServer {
     /// deliberate act a person performs, and something to revisit when devices
     /// come and go on their own.
     pub fn bind_trusting(addr: SocketAddr, identity: &Identity, store: &Store) -> Result<Self> {
-        let allowed = trusted_fingerprints(store)?;
+        let allowed = accepted_fingerprints(store)?;
         if allowed.is_empty() {
             tracing::warn!("no paired devices; this listener will refuse everyone");
         }
@@ -227,6 +227,20 @@ pub fn trusted_fingerprints(store: &Store) -> Result<Vec<Fingerprint>> {
         .into_iter()
         .map(|peer| Fingerprint::from_bytes(peer.fingerprint))
         .collect())
+}
+
+/// The devices a listener lets connect: the trusted, and the ones this device
+/// removed, let through only to be answered [`Response::Removed`] to whatever
+/// they ask -- how the removed side learns it, rather than trying forever.
+/// Dialled, synced with or shown anything, they are not.
+pub fn accepted_fingerprints(store: &Store) -> Result<Vec<Fingerprint>> {
+    let mut accepted = trusted_fingerprints(store)?;
+    for removed in store.db().removed_devices()? {
+        if !removed.by_them {
+            accepted.push(Fingerprint::from_bytes(removed.fingerprint));
+        }
+    }
+    Ok(accepted)
 }
 
 /// Serve one connection, for tests that build their own endpoint.
@@ -437,7 +451,8 @@ async fn serve_request(
         | Response::Digest(_)
         | Response::TreeDelta { .. }
         | Response::Refused { .. }
-        | Response::Placed { .. } => 0,
+        | Response::Placed { .. }
+        | Response::Removed => 0,
     };
 
     // A chunk's bytes, held to this device's upload rate.
@@ -576,6 +591,14 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
     let known = asker.and_then(|fingerprint| {
         store.db().peer_by_fingerprint(fingerprint.as_bytes()).ok().flatten()
     });
+    // A device removed here: told so, whatever it asks.
+    if known.is_none() {
+        if let Some(asker) = asker {
+            if store.db().removed_by_fingerprint(asker.as_bytes())?.is_some() {
+                return Ok(Answer::Now(Response::Removed));
+            }
+        }
+    }
     let owner = known.as_ref().map(|peer| peer.device_id);
     // Another person's device -- a guest of this computer, or a computer this
     // device visits -- is shown only what was sent to it, decided here on
@@ -993,6 +1016,19 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
             Response::Noted
         }
 
+        // The asker removed this device: forgotten here, and remembered as
+        // having done it, for the interface to say.
+        Request::Goodbye => {
+            let Some(asker) = asker else { return Ok(Answer::Now(Response::NotFound)) };
+            let db = store.db();
+            if let Some(them) = db.peer_by_fingerprint(asker.as_bytes())? {
+                tracing::info!(peer = %asker.short(), name = %them.name, "removed by the other device");
+                db.remember_removed(&them.device_id, &them.fingerprint, &them.name, them.relation, true)?;
+                db.forget_peer(&them.device_id)?;
+            }
+            Response::Noted
+        }
+
         // One of this person's own devices becoming its permanent identity
         // (decision 0079): its fingerprint turned to that one's, keeping its
         // device id -- or, set up again and that identity already known
@@ -1015,10 +1051,28 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
                     Response::Became { device_id: *known.device_id.as_bytes() }
                 }
                 Some(_) => Response::Refused { why: "that identity is another person's device".into() },
-                None => {
-                    db.set_peer_fingerprint(&me.device_id, &permanent)?;
-                    Response::Became { device_id: *me.device_id.as_bytes() }
-                }
+                None => match db.removed_by_fingerprint(&permanent)? {
+                    // Removed here once and added again, set up again since:
+                    // the device it was, trusted again under its old id, so
+                    // that its files here are its own again.
+                    Some(was) if was.relation == qurb_storage::db::Relation::Own && was.device_id != me.device_id => {
+                        db.trust_peer(&was.device_id, &permanent, &was.name)?;
+                        if let Some(kind) = db.peer_kind(&me.device_id)? {
+                            db.set_peer_kind(&was.device_id, &kind)?;
+                        }
+                        db.set_same_device(&me.device_id, qurb_storage::db::Same::Is(was.device_id))?;
+                        Response::Became { device_id: *was.device_id.as_bytes() }
+                    }
+                    Some(was) if was.relation != qurb_storage::db::Relation::Own => {
+                        Response::Refused { why: "that identity is another person's device".into() }
+                    }
+                    // New, or removed and added again as the same install.
+                    _ => {
+                        db.set_peer_fingerprint(&me.device_id, &permanent)?;
+                        db.clear_removed(&me.device_id)?;
+                        Response::Became { device_id: *me.device_id.as_bytes() }
+                    }
+                },
             }
         }
 

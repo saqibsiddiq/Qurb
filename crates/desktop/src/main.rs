@@ -169,6 +169,8 @@ fn run() -> Result<()> {
             commands::restore_deleted,
             commands::forget_deleted,
             commands::remove_device,
+            commands::removed_devices,
+            commands::delete_removed,
             commands::open_downloads,
             commands::show_received,
             commands::start_pairing,

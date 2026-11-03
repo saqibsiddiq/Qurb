@@ -243,6 +243,10 @@ pub enum Request {
     /// Its Recently deleted emptied for good, asked from the owner's phone:
     /// answered [`Response::Noted`].
     EmptyDeleted,
+    /// The asker removed this device, said as it does so: best effort, so
+    /// that this device hears now rather than at its next request, which is
+    /// answered [`Response::Removed`] anyway. Answered [`Response::Noted`].
+    Goodbye,
     /// An Office document turned into a PDF by the computer, to be shown on
     /// the phone: answered [`Response::Converted`], or [`Response::NotFound`]
     /// where it may not be read, is not Office, or nothing here converts it.
@@ -402,6 +406,10 @@ pub enum Response {
 
     /// An added file, put in the shared folder at `path`.
     Placed { path: String },
+
+    /// The asker was removed here: every request it makes gets this one
+    /// answer, so the removed side learns it rather than retrying forever.
+    Removed,
 }
 
 const TAG_TREE: u8 = 1;
@@ -440,6 +448,7 @@ const TAG_SHARED_COPY: u8 = 33;
 const TAG_STORAGE: u8 = 34;
 const TAG_EMPTY_DELETED: u8 = 35;
 const TAG_CONVERT: u8 = 36;
+const TAG_GOODBYE: u8 = 37;
 
 /// The most of a file one [`Request::Upload`] carries: a few chunks' worth,
 /// small enough that a slow link sends one in seconds.
@@ -495,6 +504,7 @@ const STATUS_BECAME: u8 = 28;
 const STATUS_PLACES: u8 = 29;
 const STATUS_STORAGE: u8 = 30;
 const STATUS_CONVERTED: u8 = 31;
+const STATUS_REMOVED: u8 = 32;
 
 /// One place at the top of a computer's folder, as it is to the asker.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -659,6 +669,7 @@ impl Request {
             Request::Places => out.push(TAG_PLACES),
             Request::Storage => out.push(TAG_STORAGE),
             Request::EmptyDeleted => out.push(TAG_EMPTY_DELETED),
+            Request::Goodbye => out.push(TAG_GOODBYE),
             Request::Convert { content, name } => {
                 out.push(TAG_CONVERT);
                 out.extend_from_slice(content);
@@ -760,6 +771,7 @@ impl Request {
             TAG_PLACES => Request::Places,
             TAG_STORAGE => Request::Storage,
             TAG_EMPTY_DELETED => Request::EmptyDeleted,
+            TAG_GOODBYE => Request::Goodbye,
             TAG_CONVERT => Request::Convert { content: r.hash()?, name: r.name()? },
             TAG_BECOME => {
                 let len = r.count()?;
@@ -972,6 +984,7 @@ impl Response {
                 out.push(STATUS_PLACED);
                 put_path(&mut out, path);
             }
+            Response::Removed => out.push(STATUS_REMOVED),
             Response::Asks { opening } => {
                 out.push(STATUS_ASKS);
                 match opening {
@@ -1082,6 +1095,7 @@ impl Response {
             }
             STATUS_REFUSED => Response::Refused { why: r.path()? },
             STATUS_PLACED => Response::Placed { path: r.path()? },
+            STATUS_REMOVED => Response::Removed,
             STATUS_ASKS => Response::Asks {
                 opening: match r.u8()? {
                     0 => None,
@@ -1571,6 +1585,7 @@ mod tests {
             Request::Places,
             Request::Storage,
             Request::EmptyDeleted,
+            Request::Goodbye,
             Request::Convert { content: [7; 32], name: "lease.docx".into() },
             Request::Become { cert: vec![0x30, 0x82, 1, 2] },
         ] {
@@ -1599,6 +1614,7 @@ mod tests {
             Response::Places { places: vec![("Shared".into(), Place::Shared), ("skib phone".into(), Place::Mine), ("Ammi's phone".into(), Place::Locked)] },
             Response::Refused { why: "something is already called Notes".into() },
             Response::Placed { path: "Photos/beach (2).jpg".into() },
+            Response::Removed,
             Response::Mismatch,
             Response::Declined,
             Response::Paired { device_id: [1; 32], name: "Phone".into(), kind: "phone".into(), key_check: [2; 32] },

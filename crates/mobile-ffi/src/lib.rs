@@ -183,6 +183,17 @@ impl From<qurb_storage::db::FolderEntry> for FileEntry {
     }
 }
 
+/// A device removed: by this phone, or this phone by it -- which the phone
+/// shows as "saqib removed this phone", with Add it again.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct RemovedDevice {
+    pub name: String,
+    /// It removed this phone, rather than this phone it.
+    pub by_them: bool,
+    /// Unix seconds.
+    pub removed_at: i64,
+}
+
 /// One directory of the folder, as a file browser shows it.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct Directory {
@@ -1926,6 +1937,18 @@ impl Qurb {
         }))
     }
 
+    /// Devices removed, newest first (`RemovedDevice`).
+    pub fn removed_devices(&self) -> Result<Vec<RemovedDevice>, QurbError> {
+        Ok(self
+            .look()?
+            .store()
+            .db()
+            .removed_devices()?
+            .into_iter()
+            .map(|r| RemovedDevice { name: r.name, by_them: r.by_them, removed_at: r.removed_at })
+            .collect())
+    }
+
     pub fn holders(&self) -> Result<Vec<PeerInfo>, QurbError> {
         let holders = self.look()?.store().db().holders()?;
         Ok(self
@@ -2150,6 +2173,12 @@ impl Qurb {
             .find(|p| p.fingerprint == fingerprint)
             .map(|p| p.name)
             .unwrap_or_default();
+        // Told, best effort, on a connection already open to it: a computer
+        // otherwise hears at its next request of this phone.
+        let open = self.kept_open.lock().expect("kept_open poisoned").remove(&fingerprint);
+        if let Some(folder) = open {
+            folder.goodbye();
+        }
         self.engine()?.store_mut().remove_device(&device, &name, delete_kept)?;
         Ok(())
     }
@@ -3029,7 +3058,12 @@ impl Qurb {
         // device unreachable, not a pass with work left over. See
         // `SyncOutcome::timed_out` for why the difference matters.
         // For the handshake and, again, for every request served this pass.
-        let trust = qurb_peer::tls::TrustList::new(peers.clone());
+        // Devices this phone removed are let in too, to be told so.
+        let accepted = {
+            let engine = self.engine()?;
+            qurb_peer::accepted_fingerprints(engine.store()).unwrap_or_else(|_| peers.clone())
+        };
+        let trust = qurb_peer::tls::TrustList::new(accepted);
         let started_connector = runtime.block_on(async {
             tokio::time::timeout(
                 budget,
@@ -3422,6 +3456,21 @@ impl Qurb {
     }
 
     /// Sync against a peer already reached. `Ok(None)` means the time ran out.
+    /// The device at `peer` removed this one, and said so: forgotten here,
+    /// and remembered as having done it -- what the phone shows ("removed
+    /// this phone", with Add it again) until the two are paired again.
+    fn removed_by(&self, peer: &qurb_peer::Fingerprint) -> Result<(), QurbError> {
+        let engine = self.engine()?;
+        let db = engine.store().db();
+        let storage = |e: qurb_storage::Error| QurbError::Storage { detail: e.to_string() };
+        if let Some(known) = db.peer_by_fingerprint(peer.as_bytes()).map_err(storage)? {
+            tracing::info!(peer = %peer.short(), name = %known.name, "removed by the other device");
+            db.remember_removed(&known.device_id, &known.fingerprint, &known.name, known.relation, true).map_err(storage)?;
+            db.forget_peer(&known.device_id).map_err(storage)?;
+        }
+        Ok(())
+    }
+
     fn sync_reached(
         &self,
         runtime: &tokio::runtime::Runtime,
@@ -3443,6 +3492,10 @@ impl Qurb {
             .block_on(async { tokio::time::timeout(budget, client.tree_kept(&peer, &trees)).await })
         {
             Ok(Ok(tree)) => tree,
+            Ok(Err(qurb_peer::Error::Removed)) => {
+                self.removed_by(&peer)?;
+                return Err(QurbError::Network { detail: qurb_peer::Error::Removed.to_string() });
+            }
             Ok(Err(e)) => return Err(QurbError::Network { detail: e.to_string() }),
             Err(_) => return Ok(None),
         };
@@ -4548,6 +4601,19 @@ impl KeptFolder {
 }
 
 impl KeptFolder {
+    /// Tell the computer this phone removed it, on the connection as it is --
+    /// never dialled again for this -- and close it.
+    fn goodbye(&self) {
+        let Ok(link) = self.link.lock() else { return };
+        if !link.stale() {
+            let client = link.client.clone();
+            let _ = self.runtime.block_on(async {
+                tokio::time::timeout(std::time::Duration::from_secs(3), client.goodbye()).await
+            });
+        }
+        link.close();
+    }
+
     /// The connection, dialled again first if the network changed or it
     /// dropped. One dial at a time: a second caller waits for the first's.
     fn client(&self) -> Result<qurb_peer::PeerClient, QurbError> {

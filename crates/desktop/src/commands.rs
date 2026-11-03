@@ -701,6 +701,10 @@ pub struct PairingState {
     guest: bool,
     /// The six digits were tried wrongly too often and no longer work.
     digits_withdrawn: bool,
+    /// While "asking": a device removed here coming back, as the same
+    /// install -- what is kept here for it, in bytes, its again once
+    /// approved (D23). A phone set up again since is known only after.
+    back: Option<String>,
 }
 
 impl PairingState {
@@ -715,6 +719,7 @@ impl PairingState {
             wants_key: false,
             guest: false,
             digits_withdrawn: false,
+            back: None,
         }
     }
 }
@@ -948,7 +953,17 @@ pub fn pairing_state(hosted: Host<'_>) -> Answer<PairingState> {
             digits_withdrawn: !attempt.digits_work.load(std::sync::atomic::Ordering::SeqCst),
             ..PairingState::of("waiting")
         },
-        Pairing::Asking { name, kind, number, wants_key, guest } => PairingState {
+        Pairing::Asking { name, kind, number, wants_key, guest, fingerprint } => PairingState {
+            back: hosted
+                .with_store(|s| {
+                    let db = s.db();
+                    Ok(match db.removed_by_fingerprint(&fingerprint)? {
+                        Some(was) => Some(big(db.stored_for(&[was.device_id], &[])?)),
+                        None => None,
+                    })
+                })
+                .ok()
+                .flatten(),
             name: Some(name),
             number: Some(number),
             kind,
@@ -1120,6 +1135,17 @@ pub struct StorageParts {
     /// Recently deleted, kept thirty days.
     deleted_files: usize,
     deleted: String,
+    /// Devices removed here whose files are kept, locked (D21).
+    removed: Vec<RemovedPart>,
+}
+
+/// A device removed here, and what is kept for it.
+#[derive(Serialize)]
+pub struct RemovedPart {
+    id: String,
+    name: String,
+    files: u64,
+    size: String,
 }
 
 /// One of the owner's phones, and what is kept here for it.
@@ -1183,7 +1209,80 @@ pub fn storage_parts(hosted: Host<'_>) -> Answer<StorageParts> {
         shared_here: big(numbers.files),
         deleted_files: deleted.len(),
         deleted: big(deleted.iter().map(|d| d.size).sum()),
+        removed: removed_parts(&hosted)?,
     })
+}
+
+fn removed_parts(hosted: &Host<'_>) -> Answer<Vec<RemovedPart>> {
+    hosted
+        .with_store(|s| {
+            let db = s.db();
+            let mut parts = Vec::new();
+            for was in db.removed_devices()?.into_iter().filter(|r| !r.by_them) {
+                let (files, _) = db.held_for(&was.device_id)?;
+                if files == 0 {
+                    continue;
+                }
+                parts.push(RemovedPart {
+                    id: was.device_id.to_hex(),
+                    name: was.name,
+                    files,
+                    size: big(db.stored_for(&[was.device_id], &[])?),
+                });
+            }
+            Ok(parts)
+        })
+        .map_err(failed)
+}
+
+/// Devices removed here, and devices that removed this computer: what Home
+/// says when no device is left (D22), and on whose side it happened.
+#[derive(Serialize)]
+pub struct RemovedDevice {
+    id: String,
+    name: String,
+    /// The other device removed this one, rather than this one it.
+    by_them: bool,
+    /// Unix seconds.
+    removed_at: i64,
+    /// What is kept here for it, in bytes.
+    size: String,
+}
+
+#[tauri::command(async)]
+pub fn removed_devices(hosted: Host<'_>) -> Answer<Vec<RemovedDevice>> {
+    hosted
+        .with_store(|s| {
+            let db = s.db();
+            let mut out = Vec::new();
+            for was in db.removed_devices()? {
+                out.push(RemovedDevice {
+                    id: was.device_id.to_hex(),
+                    size: big(if was.by_them { 0 } else { db.stored_for(&[was.device_id], &[])? }),
+                    name: was.name,
+                    by_them: was.by_them,
+                    removed_at: was.removed_at,
+                })
+            }
+            Ok(out)
+        })
+        .map_err(failed)
+}
+
+/// What is kept here for a removed device, deleted: to Recently deleted,
+/// like any deletion here. It is still known if it comes back -- with
+/// nothing kept for it.
+#[tauri::command(async)]
+pub fn delete_removed(hosted: Host<'_>, id: String) -> Answer<usize> {
+    let device = qurb_sync::DeviceId::from_hex(&id).ok_or_else(|| "no such device".to_string())?;
+    hosted
+        .with_store_mut(|s| {
+            if !s.db().removed_devices()?.iter().any(|r| r.device_id == device && !r.by_them) {
+                return Ok(0);
+            }
+            Ok(s.delete_kept_for(&device)?)
+        })
+        .map_err(failed)
 }
 
 /// One file as the file browser draws it (docs/design/brief.md §3).

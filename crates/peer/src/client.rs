@@ -170,8 +170,10 @@ impl PeerClient {
         match self.request(Request::TreeDigest).await {
             Ok(Response::Digest(digest)) => Ok(Some(digest)),
             Ok(_) => Ok(None),
-            // The connection itself gone is not an old device.
+            // The connection itself gone is not an old device, nor is one
+            // that removed this one.
             Err(Error::Connection(e)) => Err(Error::Connection(e)),
+            Err(Error::Removed) => Err(Error::Removed),
             Err(e) => {
                 tracing::debug!(error = %e, "no fingerprint of the file list; it will be fetched");
                 Ok(None)
@@ -722,6 +724,11 @@ impl PeerClient {
         Ok(fetched)
     }
 
+    /// Tell the other device this one removed it ([`Request::Goodbye`]).
+    pub async fn goodbye(&self) -> Result<()> {
+        self.request(Request::Goodbye).await.map(|_| ())
+    }
+
     pub(crate) async fn request(&self, request: Request) -> Result<Response> {
         let (mut send, mut recv) = self.connection.open_bi().await?;
         send.write_all(&request.encode()).await?;
@@ -729,7 +736,10 @@ impl PeerClient {
         // there is no length prefix because the stream itself is the frame.
         send.finish()?;
         let raw = recv.read_to_end(MAX_MESSAGE).await?;
-        Response::decode(&raw)
+        match Response::decode(&raw)? {
+            Response::Removed => Err(Error::Removed),
+            response => Ok(response),
+        }
     }
 
     pub fn close(&self) {
@@ -774,6 +784,7 @@ fn unexpected(wanted: &str, got: &Response) -> Error {
         Response::Converted(_) => "converted",
         Response::Refused { .. } => "refusal of a change",
         Response::Placed { .. } => "place of an added file",
+        Response::Removed => "removal",
         Response::Mismatch => "key mismatch",
         Response::Declined => "refusal",
         Response::Changed { .. } => "change notification",

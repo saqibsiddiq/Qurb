@@ -46,6 +46,10 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(120);
 /// waits for this. It was five seconds, and each check opens the index: an
 /// idle daemon woke 2.7 times a second with it, and 1.1 times after this
 /// change (experiments/service-capacity, `idle-daemon.sh`).
+/// How long a removed device is given to hear it was removed, on a connection
+/// already open, before that connection closes.
+const GOODBYE_WAIT: Duration = Duration::from_secs(3);
+
 const TRUST_INTERVAL: Duration = Duration::from_secs(30);
 
 /// How often to notice that a connected device went away, while any is
@@ -439,7 +443,7 @@ impl Daemon {
         // refuses a device paired a minute later -- and "pair once" then means
         // "pair once, then restart the daemon", which is not what anyone reads
         // it as. Refreshed on every sweep below.
-        let trust = qurb_peer::tls::TrustList::new(qurb_peer::trusted_fingerprints(
+        let trust = qurb_peer::tls::TrustList::new(qurb_peer::accepted_fingerprints(
             engine.store(),
         )?);
         // A device paired by another process is accepted on its first
@@ -448,7 +452,7 @@ impl Daemon {
             let (store_dir, chunk_key) = (self.store_dir.clone(), self.chunk_key());
             trust.reread_with(Arc::new(move || {
                 let store = Store::open(&store_dir, chunk_key.clone()).ok()?;
-                qurb_peer::trusted_fingerprints(&store).ok()
+                qurb_peer::accepted_fingerprints(&store).ok()
             }));
         }
         let trusted: Vec<Fingerprint> = qurb_peer::trusted_fingerprints(engine.store())?;
@@ -874,6 +878,12 @@ impl Daemon {
                     tracing::info!(peer = %peer.short(), "a device was removed");
                 }
             }
+            // Told it was removed, best effort, before its connection closes.
+            for peer in &removed {
+                if store.db().removed_by_fingerprint(peer.as_bytes()).ok().flatten().is_some() {
+                    peers.goodbye(*peer);
+                }
+            }
             peers.learn(&current);
             self.report(|status| {
                 status.peers = current.len();
@@ -882,8 +892,9 @@ impl Daemon {
         }
         // Replaced every time, not only when something was added: a device
         // forgotten in the trust store must stop being accepted here too.
+        // Removed devices are let in to be told so (`accepted_fingerprints`).
         let gained = !added.is_empty();
-        trust.replace(current);
+        trust.replace(qurb_peer::accepted_fingerprints(&store).unwrap_or(current));
         gained
     }
 
@@ -1124,6 +1135,19 @@ impl Daemon {
         let trees = qurb_peer::trees::Trees::at(self.store_dir.join("trees"));
         let tree = match client.tree_kept(&peer, &trees).await {
             Ok(tree) => tree,
+            // It removed this device, and said so: forgotten here, and
+            // remembered as having done it, for the interface to say. The
+            // next look at the trust store stops dialling it.
+            Err(qurb_peer::Error::Removed) => {
+                peers.disconnected(peer);
+                let db = engine.store().db();
+                if let Some(known) = db.peer_by_fingerprint(peer.as_bytes())? {
+                    tracing::info!(peer = %peer.short(), name = %known.name, "removed by the other device");
+                    db.remember_removed(&known.device_id, &known.fingerprint, &known.name, known.relation, true)?;
+                    db.forget_peer(&known.device_id)?;
+                }
+                return Err(qurb_peer::Error::Removed.into());
+            }
             Err(e) => {
                 // The connection has gone. Drop it so the next attempt makes a
                 // fresh one rather than retrying down a dead pipe for ever.
@@ -1472,6 +1496,18 @@ impl Peers {
     /// Connections to peers no longer trusted are dropped rather than left
     /// open: forgetting a device should stop it syncing now, not at whatever
     /// point the connection happens to fail.
+    /// Tell a device this one removed it, on its connection if one is open,
+    /// then close that: taken from the list first, so that `learn` does not
+    /// close it before it is said.
+    fn goodbye(&mut self, peer: Fingerprint) {
+        if let Some(client) = self.connections.remove(&peer) {
+            tokio::spawn(async move {
+                let _ = tokio::time::timeout(GOODBYE_WAIT, client.goodbye()).await;
+                client.disconnect("removed");
+            });
+        }
+    }
+
     fn learn(&mut self, current: &[Fingerprint]) {
         self.known = current.to_vec();
         // Closed, not only dropped: the peer's watcher holds a reference of its

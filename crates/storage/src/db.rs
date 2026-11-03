@@ -30,7 +30,7 @@ use std::path::Path;
 pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
 
 const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27, V28, V29, V30, V31];
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23, V24, V25, V26, V27, V28, V29, V30, V31, V32];
 
 const V1: &str = r#"
 CREATE TABLE IF NOT EXISTS chunks (
@@ -683,6 +683,22 @@ END;
 
 /// Each device's own name and picture, set on it and shown on every device
 /// paired with it (the owner's list of 2026-10-26, item 7).
+const V32: &str = r#"
+-- A device removed, remembered (the owner's review of 2026-11-03): removing
+-- ends trust on both sides, but the same device coming back is known for
+-- what it was and gets its files here again. `by_them`: this device was the
+-- one removed, by the device named, rather than the one removing.
+CREATE TABLE IF NOT EXISTS removed_devices (
+    device_id   BLOB PRIMARY KEY,
+    fingerprint BLOB NOT NULL,
+    name        TEXT NOT NULL,
+    relation    TEXT NOT NULL,
+    removed_at  INTEGER NOT NULL,
+    by_them     INTEGER NOT NULL DEFAULT 0
+) STRICT;
+CREATE INDEX IF NOT EXISTS removed_by_fingerprint ON removed_devices (fingerprint);
+"#;
+
 const V31: &str = r#"
 -- Activity read by kind, for a filter's chip (All, Backups, Transfers,
 -- Problems: the owner's review of 2026-11-02) without reading it all.
@@ -3786,6 +3802,8 @@ impl Db {
                  name = excluded.name",
             params![device.as_bytes().as_slice(), fingerprint.as_slice(), name],
         )?;
+        // Paired again: removed no longer, on either side.
+        self.conn.execute("DELETE FROM removed_devices WHERE device_id = ?1", params![device.as_bytes().as_slice()])?;
         // Only a genuinely new device is worth a line in the history. Trust is
         // re-asserted on a schedule, and a device that appeared once a day
         // would fill the list with an event nobody made happen.
@@ -3855,6 +3873,48 @@ impl Db {
         tx.execute("DELETE FROM visit_persons WHERE device_id = ?1", params![id])?;
         tx.commit()?;
         Ok(n > 0)
+    }
+
+    /// Remember a device as removed: by this device (`by_them` false), which
+    /// goes on answering it only to say so; or this device removed by it.
+    pub fn remember_removed(&self, device: &DeviceId, fingerprint: &[u8; 32], name: &str, relation: Relation, by_them: bool) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO removed_devices (device_id, fingerprint, name, relation, removed_at, by_them)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT (device_id) DO UPDATE SET fingerprint = excluded.fingerprint, name = excluded.name,
+               relation = excluded.relation, removed_at = excluded.removed_at, by_them = excluded.by_them",
+            params![device.as_bytes().as_slice(), fingerprint.as_slice(), name, relation.as_str(), now(), by_them as i64],
+        )?;
+        Ok(())
+    }
+
+    /// Every device remembered as removed, the newest first.
+    pub fn removed_devices(&self) -> Result<Vec<Removed>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT device_id, fingerprint, name, relation, removed_at, by_them FROM removed_devices ORDER BY removed_at DESC",
+        )?;
+        let rows = stmt.query_map([], removed_row)?;
+        rows.collect::<std::result::Result<Vec<_>, _>>()?.into_iter().collect()
+    }
+
+    /// The device this one removed that had `fingerprint`, if it did.
+    pub fn removed_by_fingerprint(&self, fingerprint: &[u8; 32]) -> Result<Option<Removed>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT device_id, fingerprint, name, relation, removed_at, by_them FROM removed_devices
+                  WHERE fingerprint = ?1 AND by_them = 0",
+                params![fingerprint.as_slice()],
+                removed_row,
+            )
+            .optional()?;
+        row.transpose()
+    }
+
+    /// Forget a removed device: it came back, or its files were let go.
+    pub fn clear_removed(&self, device: &DeviceId) -> Result<()> {
+        self.conn.execute("DELETE FROM removed_devices WHERE device_id = ?1", params![device.as_bytes().as_slice()])?;
+        Ok(())
     }
 
     /// Record another person's device, with the secret the two meet under
@@ -5207,6 +5267,33 @@ fn marker_from_hex(text: &str) -> Option<[u8; 16]> {
     Some(out)
 }
 
+
+/// A device remembered after it was removed (the owner's review of
+/// 2026-11-03): who it was, so the same device coming back is known.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Removed {
+    pub device_id: DeviceId,
+    pub fingerprint: [u8; 32],
+    pub name: String,
+    pub relation: Relation,
+    pub removed_at: i64,
+    /// This device was removed by it, rather than removing it.
+    pub by_them: bool,
+}
+
+fn removed_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Result<Removed>> {
+    let id: Vec<u8> = r.get(0)?;
+    let fp: Vec<u8> = r.get(1)?;
+    let relation: String = r.get(3)?;
+    let by_them: i64 = r.get(5)?;
+    let name: String = r.get(2)?;
+    let removed_at: i64 = r.get(4)?;
+    Ok((|| {
+        let device_id = DeviceId::from_bytes(<[u8; 32]>::try_from(id.as_slice()).map_err(|_| Error::Corrupt { detail: "a removed device's id".into() })?);
+        let fingerprint = <[u8; 32]>::try_from(fp.as_slice()).map_err(|_| Error::Corrupt { detail: "a removed device's fingerprint".into() })?;
+        Ok(Removed { device_id, fingerprint, name, relation: Relation::parse(&relation), removed_at, by_them: by_them != 0 })
+    })())
+}
 
 /// A device this one has paired with.
 #[derive(Debug, Clone, PartialEq, Eq)]

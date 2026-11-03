@@ -147,8 +147,10 @@ impl PeerClient {
         match self.request(Request::TreeSince { since }).await {
             Ok(Response::TreeDelta { now, digest, changed }) => Ok(Some(ListChanges { now, digest, changed })),
             Ok(_) => Ok(None),
-            // The connection itself gone is not an old device.
+            // The connection itself gone is not an old device, nor is one
+            // that removed this one.
             Err(Error::Connection(e)) => Err(Error::Connection(e)),
+            Err(Error::Removed) => Err(Error::Removed),
             Err(e) => {
                 tracing::debug!(error = %e, "no changes to its file list; it will be fetched whole");
                 Ok(None)

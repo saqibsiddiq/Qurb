@@ -3037,9 +3037,27 @@ impl Store {
                 }
             }
         }
+        // Remembered before it is forgotten (the owner's review of
+        // 2026-11-03): the same device coming back is known for what it was
+        // and gets its files here again, if they were kept; until then it is
+        // answered only to be told it was removed.
+        if let Some(peer) = self.db.trusted_peers()?.into_iter().find(|p| p.device_id == *device) {
+            self.db.remember_removed(device, &peer.fingerprint, &peer.name, peer.relation, false)?;
+        }
         self.db.forget_peer(device)?;
         let _ = self.db.record(db::Event::Removed, None, None, Some(device), Some(name));
         Ok(plan)
+    }
+
+    /// Delete what this device keeps in `device`'s own vault -- a device
+    /// removed here, whose files were kept (D21) -- as any deletion is, to
+    /// Recently deleted. How many files.
+    pub fn delete_kept_for(&mut self, device: &DeviceId) -> Result<usize> {
+        let kept = self.db.vault_contents(device)?;
+        for (path, _, _) in &kept {
+            self.tombstone(path, Stamp::Local, Some(*device))?;
+        }
+        Ok(kept.len())
     }
 
     /// Where what this device keeps for `device` is filed: its own vault, or

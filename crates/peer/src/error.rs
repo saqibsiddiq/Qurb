@@ -10,6 +10,10 @@ pub enum Error {
     #[error("peer is not one we trust")]
     UntrustedPeer,
 
+    /// The other device removed this one, and said so ([`crate::Response::Removed`]).
+    #[error("the other device removed this one")]
+    Removed,
+
     #[error("pairing code is not valid: {detail}")]
     BadInvite { detail: String },
 
