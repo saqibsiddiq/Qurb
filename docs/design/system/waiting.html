@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QurbSpace Waiting</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+/* Waiting, redesigned (the owner, 2026-11-03: "too cluttered and ugly").
+   From the patterns Google Photos, iCloud, Dropbox and Telegram share: one
+   picture, one title, one quiet line, one number at the end. */
+body { font-family: Inter, system-ui, sans-serif; background: color-mix(in srgb, var(--bg) 70%, #8f948c); color: var(--ink); -webkit-font-smoothing: antialiased }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 40px 24px 120px }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap }
+.top h1 { font-size: 28px; font-weight: 700; letter-spacing: -.025em }
+.top p { color: var(--ink-2); margin-top: 6px; font-size: 14.5px; max-width: 800px; line-height: 1.55 }
+.switch { display: inline-flex; padding: 4px; border-radius: var(--r-full); background: var(--surface); gap: 2px; box-shadow: var(--shadow-1) }
+.switch button { border: 0; background: none; font: 500 13px Inter; color: var(--ink-2); padding: 7px 14px; border-radius: var(--r-full); cursor: pointer }
+.switch button.on { background: var(--brand-soft); color: var(--brand) }
+h2 { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: 48px }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(520px, 1fr)); gap: 28px; margin-top: 16px }
+.panel { background: var(--bg); border-radius: var(--r-xl); padding: 28px; box-shadow: var(--shadow-2) }
+.panel h3 { font-size: 16px; font-weight: 650; letter-spacing: -.01em }
+.panel .sub { color: var(--ink-2); font-size: 13.5px; margin-top: 4px; line-height: 1.5 }
+.stage { margin-top: 22px }
+.rules { margin-top: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--ink-2) }
+.rules div { display: flex; gap: 8px; align-items: flex-start; line-height: 1.45 }
+.rules .ic { width: 16px; height: 16px; color: var(--brand); margin-top: 1px }
+.rules.bad .ic { color: var(--danger) }
+
+/* ---- the old row, as built today ---- */
+.old .row { min-height: 72px }
+.old .stack { position: relative; width: 62px; height: 46px; flex: none }
+.old .stack .tile { position: absolute; top: 1px; border: 2px solid var(--surface) }
+.old .stack .tile:nth-child(2) { left: 9px; transform: rotate(6deg) } .old .stack .tile:nth-child(3) { left: 18px; transform: rotate(12deg) }
+.old .who { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 600 }
+.old .who .ic { width: 14px; height: 14px; color: var(--ink-3) }
+.old .who .av { width: 20px; height: 20px; font-size: 10px }
+.old .chips { display: flex; gap: 6px; margin-top: 6px }
+
+/* ---- the new row ---- */
+.wl { display: flex; align-items: baseline; justify-content: space-between; margin: 0 6px 10px }
+.wl b { font-size: 15px; font-weight: 650; letter-spacing: -.01em }
+.wl a { font-size: 13.5px; font-weight: 500; color: var(--brand); text-decoration: none }
+.w { display: flex; align-items: center; gap: 14px; padding: 12px 16px; position: relative }
+.w + .w::before { content: ""; position: absolute; top: 0; left: 78px; right: 16px; height: 1px; background: var(--line) }
+.th { width: 48px; height: 48px; border-radius: 12px; position: relative; flex: none; background-size: cover }
+.th .face { position: absolute; right: -5px; bottom: -5px; width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--surface); display: grid; place-items: center; font: 600 10px Inter }
+.th .ring { position: absolute; inset: 0; border-radius: 12px; background: rgba(0,0,0,.28); display: grid; place-items: center }
+.th .ring svg { width: 26px; height: 26px }
+.th.doc { background: #fff; border: 1px solid var(--line); display: flex; flex-direction: column; gap: 3.5px; padding: 10px 9px }
+.th.doc i { display: block; height: 3px; background: #d7d8d2; border-radius: 2px }
+.th.doc em { position: absolute; left: 6px; bottom: 6px; font: 700 7.5px Inter; font-style: normal; color: #fff; background: #c4412f; border-radius: 3px; padding: 1px 4px }
+.th .play { position: absolute; inset: 0; display: grid; place-items: center }
+.th .play::before { content: ""; border-left: 11px solid rgba(255,255,255,.95); border-top: 7px solid transparent; border-bottom: 7px solid transparent; margin-left: 3px }
+.w .t { flex: 1; min-width: 0 }
+.w .t b { display: block; font-size: 15px; font-weight: 600; letter-spacing: -.005em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.w .t span { display: block; font-size: 13px; color: var(--ink-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.w .t span.wait { color: var(--warn) }
+.w .t .bar { height: 3px; border-radius: 2px; background: var(--surface-2); margin-top: 8px; overflow: hidden }
+.w .t .bar i { display: block; height: 100%; background: var(--brand); border-radius: 2px }
+.w .end { font-size: 13px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; min-width: 36px; text-align: right }
+.w .end.ic { width: 18px; height: 18px; min-width: 0; color: var(--warn); stroke-width: 2 }
+.w .end.ok { color: var(--brand) }
+.p1 { background-image: linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f) }
+.p2 { background-image: linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a) }
+.p3 { background-image: linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a) }
+.p4 { background-image: linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d) }
+.f-ph { background: linear-gradient(140deg,#d9b98a,#6d5a3f) }
+.f-desk { background: var(--brand-soft); color: var(--brand) }
+
+/* option B: one summary, Google Photos' card */
+.sum { display: flex; align-items: center; gap: 16px; padding: 16px }
+.strip { display: flex }
+.strip .th { width: 40px; height: 40px; border-radius: 10px; border: 2px solid var(--surface); margin-left: -12px }
+.strip .th:first-child { margin-left: 0 }
+.sum .t b { font-size: 15.5px }
+
+/* the phone */
+.phone { width: 360px; border-radius: 40px; background: #111; padding: 10px; margin-top: 22px; box-shadow: 0 20px 50px rgba(0,0,0,.25) }
+.screen { border-radius: 32px; background: var(--bg); padding: 20px 16px 24px; overflow: hidden }
+.mini-mark { width: 112px; height: 112px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-2); margin: 8px auto 0; display: grid; place-items: center; color: var(--brand); position: relative }
+.mini-mark .ic { width: 36px; height: 36px; stroke-width: 1.6 }
+.mini-state { text-align: center; font-size: 18px; font-weight: 650; margin-top: 14px; letter-spacing: -.01em }
+.mini-send { margin: 16px 0 24px; width: 100% }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="up" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+<symbol id="phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+<symbol id="laptop" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></symbol>
+<symbol id="moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></symbol>
+<symbol id="send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></symbol>
+<symbol id="ringfull" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3"/><circle cx="18" cy="18" r="14" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="33 88" transform="rotate(-90 18 18)"/></symbol>
+</defs></svg>
+
+<div class="wrap">
+  <div class="top">
+    <div><h1>Waiting, redesigned</h1>
+      <p>Today's rows carry an arrow, a circle, a name, two or three chips, a fanned stack of three previews and a chevron: seven things to read per row. The apps people find calm, such as Google Photos' backup, iCloud's uploads, Dropbox's transfers and Telegram's media, show four: <b>one picture, one title, one quiet line, one number at the end</b>. The verb says which way, so no arrows; colour says what needs you, so no chips.</p></div>
+    <div class="switch"><button class="on" onclick="theme('light',this)">Light</button><button onclick="theme('dark',this)">Dark</button></div>
+  </div>
+
+  <h2>Today and recommended</h2>
+  <div class="cols">
+    <div class="panel old">
+      <h3>Today</h3>
+      <div class="sub">Seven things per row; the eye has nowhere to land.</div>
+      <div class="stage"><div class="card">
+        <div class="row"><span class="stack"><span class="tile p1" style="background:linear-gradient(200deg,#9fd3e8,#3f7fa3 60%,#1e3b4f)"></span><span class="tile" style="background:linear-gradient(160deg,#f6c27a,#d9733f 55%,#5a3a2a)"></span><span class="tile" style="background:linear-gradient(150deg,#c9e3b0,#5f9a5a 60%,#2b4a2a)"></span></span>
+          <div style="flex:1"><div class="who"><svg class="ic"><use href="#down"/></svg><span class="av photo" style="background:linear-gradient(140deg,#d9b98a,#6d5a3f)"></span>Galaxy S23</div><div class="chips"><span class="chip">140</span><span class="chip">2.2 GB</span></div></div><svg class="ic" style="color:var(--ink-3)"><use href="#chev"/></svg></div>
+        <div class="row"><span class="stack"><span class="tile" style="background:#fff;border-color:var(--line)"></span><span class="tile" style="background:linear-gradient(170deg,#f4d6e0,#c26a8a 60%,#5b2a3d)"></span></span>
+          <div style="flex:1"><div class="who"><svg class="ic"><use href="#up"/></svg><span class="av photo" style="background:linear-gradient(140deg,#d9b98a,#6d5a3f)"></span>Galaxy S23</div><div class="chips"><span class="chip">2</span><span class="chip warn"><svg class="ic"><use href="#phone"/></svg>Open the app</span></div></div><svg class="ic" style="color:var(--ink-3)"><use href="#chev"/></svg></div>
+      </div></div>
+      <div class="rules bad">
+        <div><svg class="ic"><use href="#x"/></svg>Arrows, circles and chips all say the same thing three ways</div>
+        <div><svg class="ic"><use href="#x"/></svg>Bare numbers ("140", "2") with no noun</div>
+        <div><svg class="ic"><use href="#x"/></svg>A rotated stack looks busy at 48 px</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>A · Recommended</h3>
+      <div class="sub">One picture with the device's face on its corner, a title, one quiet line, and how far it has got.</div>
+      <div class="stage">
+        <div class="wl"><b>Waiting</b><a>See all</a></div>
+        <div class="card">
+          <div class="w"><span class="th p1"><span class="play"></span><span class="ring"><svg><use href="#ringfull"/></svg></span><span class="face f-ph"></span></span>
+            <div class="t"><b>Receiving 140 files</b><span>From Galaxy S23, 2.2 GB</span><div class="bar"><i style="width:38%"></i></div></div><span class="end">38%</span></div>
+          <div class="w"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><em>PDF</em><span class="face f-ph"></span></span>
+            <div class="t"><b>Sending 2 files</b><span class="wait">Open QurbSpace on Galaxy S23</span></div><svg class="ic end"><use href="#phone"/></svg></div>
+          <div class="w"><span class="th p3"><span class="face f-desk">S</span></span>
+            <div class="t"><b>Sending 1 file</b><span>To Study desktop, when it's on</span></div><svg class="ic end" style="color:var(--ink-3)"><use href="#moon"/></svg></div>
+        </div>
+      </div>
+      <div class="rules">
+        <div><svg class="ic"><use href="#check"/></svg>The verb carries the direction: Receiving, Sending, Backing up, Restoring</div>
+        <div><svg class="ic"><use href="#check"/></svg>The device's face sits on the picture's corner, as a sender's avatar does in a chat</div>
+        <div><svg class="ic"><use href="#check"/></svg>Amber only when it waits on you, and then it says what to do</div>
+        <div><svg class="ic"><use href="#check"/></svg>A 3 px bar and a percentage only while it moves; the row is the button, so no chevron</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Another way</h2>
+  <div class="cols">
+    <div class="panel">
+      <h3>B · One summary card</h3>
+      <div class="sub">As Google Photos does it: everything waiting folded into one card that opens the list. Quietest, but you can't see at a glance what is waiting on whom.</div>
+      <div class="stage"><div class="card"><div class="sum">
+        <div class="strip"><span class="th p1"></span><span class="th p2"></span><span class="th p4"></span></div>
+        <div class="t" style="flex:1"><b>143 files on their way</b><span style="display:block;font-size:13px;color:var(--ink-3);margin-top:2px">2 waiting for Galaxy S23 to open QurbSpace</span><div class="bar" style="height:3px;border-radius:2px;background:var(--surface-2);margin-top:8px;overflow:hidden"><i style="display:block;height:100%;width:38%;background:var(--brand)"></i></div></div>
+        <span style="font-size:13px;font-weight:600;color:var(--ink-2)">38%</span></div></div></div>
+    </div>
+
+    <div class="panel">
+      <h3>A, every state</h3>
+      <div class="sub">The same row says everything Waiting can be.</div>
+      <div class="stage"><div class="card">
+        <div class="w"><span class="th p2"><span class="ring"><svg><use href="#ringfull"/></svg></span><span class="face f-desk">S</span></span>
+          <div class="t"><b>Backing up 128 photos</b><span>To saqib, 1.9 GB</span><div class="bar"><i style="width:62%"></i></div></div><span class="end">62%</span></div>
+        <div class="w"><span class="th p4"><span class="ring"><svg><use href="#ringfull"/></svg></span><span class="face f-desk">S</span></span>
+          <div class="t"><b>Restoring 90 files</b><span>From saqib, 41 done</span><div class="bar"><i style="width:45%"></i></div></div><span class="end">45%</span></div>
+        <div class="w"><span class="th p3"><span class="face f-desk">S</span></span>
+          <div class="t"><b>12 files not backed up yet</b><span>Go to saqib at its next sync</span></div><span class="end"></span></div>
+        <div class="w"><span class="th p1"><span class="face f-ph"></span></span>
+          <div class="t"><b>Holiday.mp4 received</b><span>From Galaxy S23, just now</span></div><svg class="ic end ok" style="color:var(--brand)"><use href="#check"/></svg></div>
+      </div></div>
+    </div>
+  </div>
+
+  <h2>A on the phone</h2>
+  <div class="phone"><div class="screen">
+    <div class="mini-mark"><svg class="ic"><use href="#up"/></svg>
+      <svg style="position:absolute;inset:5px;width:102px;height:102px" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="var(--brand)" stroke-width="4" stroke-linecap="round" stroke-dasharray="180 289" transform="rotate(-90 50 50)"/></svg></div>
+    <div class="mini-state">Backing up</div>
+    <button class="btn btn-primary mini-send"><svg class="ic"><use href="#send"/></svg>Send</button>
+    <div class="wl"><b>Waiting</b><a>See all</a></div>
+    <div class="card">
+      <div class="w"><span class="th p2"><span class="ring"><svg><use href="#ringfull"/></svg></span><span class="face f-desk">S</span></span>
+        <div class="t"><b>Backing up 140 files</b><span>To saqib, 2.2 GB</span><div class="bar"><i style="width:62%"></i></div></div><span class="end">62%</span></div>
+      <div class="w"><span class="th doc"><i></i><i></i><i></i><i style="width:55%"></i><em>PDF</em><span class="face f-desk">S</span></span>
+        <div class="t"><b>Sending 2 files</b><span>To Study desktop, when it's on</span></div><svg class="ic end" style="color:var(--ink-3)"><use href="#moon"/></svg></div>
+    </div>
+  </div></div>
+</div>
+<script>
+function theme(t, b) {
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll(".switch button").forEach((x) => x.classList.toggle("on", x === b));
+}
+</script>
+</body>
+</html>
