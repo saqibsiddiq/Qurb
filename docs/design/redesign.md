@@ -1239,3 +1239,27 @@ the scrolling page, and Private's top is all folders -- so `Kit.folderGrid`'s
 cards wrap their own height. **Not checked:** dark mode, and any of the sheets'
 actions carried out from the new buttons. **Not built:** item 20's animations,
 which the owner put off.
+
+
+## Foundations again, in Figma (2026-11-09)
+
+The owner, after the browser mockups (`system/*.html`, 2026-11-03) were built
+into both apps: "the browser design is not good enough", and the look should
+be the phone's and the website's. On the *Foundations* page of the same file,
+section *Foundations — 2026-11-09*:
+
+- **Colours** brought to the apps' values (`system/tokens.css`, `colors.xml`)
+  in place, so drafts bound to them refresh; added `green-strong`, `online`,
+  `glass-frosted`, `glass-elevated`, `glass-edge`, `hairline`, `scrim`. Light
+  and dark stay two one-mode collections, the file's convention on the
+  starter plan. Each carries its CSS and Android name.
+- **Qurb shape**: radii 10/14/18/24/round, spacing 4 to 32.
+- **Effects**, the website's materials: Card, Sheet, Button, Mark.
+- **Type**: the phone's scale, and Display (28, bold) for page titles.
+- **Components**: Button (5 styles, 2 sizes), Chip, Row, Card (frosted
+  glass), Status mark, Waiting row (option A), Deleted tile, Sheet,
+  Background glow.
+- **Review board** under it: Home, Settings, Recently deleted and a
+  question, phone size, made only of those parts.
+
+Not yet approved; nothing built from it.
