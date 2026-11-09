@@ -1314,7 +1314,10 @@ owner asked earlier that day.
 Checked in the fixtures, headless Chromium at 1120 × 720, all 32 screens,
 light and dark.
 
-### One stylesheet, written once (2026-11-09, last)
+### One stylesheet, written once (2026-11-09, later still)
+
+*Superseded the same day by "The phone's design, on the desktop" below: the
+owner asked for the phone's look instead.*
 
 The owner, on draft 1's look: "very unpleasant to look at … study the best
 practices of ui/ux and study the design of phone and website, spacing and
@@ -1373,3 +1376,59 @@ Left undone, stated:
   nothing in the window leads to them since Files became a launcher.
 - The phone has not been restyled to match; this is the desktop's alone.
 - The system's notifications are the desktop's own, unstyled by QurbSpace.
+
+### The phone's design, on the desktop (2026-11-09, last)
+
+The owner, on the stylesheet above: "i want the desktop's design to match
+with phone, phone is perfect". The stylesheet is written again, every value
+taken from the Android app's resources rather than from the website or
+desktop convention, and checked against screenshots of the running phone app
+(the emulator, `qurb-34g`, an install of 2026-11-03 whose look is the
+current one).
+
+Taken one to one:
+
+- **Colours**, light and dark, by the names in `colors.xml` and
+  `values-night/colors.xml`; the device's dot red when off, as the phone's.
+- **Type**: Display 27, Hero 26, Title 20, Section 17, Body and Name 15.5,
+  Quiet 14.5, Meta 12.5, Label 11.5 in spaced capitals (`themes.xml`).
+- **Cards** (`card.xml`): the surface, a 1px edge, 20 round, no shadow.
+- **Setting rows** (`row_card.xml`): 64 high, a plain 22px icon, the name,
+  its value *under* the name in Meta, a chevron or a switch; no dividers.
+- **Tiles** (`tile.xml`): 44, nearly white, a hairline, 12 round.
+- **Buttons** (`Widget.Qurb.Button`): pills 48 high, flat green; secondary on
+  the surface with an edge; text buttons green; danger red; Switch device
+  blue. Home's Send 60 high, its words at 17.
+- **Switches**: the phone's MaterialSwitch, a small knob on grey that grows
+  as it crosses to green.
+- **Home** (`screen_home.xml`, `StatusMark`): the app's name and the device's
+  circle at the top; the disc with an 8-wide ring in the state's colour, no
+  halo; the state in Hero.
+- **Sheets** (`Widget.Qurb.Sheet`): rising from the foot, top corners 24, a
+  handle, the place behind dimmed a fifth; the title at the start, its icon
+  in a 48 tile; Cancel and the action as two pills of one width. Theme is
+  three pills, Auto, Light and Dark, as the phone's.
+- **Back** is ← and where it goes, as on the phone.
+
+Placed for a window rather than redrawn: the phone's floating tab bar stands
+up at the left as a rail (its icons in the same pills, filled when open);
+sheets rise from the foot of the page, beside the rail; pages are a column
+680 wide in the middle; Switch device and Remove sit side by side, in the
+phone's blue and red, rather than stacked across a phone's width. The
+sidebar's "QurbSpace" and this computer's name at its foot are gone, as the
+phone has neither; the name is Home's title instead.
+
+Checked in the fixtures, on the owner's laptop, headless Chromium at
+1120 x 720, the 40 screens with `?still`, light and dark, beside the phone's
+screenshots. The window was rebuilt and restarted; not looked at by me in the
+real window.
+
+Left undone, stated:
+
+- The phone's large marks are Phosphor's light weight; the desktop has only
+  the regular weight, so Home's icon is heavier than the phone's.
+- The folder views Files no longer reaches are styled to these rules but not
+  photographed.
+- The owner said on 2026-11-09 that Switch device and Remove as two solid
+  bars were "not good enough"; they are the phone's solid pills again, side by
+  side, because the phone is now the reference. To be confirmed with him.

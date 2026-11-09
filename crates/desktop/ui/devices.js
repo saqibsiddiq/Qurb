@@ -12,7 +12,7 @@ function drawDevicePage(main, d) {
   HOME.page = d;
   main.append(
     h("div", { class: "page" },
-      h("button", { class: "back", onclick: () => go("home") }, icon("chevron-right", "flip"), "Home"),
+      h("button", { class: "back", onclick: () => go("home") }, icon("arrow-left"), "Home"),
       h("div", { class: "dev-hd" },
         circle(d, "circle-xl"),
         h("div", { class: "dev-words" },
@@ -20,13 +20,13 @@ function drawDevicePage(main, d) {
           h("p", { class: "state" }, d.route ? "On" : d.last_seen ? h("span", {}, "Off", h("small", {}, ago(d.last_seen))) : "Off")),
         h("button", { class: "icon-btn", "aria-label": `About ${d.name}`, onclick: () => aboutDevice(d) }, icon("info"))),
       h("div", { id: "page-list" }),
-      // What can be done to the device (the owner, 2026-11-09: the two
-      // solid bars "aren't good enough"): Switch device a quiet button at
-      // the left, Remove a quiet red one at the right, red only in its words
-      // until it is pointed at.
+      // What can be done to the device, in the phone's colours (the owner,
+      // 2026-11-09: "phone is perfect"): Switch device blue, as a device's
+      // dot is when it is on, and Remove red; side by side, the window
+      // being wider than a phone.
       h("div", { class: "dev-foot" },
-        h("button", { class: "btn btn-quiet btn-sm", onclick: () => switchDevice((to) => go("device", to)) }, icon("arrow-up-down"), "Switch device"),
-        h("button", { class: "link-danger", onclick: () => askToRemove(d) }, icon("trash-2"), d.relation === "guest" ? `Remove ${d.name}` : "Remove"))));
+        h("button", { class: "btn btn-blue-solid", onclick: () => switchDevice((to) => go("device", to)) }, "Switch device"),
+        h("button", { class: "btn btn-danger-solid", onclick: () => askToRemove(d) }, d.relation === "guest" ? `Remove ${d.name}` : "Remove"))));
   listsDevicePage();
 }
 
@@ -216,7 +216,7 @@ async function drawShowCode(main, { guest, first }) {
   const stage = h("div", { class: "pair" }, h("span", { class: "empty-orb asking" }, icon("qr-code")));
   const leave = () => { stopPairing(); go(first ? "home" : "add"); };
   main.append(h("div", { class: "center-page" },
-    first ? null : h("button", { class: "back back-corner", onclick: leave }, icon("chevron-right", "flip"), "Add a device"),
+    first ? null : h("button", { class: "back back-corner", onclick: leave }, icon("arrow-left"), "Add a device"),
     h("h1", { class: "ptitle" }, guest ? "Add someone else's phone" : "Add your phone"),
     stage));
   let inv;

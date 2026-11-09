@@ -45,7 +45,7 @@ function welcome(box) {
     says);
 }
 
-const backTo = (step) => h("button", { class: "back", onclick: () => setupStep(step) }, icon("chevron-right", "flip"), "Back");
+const backTo = (step) => h("button", { class: "back", onclick: () => setupStep(step) }, icon("arrow-left"), "Back");
 
 async function create(next, says) {
   next.disabled = true;

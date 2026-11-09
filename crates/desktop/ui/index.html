@@ -10,13 +10,13 @@
 <body>
   <div class="win">
     <aside class="sb">
-      <div class="sb-brand">QurbSpace</div>
+      <!-- The phone's tab bar, standing up: each place's icon in a pill,
+           filled while it is open, its name under it. -->
       <nav class="sb-nav" aria-label="Places">
-        <button data-go="home"><i data-icon="house"></i><span>Home</span></button>
-        <button data-go="files"><i data-icon="folder"></i><span>Files</span></button>
-        <button data-go="settings"><i data-icon="settings"></i><span>Settings</span></button>
+        <button data-go="home"><span class="sb-pill"><i data-icon="house"></i><i data-icon="house-fill"></i></span><span>Home</span></button>
+        <button data-go="files"><span class="sb-pill"><i data-icon="folder"></i><i data-icon="folder-fill"></i></span><span>Files</span></button>
+        <button data-go="settings"><span class="sb-pill"><i data-icon="settings"></i><i data-icon="settings-fill"></i></span><span>Settings</span></button>
       </nav>
-      <div class="sb-me" id="sb-me"></div>
     </aside>
     <main class="main" id="main" tabindex="-1"></main>
   </div>

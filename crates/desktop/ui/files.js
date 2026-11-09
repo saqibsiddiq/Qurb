@@ -600,7 +600,7 @@ function drawDeletedPage() {
   const back = { words: "This computer", go: () => go("storage") };
   const head = selecting
     ? h("div", { class: "pg-hd" },
-      h("button", { class: "back", onclick: back.go }, icon("chevron-right", "flip"), back.words),
+      h("button", { class: "back", onclick: back.go }, icon("arrow-left"), back.words),
       h("div", { class: "pg-title" },
         h("button", { class: "icon-btn sel-x", "aria-label": "Stop choosing", onclick: () => { DELETED.selecting = false; chosen.clear(); drawDeletedPage(); } }, icon("x")),
         h("h1", {}, `${chosen.size} selected`),

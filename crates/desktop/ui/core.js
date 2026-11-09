@@ -121,7 +121,7 @@ const label = (words) => h("p", { class: "label" }, words);
 /** A place's heading, with a way back to where it was reached from. */
 function pageHead(title, back, ...end) {
   return h("div", { class: "pg-hd" },
-    back ? h("button", { class: "back", onclick: back.go }, icon("chevron-right", "flip"), back.words) : null,
+    back ? h("button", { class: "back", onclick: back.go }, icon("arrow-left"), back.words) : null,
     h("div", { class: "pg-title" }, h("h1", {}, title), h("div", { class: "pg-end" }, ...end)));
 }
 

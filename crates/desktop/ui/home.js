@@ -28,7 +28,9 @@ function choose(device) {
 function drawHome(main) {
   main.append(
     h("div", { class: "home" },
-      h("div", { class: "home-top" }, h("span", { id: "home-circle" })),
+      // The app's name and the chosen device's circle, as the phone's Home
+      // has them at its top.
+      h("div", { class: "home-top" }, h("p", { class: "home-name" }, "QurbSpace"), h("span", { id: "home-circle" })),
       h("div", { class: "home-middle" },
         h("button", { class: "mark", id: "home-mark", onclick: markClicked, "aria-label": "Sync now" },
           ring(),
@@ -50,8 +52,8 @@ function ring() {
   svg.setAttribute("viewBox", "0 0 100 100");
   svg.setAttribute("class", "ring");
   svg.innerHTML =
-    '<circle class="ring-track" cx="50" cy="50" r="46" pathLength="100"/>' +
-    '<circle class="ring-arc" id="ring-arc" cx="50" cy="50" r="46" pathLength="100"/>';
+    '<circle class="ring-track" cx="50" cy="50" r="47.6" pathLength="100"/>' +
+    '<circle class="ring-arc" id="ring-arc" cx="50" cy="50" r="47.6" pathLength="100"/>';
   return svg;
 }
 

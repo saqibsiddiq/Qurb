@@ -16,7 +16,7 @@ async function drawSettings(main) {
     [s, st, atLogin] = await Promise.all([invoke("settings"), invoke("storage").catch(() => null), invoke("starts_at_login").catch(() => false)]);
   } catch (e) { put(body, oops(e)); return; }
   SETTINGS = s;
-  const theme = { system: "System", light: "Light", dark: "Dark" }[window.qurbTheme?.chosen?.() ?? "system"];
+  const theme = { system: "Auto", light: "Light", dark: "Dark" }[window.qurbTheme?.chosen?.() ?? "system"];
   put(body,
     // Name and picture as one, as WhatsApp and the phone have them (SE-2).
     h("button", { class: "profile", onclick: () => profileSheet(s) },
@@ -130,12 +130,11 @@ function askDownloads() {
 }
 
 function themeSheet() {
-  const box = sheet({ ic: "palette", title: "Theme" });
+  const box = sheet({ title: "Theme" });
   const now = window.qurbTheme.chosen();
-  // Rows, the chosen one ticked, as every choice in a sheet is.
-  box.append(h("div", { class: "grp-box" }, ...[["system", "As the system is"], ["light", "Light"], ["dark", "Dark"]].map(([to, words]) =>
-    setting({ ic: "palette", name: words, end: to === now ? icon("check", "set-tick") : h("span"), onclick: () => { box.close(); window.qurbTheme.choose(to); go("settings"); } }))));
-  icons(box);
+  // Three pills, the chosen one green, as the phone's Theme sheet has them.
+  box.append(h("div", { class: "pills" }, ...[["system", "Auto"], ["light", "Light"], ["dark", "Dark"]].map(([to, words]) =>
+    h("button", { class: `pill${to === now ? " on" : ""}`, onclick: () => { box.close(); window.qurbTheme.choose(to); go("settings"); } }, words))));
 }
 
 /** This computer's picture, round, as its other devices show it. */

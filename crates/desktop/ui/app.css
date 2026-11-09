@@ -1,21 +1,18 @@
-/* QurbSpace's desktop window: one design, written once.
+/* QurbSpace's desktop window, drawn as the phone is.
 
-   The owner, 2026-11-09, after three looks turned down: "study the best
-   practices of ui/ux and study the design of phone and website ... a really
-   eye-pleasing and super smooth application". This file replaces the 3,880
-   lines those looks had layered over each other (docs/design/redesign.md,
-   "One stylesheet, written once").
-
-   From the phone and the website: the soft glow behind everything, white
-   cards with a hairline edge and a soft shadow, the deep green the one
-   colour, Inter, round corners, the website's buttons. From desktop
-   convention: 14.5px text, 40px controls, 54px rows, content 720 wide and
-   centred, a 240px sidebar. Spacing on a 4px grid. Motion short and easing
-   out, and none when the system asks for less.
+   The owner, 2026-11-09: "i want the desktop's design to match with phone,
+   phone is perfect". Every value here is the Android app's own, from
+   android/app/src/main/res: colors.xml and values-night (the colours),
+   themes.xml (the type and the buttons), dimens.xml (spacing, corners,
+   sizes), the drawables (cards, tiles, chips) and the layouts (rows). Where a
+   window differs from a phone, the phone's thing is placed for the window
+   and not redrawn: the tab bar stands up at the left as a rail, a sheet rises
+   from the foot of the page rather than the screen, and pages are a column
+   in the middle of the window.
 
    Sections: tokens, base, motion, the window, pages, cards and rows,
-   controls, sheets and toasts, circles, then each place in the sidebar's
-   order, then setting up. */
+   controls, sheets and toasts, circles, then each place in the rail's order,
+   then setting up. */
 
 @font-face {
   font-family: "Inter";
@@ -33,101 +30,120 @@
 
 /* ============================================================== tokens */
 
-/* The colours are the phone's (colors.xml, docs/design/system/tokens.css);
-   the materials and shadows are this window's. */
+/* colors.xml, by the same names. */
 :root,
 [data-theme="light"] {
-  --bg: #f5f5f1;
+  --bg: #f6f6f3;
   --surface: #ffffff;
-  --surface-2: #f0f0eb;
-  --line: #e2e2dc;
-  --ink: #171916;
-  --ink-2: #565b55;
-  --ink-3: #868a83;
-  --brand: #2f6b57;
-  --brand-strong: #255848;
-  --brand-soft: #e5efe9;
-  --on-brand: #ffffff;
+  --surface-2: #efefea;
+  --text: #161815;
+  --text-2: #5c605a;
+  --text-3: #8b8e87;
+  --border: #e4e4de;
+  --border-strong: #d2d4cd;
+  --green: #2f6b57;
+  --green-hover: #255848;
+  --green-pressed: #214b3d;
+  --green-soft: #e6efea;
+  --avatar-fill: #d2e5db;
+  --avatar-ring: #a9c9b9;
+  --healthy: #287052;
   --online: #2f7de1;
-  --warn: #93691f;
-  --warn-soft: #f7efdc;
-  --danger: #b4463b;
-  --danger-soft: #f8e9e6;
-
-  --glow: 111, 175, 152;
+  --offline: #d64545;
+  --attention: #946a24;
+  --attention-bg: #f6eedb;
+  --error: #b0443a;
+  --error-bg: #f7e8e5;
+  --neutral: #626a68;
+  --neutral-bg: #eceeec;
+  --glass-solid: #fcfcfa;
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --hairline: rgba(23, 24, 22, 0.07);
+  --nav-glass: #fbfbf9;
+  --tile-fill: rgba(255, 255, 255, 0.8);
+  --ripple: rgba(23, 24, 22, 0.08);
+  --healthy-ring: rgba(40, 112, 82, 0.22);
+  --neutral-ring: rgba(98, 106, 104, 0.22);
+  --attention-ring: rgba(148, 106, 36, 0.3);
+  --error-ring: rgba(163, 66, 58, 0.22);
+  --switch-off: #d6d7d1;
+  --dim: rgba(0, 0, 0, 0.2);
+  --toast: #2b302d;
+  --toast-ink: #f3f5f2;
+  /* environment.xml: the still glow behind every place. */
   --environment:
-    radial-gradient(55% 60% at 0% 0%, rgba(var(--glow), 0.16), transparent 70%),
-    radial-gradient(45% 50% at 100% 0%, rgba(200, 211, 218, 0.34), transparent 70%),
-    radial-gradient(60% 55% at 85% 105%, rgba(236, 224, 199, 0.46), transparent 70%);
-  --rail: rgba(250, 250, 247, 0.62);
-  --card: #ffffff;
-  --edge: rgba(23, 25, 22, 0.075);
-  --edge-strong: rgba(23, 25, 22, 0.13);
-  --tile: #f1f1ec;
-  --hover: rgba(23, 25, 22, 0.035);
-  --press: rgba(23, 25, 22, 0.065);
-  --shadow-card: 0 1px 2px rgba(23, 25, 22, 0.04), 0 8px 24px -14px rgba(23, 25, 22, 0.12);
-  --shadow-lift: 0 2px 4px rgba(23, 25, 22, 0.04), 0 16px 36px -16px rgba(23, 25, 22, 0.2);
-  --shadow-sheet: 0 2px 8px rgba(23, 25, 22, 0.06), 0 30px 70px -18px rgba(23, 25, 22, 0.3);
-  --shadow-brand: 0 1px 2px rgba(33, 75, 61, 0.25), 0 8px 20px -8px rgba(47, 107, 87, 0.45);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --scrim: rgba(24, 30, 27, 0.16);
-  --toast: #1d2320;
-  --toast-ink: #f2f5f2;
+    radial-gradient(75% 75% at 0% 0%, rgba(111, 175, 152, 0.28), transparent 100%),
+    radial-gradient(60% 60% at 100% 12%, rgba(196, 208, 216, 0.42), transparent 100%),
+    radial-gradient(80% 80% at 85% 100%, rgba(234, 222, 196, 0.55), transparent 100%),
+    radial-gradient(55% 55% at 20% 85%, rgba(111, 175, 152, 0.12), transparent 100%);
+  --lift: 0 1px 3px rgba(0, 0, 0, 0.06), 0 6px 18px rgba(0, 0, 0, 0.07);
   color-scheme: light;
 }
+/* values-night/colors.xml. */
 [data-theme="dark"] {
-  --bg: #101412;
-  --surface: #181d1a;
-  --surface-2: #1f2521;
-  --line: #2b322e;
-  --ink: #ebefec;
-  --ink-2: #b2bab5;
-  --ink-3: #848d87;
-  --brand: #58ad8d;
-  --brand-strong: #6cc0a0;
-  --brand-soft: #1a2a22;
-  --on-brand: #ffffff;
+  --bg: #0f1311;
+  --surface: #171c19;
+  --surface-2: #1e2420;
+  --text: #ecf0ed;
+  --text-2: #b5bdb8;
+  --text-3: #848e88;
+  --border: #2a312d;
+  --border-strong: #3c3f3a;
+  --green: #55ab8b;
+  --green-hover: #6bbf9f;
+  --green-pressed: #357a61;
+  --green-soft: #18271f;
+  --avatar-fill: #223a30;
+  --avatar-ring: #33584a;
+  --healthy: #74c29b;
   --online: #5b9bff;
-  --warn: #dba84d;
-  --warn-soft: #2b2417;
-  --danger: #ee6d60;
-  --danger-soft: #2d1816;
-
+  --offline: #ec6b6b;
+  --attention: #d9a64a;
+  --attention-bg: #2a2316;
+  --error: #ef6b5d;
+  --error-bg: #2b1715;
+  --neutral: #a2aaa7;
+  --neutral-bg: #232625;
+  --glass-solid: #1e201d;
+  --glass-edge: rgba(255, 255, 255, 0.08);
+  --hairline: rgba(236, 237, 232, 0.08);
+  --nav-glass: #1e201d;
+  --tile-fill: rgba(40, 42, 38, 0.8);
+  --ripple: rgba(236, 237, 232, 0.12);
+  --healthy-ring: rgba(116, 194, 155, 0.25);
+  --neutral-ring: rgba(162, 170, 167, 0.25);
+  --attention-ring: rgba(220, 176, 100, 0.3);
+  --error-ring: rgba(229, 132, 122, 0.25);
+  --switch-off: #3c3f3a;
+  --dim: rgba(0, 0, 0, 0.6);
+  --toast: #e6ebe7;
+  --toast-ink: #161815;
   --environment:
-    radial-gradient(55% 60% at 0% 0%, rgba(var(--glow), 0.09), transparent 70%),
-    radial-gradient(45% 50% at 100% 0%, rgba(44, 58, 70, 0.28), transparent 70%),
-    radial-gradient(60% 55% at 85% 105%, rgba(62, 52, 36, 0.28), transparent 70%);
-  --rail: rgba(20, 25, 22, 0.6);
-  --card: #191e1b;
-  --edge: rgba(255, 255, 255, 0.065);
-  --edge-strong: rgba(255, 255, 255, 0.12);
-  --tile: #242b27;
-  --hover: rgba(255, 255, 255, 0.04);
-  --press: rgba(255, 255, 255, 0.075);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -16px rgba(0, 0, 0, 0.6);
-  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 40px -18px rgba(0, 0, 0, 0.7);
-  --shadow-sheet: 0 2px 10px rgba(0, 0, 0, 0.45), 0 30px 80px -18px rgba(0, 0, 0, 0.8);
-  --shadow-brand: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 20px -8px rgba(0, 0, 0, 0.6);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --scrim: rgba(0, 0, 0, 0.5);
-  --toast: #edf1ee;
-  --toast-ink: #171916;
+    radial-gradient(75% 75% at 0% 0%, rgba(111, 175, 152, 0.22), transparent 100%),
+    radial-gradient(60% 60% at 100% 12%, rgba(30, 38, 46, 0.3), transparent 100%),
+    radial-gradient(80% 80% at 85% 100%, rgba(58, 50, 36, 0.4), transparent 100%),
+    radial-gradient(55% 55% at 20% 85%, rgba(111, 175, 152, 0.09), transparent 100%);
+  --lift: 0 1px 3px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }
 :root {
-  --r-xs: 8px;
-  --r-s: 10px;
-  --r-m: 12px;
-  --r-l: 16px;
-  --r-xl: 22px;
-  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --spring: cubic-bezier(0.34, 1.36, 0.64, 1);
-  --fast: 140ms;
-  --mid: 220ms;
-  /* Names the scripts still use in inline styles. */
-  --green: var(--brand);
+  /* dimens.xml. */
+  --radius-m: 14px;
+  --radius-l: 20px;
+  --radius-sheet: 24px;
+  --tile: 44px;
+  --row: 64px;
+  --touch: 48px;
+  --rail: 112px;
+  /* Material's standard motion. */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --fast: 150ms;
+  --mid: 250ms;
+  /* Names the scripts use in inline styles. */
+  --ink-3: var(--text-3);
   --blue: var(--online);
+  --warn: var(--attention);
 }
 
 /* ================================================================ base */
@@ -145,9 +161,9 @@ body {
 }
 body {
   background: var(--environment), var(--bg);
-  color: var(--ink);
-  font: 400 14.5px/1.45 "Inter", system-ui, sans-serif;
-  font-feature-settings: "cv11", "ss01";
+  color: var(--text);
+  /* Text.Body. */
+  font: 400 15.5px/22px "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
   overflow: hidden;
@@ -173,18 +189,18 @@ textarea {
   user-select: text;
 }
 ::selection {
-  background: rgba(var(--glow), 0.32);
+  background: rgba(111, 175, 152, 0.35);
 }
 :focus {
   outline: none;
 }
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--green);
   outline-offset: 2px;
 }
 .ic {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   flex: none;
   fill: currentColor;
 }
@@ -193,7 +209,6 @@ textarea {
 }
 ::-webkit-scrollbar {
   width: 12px;
-  height: 12px;
 }
 ::-webkit-scrollbar-thumb {
   border: 4px solid transparent;
@@ -203,34 +218,32 @@ textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(128, 132, 126, 0.5) padding-box;
 }
-::-webkit-scrollbar-track,
-::-webkit-scrollbar-corner {
+::-webkit-scrollbar-track {
   background: transparent;
 }
 
 /* ============================================================== motion */
 
-@keyframes page-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
 @keyframes fade-in {
   from {
     opacity: 0;
   }
 }
-@keyframes rise {
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes pop {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.97);
+    transform: scale(0.94);
   }
 }
 @keyframes bar-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 12px);
+    transform: translate(-50%, 16px);
   }
 }
 @keyframes spin {
@@ -248,7 +261,7 @@ textarea {
 }
 @keyframes breathe {
   50% {
-    box-shadow: 0 0 0 12px rgba(var(--glow), 0.14);
+    box-shadow: 0 0 0 10px rgba(111, 175, 152, 0.16);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -265,112 +278,90 @@ textarea {
 
 .win {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: var(--rail) minmax(0, 1fr);
   height: 100%;
 }
-/* The sidebar: a pane of frosted glass over the glow. */
+/* The phone's tab bar, standing up at the left: a floating bar, each
+   place's icon in a pill, filled and green while it is open, its name under
+   it (activity_main.xml, Nav.Indicator, Nav.Label). */
 .sb {
   display: flex;
-  flex-direction: column;
-  padding: 24px 14px 14px;
-  border-right: 1px solid var(--edge);
-  background: var(--rail);
-  backdrop-filter: blur(30px) saturate(1.3);
-}
-.sb-brand {
-  padding: 0 12px 22px;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 0 16px 16px;
 }
 .sb-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  width: 88px;
+  padding: 10px 0;
+  border: 1px solid var(--glass-edge);
+  border-radius: 26px;
+  background: var(--nav-glass);
+  box-shadow: var(--lift);
 }
 .sb-nav button {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  height: 38px;
-  padding: 0 12px;
+  gap: 4px;
+  padding: 8px 0;
   border: 0;
-  border-radius: var(--r-s);
   background: none;
-  color: var(--ink-2);
-  font-size: 14px;
+  color: var(--text-2);
+  font-size: 12px;
   font-weight: 500;
-  text-align: left;
-  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+  line-height: 16px;
 }
-.sb-nav button .ic {
-  width: 18px;
-  height: 18px;
-  color: var(--ink-3);
-  transition: color var(--fast) var(--ease);
+.sb-pill {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 30px;
+  border-radius: 15px;
+  transition: background var(--fast) var(--ease);
 }
-.sb-nav button:hover {
-  background: var(--hover);
-  color: var(--ink);
+.sb-pill .ic {
+  grid-area: 1 / 1;
+  width: 22px;
+  height: 22px;
 }
-.sb-nav button:active {
-  background: var(--press);
-}
-/* The open place: a raised white pill, its icon green. */
-.sb-nav button.on {
-  background: var(--card);
-  color: var(--ink);
-  font-weight: 600;
-  box-shadow: 0 0 0 1px var(--edge), 0 1px 3px rgba(23, 25, 22, 0.07);
-}
-.sb-nav button.on .ic {
-  color: var(--brand);
-}
-/* This computer, at the foot. */
-.sb-me {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: auto;
-  padding: 14px 12px 2px;
-  border-top: 1px solid var(--edge);
-  color: var(--ink-3);
-  font-size: 12.5px;
-  font-weight: 500;
-}
-.sb-me:empty {
+.sb-pill .ic:last-child,
+.sb-nav button.on .sb-pill .ic:first-child {
   display: none;
 }
-.sb-me .ic {
-  width: 16px;
-  height: 16px;
+.sb-nav button.on .sb-pill .ic:last-child {
+  display: block;
 }
-.sb-me span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.sb-nav button:hover .sb-pill {
+  background: var(--ripple);
+}
+.sb-nav button.on {
+  color: var(--green);
+}
+.sb-nav button.on .sb-pill {
+  background: var(--green-soft);
 }
 .main {
   position: relative;
   overflow-y: auto;
-  scroll-behavior: smooth;
 }
-/* Every place fades in as it opens: opacity only, and nothing kept after,
-   since a transform left on the page would hold the bars that float at the
-   window's foot (Recently deleted's) inside it. */
+/* Each place fades in; no transform is left on it, which would hold what
+   floats at the window's foot inside the page. */
 .main > * {
   animation: fade-in 200ms var(--ease);
 }
 
 /* =============================================================== pages */
 
-/* A page: 720 of content, centred, with room around it. */
+/* A place: a column in the middle of the window. */
 .pg,
 .page {
   width: 100%;
-  max-width: 808px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 40px 44px 96px;
+  padding: 24px 40px 80px;
 }
 .page {
   display: flex;
@@ -379,50 +370,51 @@ textarea {
 .pg-hd {
   display: flex;
   flex-direction: column;
-  margin-bottom: 28px;
+  margin-bottom: 8px;
 }
+/* Back: ← and where it goes, as the phone's pages start. */
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 12px;
   align-self: flex-start;
-  height: 28px;
-  margin: 0 0 8px -8px;
-  padding: 0 10px 0 4px;
+  height: 48px;
+  margin-left: -12px;
+  padding: 0 14px 0 12px;
   border: 0;
-  border-radius: var(--r-xs);
+  border-radius: var(--radius-m);
   background: none;
-  color: var(--ink-3);
-  font-size: 13px;
-  font-weight: 500;
-  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+  color: var(--text-2);
+  font-size: 15.5px;
+  transition: background var(--fast) var(--ease);
 }
 .back .ic {
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
 }
 .back:hover {
-  background: var(--hover);
-  color: var(--ink);
+  background: var(--ripple);
 }
 .back-corner {
   position: absolute;
-  top: 40px;
-  left: 36px;
+  top: 24px;
+  left: max(40px, calc(50% - 340px));
 }
+/* Text.Display. */
 .pg-title {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 40px;
+  min-height: 52px;
+  padding: 8px 0 4px;
 }
 .pg-title h1,
 .ptitle {
   overflow: hidden;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 33px;
+  letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -440,61 +432,52 @@ textarea {
 }
 .quiet-line,
 .pg-hd + div > .note:first-child {
-  margin: -18px 4px 24px;
-  color: var(--ink-3);
-  font-size: 14px;
+  margin: 0 0 8px;
+  color: var(--text-3);
+  font-size: 14.5px;
+  line-height: 21px;
 }
-.pg-hd + div > .note:first-child + .conflict {
-  margin-top: 0;
-}
-/* A group's label: small capitals over its card. */
+/* Text.Label: a group's name, in capitals, over its card. */
 .label {
-  margin: 32px 4px 10px;
-  color: var(--ink-3);
+  margin: 0;
+  padding: 24px 0 8px;
+  color: var(--text-3);
   font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.075em;
+  line-height: 16px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-.pg-hd + .label,
-.pg-hd + div > .label:first-child,
-.pg-hd + div > .grp:first-child > .label,
-.quiet-line + .label,
-.grp-box + .grp > .label:first-child {
-  margin-top: 0;
-}
-.grp-box + .grp {
-  margin-top: 32px;
 }
 .label-who {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+/* Text.Meta. */
 .note {
-  margin: 12px 4px 0;
-  color: var(--ink-3);
-  font-size: 13px;
-  line-height: 1.5;
+  margin: 10px 2px 0;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 17px;
 }
 .note b {
-  color: var(--ink);
+  color: var(--text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .note.warn {
-  color: var(--warn);
+  color: var(--attention);
 }
 .oops {
-  margin: 20px 4px;
-  color: var(--warn);
-  font-size: 13.5px;
+  margin: 16px 2px;
+  color: var(--attention);
+  font-size: 14.5px;
 }
 .quiet {
-  color: var(--ink-3);
-  font-size: 15px;
+  color: var(--text-2);
+  font-size: 14.5px;
+  line-height: 21px;
 }
-/* A page whose few things sit in the middle of the window. */
 .center-page {
   position: relative;
   display: flex;
@@ -502,18 +485,19 @@ textarea {
   align-items: center;
   justify-content: center;
   min-height: 100%;
-  padding: 56px 40px;
+  padding: 72px 40px 48px;
   text-align: center;
 }
-/* Nothing here: an orb, a few words, what to do. */
+/* Nothing here: an icon in a circle, a few words. */
 .empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
   padding: 64px 24px;
-  color: var(--ink-2);
+  color: var(--text-2);
   font-size: 14.5px;
+  line-height: 21px;
   text-align: center;
 }
 .empty p {
@@ -523,56 +507,54 @@ textarea {
   display: grid;
   place-items: center;
   flex: none;
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: var(--card);
-  box-shadow: 0 0 0 1px var(--edge), var(--shadow-card);
-  color: var(--ink-3);
+  background: var(--surface);
+  color: var(--text-2);
 }
 .empty-orb .ic {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
 }
 .empty-orb.ok,
 .empty-orb.asking {
-  background: var(--brand-soft);
-  box-shadow: none;
-  color: var(--brand);
+  border-color: transparent;
+  background: var(--green-soft);
+  color: var(--green);
 }
 .empty-orb.warn {
-  background: var(--warn-soft);
-  box-shadow: none;
-  color: var(--warn);
+  border-color: transparent;
+  background: var(--attention-bg);
+  color: var(--attention);
 }
 .empty-orb.asking {
   animation: breathe 2.4s ease-in-out infinite;
 }
-/* A state said in the middle: the key's, a locked folder's. */
 .locked {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 8px 24px 4px;
+  gap: 6px;
+  padding: 24px 20px;
   text-align: center;
 }
 .locked > .empty-orb {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
-.locked > p:not(.note) {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
+/* Text.Title. */
+.locked > p:not(.note),
 .locked h1 {
   font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.01em;
 }
 .locked .note {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 14.5px;
+  line-height: 21px;
 }
 .locked .btn {
   margin-top: 16px;
@@ -584,120 +566,117 @@ textarea {
 
 /* ======================================================= cards and rows */
 
-/* A card: white, a hairline, a soft shadow. */
+/* card.xml: the surface, a hairline edge, rounded wide. No shadow. */
 .grp-box,
-.w-card,
-.wa-card {
+.wa-card,
+.disk,
+.conflict {
   overflow: hidden;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-l);
-  background: var(--card);
-  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
 }
-.grp-gap {
-  margin-bottom: 16px;
+.grp-box {
+  padding: 4px 0;
 }
-/* One row of a card: its icon in a soft tile, its name, its value, then a
-   chevron, a switch or nothing; a hairline between rows, from the name. */
+/* row_card.xml: an icon, a name, a short value under it, and at its end a
+   switch, an arrow or nothing. 64 high. */
 .set {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-content: center;
   align-items: center;
-  gap: 14px;
+  column-gap: 14px;
   width: 100%;
-  min-height: 56px;
-  padding: 10px 16px 10px 12px;
+  min-height: var(--row);
+  padding: 8px 14px;
   border: 0;
   background: none;
-  color: var(--ink);
-  font-size: 14.5px;
+  color: var(--text);
   text-align: left;
   transition: background var(--fast) var(--ease);
 }
-.grp-box > * + .set::before,
-.grp-box > .set + *::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 60px;
-  right: 0;
-  height: 1px;
-  background: var(--edge);
-}
 button.set:hover {
-  background: var(--hover);
+  background: var(--ripple);
 }
-button.set:active {
-  background: var(--press);
+.set > .set-ic,
+.set > .sw {
+  grid-column: 1;
+  grid-row: 1 / span 2;
 }
 .set-ic {
-  box-sizing: content-box;
-  width: 18px;
-  height: 18px;
-  padding: 8px;
-  border-radius: var(--r-s);
-  background: var(--tile);
-  color: var(--ink-2);
+  width: 22px;
+  height: 22px;
+  color: var(--text-2);
 }
+/* Text.Name. */
 .set-name {
-  flex: 1;
-  min-width: 0;
+  grid-column: 2;
+  grid-row: 1;
   overflow: hidden;
+  font-size: 15.5px;
   font-weight: 500;
+  line-height: 21px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Text.Meta, under the name. */
 .set-value {
-  max-width: 55%;
+  grid-column: 2;
+  grid-row: 2;
+  margin-top: 1px;
   overflow: hidden;
-  color: var(--ink-3);
-  font-size: 14px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 17px;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.set > :nth-child(n + 3):not(.set-value) {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  margin-left: 2px;
+}
 .set-go {
-  width: 16px;
-  height: 16px;
-  margin-left: -4px;
-  color: var(--ink-3);
-  transition: transform var(--fast) var(--ease);
-}
-button.set:hover .set-go,
-button.profile:hover .set-go {
-  transform: translateX(2px);
-}
-.set-tick {
   width: 18px;
   height: 18px;
-  color: var(--brand);
+  color: var(--text-3);
+}
+.set-tick {
+  width: 20px;
+  height: 20px;
+  color: var(--green);
 }
 .set-danger,
 .set-danger .set-ic {
-  color: var(--danger);
-}
-.set-danger .set-ic {
-  background: var(--danger-soft);
-}
-.set .btn-sm {
-  margin: -2px 0;
+  color: var(--error);
 }
 .set > small.note {
   margin: 0;
 }
-/* A card inside a sheet: no shadow, already raised. */
+/* A part's colour in the storage bar, where the part has no icon. */
+.sw {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+}
+.sw i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
 .sheet .grp-box,
 .grp-flat {
-  box-shadow: none;
+  padding: 0;
 }
-.grp-flat {
-  margin-top: 4px;
-}
-/* A list of files or folders: rows that light up under the pointer. */
+/* row_item.xml: a file or folder, its icon in a tile, its name, a line
+   under it. */
 .rows {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 .row {
   position: relative;
@@ -705,66 +684,52 @@ button.profile:hover .set-go {
   align-items: center;
   gap: 14px;
   width: 100%;
-  min-height: 60px;
-  padding: 10px 14px 10px 10px;
+  min-height: var(--row);
+  padding: 8px;
   border: 0;
-  border-radius: var(--r-m);
+  border-radius: var(--radius-m);
   background: none;
-  color: var(--ink);
+  color: var(--text);
   text-align: left;
   transition: background var(--fast) var(--ease);
 }
 button.row:hover {
-  background: var(--hover);
-}
-button.row:active {
-  background: var(--press);
-}
-.rows-card {
-  display: flex;
-  flex-direction: column;
+  background: var(--ripple);
 }
 .rows-card .row {
+  padding: 8px 14px;
   border-radius: 0;
-  padding-left: 12px;
-}
-.rows-card .row + .row::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 66px;
-  right: 0;
-  height: 1px;
-  background: var(--edge);
 }
 .row-main {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 .row-main b {
   overflow: hidden;
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 500;
+  line-height: 21px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .row-main small {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
-  color: var(--ink-3);
+  gap: 0 10px;
+  color: var(--text-3);
   font-size: 12.5px;
+  line-height: 17px;
 }
 .row-go {
-  width: 16px;
-  height: 16px;
-  color: var(--ink-3);
+  width: 18px;
+  height: 18px;
+  color: var(--text-3);
 }
 .row-warn .row-main b {
-  color: var(--warn);
+  color: var(--attention);
 }
 .w-bar {
   display: block;
@@ -777,106 +742,94 @@ button.row:active {
 .w-bar i {
   display: block;
   height: 100%;
-  background: var(--brand);
+  background: var(--green);
 }
-/* A tile: an icon in a soft rounded square, as on the phone. */
+/* tile.xml: 44, nearly white, a hairline, 12 round. */
 .tile {
   display: grid;
   place-items: center;
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: var(--tile);
+  height: var(--tile);
   overflow: hidden;
-  border-radius: var(--r-m);
-  background: var(--tile);
-  color: var(--ink-2);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--tile-fill);
+  color: var(--text-2);
 }
 .tile .ic {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
 }
 .tile img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
+/* A sheet's tile: 48, its icon 24. */
 .tile-lg {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--brand-soft);
-  color: var(--brand);
+  width: 48px;
+  height: 48px;
 }
 .tile-lg .ic {
   width: 24px;
   height: 24px;
 }
 .tile-warn {
-  background: var(--warn-soft);
-  color: var(--warn);
+  background: var(--attention-bg);
+  color: var(--attention);
 }
 .tile-ok {
-  background: var(--brand-soft);
-  color: var(--brand);
+  background: var(--green-soft);
+  color: var(--green);
 }
-/* Where a file is, as a small icon at a row's end. */
 .where {
   display: inline-grid;
   place-items: center;
   width: 28px;
   height: 28px;
-  color: var(--ink-3);
+  color: var(--text-3);
 }
 .where .ic {
   width: 16px;
   height: 16px;
 }
 .where.moving {
-  color: var(--brand);
+  color: var(--green);
 }
 .where.warn {
-  color: var(--warn);
-}
-.holders {
-  margin-top: 4px;
+  color: var(--attention);
 }
 .holders .label {
-  margin-top: 20px;
+  padding-top: 18px;
 }
 .holders .row {
   margin-top: 12px;
-  background: var(--warn-soft);
 }
-/* Folders, where a place still browses them: cards, a few to a row. */
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 .card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 64px;
-  padding: 12px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-l);
-  background: var(--card);
-  box-shadow: var(--shadow-card);
+  gap: 14px;
+  min-height: 76px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--text);
   text-align: left;
-  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+  transition: background var(--fast) var(--ease);
 }
 .card:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-lift);
-}
-.card:active {
-  transform: scale(0.99);
+  background: color-mix(in srgb, var(--surface) 94%, var(--text));
 }
 .card .tile {
-  background: var(--brand-soft);
-  color: var(--brand);
+  color: var(--green);
 }
 .card-words {
   display: flex;
@@ -886,12 +839,12 @@ button.row:active {
 }
 .card-words b {
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .card-words small {
-  color: var(--ink-3);
+  color: var(--text-3);
   font-size: 12.5px;
 }
 .card-words small:empty {
@@ -900,190 +853,161 @@ button.row:active {
 
 /* ============================================================ controls */
 
-/* Buttons, as the website draws them: 40 high, 12 round, a lift. */
+/* Widget.Qurb.Button: a pill, 48 high, Text.Button; pressed, it sinks a
+   little (animator/press). */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 18px;
+  min-height: var(--touch);
+  padding: 0 24px;
   border: 1px solid transparent;
-  border-radius: var(--r-m);
-  background: none;
-  font-size: 14px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.005em;
+  line-height: 20px;
   white-space: nowrap;
-  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), background var(--fast) var(--ease), filter var(--fast) var(--ease), border-color var(--fast) var(--ease), opacity var(--fast) var(--ease);
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease), opacity var(--fast) var(--ease), filter var(--fast) var(--ease);
 }
 .btn .ic {
-  width: 16px;
-  height: 16px;
-}
-.btn:hover:not(:disabled) {
-  transform: translateY(-1px);
+  width: 18px;
+  height: 18px;
 }
 .btn:active:not(:disabled) {
-  transform: translateY(0) scale(0.98);
-  transition-duration: 60ms;
+  transform: scale(0.97);
 }
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
 }
-/* The one thing to do: green, a gradient as the website's. */
-.btn-main,
-.send {
-  border-color: var(--brand-strong);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 86%, #fff), var(--brand));
-  color: var(--on-brand);
-  box-shadow: var(--shadow-brand), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+.btn-main:hover:not(:disabled) {
+  background: var(--green-hover);
 }
-.btn-main:hover:not(:disabled),
-.send:hover {
-  filter: brightness(1.06);
+.btn-main:active:not(:disabled) {
+  background: var(--green-pressed);
 }
-[data-theme="dark"] .btn-main,
-[data-theme="dark"] .send {
-  border-color: color-mix(in srgb, var(--brand) 70%, #000);
-  background: linear-gradient(180deg, #3f8a70, #33765f);
-}
-/* Everything else: white, a hairline. */
+/* Secondary: the surface, a hairline edge. */
 .btn-quiet {
-  border-color: var(--edge-strong);
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: 0 1px 2px rgba(23, 25, 22, 0.05), var(--highlight);
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
 }
 .btn-quiet:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--ink) 18%, transparent);
-  box-shadow: 0 4px 12px -4px rgba(23, 25, 22, 0.14), var(--highlight);
-}
-[data-theme="dark"] .btn-quiet {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface) 94%, var(--text));
 }
 .btn-soft {
-  background: var(--brand-soft);
-  color: var(--brand);
+  background: var(--green-soft);
+  color: var(--green);
 }
 .btn-soft:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--brand) 30%, transparent);
+  background: color-mix(in srgb, var(--green-soft) 85%, var(--green));
 }
+/* Danger: muted red. Blue: Switch device, as a device's dot is when on. */
 .btn-danger-solid {
-  border-color: color-mix(in srgb, var(--danger) 82%, #000);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 88%, #fff), var(--danger));
-  color: #fff;
-  box-shadow: 0 1px 2px rgba(120, 30, 20, 0.25), 0 8px 20px -8px rgba(180, 70, 59, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-.btn-danger-solid:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-[data-theme="dark"] .btn-danger-solid {
-  border-color: #a63d32;
-  background: linear-gradient(180deg, #d0564a, #b9463b);
+  background: var(--error);
 }
 .btn-blue-solid {
   background: var(--online);
-  color: #fff;
+}
+.btn-danger-solid:hover:not(:disabled),
+.btn-blue-solid:hover:not(:disabled) {
+  filter: brightness(1.07);
 }
 .btn-red-words {
-  color: var(--danger);
+  color: var(--error);
 }
+/* Small: 36 high, 13.5. */
 .btn-sm {
-  height: 34px;
+  min-height: 36px;
   padding: 0 14px;
-  border-radius: var(--r-s);
-  font-size: 13px;
+  font-size: 13.5px;
 }
 .btn-sm .ic {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 .btn-wide {
   width: 100%;
 }
 .btn-later {
-  min-width: 160px;
+  min-width: 200px;
   margin-top: 28px;
 }
-/* A destructive act, quiet until pointed at: Remove, Quit. */
+/* A text button, in red: Quit QurbSpace. */
 .link-danger {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
+  min-height: var(--touch);
   padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: var(--r-m);
+  border: 0;
+  border-radius: var(--radius-m);
   background: none;
-  color: var(--danger);
-  font-size: 14px;
+  color: var(--error);
+  font-size: 15px;
   font-weight: 600;
-  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+  transition: background var(--fast) var(--ease);
 }
 .link-danger .ic {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 .link-danger:hover {
-  background: var(--danger-soft);
+  background: var(--error-bg);
 }
-.link-danger:active {
-  border-color: color-mix(in srgb, var(--danger) 25%, transparent);
-}
-/* A way somewhere else, in green words. */
+/* Widget.Qurb.Button.Text: green words, 14 round. */
 .link {
   align-self: center;
-  margin-top: 16px;
-  padding: 6px 10px;
+  min-height: var(--touch);
+  margin-top: 8px;
+  padding: 0 14px;
   border: 0;
-  border-radius: var(--r-xs);
+  border-radius: var(--radius-m);
   background: none;
-  color: var(--brand);
-  font-size: 14px;
+  color: var(--green);
+  font-size: 15px;
   font-weight: 600;
   transition: background var(--fast) var(--ease);
 }
 .link:hover {
-  background: var(--brand-soft);
+  background: var(--green-soft);
 }
 .icon-btn {
   display: grid;
   place-items: center;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: var(--touch);
+  height: var(--touch);
   border: 0;
-  border-radius: var(--r-s);
+  border-radius: 50%;
   background: none;
-  color: var(--ink-2);
-  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+  color: var(--text-2);
+  transition: background var(--fast) var(--ease);
 }
 .icon-btn:hover {
-  background: var(--hover);
-  color: var(--ink);
-}
-.icon-btn:active {
-  background: var(--press);
+  background: var(--ripple);
 }
 .icon-btn .ic {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
 }
 .icon-btn.armed {
   width: auto;
-  padding: 0 12px;
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: 12.5px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 13.5px;
   font-weight: 600;
 }
-/* A sheet's buttons: the quiet one, then the main one, of one width. */
+/* A sheet's buttons: Cancel and the one to do, of one width, 12 apart. */
 .acts {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 24px;
+  gap: 12px;
+  margin-top: 22px;
 }
 .acts-c {
   justify-content: center;
@@ -1094,71 +1018,103 @@ button.row:active {
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
 }
-.sheet .acts .btn {
-  height: 42px;
-}
-/* Chips: a value or a state in a small pill. */
+/* A value or a state in a small pill. */
 .chips {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: 6px;
 }
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
+  height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--ink-2);
-  font-size: 12px;
+  background: var(--neutral-bg);
+  color: var(--text-2);
+  font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
 }
 .chip .ic {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
 }
 .chip-ok {
-  background: var(--brand-soft);
-  color: var(--brand);
+  background: var(--green-soft);
+  color: var(--green);
 }
 .chip-do {
-  background: var(--brand);
-  color: var(--on-brand);
+  background: var(--green);
+  color: #fff;
   font-weight: 600;
 }
 .chip-wait {
-  background: var(--warn-soft);
-  color: var(--warn);
+  background: var(--attention-bg);
+  color: var(--attention);
 }
 .chip:empty,
 .chip:has(> :only-child:empty) {
   display: none;
 }
 .chip-quiet > span {
-  color: var(--ink-3);
+  color: var(--text-3);
 }
+/* badge.xml: a count beside a label. */
 .badge {
   display: inline-grid;
   place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: var(--brand-soft);
-  color: var(--brand);
-  font-size: 11.5px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 12px;
   font-weight: 600;
 }
-/* A switch: a green track, a white knob that springs across. */
+/* Choices as pills: the chosen one green, the rest on the surface with a
+   hairline (the phone's Theme sheet). */
+.pills {
+  display: flex;
+  gap: 10px;
+}
+.pill,
+.limit {
+  flex: 1;
+  min-height: var(--touch);
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.pill:hover,
+.limit:hover {
+  border-color: var(--border-strong);
+}
+.pill:active,
+.limit:active {
+  transform: scale(0.97);
+}
+.pill.on,
+.limit.on {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+/* MaterialSwitch as the phone draws it: 52 by 32, a small white knob on
+   grey that grows as it slides across green. */
 .switch {
   position: relative;
   flex: none;
-  width: 42px;
-  height: 26px;
+  width: 52px;
+  height: 32px;
   cursor: pointer;
 }
 .switch input {
@@ -1169,71 +1125,61 @@ button.row:active {
 .switch span {
   position: absolute;
   inset: 0;
-  border-radius: 999px;
-  background: var(--line);
+  border-radius: 16px;
+  background: var(--switch-off);
   transition: background var(--mid) var(--ease);
 }
 .switch span::after {
   content: "";
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
+  top: 7px;
+  left: 7px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.12);
-  transition: transform 260ms var(--spring);
-}
-.switch:active span::after {
-  width: 23px;
+  transition: all var(--mid) var(--ease);
 }
 .switch input:checked + span {
-  background: var(--brand);
+  background: var(--green);
 }
 .switch input:checked + span::after {
-  transform: translateX(16px);
-}
-.switch:active input:checked + span::after {
-  transform: translateX(13px);
+  top: 3px;
+  left: 23px;
+  width: 26px;
+  height: 26px;
 }
 .switch input:focus-visible + span {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--green);
   outline-offset: 2px;
 }
-/* Fields: white, 12 round, a green ring with focus. */
+/* Widget.Qurb.Field: an outlined box, 14 round, green while typed in. */
 .field,
 .digits-in {
   display: block;
   width: 100%;
-  height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--edge-strong);
-  border-radius: var(--r-m);
-  background: var(--card);
-  box-shadow: inset 0 1px 2px rgba(23, 25, 22, 0.04);
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  font-size: 15.5px;
   transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
 }
-[data-theme="dark"] .field,
-[data-theme="dark"] .digits-in {
-  background: var(--surface-2);
-}
 textarea.field {
-  height: auto;
-  min-height: 116px;
-  padding: 12px 14px;
-  line-height: 1.55;
+  min-height: 120px;
+  padding: 14px 16px;
+  line-height: 22px;
   resize: none;
 }
 .field:focus,
 .digits-in:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 4px rgba(var(--glow), 0.22);
+  border-color: var(--green);
+  box-shadow: inset 0 0 0 1px var(--green);
 }
 .field::placeholder,
 .digits-in::placeholder {
-  color: var(--ink-3);
-  opacity: 0.8;
+  color: var(--text-3);
 }
 .field:disabled,
 .digits-in:disabled {
@@ -1243,142 +1189,140 @@ textarea.field {
   margin-top: 12px;
   text-align: center;
 }
-/* Six digits typed: large, spaced, in the middle. */
+/* Six digits, as large as the phone's digit boxes. */
 .digits-in {
-  width: 260px;
-  height: 60px;
-  border-radius: var(--r-l);
-  font-size: 26px;
+  width: 280px;
+  min-height: 64px;
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.3em;
   text-align: center;
-  text-indent: 0.32em;
+  text-indent: 0.3em;
   font-variant-numeric: tabular-nums;
-}
-.digits-in::placeholder {
-  color: var(--line);
-  opacity: 1;
 }
 
 /* ================================================== sheets and toasts */
 
+/* A sheet rises from the foot of the page, as the phone's from the foot of
+   its screen, the place behind dimmed a fifth. */
 .scrim {
   position: fixed;
   inset: 0;
   z-index: 30;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: var(--scrim);
-  backdrop-filter: blur(2px) saturate(0.9);
-  animation: fade-in 180ms var(--ease) both;
-  transition: opacity 170ms var(--ease);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px 24px 0 calc(var(--rail) + 24px);
+  background: var(--dim);
+  animation: fade-in var(--mid) var(--ease) both;
+  transition: opacity 200ms var(--ease);
+}
+body.setting-up .scrim {
+  padding-left: 24px;
 }
 .scrim.gone {
   opacity: 0;
 }
 .scrim.gone .sheet {
-  transform: translateY(6px) scale(0.98);
-  transition: transform 170ms var(--ease);
+  transform: translateY(40%);
+  transition: transform 200ms var(--ease);
 }
-/* A sheet: a white card in the middle, its picture and title centred. */
+/* Widget.Qurb.Sheet: the solid elevated material, its top corners 24, a
+   handle, room at the sides. */
 .sheet {
-  width: 420px;
+  width: 560px;
   max-width: 100%;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
-  padding: 28px 24px 24px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-xl);
-  background: var(--card);
-  box-shadow: var(--shadow-sheet);
-  animation: rise 280ms var(--ease) both;
+  padding: 10px 24px 28px;
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  background: var(--glass-solid);
+  box-shadow: 0 -2px 24px rgba(0, 0, 0, 0.12);
+  animation: sheet-up 320ms var(--ease-out) both;
+}
+.sheet::before {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 18px;
+  border-radius: 2px;
+  background: var(--border-strong);
 }
 .sheet-wide {
-  width: 480px;
+  width: 620px;
 }
+/* What a sheet is about: its icon in a tile, then the title and a line,
+   at the start. */
 .sh-hd {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 14px;
-  margin-bottom: 22px;
-  text-align: center;
+  margin-bottom: 18px;
 }
 .sh-hd > .circle {
-  width: 56px;
-  height: 56px;
-  font-size: 21px;
-}
-.sh-hd > .w-stack {
-  margin-left: 16px;
+  width: 48px;
+  height: 48px;
+  font-size: 19px;
 }
 .sh-words {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
-  max-width: 100%;
 }
 .sh-words h2 {
-  max-width: 100%;
   overflow: hidden;
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.018em;
-  line-height: 1.3;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sh-words p {
-  color: var(--ink-2);
-  font-size: 14px;
-  line-height: 1.5;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 17px;
 }
 .sh-words .chips {
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .sheet > .rows {
   margin: 0 -8px;
 }
 .sheet > .label {
-  margin-top: 22px;
+  padding-top: 18px;
 }
 .sheet > .field + .note,
 .sheet > .field + .sheet-note {
-  min-height: 20px;
-  margin: 10px 4px 0;
-  text-align: center;
-}
-.sheet > .field + .note:empty {
-  min-height: 0;
+  min-height: 17px;
+  margin: 8px 4px 0;
 }
 .sheet-note {
   margin-top: 14px;
-  color: var(--ink-3);
-  font-size: 13px;
-  text-align: center;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 17px;
 }
 .sheet-note:empty {
   display: none;
 }
-/* Who it is in a removal sheet, its rows, the toggle. */
-.sheet .grp-box .set {
-  min-height: 52px;
-}
-/* The key: its orb and words over its rows. */
+/* The key: safe or not, said in the middle. */
 .key-status {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  margin-bottom: 22px;
+  margin: 6px 0 20px;
   text-align: center;
 }
 .key-status h2 {
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.018em;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.01em;
 }
 /* The 24 words, four columns, numbered. */
 .words {
@@ -1386,34 +1330,29 @@ textarea.field {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px 16px;
   margin: 12px 0 0;
-  padding: 18px 18px 18px 40px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-l);
+  padding: 16px 16px 16px 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
   background: var(--surface-2);
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 500;
   user-select: text;
 }
 .grp-box > .words,
 .grp-box > div > .words {
-  margin: 0;
-  border: 0;
-  border-top: 1px solid var(--edge);
-  border-radius: 0;
-}
-.words li {
-  padding-left: 4px;
+  margin: 4px 14px 10px;
 }
 .words li::marker {
-  color: var(--ink-3);
-  font-size: 11.5px;
+  color: var(--text-3);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
-/* A sheet's actions as the phone's: round buttons, a word under each. */
+/* A file's actions, as the phone's file sheet has them: round buttons, a
+   word under each. */
 .rounds {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
-  gap: 12px 4px;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 14px 4px;
   margin-top: 4px;
 }
 .round {
@@ -1424,122 +1363,120 @@ textarea.field {
   padding: 4px 0;
   border: 0;
   background: none;
-  color: var(--ink-2);
+  color: var(--text-2);
   font-size: 12.5px;
   font-weight: 500;
 }
 .round-c {
   display: grid;
   place-items: center;
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
+  border: 1px solid var(--hairline);
   border-radius: 50%;
-  background: var(--tile);
-  color: var(--ink);
-  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease);
+  background: var(--surface);
+  color: var(--text);
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
 .round-c .ic {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 .round:hover .round-c {
-  background: var(--brand-soft);
-  color: var(--brand);
-  transform: translateY(-1px);
+  background: var(--green-soft);
+  color: var(--green);
 }
 .round:active .round-c {
   transform: scale(0.94);
 }
 .round-danger {
-  color: var(--danger);
+  color: var(--error);
 }
 .round-danger .round-c,
 .round-danger:hover .round-c {
-  background: var(--danger-soft);
-  color: var(--danger);
+  background: var(--error-bg);
+  color: var(--error);
 }
-/* A toast: a dark pill over the page's foot. */
+/* Widget.Qurb.Snackbar: dark, rounded, over the foot of the page. */
 .toast {
   position: fixed;
-  left: calc(50% + 120px);
-  bottom: 28px;
+  left: calc(50% + var(--rail) / 2);
+  bottom: 24px;
   z-index: 50;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  max-width: min(560px, calc(100vw - 300px));
-  padding: 11px 20px 11px 14px;
-  border-radius: 999px;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - var(--rail) - 48px));
+  min-height: 48px;
+  padding: 12px 20px 12px 16px;
+  border-radius: var(--radius-m);
   background: var(--toast);
   color: var(--toast-ink);
-  font-size: 13.5px;
-  font-weight: 500;
-  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.45);
+  font-size: 14.5px;
+  line-height: 20px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
   transform: translateX(-50%);
-  animation: bar-in var(--mid) var(--ease) both;
+  animation: bar-in var(--mid) var(--ease-out) both;
   transition: opacity 300ms var(--ease), transform 300ms var(--ease);
 }
 body.setting-up .toast {
   left: 50%;
 }
 .toast-ic {
-  width: 18px;
-  height: 18px;
-  color: #6fd3a8;
+  width: 20px;
+  height: 20px;
+  color: #7fd2ad;
 }
 .toast-warn .toast-ic {
-  color: #f2b65c;
+  color: #f0b65c;
 }
 [data-theme="dark"] .toast-ic {
-  color: var(--brand);
+  color: #2f6b57;
 }
 [data-theme="dark"] .toast-warn .toast-ic {
-  color: #b77b1c;
+  color: #946a24;
 }
 .toast.gone {
   opacity: 0;
   transform: translate(-50%, 8px);
 }
-/* Files held over the window. */
 .dropping {
   position: fixed;
-  inset: 12px 12px 12px 252px;
+  inset: 16px 16px 16px calc(var(--rail) + 8px);
   z-index: 40;
   display: grid;
   place-items: center;
-  border: 2px dashed color-mix(in srgb, var(--brand) 60%, transparent);
-  border-radius: var(--r-xl);
-  background: color-mix(in srgb, var(--brand-soft) 86%, transparent);
-  backdrop-filter: blur(8px);
-  color: var(--brand);
+  border: 2px dashed var(--green);
+  border-radius: var(--radius-sheet);
+  background: color-mix(in srgb, var(--green-soft) 90%, transparent);
+  color: var(--green);
   font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-weight: 600;
   opacity: 0;
   pointer-events: none;
-  transform: scale(0.985);
-  transition: opacity var(--mid) var(--ease), transform var(--mid) var(--ease);
+  transition: opacity var(--mid) var(--ease);
 }
 .dropping.on {
   opacity: 1;
-  transform: none;
 }
 
 /* ============================================================ circles */
 
-/* A device as a circle: its picture or its first letter; a dot for on. */
+/* A device's circle: deeper than green-soft, ringed, its first letter in
+   green; a dot, blue for on and red for off. */
 .circle {
   position: relative;
   display: grid;
   place-items: center;
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: var(--brand-soft);
-  color: var(--brand);
-  font-size: 15px;
-  font-weight: 650;
+  background: var(--avatar-fill);
+  box-shadow: inset 0 0 0 1.5px var(--avatar-ring);
+  color: var(--green);
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1;
 }
 .circle img {
@@ -1552,101 +1489,111 @@ body.setting-up .toast {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 11px;
-  height: 11px;
-  border: 2px solid var(--card);
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--bg);
   border-radius: 50%;
-  background: var(--ink-3);
+  background: var(--offline);
 }
 .circle-dot.on {
   background: var(--online);
 }
+.grp-box .circle-dot,
+.sheet .circle-dot,
+.dev-card .circle-dot,
+.launch-tile .circle-dot,
+.wa-card .circle-dot {
+  border-color: var(--surface);
+}
 .circle-xs {
-  width: 18px;
-  height: 18px;
-  font-size: 9.5px;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  box-shadow: inset 0 0 0 1px var(--avatar-ring);
 }
 .circle-xs .circle-dot,
 .circle-plain .circle-dot {
   display: none;
 }
 .circle-md {
-  width: 36px;
-  height: 36px;
-  font-size: 14px;
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
 }
 .circle-lg {
-  width: 44px;
-  height: 44px;
-  font-size: 17px;
+  width: 48px;
+  height: 48px;
+  font-size: 19px;
 }
 .circle-xl {
   width: 64px;
   height: 64px;
-  font-size: 25px;
+  font-size: 26px;
 }
 .circle-xl .circle-dot {
   width: 15px;
   height: 15px;
-  border-width: 3px;
+  border-width: 2.5px;
 }
 .circle-add {
-  background: var(--card);
-  box-shadow: inset 0 0 0 1.5px var(--edge-strong);
-  color: var(--ink-2);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+  color: var(--text-2);
 }
 .circle-add .ic {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 .circle-btn {
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: none;
-  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
-}
-.circle-btn:hover {
-  transform: scale(1.06);
+  transition: transform var(--fast) var(--ease);
 }
 .circle-btn:active {
-  transform: scale(0.97);
-}
-.circle-btn .circle {
-  box-shadow: 0 0 0 3px var(--bg), 0 4px 12px -4px rgba(23, 25, 22, 0.25);
-}
-.circle-btn .circle-add {
-  box-shadow: inset 0 0 0 1.5px var(--edge-strong), 0 4px 12px -6px rgba(23, 25, 22, 0.2);
-}
-.circle-btn .circle-dot {
-  border-color: var(--bg);
+  transform: scale(0.95);
 }
 
 /* ================================================================ home */
 
+/* screen_home.xml: the name and the circle at the top, the state in the
+   middle of the window, one Send, Waiting under it while something is. */
 .home {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  padding: 40px 32px;
+  padding: 16px 40px 40px;
 }
-/* The chosen device's circle, at the top right. */
 .home-top {
-  position: absolute;
-  top: 24px;
-  right: 28px;
-  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 680px;
+  height: 56px;
+  margin: 0 auto;
 }
+/* Text.Title. */
+.home-name {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.01em;
+}
+/* Equal room above and below the state: the 72 the top takes, less the
+   40 under the page. */
 .home-middle {
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: 12px;
+  padding-bottom: 32px;
 }
-/* The status mark: a white disc in a faint green halo, its ring the state. */
+/* StatusMark: a disc with a ring 8 wide in the state's colour; syncing, a
+   third of the ring lit green, travelling. */
 .mark {
   position: relative;
   display: grid;
@@ -1657,220 +1604,185 @@ body.setting-up .toast {
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--card);
-  box-shadow: 0 0 0 1px var(--edge), 0 12px 32px -12px rgba(23, 25, 22, 0.2), 0 0 0 16px rgba(var(--glow), 0.07), 0 0 80px 24px rgba(var(--glow), 0.12);
-  transition: transform var(--mid) var(--ease), width var(--mid) var(--ease), height var(--mid) var(--ease), box-shadow var(--mid) var(--ease);
-}
-.mark:hover {
-  transform: scale(1.025);
+  background: var(--surface);
+  transition: background var(--mid) var(--ease), transform var(--fast) var(--ease);
 }
 .mark:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 .mark[data-tone="warn"] {
-  box-shadow: 0 0 0 1px var(--edge), 0 12px 32px -12px rgba(23, 25, 22, 0.2), 0 0 0 16px rgba(201, 150, 60, 0.08), 0 0 80px 24px rgba(201, 150, 60, 0.1);
+  background: var(--attention-bg);
 }
-.mark[data-tone="away"],
-.mark[data-tone="idle"] {
-  box-shadow: 0 0 0 1px var(--edge), 0 12px 32px -12px rgba(23, 25, 22, 0.2);
+.mark[data-tone="away"] {
+  background: var(--neutral-bg);
 }
 .ring {
   position: absolute;
-  inset: 12px;
-  width: calc(100% - 24px);
-  height: calc(100% - 24px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg);
 }
 .ring circle {
   fill: none;
-  stroke-width: 2.4;
+  stroke-width: 4.76;
 }
 .ring-track {
-  stroke: color-mix(in srgb, var(--brand) 22%, transparent);
+  stroke: var(--healthy-ring);
   transition: stroke var(--mid) var(--ease);
 }
-.mark[data-tone="ok"] .ring-track {
-  stroke: var(--brand);
+.mark[data-tone="busy"] .ring-track {
+  stroke: var(--neutral-bg);
 }
 .mark[data-tone="warn"] .ring-track {
-  stroke: color-mix(in srgb, var(--warn) 55%, transparent);
+  stroke: var(--attention-ring);
 }
 .mark[data-tone="away"] .ring-track,
 .mark[data-tone="idle"] .ring-track {
-  stroke: var(--line);
+  stroke: var(--neutral-ring);
 }
 .ring-arc {
-  stroke: var(--brand);
-  stroke-linecap: round;
+  stroke: var(--green);
   stroke-dasharray: 0 100;
   transition: stroke-dasharray 0.6s var(--ease), opacity var(--mid) var(--ease);
 }
 .mark.spinning .ring {
-  animation: travel 1.3s linear infinite;
+  animation: travel 1.6s linear infinite;
 }
 .mark-in {
   display: grid;
   place-items: center;
-  color: var(--brand);
-  transition: color var(--mid) var(--ease);
+  color: var(--healthy);
 }
 /* No fade on the icon: Home draws it again every two seconds. */
 .mark-in .ic {
-  width: 50px;
-  height: 50px;
+  width: 60px;
+  height: 60px;
+}
+.mark[data-tone="busy"] .mark-in {
+  color: var(--green);
 }
 .mark[data-tone="warn"] .mark-in {
-  color: var(--warn);
+  color: var(--attention);
 }
 .mark[data-tone="away"] .mark-in,
 .mark[data-tone="idle"] .mark-in {
-  color: var(--ink-3);
+  color: var(--neutral);
 }
+/* Text.Hero. */
 .mark-words {
-  max-width: 520px;
-  margin-top: 32px;
-  font-size: 24px;
-  font-weight: 650;
-  letter-spacing: -0.022em;
-  line-height: 1.25;
+  max-width: 560px;
+  margin-top: 24px;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.02em;
   text-align: center;
 }
 .mark-quiet {
-  max-width: 420px;
-  margin-top: 8px;
-  color: var(--ink-3);
-  font-size: 14.5px;
+  max-width: 440px;
+  margin-top: 6px;
+  color: var(--text-3);
+  font-size: 15.5px;
+  line-height: 22px;
   text-align: center;
 }
+/* One big Send: 60 high, a pill, its words at 17. */
 .send {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-width: 208px;
-  height: 48px;
+  width: min(100%, 480px);
+  height: 60px;
   margin-top: 28px;
-  padding: 0 28px;
-  border: 1px solid var(--brand-strong);
-  border-radius: 14px;
-  font-size: 15px;
+  border: 0;
+  border-radius: 30px;
+  background: var(--green);
+  color: #fff;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: -0.005em;
-  transition: transform var(--fast) var(--ease), filter var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
 .send .ic {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
 }
 .send:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-brand), 0 12px 28px -10px rgba(47, 107, 87, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: var(--green-hover);
 }
 .send:active {
+  background: var(--green-pressed);
   transform: scale(0.98);
-  transition-duration: 60ms;
 }
 .drop-hint {
   position: absolute;
-  bottom: 28px;
+  bottom: 24px;
   left: 0;
   right: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--ink-3);
+  color: var(--text-3);
   font-size: 12.5px;
 }
 .drop-hint .ic {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
-/* With a queue: the mark smaller and higher, Waiting under it. */
 .home.queued .home-middle {
   justify-content: flex-start;
-  padding-top: 8px;
-}
-.home.queued .mark {
-  width: 128px;
-  height: 128px;
-}
-.home.queued .ring {
-  inset: 9px;
-  width: calc(100% - 18px);
-  height: calc(100% - 18px);
-}
-.home.queued .mark-in .ic {
-  width: 38px;
-  height: 38px;
-}
-.home.queued .mark-words {
-  margin-top: 24px;
-  font-size: 21px;
-}
-.home.queued .send {
-  margin-top: 22px;
+  padding: 8px 0 0;
 }
 .home.queued .drop-hint {
   display: none;
 }
 .waiting {
-  width: min(580px, 100%);
-  margin-top: 40px;
-  animation: page-in 300ms var(--ease) both;
+  width: min(100%, 480px);
+  margin-top: 32px;
 }
 .waiting:empty {
   display: none;
 }
+/* "Waiting", and See all at its end. */
 .wl {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 0 4px 10px;
+  margin: 0 6px 8px;
 }
 .wl b {
   font-size: 15px;
   font-weight: 650;
-  letter-spacing: -0.012em;
 }
 .wl-all {
-  padding: 4px 8px;
+  padding: 6px 0 6px 8px;
   border: 0;
-  border-radius: var(--r-xs);
   background: none;
-  color: var(--brand);
+  color: var(--green);
   font-size: 13.5px;
-  font-weight: 600;
-  transition: background var(--fast) var(--ease);
 }
 .wl-all:hover {
-  background: var(--brand-soft);
+  text-decoration: underline;
 }
-/* A Waiting row (option A): its picture with the device's face on its
-   corner, a title, one quiet line, how far. */
+/* A Waiting row (Waits.kt, option A): 72 high, its picture with the
+   device's face on its corner, a title, one line, how far. */
 .wa {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   width: 100%;
-  padding: 14px 18px 14px 14px;
+  min-height: 72px;
+  padding: 12px 16px;
   border: 0;
   background: none;
+  color: var(--text);
   text-align: left;
   transition: background var(--fast) var(--ease);
 }
-.wa + .wa::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 78px;
-  right: 0;
-  height: 1px;
-  background: var(--edge);
-}
 .wa:hover {
-  background: var(--hover);
+  background: var(--ripple);
 }
 .wa-th {
   position: relative;
@@ -1879,19 +1791,20 @@ body.setting-up .toast {
   flex: none;
   width: 48px;
   height: 48px;
-  border-radius: var(--r-m);
-  background: var(--tile);
-  color: var(--ink-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-2);
 }
 .wa-th > img {
   width: 100%;
   height: 100%;
-  border-radius: var(--r-m);
+  border-radius: 11px;
   object-fit: cover;
 }
 .wa-th > .ic {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
 }
 .wa-play {
   position: absolute;
@@ -1910,11 +1823,11 @@ body.setting-up .toast {
 }
 .circle.wa-face {
   position: absolute;
-  right: -6px;
-  bottom: -6px;
+  right: -7px;
+  bottom: -7px;
   width: 24px;
   height: 24px;
-  border: 2.5px solid var(--card);
+  border: 2px solid var(--surface);
   font-size: 10px;
 }
 .wa-face .circle-dot {
@@ -1924,6 +1837,7 @@ body.setting-up .toast {
   display: block;
   flex: 1;
   min-width: 0;
+  margin-left: 4px;
 }
 .wa-t b,
 .wa-t > span {
@@ -1933,20 +1847,22 @@ body.setting-up .toast {
   white-space: nowrap;
 }
 .wa-t b {
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 15.5px;
+  font-weight: 500;
+  line-height: 21px;
 }
 .wa-t > span {
   margin-top: 2px;
-  color: var(--ink-3);
-  font-size: 13px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 17px;
 }
 .wa-t > span.wait {
-  color: var(--warn);
+  color: var(--attention);
 }
 .wa-t > .wa-bar {
-  height: 4px;
-  margin-top: 9px;
+  height: 3px;
+  margin-top: 8px;
   overflow: hidden;
   border-radius: 2px;
   background: var(--surface-2);
@@ -1955,13 +1871,13 @@ body.setting-up .toast {
   display: block;
   height: 100%;
   border-radius: 2px;
-  background: var(--brand);
+  background: var(--green);
   transition: width 0.6s var(--ease);
 }
 .wa-end {
-  min-width: 38px;
-  color: var(--ink-2);
-  font-size: 13px;
+  min-width: 36px;
+  color: var(--text-2);
+  font-size: 13.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -1969,12 +1885,11 @@ body.setting-up .toast {
 .wa-end-ic {
   width: 18px;
   height: 18px;
-  color: var(--ink-3);
+  color: var(--text-3);
 }
 .wa-end-ic.wait {
-  color: var(--warn);
+  color: var(--attention);
 }
-/* How far one file has got: a ring over its picture. */
 .w-ring {
   position: absolute;
   inset: 0;
@@ -1997,7 +1912,6 @@ body.setting-up .toast {
   stroke: #fff;
   stroke-linecap: round;
 }
-/* A document drawn as a page of lines, its type on a tag. */
 .doc-face {
   position: absolute;
   inset: 0;
@@ -2005,7 +1919,6 @@ body.setting-up .toast {
   flex-direction: column;
   gap: 13%;
   padding: 22% 20%;
-  border: 1px solid var(--edge);
   border-radius: inherit;
   background: #fdfdfb;
 }
@@ -2025,46 +1938,45 @@ body.setting-up .toast {
   color: #fff;
   font: 700 7.5px/1.35 "Inter", sans-serif;
   font-style: normal;
-  letter-spacing: 0.02em;
 }
 
 /* ===================================================== waiting in full */
 
 .wsect {
-  margin: 32px 4px 12px;
+  padding: 24px 2px 10px;
 }
 .wsect:first-child {
-  margin-top: 0;
+  padding-top: 8px;
 }
 .wsect b {
   display: block;
-  font-size: 16px;
-  font-weight: 650;
-  letter-spacing: -0.012em;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 23px;
 }
 .wsect span {
   display: block;
-  margin-top: 3px;
-  color: var(--ink-3);
-  font-size: 13px;
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 17px;
 }
 .wsect span.wait {
-  color: var(--warn);
+  color: var(--attention);
 }
 .wgrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 84px);
-  gap: 10px;
+  gap: 8px;
 }
 .wa-th.wa-cell {
   width: 84px;
   height: 84px;
-  border-radius: 14px;
-  box-shadow: 0 0 0 1px var(--edge);
+  border-radius: 12px;
 }
 .wa-cell > img,
 .wa-cell .w-ring {
-  border-radius: 14px;
+  border-radius: 11px;
 }
 .wa-cell .w-ring {
   padding: 26px;
@@ -2074,7 +1986,7 @@ body.setting-up .toast {
   height: 26px;
 }
 .wa-more {
-  color: var(--ink-2);
+  color: var(--text-2);
   font-size: 14px;
   font-weight: 600;
 }
@@ -2090,15 +2002,9 @@ body.setting-up .toast {
   border-radius: 11px;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
-  opacity: 0;
-  transition: background var(--fast) var(--ease), opacity var(--fast) var(--ease);
-}
-.wa-cell:hover .w-x,
-.w-x:focus-visible {
-  opacity: 1;
 }
 .w-x:hover {
-  background: var(--danger);
+  background: var(--error);
 }
 .w-x .ic {
   width: 12px;
@@ -2107,11 +2013,12 @@ body.setting-up .toast {
 
 /* ====================================================== a device's page */
 
+/* The device's circle, its name in Text.Display, Off and how long, ⓘ. */
 .dev-hd {
   display: flex;
   align-items: center;
   gap: 18px;
-  margin: 4px 0 8px;
+  margin: 12px 0 0;
 }
 .dev-words {
   flex: 1;
@@ -2119,123 +2026,81 @@ body.setting-up .toast {
 }
 .dev-words h1 {
   overflow: hidden;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 33px;
+  letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dev-words .state {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   margin-top: 4px;
-  color: var(--ink-3);
-  font-size: 14px;
-}
-.dev-words .state::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ink-3);
-}
-.dev-hd:has(.circle-dot.on) .state {
-  color: var(--online);
-  font-weight: 500;
-}
-.dev-hd:has(.circle-dot.on) .state::before {
-  background: var(--online);
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 17px;
 }
 .dev-words .state small {
   margin-left: 8px;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 #page-list {
   align-self: stretch;
-  margin-top: 28px;
+  margin-top: 4px;
 }
-#page-list > .label:first-child {
-  margin-top: 0;
-}
-/* Switch device and Remove, side by side under the cards. */
 .dev-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 28px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 24px;
 }
-.dev-foot .btn-sm {
-  height: 40px;
-  padding: 0 16px;
-  border-radius: var(--r-m);
-  font-size: 14px;
-}
-.dev-foot .btn-sm .ic {
-  width: 16px;
-  height: 16px;
-}
-/* The chooser: a card for each device, the chosen one ticked. */
 .dev-card {
   display: flex;
   align-items: center;
   gap: 14px;
   width: 100%;
-  min-height: 60px;
-  padding: 10px 16px 10px 12px;
-  border: 1px solid var(--edge-strong);
-  border-radius: var(--r-l);
-  background: var(--card);
+  min-height: 72px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--text);
   text-align: left;
-  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease), transform var(--fast) var(--ease);
+  transition: background var(--fast) var(--ease);
 }
 .dev-card + .dev-card {
   margin-top: 8px;
 }
 .dev-card:hover {
-  border-color: color-mix(in srgb, var(--brand) 45%, var(--edge-strong));
+  background: color-mix(in srgb, var(--surface) 94%, var(--text));
 }
-.dev-card:active {
-  transform: scale(0.99);
-}
+/* card_chosen.xml: the chosen one edged in green, 2 wide. */
 .dev-card.on {
-  border-color: var(--brand);
-  background: var(--brand-soft);
+  border-color: var(--green);
+  box-shadow: inset 0 0 0 1px var(--green);
 }
 .dev-card b {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 15.5px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .dev-card small {
-  color: var(--ink-3);
+  color: var(--text-3);
   font-size: 12.5px;
 }
-.dev-card .circle-md {
-  width: 38px;
-  height: 38px;
-}
-.dev-card.on .circle-dot {
-  border-color: var(--brand-soft);
-}
 .dev-tick {
-  width: 18px;
-  height: 18px;
-  color: var(--brand);
+  width: 20px;
+  height: 20px;
+  color: var(--green);
 }
+/* card_dashed.xml. */
 .dev-add {
-  border-style: dashed;
+  border: 1.5px dashed var(--border-strong);
   background: none;
-  color: var(--ink-2);
-}
-.dev-add b {
-  font-weight: 500;
+  color: var(--text-2);
 }
 .sheet > .label + .dev-card {
   margin-top: 0;
@@ -2243,8 +2108,8 @@ body.setting-up .toast {
 .tech {
   width: 100%;
   margin-top: 16px;
-  color: var(--ink-3);
-  font-size: 13px;
+  color: var(--text-3);
+  font-size: 12.5px;
 }
 .tech summary {
   cursor: pointer;
@@ -2263,66 +2128,78 @@ body.setting-up .toast {
 
 /* ====================================================== adding a device */
 
-/* Two choices as tiles: an icon at the top, the words at the foot. */
-.choices {
+/* card_device.xml: tiles two to a row, the icon in its tile at the top,
+   the name under it. */
+.choices,
+.launch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 10px;
 }
-.choice {
+.choice,
+.launch-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
-  min-height: 148px;
-  padding: 20px;
-  border: 1px solid var(--edge);
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: var(--shadow-card);
+  gap: 14px;
+  min-height: 120px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--text);
   text-align: left;
-  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), border-color var(--fast) var(--ease);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
-.choice:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--brand) 32%, var(--edge));
-  box-shadow: var(--shadow-lift);
+.choice:hover,
+.launch-tile:hover {
+  background: color-mix(in srgb, var(--surface) 94%, var(--text));
 }
-.choice:active {
-  transform: scale(0.99);
+.choice:active,
+.launch-tile:active {
+  transform: scale(0.98);
 }
-.choice-c {
+.choice-c,
+.launch-lead {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: var(--brand-soft);
-  color: var(--brand);
+  width: 50px;
+  height: 50px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--tile-fill);
+  color: var(--green);
 }
-.choice-c .ic {
-  width: 24px;
-  height: 24px;
+.choice-c .ic,
+.launch-lead .ic {
+  width: 26px;
+  height: 26px;
 }
 .choice-person .choice-c {
-  background: #f3e3ea;
-  color: #9a5473;
+  color: #9b5574;
 }
 [data-theme="dark"] .choice-person .choice-c {
-  background: #2d1d24;
   color: #d796b2;
 }
-.choice b {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.choice b,
+.launch-tile > b {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 15.5px;
+  font-weight: 500;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .choices + .link {
   display: block;
-  margin: 20px auto 0;
+  margin: 16px auto 0;
 }
-/* The code to scan: the QR on white, its six digits, how long it lasts. */
+/* The code to scan (qr_card.xml): the QR on white, its six digits, how
+   long it lasts. */
 .pair {
   display: flex;
   flex-direction: column;
@@ -2338,15 +2215,15 @@ body.setting-up .toast {
 .qr {
   display: grid;
   place-items: center;
-  width: 236px;
-  height: 236px;
-  margin-top: 32px;
+  width: 240px;
+  height: 240px;
+  margin-top: 28px;
   padding: 18px;
-  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
   background: #fff;
   color: #111;
-  box-shadow: 0 0 0 1px var(--edge), var(--shadow-lift);
-  animation: rise 320ms var(--ease) both;
+  animation: pop 300ms var(--ease-out) both;
   transition: opacity var(--mid) var(--ease);
 }
 .qr svg {
@@ -2362,49 +2239,49 @@ body.setting-up .toast {
   opacity: 0.25;
 }
 .digits {
-  margin-top: 26px;
+  margin-top: 24px;
   font-size: 32px;
-  font-weight: 650;
+  font-weight: 600;
+  line-height: 40px;
   letter-spacing: 0.16em;
   text-indent: 0.16em;
   font-variant-numeric: tabular-nums;
 }
 .digits.withdrawn {
-  color: var(--ink-3);
+  color: var(--text-3);
   text-decoration: line-through;
-  text-decoration-thickness: 2px;
 }
 .count {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 6px;
-  color: var(--ink-3);
-  font-size: 14px;
+  margin-top: 4px;
+  color: var(--text-3);
+  font-size: 14.5px;
   font-variant-numeric: tabular-nums;
 }
 .count .ic {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
-/* Six digits in boxes, to compare with the phone's. */
+/* digit_box.xml: six digits to compare, each in its box. */
 .six {
   display: flex;
   justify-content: center;
   gap: 8px;
-  margin: 0 0 14px;
+  margin: 4px 0 14px;
 }
 .six span {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 58px;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-m);
-  background: var(--surface-2);
-  font-size: 25px;
-  font-weight: 650;
+  width: 48px;
+  height: 60px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  font-size: 26px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .six span:nth-child(3) {
@@ -2413,30 +2290,29 @@ body.setting-up .toast {
 .sub-ic {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
 }
 .sub-ic .ic {
   width: 15px;
   height: 15px;
-  color: var(--brand);
+  color: var(--green);
 }
-.sub-quiet {
-  color: var(--ink-2);
-  font-size: 14px;
+.sheet .sub-quiet {
+  justify-content: center;
+  color: var(--text-2);
+  font-size: 14.5px;
 }
 .sub-quiet .ic {
   color: inherit;
 }
-/* Entering a code: the field, and under it what is happening. */
 .pg .pair {
   padding-top: 24px;
 }
 .pg .pair .note {
-  margin-top: 16px;
-  font-size: 14px;
+  margin-top: 14px;
+  font-size: 14.5px;
 }
-/* Waiting on a phone's yes: the phone in an orb, a ring travelling. */
+/* Waiting on a phone's yes. */
 .asking-phone {
   display: flex;
   flex-direction: column;
@@ -2447,12 +2323,14 @@ body.setting-up .toast {
 }
 .asking-phone h2 {
   margin-top: 18px;
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.018em;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.01em;
 }
 .asking-phone .note {
   margin: 0;
+  font-size: 14.5px;
 }
 .asking-orb {
   position: relative;
@@ -2461,18 +2339,18 @@ body.setting-up .toast {
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: var(--brand-soft);
-  color: var(--brand);
+  background: var(--green-soft);
+  color: var(--green);
 }
 .asking-orb .ic {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
 }
 .asking-spin {
   position: absolute;
   inset: -6px;
-  border: 2.5px solid transparent;
-  border-top-color: var(--brand);
+  border: 3px solid transparent;
+  border-top-color: var(--green);
   border-radius: 50%;
   animation: spin 1.1s linear infinite;
 }
@@ -2485,110 +2363,50 @@ body.setting-up .toast {
 }
 .arrived h1 {
   margin-top: 10px;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.022em;
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 33px;
+  letter-spacing: -0.02em;
 }
 .arrived .btn {
-  min-width: 160px;
+  min-width: 200px;
   margin-top: 20px;
 }
 
 /* ============================================================== files */
 
-/* Places as tiles, two to a row: an icon at the top, the name at the foot,
-   ↗ in the corner. */
-.launch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-.launch-tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  min-height: 132px;
-  padding: 20px;
-  border: 1px solid var(--edge);
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: var(--shadow-card);
-  cursor: pointer;
-  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), border-color var(--fast) var(--ease);
-}
-.launch-tile:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--brand) 32%, var(--edge));
-  box-shadow: var(--shadow-lift);
-}
-.launch-tile:active {
-  transform: scale(0.99);
-}
-.launch-lead {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: var(--brand-soft);
-  color: var(--brand);
-}
-.launch-lead .ic {
-  width: 24px;
-  height: 24px;
+/* A person's tile leads with their circle rather than an icon. */
+.launch-tile:has(.launch-lead .circle) .launch-lead {
+  width: auto;
+  height: auto;
+  border: 0;
+  background: none;
 }
 .launch-lead .circle {
-  width: 48px;
-  height: 48px;
-  font-size: 19px;
-}
-.launch-tile > b {
-  max-width: 100%;
-  overflow: hidden;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: 50px;
+  height: 50px;
+  font-size: 20px;
 }
 .launch-side {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  color: var(--ink-3);
-  transition: color var(--fast) var(--ease), transform var(--fast) var(--ease);
-}
-.launch-tile:hover .launch-side:not(:has(.btn)) {
-  color: var(--brand);
-  transform: translate(1px, -1px);
-}
-.launch-side:has(.btn) {
   top: 16px;
   right: 16px;
+  color: var(--text-3);
 }
 .launch-end {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
-/* A person's folder, open: green, with Lock. */
 .launch-open {
-  border-color: color-mix(in srgb, var(--brand) 45%, var(--edge));
-  background: linear-gradient(180deg, var(--brand-soft), var(--card) 75%);
+  border-color: var(--green);
+  box-shadow: inset 0 0 0 1px var(--green);
 }
-.launch-open .launch-lead .circle {
-  background: var(--brand);
-  color: var(--on-brand);
-}
-/* A gallery: square pictures, edge to edge. */
 .gallery {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 4px;
+  gap: 3px;
   overflow: hidden;
-  border-radius: var(--r-l);
+  border-radius: var(--radius-m);
 }
 .pic {
   display: grid;
@@ -2597,11 +2415,7 @@ body.setting-up .toast {
   padding: 0;
   border: 0;
   background: var(--surface-2);
-  color: var(--ink-3);
-  transition: filter var(--fast) var(--ease);
-}
-.pic:hover {
-  filter: brightness(0.94);
+  color: var(--text-3);
 }
 .pic img {
   width: 100%;
@@ -2609,15 +2423,14 @@ body.setting-up .toast {
   object-fit: cover;
   animation: fade-in 0.3s ease both;
 }
-/* Quick preview, over everything. */
+/* Quick preview (Peek.kt): black, its bar at the top. */
 .peek {
   position: fixed;
   inset: 0;
   z-index: 45;
   display: flex;
   flex-direction: column;
-  background: rgba(12, 14, 13, 0.92);
-  backdrop-filter: blur(14px);
+  background: #0d0f0e;
   color: #fff;
   animation: fade-in 180ms var(--ease) both;
 }
@@ -2625,13 +2438,13 @@ body.setting-up .toast {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 18px 14px 24px;
+  padding: 10px 16px 10px 24px;
 }
 .peek-bar b {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2642,12 +2455,9 @@ body.setting-up .toast {
   background: rgba(255, 255, 255, 0.12);
 }
 .btn-onpeek {
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
-}
-.btn-onpeek:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.18);
 }
 .peek-stage {
   position: relative;
@@ -2660,18 +2470,16 @@ body.setting-up .toast {
 .peek-stage img {
   max-width: 100%;
   max-height: 100%;
-  border-radius: var(--r-xs);
   object-fit: contain;
-  animation: rise 240ms var(--ease) both;
 }
 .peek-stage pre {
   max-width: 820px;
   max-height: 100%;
   overflow: auto;
-  padding: 22px 26px;
-  border-radius: var(--r-m);
-  background: #fbfbf8;
-  color: #222;
+  padding: 20px 24px;
+  border-radius: var(--radius-m);
+  background: #181b19;
+  color: #dfe5e1;
   font: 13px/1.6 ui-monospace, monospace;
   white-space: pre-wrap;
   user-select: text;
@@ -2684,7 +2492,6 @@ body.setting-up .toast {
 .peek-video {
   max-width: 100%;
   max-height: 100%;
-  border-radius: var(--r-xs);
   background: #000;
 }
 .peek-audio {
@@ -2694,7 +2501,6 @@ body.setting-up .toast {
   width: min(900px, 100%);
   height: 100%;
   border: 0;
-  border-radius: var(--r-xs);
   background: #fff;
 }
 .peek-nav {
@@ -2702,48 +2508,45 @@ body.setting-up .toast {
   top: 50%;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   transform: translateY(-50%);
-  transition: background var(--fast) var(--ease);
 }
 .peek-nav:hover {
   background: rgba(255, 255, 255, 0.22);
 }
 .peek-nav.prev {
-  left: 18px;
+  left: 16px;
 }
 .peek-nav.next {
-  right: 18px;
+  right: 16px;
 }
 .peek-nav.next .ic {
   transform: scaleX(-1);
 }
 /* Two versions: side by side, then the three choices. */
 .conflict {
-  margin-top: 20px;
-  padding: 18px;
-  border: 1px solid var(--edge);
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: var(--shadow-card);
+  margin-top: 16px;
+  padding: 16px;
+}
+.pg-hd + div > .note:first-child + .conflict {
+  margin-top: 8px;
 }
 .sheet .conflict {
   margin-top: 0;
   padding: 0;
   border: 0;
   background: none;
-  box-shadow: none;
 }
 .conflict-hd {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .sheet .conflict-hd {
   display: none;
@@ -2751,13 +2554,13 @@ body.setting-up .toast {
 .vers {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 .ver {
   overflow: hidden;
-  border: 1px solid var(--edge-strong);
-  border-radius: var(--r-m);
-  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
 }
 .ver > .note {
   margin: 16px;
@@ -2791,7 +2594,7 @@ body.setting-up .toast {
 .ver-ic {
   width: 36px;
   height: 36px;
-  color: var(--ink-3);
+  color: var(--text-3);
 }
 .ver-gone {
   background: #f8e1dd;
@@ -2804,47 +2607,49 @@ body.setting-up .toast {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  border-top: 1px solid var(--edge);
-  font-size: 13px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
 }
 .ver-by .ic {
-  width: 15px;
-  height: 15px;
-  color: var(--ink-3);
+  width: 16px;
+  height: 16px;
+  color: var(--text-3);
 }
 .ver-by b {
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ver-by small {
   margin-left: auto;
-  color: var(--ink-3);
+  color: var(--text-3);
+  font-size: 12.5px;
   white-space: nowrap;
 }
 .keeps {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 16px;
+  margin-top: 14px;
 }
 .keeps .btn {
   width: 100%;
-  height: 44px;
 }
 
 /* =================================================== recently deleted */
 
+/* DeletedScreen.kt: the files themselves in a grid, their names under
+   them, days left in amber in the last week. */
 .rdg {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 18px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 14px 10px;
 }
 .rd {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -2854,9 +2659,10 @@ body.setting-up .toast {
 }
 .rd small {
   overflow: hidden;
-  padding: 0 4px;
-  color: var(--ink-2);
+  padding: 0 2px;
+  color: var(--text-2);
   font-size: 12.5px;
+  line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2867,19 +2673,14 @@ body.setting-up .toast {
   width: 100%;
   aspect-ratio: 1;
   overflow: hidden;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-l);
-  background: var(--card);
-  color: var(--ink-3);
-  box-shadow: var(--shadow-card);
-  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
-}
-button.rd:hover .rd-th {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lift);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+  color: var(--text-2);
+  transition: transform var(--fast) var(--ease);
 }
 button.rd:active .rd-th {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 .rd-th > img {
   position: absolute;
@@ -2897,117 +2698,102 @@ button.rd:active .rd-th {
   border-bottom-width: 10px;
   border-left-width: 16px;
 }
-.rd-th .doc-face {
-  border: 0;
-}
 .rd-th .doc-face em {
   font-size: 10px;
 }
 .rd.sel .rd-th {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 2px var(--brand), var(--shadow-card);
-}
-.rd.sel .rd-th > img {
-  transform: scale(0.94);
-  border-radius: 10px;
-}
-.rd-th > img {
-  transition: transform var(--mid) var(--ease), border-radius var(--mid) var(--ease);
+  border-color: var(--green);
+  box-shadow: inset 0 0 0 2px var(--green);
 }
 .rd-days {
   position: absolute;
-  left: 8px;
-  bottom: 8px;
+  left: 6px;
+  bottom: 6px;
   display: grid;
   place-items: center;
   height: 22px;
   padding: 0 8px;
   border-radius: 11px;
-  background: var(--warn);
+  background: var(--attention);
   color: #fff;
   font-size: 11.5px;
   font-weight: 600;
 }
 .rd-tick {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   display: grid;
   place-items: center;
   width: 24px;
   height: 24px;
   border: 2px solid #fff;
   border-radius: 12px;
-  background: var(--brand);
+  background: var(--green);
   color: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-  transition: background var(--fast) var(--ease), transform 220ms var(--spring);
 }
 .rd-tick.off {
-  background: rgba(0, 0, 0, 0.18);
-  transform: scale(0.92);
+  background: rgba(0, 0, 0, 0.2);
 }
 .rd-tick .ic {
   width: 13px;
   height: 13px;
 }
 .sel-x {
-  margin-left: -8px;
+  margin-left: -12px;
 }
 .pg:has(.selbar) {
   padding-bottom: 120px;
 }
-/* The bar at the foot: Restore and Delete, floating over the page. */
+/* The bar in the tab bar's place: Restore and Delete, floating. */
 .selbar {
   position: fixed;
-  left: calc(50% + 120px);
-  bottom: 28px;
+  left: calc(50% + var(--rail) / 2);
+  bottom: 24px;
   z-index: 10;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px;
-  border: 1px solid var(--edge);
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: var(--shadow-sheet);
+  border: 1px solid var(--glass-edge);
+  border-radius: 26px;
+  background: var(--nav-glass);
+  box-shadow: var(--lift);
   transform: translateX(-50%);
-  animation: bar-in 260ms var(--ease) both;
+  animation: bar-in var(--mid) var(--ease-out) both;
 }
 .selbar .btn {
-  height: 40px;
-  padding: 0 18px;
-  border-radius: var(--r-m);
-  font-size: 13.5px;
+  min-height: 44px;
+  padding: 0 20px;
+  font-size: 14.5px;
 }
 
 /* =========================================================== settings */
 
-/* This computer, as one card: its circle, its name. */
+/* This computer, as the phone's profile card: its circle, its name in
+   Text.Title, a line under it. */
 .profile {
   display: flex;
   align-items: center;
   gap: 16px;
   width: 100%;
-  padding: 16px 18px 16px 16px;
-  border: 1px solid var(--edge);
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: var(--shadow-card);
-  color: var(--ink);
+  min-height: 92px;
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  color: var(--text);
   text-align: left;
-  transition: box-shadow var(--fast) var(--ease), transform var(--fast) var(--ease);
+  transition: background var(--fast) var(--ease);
 }
 .profile:hover {
-  box-shadow: var(--shadow-lift);
-}
-.profile:active {
-  transform: scale(0.995);
+  background: color-mix(in srgb, var(--surface) 96%, var(--text));
 }
 .profile .circle {
-  width: 56px;
-  height: 56px;
-  font-size: 22px;
+  width: 60px;
+  height: 60px;
+  font-size: 24px;
 }
 .profile-words {
   display: flex;
@@ -3018,49 +2804,47 @@ button.rd:active .rd-th {
 }
 .profile-words b {
   overflow: hidden;
-  font-size: 17px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+  letter-spacing: -0.01em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .profile-words small {
-  color: var(--ink-3);
-  font-size: 13px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 17px;
 }
 .pg .link-danger:last-child {
-  margin: 28px 0 0 -4px;
+  margin: 20px 0 0 -2px;
 }
-/* What this computer keeps: how much is left, a bar of what fills it. */
+/* What this computer keeps: how much is left, and a bar of what fills it. */
 .disk {
-  margin: 0 0 24px;
-  padding: 22px 22px 20px;
-  border: 1px solid var(--edge);
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: var(--shadow-card);
+  margin: 8px 0 0;
+  padding: 18px 16px 16px;
 }
 .free {
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 .free small {
   margin-left: 8px;
-  color: var(--ink-3);
-  font-size: 14px;
-  font-weight: 500;
+  color: var(--text-3);
+  font-size: 14.5px;
+  font-weight: 400;
   letter-spacing: 0;
 }
 .disk-bar {
   display: flex;
   gap: 2px;
   height: 10px;
-  margin-top: 16px;
+  margin-top: 14px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: 5px;
   background: var(--surface-2);
 }
 .disk-bar i {
@@ -3068,145 +2852,80 @@ button.rd:active .rd-th {
   height: 100%;
   transition: width 0.6s var(--ease);
 }
-/* A part's colour in the bar, as a dot in a tile where a part has no icon;
-   the icons of the others take their colours. */
-.sw {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-s);
-  background: var(--tile);
-}
-.sw i {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
 .disk + .grp-box {
-  margin-bottom: 16px;
+  margin: 10px 0;
 }
-/* Space for QurbSpace: sizes to pick, three to a row, or two when there
-   are four; a short last row shares its width. */
+/* Space for QurbSpace: sizes as pills, three to a row, or two when four. */
 .limits {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 .limit {
-  flex: 1 1 calc(33.333% - 8px);
-  height: 44px;
-  border: 1px solid var(--edge-strong);
-  border-radius: var(--r-m);
-  background: var(--card);
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease), color var(--fast) var(--ease);
+  flex: 1 1 calc(33.333% - 10px);
 }
 .limits:has(> :nth-child(4):last-child) .limit {
-  flex-basis: calc(50% - 8px);
+  flex-basis: calc(50% - 10px);
 }
-.limit:hover {
-  border-color: color-mix(in srgb, var(--brand) 40%, var(--edge-strong));
-}
-.limit.on {
-  border-color: var(--brand);
-  background: var(--brand-soft);
-  color: var(--brand);
-  box-shadow: inset 0 0 0 1px var(--brand);
-}
-/* The speed limit: each way, a row of choices. */
+/* The speed limit: each way, its pills. */
 .speed {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
-  min-height: 64px;
-  padding: 12px 16px 12px 12px;
+  min-height: var(--row);
+  padding: 10px 14px;
 }
-.speed + .speed::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 60px;
-  right: 0;
-  height: 1px;
-  background: var(--edge);
+.speed .set-ic {
+  flex: none;
 }
 .amounts {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-.amount {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--edge-strong);
-  border-radius: 999px;
-  background: var(--card);
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease);
-}
-.amount:hover {
-  border-color: color-mix(in srgb, var(--ink) 22%, transparent);
-  color: var(--ink);
-}
-.amount.on {
-  border-color: var(--brand);
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 600;
-}
-/* The key's page: its state in the middle of a card. */
-.pg-hd + div > .locked:first-child {
-  padding: 28px 24px;
-  border: 1px solid var(--edge);
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: var(--shadow-card);
-}
-.pg-hd + div > .locked:first-child + .grp > .label {
-  margin-top: 32px;
-}
-
-/* =========================================================== activity */
-
-/* Which: segmented chips. */
-.a-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: -8px 0 4px;
-}
+/* Activity's filters and the speed's amounts: pills 36 high, the chosen
+   one green. */
+.amount,
 .a-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
+  min-height: 36px;
   padding: 0 14px;
-  border: 1px solid var(--edge-strong);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--card);
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 500;
-  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
+.amount:hover,
 .a-chip:hover {
-  border-color: color-mix(in srgb, var(--ink) 22%, transparent);
-  color: var(--ink);
+  border-color: var(--border-strong);
 }
+.amount.on,
 .a-chip.on {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--bg);
-  font-weight: 600;
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+/* The key's page: its state on a card. */
+.pg-hd + div > .locked:first-child {
+  margin-top: 8px;
+  padding: 24px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+}
+
+/* =========================================================== activity */
+
+.a-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0;
 }
 .a-n {
   display: grid;
@@ -3215,16 +2934,19 @@ button.rd:active .rd-th {
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: var(--warn);
+  background: var(--attention);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
 }
-.a-chips + div > .label:first-child {
-  margin-top: 24px;
+.a-chip.on .a-n {
+  background: #fff;
+  color: var(--green);
 }
-.a-chips + div > .empty {
-  padding-top: 72px;
+/* What happened: rows on the page, not in a card, as the phone's. */
+.w-card {
+  display: flex;
+  flex-direction: column;
 }
 .w-row {
   position: relative;
@@ -3232,33 +2954,25 @@ button.rd:active .rd-th {
   align-items: center;
   gap: 14px;
   width: 100%;
-  min-height: 68px;
-  padding: 12px 16px 12px 14px;
+  min-height: var(--row);
+  padding: 8px;
   border: 0;
+  border-radius: var(--radius-m);
   background: none;
-  color: var(--ink);
+  color: var(--text);
   text-align: left;
   transition: background var(--fast) var(--ease);
 }
-.w-row + .w-row::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 80px;
-  right: 0;
-  height: 1px;
-  background: var(--edge);
-}
 .w-row:hover {
-  background: var(--hover);
+  background: var(--ripple);
 }
-/* Up to three previews, fanned. */
 .w-stack {
   position: relative;
   flex: none;
   width: 52px;
   height: 44px;
 }
+/* file_tile.xml: the surface, a hairline edge, 12 round. */
 .w-pic {
   position: absolute;
   top: 0;
@@ -3268,10 +2982,10 @@ button.rd:active .rd-th {
   overflow: hidden;
   width: 44px;
   height: 44px;
-  border-radius: var(--r-m);
-  background: var(--tile);
-  color: var(--ink-2);
-  box-shadow: 0 0 0 2px var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-2);
 }
 .w-pic img {
   width: 100%;
@@ -3279,30 +2993,25 @@ button.rd:active .rd-th {
   object-fit: cover;
 }
 .w-pic .ic {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
 }
 .w-pic-row {
   position: relative;
   width: 64px;
   height: 64px;
-  box-shadow: 0 0 0 1px var(--edge);
-}
-.w-pic-row .ic {
-  width: 22px;
-  height: 22px;
 }
 .a-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 64px);
-  justify-content: center;
   gap: 8px;
 }
 .a-more {
-  color: var(--ink-2);
+  color: var(--text-2);
   font-size: 12.5px;
   font-weight: 600;
 }
+/* What happened, as the badge on the tile's corner (Kit.What). */
 .a-badge {
   position: absolute;
   left: 30px;
@@ -3312,59 +3021,64 @@ button.rd:active .rd-th {
   place-items: center;
   width: 20px;
   height: 20px;
-  border: 2px solid var(--card);
+  border: 2px solid var(--bg);
   border-radius: 10px;
   color: #fff;
+}
+.sheet .a-badge {
+  border-color: var(--glass-solid);
 }
 .a-badge .ic {
   width: 11px;
   height: 11px;
 }
 .b-in {
-  background: var(--online);
+  background: var(--healthy);
 }
 .b-out,
 .b-ok {
-  background: var(--brand);
+  background: var(--green);
 }
 .b-bad {
-  background: var(--warn);
+  background: var(--error);
 }
 .b-quiet {
-  background: var(--ink-3);
+  background: var(--neutral-bg);
+  color: var(--neutral);
 }
 .w-main {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 .w-main b {
   overflow: hidden;
-  font-size: 14.5px;
+  font-size: 15.5px;
   font-weight: 500;
+  line-height: 21px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .w-main small {
   overflow: hidden;
-  color: var(--ink-3);
+  color: var(--text-3);
   font-size: 12.5px;
+  line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .w-main small.a-bad {
-  color: var(--warn);
+  color: var(--error);
 }
 .a-time {
-  color: var(--ink-3);
+  color: var(--text-3);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
 }
-.w-card + .acts,
 div:has(> .w-card) + .acts {
-  margin-top: 28px;
+  margin-top: 24px;
 }
 
 /* ========================================================= setting up */
@@ -3389,78 +3103,71 @@ body.setting-up .win {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  width: min(420px, 100%);
+  gap: 12px;
+  width: min(400px, 100%);
   text-align: center;
-  animation: page-in 320ms var(--ease) both;
+  animation: fade-in 300ms var(--ease) both;
 }
 .setup-in:has(> .appmark) {
   gap: 0;
 }
 .setup-in > .back {
-  align-self: center;
-  margin: 0 0 8px;
+  align-self: flex-start;
+  margin: 0 0 8px -12px;
 }
 .setup-in h1 {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 33px;
+  letter-spacing: -0.02em;
 }
 .setup-in > .empty-orb + h1 {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .setup-in .note {
   margin: 0;
-  font-size: 14px;
+  font-size: 14.5px;
+  line-height: 21px;
 }
 .setup-in .field,
 .setup-in .digits-in {
-  margin-top: 10px;
-}
-.setup-in .link {
-  margin-top: 4px;
+  margin-top: 8px;
 }
 .setup-in .acts {
   justify-content: center;
+  width: 100%;
   margin-top: 12px;
 }
-.setup-in .acts .btn {
-  min-width: 220px;
-  height: 46px;
-  border-radius: 14px;
-  font-size: 15px;
+.setup-in .acts .btn,
+.btn-start {
+  width: 100%;
+  min-height: 56px;
+  font-size: 16px;
 }
-/* The welcome: the app's mark, its name, one line, Start. */
+/* SetupActivity's Welcome: the app's mark, its name, one line, Start. */
 .appmark {
   display: grid;
   place-items: center;
-  width: 88px;
-  height: 88px;
+  width: 96px;
+  height: 96px;
   overflow: hidden;
-  border-radius: 26px;
-  box-shadow: 0 18px 40px -14px rgba(47, 107, 87, 0.6), 0 0 0 1px rgba(23, 25, 22, 0.04);
-  animation: rise 420ms var(--ease) both;
+  border-radius: 28px;
 }
 .appmark svg {
-  width: 88px;
-  height: 88px;
+  width: 96px;
+  height: 96px;
 }
 .appmark + .ptitle {
   margin-top: 28px;
-  font-size: 32px;
 }
 .ptitle + .quiet {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 .btn-start {
-  width: 280px;
-  height: 48px;
-  margin-top: 36px;
-  border-radius: 14px;
-  font-size: 15px;
+  margin-top: 40px;
 }
 .btn-start + .link {
-  margin-top: 14px;
+  margin-top: 8px;
 }
 .btn-start ~ .note:empty {
   display: none;
