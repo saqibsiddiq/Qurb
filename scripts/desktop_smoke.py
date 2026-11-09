@@ -201,7 +201,8 @@ def portal(scheme):
 def choose_theme(window, words):
     go(window, "settings")
     window.js("themeSheet()")
-    window.until("the theme sheet", "return document.querySelector('.sheet .rounds')")
+    # Three pills, Auto, Light and Dark, as the phone's Theme sheet has them.
+    window.until("the theme sheet", "return document.querySelector('.sheet .pills')")
     press(window, words, ".sheet")
 
 
@@ -229,8 +230,8 @@ def follows_the_desktop(window):
     time.sleep(0.5)
     if window.js(drawn)[0] != "light":
         raise AssertionError("the desktop's style overrode the choice made in Settings")
-    choose_theme(window, "System")
-    seen["System chosen again"] = drawn_as("dark", "the desktop's again")
+    choose_theme(window, "Auto")
+    seen["Auto chosen again"] = drawn_as("dark", "the desktop's again")
     return seen
 
 
@@ -284,12 +285,13 @@ def pair(window):
             expected = found.group(1)
             break
     assert expected, f"qurb join printed no number: {said}"
+    # The sheet that asks shows the number as six boxes (D18).
     shown = window.until("the window asking about the device",
-        "const d = document.querySelector('.asking-box .digits'); return d && d.textContent")
-    assert shown == expected, f"the window shows {shown}, the joining device {expected}"
+        "const d = [...document.querySelectorAll('.sheet .six span')].map((s) => s.textContent).join(''); return d.length === 6 && d")
+    assert shown == expected.replace(" ", ""), f"the window shows {shown}, the joining device {expected}"
     # As long as a person comparing two numbers might take.
     time.sleep(float(os.environ.get("SMOKE_THINK", "0")))
-    press(window, "Approve", ".asking-box")
+    press(window, "Approve", ".sheet")
     rest, _ = joining.communicate(timeout=60)
     assert joining.returncode == 0, f"qurb join failed: {said}{rest}"
     # Added, the window goes Home and says so in a moment's note.
@@ -319,8 +321,10 @@ def home(window):
     that asking works."""
     go(window, "home")
     window.js("listsHome()")
+    # One row for the device, as option A has it: "Sending 1 file".
     window.until("the send under Waiting",
-        "const w = document.getElementById('home-waiting'); return w && w.textContent.includes('to-send.txt')")
+        "const w = document.getElementById('home-waiting'); return w && w.textContent.includes('Sending 1 file')"
+        " && HOME.sends.some((s) => s.path.endsWith('to-send.txt'))")
     window.js("document.getElementById('home-mark').click()")
     time.sleep(1)
 
@@ -364,7 +368,10 @@ def new_features(window, device):
     window.until("the folder read into the vault",
         "return (BACKUPS?.folders ?? []).some(f => f.files === 2) || (listsBackup(), false)", timeout=60)
     assert call_js(window, "backups", {})["keepers"][0]["on"]
-    inside = os.path.join(HOME, "qurb", "inside")
+    # The synced folder is the window's root: ~/qurb/Shared since decision
+    # 0083, a folder of people's folders beside it.
+    synced = window.js("return rootPath")
+    inside = os.path.join(synced, "inside")
     os.makedirs(inside, exist_ok=True)
     window.js("""window.__answer = undefined;
         invoke('set_backup_folders', {folders: [arguments[0]]}).then(() => window.__answer = 'taken', e => window.__answer = String(e));""",
@@ -378,7 +385,7 @@ def new_features(window, device):
     # Quick preview of a video in the synced folder: an address on this
     # machine, which answers a range as a player asks for one.
     clip = os.urandom(150_000)
-    with open(os.path.join(HOME, "qurb", "clip.mp4"), "wb") as f:
+    with open(os.path.join(synced, "clip.mp4"), "wb") as f:
         f.write(clip)
     window.until("the clip in the index",
         "return window.__TAURI__.core.invoke('find', {text: 'clip', private: false}).then(r => window.__found = r.length), window.__found",
@@ -395,7 +402,7 @@ def new_features(window, device):
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, "website/public/media/waves.mp4"), "rb") as f:
         waves = f.read()
-    with open(os.path.join(HOME, "qurb", "waves.mp4"), "wb") as f:
+    with open(os.path.join(synced, "waves.mp4"), "wb") as f:
         f.write(waves)
     window.until("the clip in the index",
         "return window.__TAURI__.core.invoke('find', {text: 'waves', private: false}).then(r => window.__waves = r.length), window.__waves",
@@ -416,8 +423,8 @@ def remove(window, device):
     """
     window.until("the device in the circle's list", "return HOME.devices.length")
     window.js("go('device', HOME.devices[0])")
-    window.until("its page", "return document.querySelector('.remove')")
-    window.js("document.querySelector('.remove').click()")
+    window.until("its page", "return document.querySelector('.dev-foot .btn-danger-solid')")
+    window.js("document.querySelector('.dev-foot .btn-danger-solid').click()")
     said = window.until("the question", "const c = document.querySelector('.sheet'); return c && c.textContent")
     assert f"Remove {device}?" in said, said
     assert "1 send cancelled" in said, said
@@ -430,7 +437,7 @@ def remove(window, device):
 # Failures a step causes on purpose, and so not a reason to fail the run.
 EXPECTED = (
     r"^unlock: that passphrase does not open this key$",
-    r"^set_backup_folders: .*/qurb/inside overlaps your QurbSpace folder",
+    r"^set_backup_folders: .*/inside overlaps your QurbSpace folder",
 )
 
 # Failures from windows already closed: starting again opens a new page, and
@@ -454,6 +461,7 @@ def lock_and_unlock(window):
     window.until("the key kept by passphrase",
         "return [...document.querySelectorAll('.set')].some(s => s.textContent.startsWith('Passphrase') && s.querySelector('.set-tick'))")
     EARLIER.extend(window.js("return window.qurbFailures || []"))
+    synced = window.js("return rootPath")
     # Quit, not close: closing the window keeps qurb running (decision 0040),
     # and the next launch would only ask that one to show itself.
     try:
@@ -465,7 +473,7 @@ def lock_and_unlock(window):
 
     # The folder named: the second device enrolled from the command line is
     # the most recently registered, and would otherwise be the one opened.
-    window = Window([f"{HOME}/qurb"])
+    window = Window([synced])
     window.until("the unlock screen",
         "const h = document.querySelector('.setup-in h1'); return h && h.textContent === 'QurbSpace is locked'")
     window.js("document.querySelector('.setup-in .field').value = 'wrong horse'")

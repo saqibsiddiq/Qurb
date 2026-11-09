@@ -353,9 +353,11 @@ pub fn protect_key(
 /// a code, which carries the key. The 24 words can still be shown, in
 /// Settings, by [`reveal_phrase`].
 ///
-/// `allowance` is the disk this device may use, in bytes, from the question
-/// asked before the key is made (decision 0038). Written with the rest of the
-/// device's settings, before anything syncs.
+/// `allowance` is the disk this device may use, in bytes, written with the
+/// rest of the device's settings before anything syncs. Zero is no limit,
+/// which is what setting up sends since the question was taken out of it (the
+/// owner's review of 2026-11-03, P-1): a computer keeps everything, and the
+/// limit is set later in Settings, if at all (decision 0083).
 #[tauri::command(async)]
 pub fn create_device(hosted: Host<'_>, path: String, allowance: String) -> Answer<()> {
     let bytes = bytes_of(&allowance)?;
@@ -382,11 +384,12 @@ fn start_at_login_from_now() {
 }
 
 
+/// The allowance setting up was given, in bytes; zero is no limit, as in the
+/// config file. Refusing zero here outlived the question it guarded, and from
+/// 2026-11-03 to 2026-11-09 no computer could be set up through the window:
+/// found by `scripts/desktop-smoke.sh`.
 fn bytes_of(allowance: &str) -> Answer<u64> {
-    match allowance.parse::<u64>() {
-        Ok(0) | Err(_) => Err("choose how much space qurb may use".to_string()),
-        Ok(bytes) => Ok(bytes),
-    }
+    allowance.parse::<u64>().map_err(|_| "that is not an amount of space".to_string())
 }
 
 /// Set this folder up with a key that already exists on another device.
@@ -3139,6 +3142,17 @@ mod tests {
             assert_eq!(base64(plain.as_bytes()), encoded, "{plain:?}");
         }
         assert_eq!(base64(&[0xff, 0xfe, 0xfd]), "//79");
+    }
+
+    /// Setting up sends no limit, zero, since it stopped asking (P-1); a
+    /// limit chosen is taken as it is, and only something not a number is
+    /// refused.
+    #[test]
+    fn setting_up_takes_no_limit() {
+        assert_eq!(bytes_of("0"), Ok(0));
+        assert_eq!(bytes_of("100000000000"), Ok(100_000_000_000));
+        assert!(bytes_of("").is_err());
+        assert!(bytes_of("lots").is_err());
     }
 
     /// A JPEG as a camera writes one: an APP1 EXIF block whose IFD1 points at

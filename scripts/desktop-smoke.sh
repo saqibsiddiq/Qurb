@@ -101,6 +101,9 @@ export SMOKE_APP=${SMOKE_APP:-$ROOT/target/release/qurb-desktop}
 export SMOKE_QURB=${SMOKE_QURB:-$ROOT/target/release/qurb}
 
 if python3 "$ROOT/scripts/desktop_smoke.py"; then
+    # A person's folder is read-only until it is opened (src/mount.rs), and
+    # rm cannot empty a folder it may not write.
+    chmod -R u+w "$WORK"
     rm -rf "$WORK"
 else
     echo "desktop-smoke: failed; what it left is in $WORK" >&2
