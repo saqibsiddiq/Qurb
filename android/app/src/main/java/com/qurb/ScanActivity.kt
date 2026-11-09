@@ -155,6 +155,11 @@ class ScanActivity : AppCompatActivity() {
                 val input = InputImage.fromMediaImage(image, proxy.imageInfo.rotationDegrees)
                 scanner.process(input)
                     .addOnSuccessListener { codes ->
+                        // The reader has come, if it was being fetched.
+                        if (fetching) {
+                            fetching = false
+                            runOnUiThread { if (!done) views.hint.text = "Point at the code" }
+                        }
                         val read = codes.mapNotNull { it.rawValue }
                         // Ours, a device's code or a guest's (decision 0060).
                         // A camera pointed at a room finds URLs, Wi-Fi codes
@@ -167,6 +172,13 @@ class ScanActivity : AppCompatActivity() {
                             otherSeenAt = SystemClock.elapsedRealtime()
                             notOurs()
                         }
+                    }
+                    .addOnFailureListener { e ->
+                        // The reader not on the phone yet: every frame fails
+                        // this way until Play services has fetched it.
+                        if (e is com.google.mlkit.common.MlKitException &&
+                            e.errorCode == com.google.mlkit.common.MlKitException.UNAVAILABLE
+                        ) fetchReader(scanner)
                     }
                     .addOnCompleteListener { proxy.close() }
             }
@@ -182,6 +194,37 @@ class ScanActivity : AppCompatActivity() {
                 views.hint.text = "No camera"
             }
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    /** Whether the reader has been asked for, once a frame found it missing,
+     *  and not yet read a frame. */
+    private var fetching = false
+    private var asked = false
+
+    /**
+     * The barcode reader is Google Play services' own, fetched by the phone
+     * when first wanted, and until it arrives every frame fails to be read --
+     * which went unheard, and the screen said *Point at the code* to a code it
+     * was pointed at (found on the emulator, 2026-11-09, which could not
+     * fetch it). So it is asked for at once, said while it comes, and the six
+     * digits offered if it cannot come.
+     */
+    private fun fetchReader(scanner: com.google.android.gms.common.api.OptionalModuleApi) = runOnUiThread {
+        if (asked || done) return@runOnUiThread
+        asked = true
+        fetching = true
+        android.util.Log.i("qurb", "the barcode reader is not on this phone yet: asking Play services for it")
+        views.hint.text = "Getting the scanner ready"
+        val request = com.google.android.gms.common.moduleinstall.ModuleInstallRequest.newBuilder()
+            .addApi(scanner)
+            .build()
+        com.google.android.gms.common.moduleinstall.ModuleInstall.getClient(this).installModules(request)
+            // Asked for, not yet here: the first frame read says it has come.
+            .addOnSuccessListener { android.util.Log.i("qurb", "the barcode reader asked for; already here: ${it.areModulesAlreadyInstalled()}") }
+            .addOnFailureListener { e ->
+                android.util.Log.w("qurb", "could not fetch the barcode reader", e)
+                if (!done) views.hint.text = "The scanner could not be fetched. Type the 6 digits"
+            }
     }
 
     private fun ours(text: String): Boolean {

@@ -66,6 +66,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Qurb">
 
+        <!-- The barcode reader is Play services' and is fetched when first
+             wanted; this asks for it at install from the Play Store. A phone
+             that installed the APK itself fetches it when the scanner opens
+             (ScanActivity.ready). -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode" />
+
         <!-- allowBackup is false deliberately. Android's backup would copy the
              encrypted vault to Google's servers, and the key wrapping it lives
              in the Keystore and does NOT travel - so a restored copy would be
