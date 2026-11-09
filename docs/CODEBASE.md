@@ -1133,7 +1133,9 @@ qurb/
 │   │                      x86_64, or 32-bit x86 on an x86_64 emulator
 │   ├── desktop-icons.py   the phone's icons, for the desktop window
 │   ├── desktop-smoke.sh   drive the real desktop window end to end, on a
-│   │                      display of its own (with desktop_smoke.py)
+│   │                      display of its own (with desktop_smoke.py);
+│   │                      SMOKE_MODE=full runs desktop_full.py: every
+│   │                      window function, against a second device that runs
 │   ├── smoke_portal.py    a stand-in desktop settings portal, for the
 │   │                      smoke test's dark-preference check
 │   ├── mobile-bindings.sh generate the Kotlin and Swift bindings
@@ -2039,6 +2041,11 @@ cargo build --release -p qurb-desktop
 # The window following the desktop's dark preference, from a stand-in
 # settings portal on a bus of its own. Also needs dbus-daemon and PyGObject.
 SMOKE_MODE=theme ./scripts/desktop-smoke.sh
+# Every function of the window that needs no phone, against a second device
+# (the command line) that runs and syncs: files both ways, freeing, deleting
+# and restoring, the Vault, two versions, sharing, sending, joining by a code,
+# removing, and setting up again with the 24 words (docs/testing.md).
+SMOKE_MODE=full ./scripts/desktop-smoke.sh
 ```
 
 ```bash
