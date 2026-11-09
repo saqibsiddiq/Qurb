@@ -894,7 +894,12 @@ class MainActivity : AppCompatActivity() {
                 result = outcome
                 if (outcome.reached > 0u) Engine.noteSynced(this@MainActivity)
                 if (outcome.reached > 0u || outcome.unreachable > 0u) Engine.noteTried(this@MainActivity, started)
-                withContext(Dispatchers.IO) { Folders.startChosen(this@MainActivity, engine) }
+                withContext(Dispatchers.IO) {
+                    Folders.startChosen(this@MainActivity, engine)
+                    // A kept file found changed when the computer asked for
+                    // it: listed again now, as after the worker's pass.
+                    if (runCatching { engine.keptFilesChanged() }.getOrDefault(false)) WhatsApp.relist(this@MainActivity)
+                }
                 // On screen, so nothing is raised; what was shown here is
                 // marked as seen, and not announced later.
                 withContext(Dispatchers.IO) { Notices.tell(this@MainActivity, engine) }

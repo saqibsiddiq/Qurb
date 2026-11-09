@@ -180,6 +180,10 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             if (outcome.reached > 0u) Engine.noteSynced(applicationContext)
             if (outcome.reached > 0u || outcome.unreachable > 0u) Engine.noteTried(applicationContext, started)
             Folders.startChosen(applicationContext, engine)
+            // A kept file found changed when the computer asked for it --
+            // WhatsApp rewrites its chat backups each night: listed again
+            // now, on Wi-Fi, rather than the next night it charges.
+            if (runCatching { engine.keptFilesChanged() }.getOrDefault(false)) WhatsApp.relist(applicationContext)
 
             // Refused the foreground with a large collection waiting, while a
             // device was there for it -- reached, or collecting on its own

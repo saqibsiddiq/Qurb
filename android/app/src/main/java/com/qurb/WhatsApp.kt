@@ -70,6 +70,8 @@ object WhatsApp {
      *  half; listing takes another. Inside a worker's ten minutes, and what is
      *  left over is carried on with next time. */
     private const val RUN_SECONDS = 420u
+    /** How often a changed kept file may have the folders listed again. */
+    private const val RELIST_EVERY_MS = 30 * 60 * 1000L
 
     /** The picker, opened at WhatsApp's folder. */
     fun pickIntent(): Intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
@@ -217,6 +219,21 @@ object WhatsApp {
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.KEEP, request)
+    }
+
+    /**
+     * A file kept here found changed when a computer asked for it: WhatsApp's
+     * folder and the chosen ones listed again now, which reads it again
+     * (`Store::outsides_changed`). On the S23 on 2026-11-09 four chat
+     * backups, rewritten after the night's run, waited at 99% for a day.
+     * At most every half hour: a file that cannot be read stays marked.
+     */
+    fun relist(context: Context) {
+        val now = System.currentTimeMillis()
+        if (now - prefs(context).getLong("relisted", 0) < RELIST_EVERY_MS) return
+        prefs(context).edit().putLong("relisted", now).apply()
+        Log.i(TAG, "a kept file changed since it was read: listing the folders again")
+        runNow(context)
     }
 
     private fun carryOn(context: Context) {

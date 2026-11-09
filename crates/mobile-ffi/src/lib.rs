@@ -2503,6 +2503,14 @@ impl Qurb {
         Ok(BackupWaiting { files, files_left, bytes_left })
     }
 
+    /// Whether a file this phone keeps outside its folder -- WhatsApp's, or
+    /// one of the folders chosen for backing up -- was found changed when a
+    /// computer asked for it, and has not been read again: the app then
+    /// lists its folders now rather than at night (`Store::outsides_changed`).
+    pub fn kept_files_changed(&self) -> Result<bool, QurbError> {
+        Ok(self.look()?.store().kept_files_changed()?)
+    }
+
     /// The WhatsApp backup as it stands: how much, and how much of it the
     /// computer has (decision 0062).
     pub fn whatsapp_backup(&self) -> Result<BackupState, QurbError> {

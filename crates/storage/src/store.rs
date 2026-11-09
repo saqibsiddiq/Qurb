@@ -75,6 +75,13 @@ impl ChunkAt {
             _ => None,
         }
     }
+
+    fn outside_source(&self) -> Option<String> {
+        match self {
+            ChunkAt::Outside { source, .. } => Some(source.clone()),
+            _ => None,
+        }
+    }
 }
 
 /// Reads a chunk from the places [`Store::locate`] found, without the store.
@@ -93,10 +100,13 @@ pub struct ChunkReader {
 }
 
 /// A chunk read by a [`ChunkReader`], and the sends whose files were found no
-/// longer to hold what was sent, for [`Store::sends_changed`].
+/// longer to hold what was sent, for [`Store::sends_changed`]; and the files
+/// kept outside the folder found changed since they were read, for
+/// [`Store::outsides_changed`].
 pub struct ChunkRead {
     pub bytes: Result<Vec<u8>>,
     pub changed_sends: Vec<String>,
+    pub changed_outside: Vec<String>,
 }
 
 /// What one place held.
@@ -122,18 +132,21 @@ impl ChunkReader {
     /// against its hash. The chunk store, always last, decides the error when
     /// none does.
     pub fn read(&self, hash: &blake3::Hash, places: &[ChunkAt]) -> ChunkRead {
-        let mut changed_sends = Vec::new();
+        let (mut changed_sends, mut changed_outside) = (Vec::new(), Vec::new());
         for place in places {
             if *place == ChunkAt::Stored {
-                return ChunkRead { bytes: self.stored(hash), changed_sends };
+                return ChunkRead { bytes: self.stored(hash), changed_sends, changed_outside };
             }
             match self.at(place, hash) {
-                Found::Bytes(bytes) => return ChunkRead { bytes: Ok(bytes), changed_sends },
-                Found::Different => changed_sends.extend(place.sent_source()),
+                Found::Bytes(bytes) => return ChunkRead { bytes: Ok(bytes), changed_sends, changed_outside },
+                Found::Different => {
+                    changed_sends.extend(place.sent_source());
+                    changed_outside.extend(place.outside_source());
+                }
                 Found::Unreadable => {}
             }
         }
-        ChunkRead { bytes: self.stored(hash), changed_sends }
+        ChunkRead { bytes: self.stored(hash), changed_sends, changed_outside }
     }
 
     /// One place's bytes. Not an error when it does not hold them: a file
@@ -555,7 +568,15 @@ impl Store {
     /// bytes: it changed, and the next listing of its folder makes it a new
     /// version.
     fn chunk_from_outside(&self, hash: &blake3::Hash) -> Result<Option<Vec<u8>>> {
-        Ok(self.outside_place(hash)?.and_then(|place| self.reader().at(&place, hash).bytes()))
+        let Some(place) = self.outside_place(hash)? else { return Ok(None) };
+        match self.reader().at(&place, hash) {
+            Found::Bytes(bytes) => Ok(Some(bytes)),
+            Found::Different => {
+                self.outsides_changed(&place.outside_source().into_iter().collect::<Vec<_>>())?;
+                Ok(None)
+            }
+            Found::Unreadable => Ok(None),
+        }
     }
 
     /// Everywhere this chunk's bytes may be, in the order to try them: a file
@@ -589,6 +610,26 @@ impl Store {
             self.db.send_source_changed(source)?;
         }
         Ok(())
+    }
+
+    /// Files kept outside the folder found, when asked for, no longer to hold
+    /// what was read of them: marked, so that the next listing of their
+    /// folder reads them again whatever their size and time say, and
+    /// [`Self::kept_files_changed`] tells the phone to list it now rather
+    /// than at night. WhatsApp rewrites its chat backups in place each night;
+    /// read before that, they could not be given to the computer for a day,
+    /// which waited at 99% for them (the owner's S23, 2026-11-09).
+    pub fn outsides_changed(&self, sources: &[String]) -> Result<()> {
+        for source in sources {
+            self.db.outside_source_changed(source)?;
+        }
+        Ok(())
+    }
+
+    /// Whether a file kept outside the folder was found changed since it was
+    /// read, and not read again yet.
+    pub fn kept_files_changed(&self) -> Result<bool> {
+        self.db.outside_sources_changed()
     }
 
     /// A chunk that is not in the chunk store, from wherever this device has
@@ -1238,6 +1279,7 @@ impl Store {
         let places = self.locate(hash)?;
         let read = self.reader().read(hash, &places);
         self.sends_changed(&read.changed_sends)?;
+        self.outsides_changed(&read.changed_outside)?;
         read.bytes
     }
 

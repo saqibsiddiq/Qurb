@@ -472,3 +472,28 @@ fn a_holder_of_the_backups_only_is_shown_only_them() {
     phone.store.db().set_vault_files(&computer(), true).unwrap();
     assert_eq!(paths(&phone), both);
 }
+
+/// WhatsApp rewrites its chat backups in place each night. Read before that,
+/// a file's old content is asked for and is not there: the file is marked,
+/// the phone told so that it lists its folders now, and the next listing
+/// reads it again even when its size and time say nothing changed (the
+/// owner's S23, 2026-11-09: four backups waiting at 99% for a day).
+#[test]
+fn a_kept_file_found_changed_when_asked_for_is_read_again() {
+    let mut phone = Phone::new();
+    let before = noisy(5_000, 7);
+    let entry = phone.write("Backups/wa.db.crypt14", &before, 1);
+    assert_eq!(phone.sync(&[entry.clone()], true).added, 1);
+    assert!(!phone.store.kept_files_changed().unwrap(), "marked before anything changed");
+
+    // Rewritten, the same size, its time as the listing will say it.
+    let after = noisy(5_000, 8);
+    std::fs::write(phone.outside().join("Backups/wa.db.crypt14"), &after).unwrap();
+    assert!(phone.store.read_chunk(&blake3::hash(&before)).is_err(), "the old content served");
+    assert!(phone.store.kept_files_changed().unwrap(), "not marked as changed");
+
+    let again = phone.sync(&[entry], true);
+    assert_eq!((again.changed, again.unchanged), (1, 0), "not read again");
+    assert!(!phone.store.kept_files_changed().unwrap(), "still marked once read again");
+    assert_eq!(phone.store.read_content(&blake3::hash(&after)).unwrap().expect("the new content unreadable"), after);
+}

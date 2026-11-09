@@ -1415,6 +1415,20 @@ impl Db {
         Ok(())
     }
 
+    /// A file kept outside the folder no longer holds what was read of it:
+    /// its listed size forgotten, so that the next listing reads it again
+    /// (`Store::outsides_changed`).
+    pub fn outside_source_changed(&self, source: &str) -> Result<()> {
+        self.conn.execute("UPDATE outside_sources SET size = -1 WHERE source = ?1", params![source])?;
+        Ok(())
+    }
+
+    /// Whether any file kept outside the folder is marked changed and not
+    /// read again yet.
+    pub fn outside_sources_changed(&self) -> Result<bool> {
+        Ok(self.conn.query_row("SELECT EXISTS (SELECT 1 FROM outside_sources WHERE size = -1)", [], |r| r.get(0))?)
+    }
+
     /// Stop reading a file kept outside the folder: it has gone from there.
     pub fn forget_outside_source(&self, file_id: i64) -> Result<()> {
         self.conn.execute("DELETE FROM outside_sources WHERE file_id = ?1", params![file_id])?;

@@ -400,8 +400,10 @@ async fn serve_request(
             // whose file was found changed.
             Answer::Read { hash, places, reader } => tokio::task::block_in_place(|| -> Result<Response> {
                 let read = reader.read(&hash, &places);
-                if !read.changed_sends.is_empty() {
-                    store.lock().expect("store mutex poisoned").sends_changed(&read.changed_sends)?;
+                if !read.changed_sends.is_empty() || !read.changed_outside.is_empty() {
+                    let store = store.lock().expect("store mutex poisoned");
+                    store.sends_changed(&read.changed_sends)?;
+                    store.outsides_changed(&read.changed_outside)?;
                 }
                 // Verified against its own hash in the reading, so a corrupt
                 // chunk is reported as missing rather than served.
