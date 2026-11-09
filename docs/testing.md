@@ -111,9 +111,22 @@ computer, are pass 4's.
 
 ### Pass 4: the Galaxy S23 and the laptop
 
-Not run yet: it needs the owner's hands on the phone, and the S23 on
-0.2.0-beta.8. The checklist given to the owner is the list above that pass 3
-could not reach.
+Under way, with the owner. The laptop on the day's build (`target/release`,
+replacing the installed AppImage of 2026-11-01 with the owner's yes); the S23
+on 0.2.0-beta.8, installed over wireless debugging with its data kept.
+Background sync on the S23 is set to *Off*, so it syncs when asked or when
+it notices a change, and only while QurbSpace is on screen.
+
+1. **Home on both** -- each sees the other. Passed, and found *Found and
+   fixed*, 4: four WhatsApp backups waiting at 99%.
+2. **The laptop sends to the phone** -- `qurb send` from the laptop's folder;
+   collected by the phone while QurbSpace was open (the laptop's activity
+   says *sent*). Passed.
+3. to 9. **Not run yet** (paused at 23:00 for the owner): the phone sending
+   to the laptop; a phone folder backed up after choosing it on the laptop;
+   the owner's folder asked for and opened on the laptop; the space limit
+   seen on the phone; the phone's Recently deleted; the scanner; the phone's
+   Activity.
 
 ### Found and fixed
 
@@ -135,12 +148,30 @@ could not reach.
    fetched. Found on the emulator. On the owner's S23, which has scanned
    before, the reader is there already.
 
+4. **A WhatsApp backup rewritten after the night's run waited a day**
+   (`0519dfe`). On the S23, Home said *Backing up 4 files, 99%* while the
+   laptop said everything was synced: WhatsApp rewrote its four chat backups
+   at 08:54, after the night's listing; the phone still listed their old
+   contents, could not give them, and the laptop asked again every pass. The
+   folder is listed only at night while charging. Now a kept file found
+   changed when asked for is marked, read again by the next listing whatever
+   its size and time, and the app lists the folders at once on Wi-Fi after
+   any sync that finds one. The day's four were cleared by forcing the
+   night's run from adb; the fix itself is shown by a test, not yet seen on
+   the phone.
+
 ### Found, and left
 
 - **Scanning needs Google Play services.** A phone without them (de-Googled,
   some Huawei) can pair only by the six digits, on the same Wi-Fi. Bundling
   the reader would fix it at the cost of the APK's size (decision 0039 left
   the scanner's weight unmeasured): the owner's call.
+- **There is no way to start a backup by hand.** *Back up now* is on the
+  phone's Backups screen, which nothing opens any more; WhatsApp's folder is
+  listed only at night, while charging, on Wi-Fi.
+- **With background sync off, opening the app does not sync.** The phone
+  syncs when the circle is tapped, when pulled down, or after a change of
+  its own; a send waiting on the laptop is collected only then.
 - **A camera refused once cannot be allowed from the scanner.** It says
   *Camera not allowed* and offers the six digits; allowing it means the
   system's settings.
