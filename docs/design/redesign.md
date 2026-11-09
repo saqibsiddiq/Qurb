@@ -1277,3 +1277,22 @@ This computer and its limit, a removed device's files, Recently deleted
 (grid, choosing, empty, delete for good), Activity, Speed limit, Advanced and
 the key's sheets, the field sheets, backed-up folders, and the six system
 notifications (about 30 screens).
+
+### The desktop finished in code, in the Figma look (2026-11-09)
+
+Figma's starter plan stopped at 63 screens, and the owner would not pay for
+more: "build the remaining pages in same design language … complete the
+desktop app". So the window itself carries the foundations: the website's
+background glow behind every page and the setup screens, frosted cards
+(65% white, a light edge, the website's soft deep shadow), elevated glass for
+sheets, the bar and toasts, the mark in a faint green halo, the website's
+button shadows. Also the owner's two notes on the Figma frames: no mark beside
+the name in the sidebar, as the phone's Home has none; and a device's Switch
+device and Remove as a card of two rows, Remove in red, in place of two solid
+bars. The first run shows the app's real mark (decision 0048), not the
+mockups' placeholder; the Picture sheet has rows, as every sheet's choices do.
+
+Checked in the fixtures, headless Chromium at 1120 × 720, every place and
+sheet (32 shots), light and dark. Not checked against the remaining Figma
+frames, which were never drawn; and the six system notifications are the
+desktop's own, unstyled by QurbSpace.

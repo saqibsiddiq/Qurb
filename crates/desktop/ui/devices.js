@@ -20,8 +20,12 @@ function drawDevicePage(main, d) {
           h("p", { class: "state" }, d.route ? "On" : d.last_seen ? h("span", {}, "Off", h("small", {}, ago(d.last_seen))) : "Off")),
         h("button", { class: "icon-btn", "aria-label": `About ${d.name}`, onclick: () => aboutDevice(d) }, icon("info"))),
       h("div", { id: "page-list" }),
-      h("button", { class: "big-btn big-red", onclick: () => askToRemove(d) }, d.relation === "guest" ? "Remove this person" : "Remove"),
-      h("button", { class: "big-btn big-blue", onclick: () => switchDevice((to) => go("device", to)) }, "Switch device")));
+      // What can be done to the device, as a card like those above it (the
+      // owner, 2026-11-09: the two solid bars "aren't good enough"):
+      // switching to another, then removing this one, in red.
+      h("div", { class: "grp-box dev-acts" },
+        setting({ ic: "arrow-up-down", name: "Switch device", onclick: () => switchDevice((to) => go("device", to)) }),
+        setting({ ic: "trash-2", name: d.relation === "guest" ? `Remove ${d.name}` : `Remove ${d.name}`, danger: true, onclick: () => askToRemove(d) }))));
   listsDevicePage();
 }
 
@@ -38,7 +42,7 @@ async function aboutDevice(d) {
     setting({ ic: "key-round", name: "Identity", value: d.fingerprint.slice(0, 8) }),
     setting({ ic: "clock", name: "Paired", value: ago(d.paired_at) }),
     setting({ ic: "link", name: "Path", value: d.route === "relay" ? "Relayed" : d.route === "direct" ? "Direct" : "Not connected" }),
-    earlier ? setting({ ic: "history", name: "Earlier setup", value: earlier.held ? earlier.held.bytes : "", onclick: () => { box.close(); askToRemove(earlier, `the earlier ${earlier.name}`); } }) : null,
+    earlier ? setting({ ic: "history", name: "Earlier setup", value: earlier.held ? size(earlier.held.bytes) : "", onclick: () => { box.close(); askToRemove(earlier, `the earlier ${earlier.name}`); } }) : null,
     earlier?.said_same ? setting({ ic: "git-compare", name: "Not the same device", onclick: () => { box.close(); sameDevice(earlier, null); } }) : null,
     later.length ? setting({ ic: "git-compare", name: "The same as another device", onclick: () => { box.close(); sameAs(d, later); } }) : null));
   icons(box);
@@ -104,7 +108,7 @@ async function sameDevice(older, newer) {
 
 async function drawPhoneFolders(main, d) {
   const body = h("div", {});
-  main.append(h("div", { class: "pg" }, pageHead("Back up folders", { words: d.name, go: () => go("device", d) }), body));
+  main.append(h("div", { class: "pg pg-narrow" }, pageHead("Back up folders", { words: d.name, go: () => go("device", d) }), body));
   const draw = async () => {
     let answer;
     try { answer = await invoke("phone_folders", { phone: d.fingerprint }); } catch (e) { put(body, oops(e)); return; }
@@ -211,6 +215,7 @@ async function drawShowCode(main, { guest, first }) {
   const stage = h("div", { class: "pair" }, h("span", { class: "empty-orb asking" }, icon("qr-code")));
   const leave = () => { stopPairing(); go(first ? "home" : "add"); };
   main.append(h("div", { class: "center-page" },
+    first ? null : h("button", { class: "back back-corner", onclick: leave }, icon("chevron-right", "flip"), "Add a device"),
     h("h1", { class: "ptitle" }, guest ? "Add someone else's phone" : "Add your phone"),
     stage));
   let inv;

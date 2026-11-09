@@ -146,10 +146,11 @@ function pictureSheet(s) {
   });
   document.body.append(file);
   const box = sheet({ ic: circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-lg circle-plain"), title: "Picture", onclose: () => setTimeout(() => file.remove(), 60000) });
-  rounds(box, [
-    { ic: "image", words: s.picture ? "Change" : "Choose", act: () => file.click() },
-    s.picture ? { ic: "trash-2", words: "Remove", danger: true, act: async () => { await invoke("set_picture", { picture: null }).catch((e) => toast(String(e), true)); go("settings"); } } : null,
-  ]);
+  // Rows, as every choice in a sheet is (the Figma frames of 2026-11-09).
+  box.append(h("div", { class: "grp-box" },
+    setting({ ic: "image", name: s.picture ? "Choose another picture" : "Choose a picture", onclick: () => { box.close(); file.click(); } }),
+    s.picture ? setting({ ic: "trash-2", name: "Remove the picture", danger: true, onclick: async () => { box.close(); await invoke("set_picture", { picture: null }).catch((e) => toast(String(e), true)); go("settings"); } }) : null));
+  icons(box);
 }
 
 /** The middle square of a picture, 256 across, as JPEG bytes: what the phone
@@ -191,7 +192,7 @@ async function drawStorage(main) {
     ...parts.guests.map((g) => ({ name: g.name, bytes: Number(g.size), colour: "#d8a0b8", lead: "user-circle" })),
     // A device removed here: what it kept stays, locked, until it is added
     // again or deleted (decision 0084).
-    ...(parts.removed ?? []).map((r) => ({ name: r.name, bytes: Number(r.size), colour: "var(--ink-3)", lead: "lock-keyhole", open: () => deleteRemoved(r) })),
+    ...(parts.removed ?? []).map((r) => ({ name: `${r.name}, removed`, bytes: Number(r.size), colour: "var(--ink-3)", lead: "lock-keyhole", open: () => deleteRemoved(r) })),
     { name: "Recently deleted", bytes: Number(parts.deleted), colour: "var(--warn)", lead: "trash-2", open: () => go("deleted") },
   ];
   // Measured against the space given QurbSpace where it is set, as the

@@ -24,12 +24,20 @@ function setupStep(step) {
   box.querySelector("input")?.focus();
 }
 
+/** The app's mark (decision 0048): a ring, the stem that makes it a q, a
+ * point of light inside; the website's and the phone's drawing. */
+function appMark() {
+  const m = h("span", { class: "appmark" });
+  m.innerHTML = '<svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="qm-tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3c806a"/><stop offset="1" stop-color="#22503f"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="9" fill="url(#qm-tile)"/><circle cx="14.4" cy="14.4" r="6.2" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M20.6 11 V24.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="14.4" cy="14.4" r="1.9" fill="#bde7d6"/></svg>';
+  return m;
+}
+
 function welcome(box) {
   const says = h("p", { class: "note" });
   const startBtn = btn("Start", () => create(startBtn, says), "btn-main btn-start");
   // D16: the app's mark, its name, one quiet line, one button.
   box.append(
-    h("span", { class: "appmark" }, icon("search")),
+    appMark(),
     h("h1", { class: "ptitle" }, "QurbSpace"),
     h("p", { class: "quiet" }, "Your files, on your own devices"),
     startBtn,

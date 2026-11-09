@@ -208,7 +208,7 @@ function actions(...buttons) {
 const btn = (words, onclick, cls = "") => h("button", { class: `btn ${cls}`.trim(), onclick }, words);
 
 function toast(words, warn = false) {
-  const t = h("div", { class: `toast${warn ? " toast-warn" : ""}`, role: "status" }, words);
+  const t = h("div", { class: `toast${warn ? " toast-warn" : ""}`, role: "status" }, icon(warn ? "triangle-alert" : "circle-check", "toast-ic"), words);
   document.body.append(t);
   setTimeout(() => t.classList.add("gone"), 2800);
   setTimeout(() => t.remove(), 3300);

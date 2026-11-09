@@ -551,7 +551,7 @@ document.addEventListener("keydown", (e) => {
 
 async function drawReceived(main) {
   const body = h("div", {});
-  main.append(h("div", { class: "pg" },
+  main.append(h("div", { class: "pg pg-narrow" },
     pageHead("Received", { words: "Files", go: () => go("files") },
       h("button", { class: "btn btn-quiet btn-sm", onclick: () => invoke("open_downloads").catch((e) => toast(String(e), true)) }, icon("folder-open"), "Open folder")),
     body));
@@ -559,7 +559,7 @@ async function drawReceived(main) {
     const rows = (await invoke("activity", { path: null, limit: 300, before: null }))
       .filter((r) => r.kind === "received" && (r.detail ?? "").startsWith("sent to this device"));
     put(body, rows.length
-      ? h("div", { class: "rows" }, ...rows.map((r) => row({
+      ? h("div", { class: "grp-box rows-card" }, ...rows.map((r) => row({
         ic: fileIcon(r.path), name: base(r.path), sub: [r.device ?? "Another device", ago(r.at)],
         onclick: () => invoke("show_received", { id: r.id }).catch((e) => toast(String(e), true)),
       })))

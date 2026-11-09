@@ -3176,3 +3176,190 @@ body.setting-up .win {
   border-radius: var(--r-full);
   text-align: center;
 }
+
+/* ======================================================================
+   The look of the phone and the website (the owner, 2026-11-09; the
+   Figma foundations of that day): frosted glass over a faint glow, the
+   website's soft deep shadows. Last in the file, so it governs every page.
+   ====================================================================== */
+:root,
+[data-theme="light"] {
+  --glass-frosted: rgba(255, 255, 255, 0.65);
+  --glass-elevated: rgba(252, 252, 250, 0.97);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --glass-clear: rgba(255, 255, 255, 0.36);
+  --hairline: rgba(22, 24, 21, 0.07);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow-card: 0 1px 2px rgba(22, 24, 21, 0.04), 0 10px 30px rgba(22, 24, 21, 0.06);
+  --shadow-sheet: 0 2px 8px rgba(22, 24, 21, 0.07), 0 28px 70px rgba(22, 24, 21, 0.18);
+  --shadow-mark: 0 6px 20px rgba(22, 24, 21, 0.07), 0 18px 48px rgba(22, 24, 21, 0.08);
+  --shadow-press: 0 1px 2px rgba(33, 75, 61, 0.25), 0 6px 18px rgba(47, 107, 87, 0.18);
+  --glow: 111, 175, 152;
+  --environment:
+    radial-gradient(62% 58% at 6% 2%, rgba(var(--glow), 0.26), transparent 72%),
+    radial-gradient(48% 52% at 94% 10%, rgba(196, 208, 216, 0.42), transparent 70%),
+    radial-gradient(72% 62% at 78% 108%, rgba(234, 222, 196, 0.55), transparent 70%),
+    radial-gradient(42% 42% at 28% 88%, rgba(var(--glow), 0.12), transparent 70%);
+}
+[data-theme="dark"] {
+  --glass-frosted: rgba(32, 34, 31, 0.62);
+  --glass-elevated: rgba(30, 32, 29, 0.97);
+  --glass-edge: rgba(255, 255, 255, 0.08);
+  --glass-clear: rgba(255, 255, 255, 0.03);
+  --hairline: rgba(236, 237, 232, 0.08);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.25);
+  --shadow-sheet: 0 2px 8px rgba(0, 0, 0, 0.4), 0 28px 70px rgba(0, 0, 0, 0.6);
+  --shadow-mark: 0 6px 20px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.35);
+  --shadow-press: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --environment:
+    radial-gradient(62% 58% at 6% 2%, rgba(var(--glow), 0.12), transparent 72%),
+    radial-gradient(48% 52% at 94% 10%, rgba(40, 52, 62, 0.35), transparent 70%),
+    radial-gradient(72% 62% at 78% 108%, rgba(58, 50, 36, 0.4), transparent 70%);
+}
+/* The page behind everything. */
+body {
+  background: var(--environment), var(--bg);
+  background-attachment: fixed;
+}
+/* The sidebar: clear glass, the name alone (no mark, as the phone's Home). */
+.sb {
+  background: var(--glass-clear);
+  border-right: 1px solid var(--hairline);
+}
+.sb-brand {
+  padding-left: 12px;
+  font-size: 16px;
+  letter-spacing: -0.015em;
+}
+/* Frosted cards: every group of rows, tile and card. */
+.grp-box,
+.wa-card,
+.launch-tile,
+.profile,
+.choice,
+.ver,
+.disk-card {
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-frosted);
+  box-shadow: var(--shadow-card), var(--highlight);
+}
+.launch-tile.launch-open {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.dev-card {
+  border-color: var(--glass-edge);
+  background: var(--glass-frosted);
+}
+.dev-card.on {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.dev-add {
+  border: 1px dashed var(--line);
+  background: none;
+}
+/* Sheets, the bar at Recently deleted's foot, toasts: elevated glass. */
+.sheet,
+.selbar {
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-elevated);
+  box-shadow: var(--shadow-sheet), var(--highlight);
+  backdrop-filter: blur(40px) saturate(1.2);
+}
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-elevated);
+  color: var(--ink);
+  box-shadow: var(--shadow-sheet), var(--highlight);
+  backdrop-filter: blur(40px) saturate(1.2);
+}
+.toast-warn {
+  background: var(--glass-elevated);
+  color: var(--warn);
+}
+/* Home's mark: a white disc in a faint green halo. */
+.mark {
+  background: var(--surface);
+  box-shadow: var(--shadow-mark), var(--highlight), 0 0 0 16px rgba(var(--glow), 0.1), 0 0 60px 24px rgba(var(--glow), 0.14);
+}
+.mark[data-tone="away"],
+.mark[data-tone="idle"],
+.mark[data-tone="warn"] {
+  box-shadow: var(--shadow-mark), var(--highlight);
+}
+/* Buttons: the website's. */
+.btn-main,
+.send {
+  box-shadow: var(--shadow-press), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.btn-quiet {
+  border-color: var(--hairline);
+  background: var(--glass-frosted);
+  box-shadow: 0 1px 2px rgba(22, 24, 21, 0.05), var(--highlight);
+}
+.btn-quiet:hover:not(:disabled) {
+  background: var(--surface);
+}
+/* Fields: glass, round, green when they have focus. */
+.field,
+.digits-in {
+  border: 1px solid var(--line);
+  background: var(--glass-frosted);
+}
+.field:focus,
+.digits-in:focus {
+  border-color: var(--brand);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--glow), 0.18);
+}
+/* A device's page: its actions as a card (the owner, 2026-11-09). */
+.dev-acts {
+  align-self: stretch;
+  margin-top: 24px;
+}
+.dev-acts .set-danger .set-name {
+  font-weight: 500;
+}
+/* The QR: on white always, its shadow the card's. */
+.qr {
+  box-shadow: var(--shadow-card);
+}
+.toast-ic {
+  width: 18px;
+  height: 18px;
+  color: var(--brand);
+}
+.toast-warn .toast-ic {
+  color: var(--warn);
+}
+/* Setting up: the same glow behind it. */
+.setup {
+  background: var(--environment), var(--bg);
+}
+/* The app's mark, drawn: its own tile, so the frame round it goes. */
+.appmark {
+  background: none;
+  box-shadow: 0 12px 30px -10px rgba(47, 107, 87, 0.6);
+  overflow: hidden;
+}
+.appmark svg {
+  width: 80px;
+  height: 80px;
+}
+.rows-card .row {
+  border-radius: 0;
+}
+.back-corner {
+  position: absolute;
+  top: 22px;
+  left: 144px;
+}
+.center-page {
+  position: relative;
+}
