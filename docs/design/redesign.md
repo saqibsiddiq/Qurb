@@ -1263,3 +1263,17 @@ section *Foundations — 2026-11-09*:
   question, phone size, made only of those parts.
 
 Not yet approved; nothing built from it.
+
+### Every desktop screen, in Figma (2026-11-09, unfinished)
+
+On the *Desktop* page, section *Desktop — every screen*, built from those
+foundations at 1120 × 720, 63 so far: the new sidebar and QR parts; 1 Setup
+and unlocking (12); 2 Home (16: every state, drop to send, sent before,
+Switch device, two versions); 3 Waiting (2); 4 Devices (8); 5 Add a device
+(8); 6 Files (6); 7 Settings, the page, name, picture, theme and updates (8).
+
+**Stopped by Figma's starter-plan limit on tool calls** before the rest:
+This computer and its limit, a removed device's files, Recently deleted
+(grid, choosing, empty, delete for good), Activity, Speed limit, Advanced and
+the key's sheets, the field sheets, backed-up folders, and the six system
+notifications (about 30 screens).
