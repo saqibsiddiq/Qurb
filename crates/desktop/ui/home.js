@@ -36,6 +36,7 @@ function drawHome(main) {
         h("p", { class: "mark-words", id: "mark-words" }, " "),
         h("p", { class: "mark-quiet", id: "mark-quiet", hidden: true }),
         h("button", { class: "send", id: "home-send", onclick: () => (HOME.mark?.again ? go("add") : chooseAndSend()) }, icon("send"), "Send"),
+        h("p", { class: "drop-hint" }, icon("download"), "Drop files here to send"),
         h("div", { class: "waiting", id: "home-waiting" }))));
   icons(main);
   drawCircle();

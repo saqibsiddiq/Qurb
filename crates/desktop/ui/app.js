@@ -100,6 +100,8 @@ async function start() {
   }
   const at = new URLSearchParams(location.search).get("place");
   go(at || "home");
+  // This computer, at the sidebar's foot (the desktop's draft 1).
+  invoke("settings").then((s) => { put($("sb-me"), icon("laptop"), h("span", {}, s.name)); }).catch(() => {});
   showUpdate();
 }
 

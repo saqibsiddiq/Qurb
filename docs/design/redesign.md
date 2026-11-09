@@ -1296,3 +1296,20 @@ Checked in the fixtures, headless Chromium at 1120 × 720, every place and
 sheet (32 shots), light and dark. Not checked against the remaining Figma
 frames, which were never drawn; and the six system notifications are the
 desktop's own, unstyled by QurbSpace.
+
+### Draft 1's look instead (2026-11-09, later)
+
+The owner, on the glass: "its not good enough … we follow the design
+language of desktop redesign draft 1 (2026-10-24) instead, but all the
+functions should be of current app, we are only following the aesthetics".
+The window now has draft 1's look, its functions unchanged: two floating
+white panels -- the sidebar, this computer's name at its foot, and the page
+-- on a mint-to-cream ground; compact type (titles 20, rows 13.5, labels
+10.5); icons in small grey tiles; pages wide and to the left; Settings in two
+columns; Files as small square tiles; Home's thin green ring, a small Send,
+"Drop files here to send"; a destructive act as a red link (Remove, Quit
+QurbSpace); white sheets. Draft 1's mark beside the name is left out, as the
+owner asked earlier that day.
+
+Checked in the fixtures, headless Chromium at 1120 × 720, all 32 screens,
+light and dark.

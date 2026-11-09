@@ -23,9 +23,11 @@ function drawDevicePage(main, d) {
       // What can be done to the device, as a card like those above it (the
       // owner, 2026-11-09: the two solid bars "aren't good enough"):
       // switching to another, then removing this one, in red.
-      h("div", { class: "grp-box dev-acts" },
-        setting({ ic: "arrow-up-down", name: "Switch device", onclick: () => switchDevice((to) => go("device", to)) }),
-        setting({ ic: "trash-2", name: d.relation === "guest" ? `Remove ${d.name}` : `Remove ${d.name}`, danger: true, onclick: () => askToRemove(d) }))));
+      // Switch device a quiet button, Remove a red link under it, as the
+      // desktop's draft 1 has them.
+      h("div", { class: "dev-foot" },
+        h("button", { class: "btn btn-quiet btn-sm", onclick: () => switchDevice((to) => go("device", to)) }, icon("arrow-up-down"), "Switch device"),
+        h("button", { class: "link-danger", onclick: () => askToRemove(d) }, icon("trash-2"), d.relation === "guest" ? `Remove ${d.name}` : "Remove"))));
   listsDevicePage();
 }
 

@@ -3363,3 +3363,518 @@ body {
 .center-page {
   position: relative;
 }
+
+/* ======================================================================
+   The desktop's draft 1 (Figma, 2026-10-24), chosen by the owner on
+   2026-11-09 over the glass of that day: two floating white panels -- the
+   sidebar and the page -- on a mint-to-cream ground; compact, quiet type;
+   small icons in small grey tiles; content laid out wide and to the left.
+   Only the look: every function is the app's as it is.
+   ====================================================================== */
+:root,
+[data-theme="light"] {
+  --ground: linear-gradient(160deg, #dcebe3 0%, #e9f1ec 38%, #f4f2ea 72%, #f5efe3 100%);
+  --panel: rgba(255, 255, 255, 0.92);
+  --panel-2: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(251, 250, 246, 0.86));
+  --panel-edge: rgba(22, 24, 21, 0.06);
+  --panel-shadow: 0 1px 2px rgba(22, 24, 21, 0.04), 0 8px 24px -12px rgba(22, 24, 21, 0.12);
+  --card: #ffffff;
+  --card-edge: rgba(22, 24, 21, 0.08);
+  --card-shadow: 0 1px 2px rgba(22, 24, 21, 0.04);
+  --tile: #f2f3ef;
+}
+[data-theme="dark"] {
+  --ground: linear-gradient(160deg, #0f1a15 0%, #111513 45%, #15140f 100%);
+  --panel: rgba(23, 28, 25, 0.94);
+  --panel-2: linear-gradient(180deg, rgba(23, 28, 25, 0.94), rgba(20, 24, 22, 0.92));
+  --panel-edge: rgba(255, 255, 255, 0.06);
+  --panel-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  --card: #1c221f;
+  --card-edge: rgba(255, 255, 255, 0.07);
+  --card-shadow: none;
+  --tile: #252c28;
+}
+body,
+.setup {
+  background: var(--ground);
+  font-size: 13.5px;
+}
+/* The window: two panels with a gap, inset from its edges. */
+.win {
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+}
+.sb {
+  padding: 16px 10px 12px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--panel-shadow);
+}
+.sb-brand {
+  padding: 0 10px 18px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.sb-nav button {
+  height: 32px;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.sb-nav button .ic {
+  width: 16px;
+  height: 16px;
+}
+.sb-me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 0 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+.sb-me .ic {
+  width: 14px;
+  height: 14px;
+}
+.main {
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  background: var(--panel-2);
+  box-shadow: var(--panel-shadow);
+}
+/* Pages: wide and to the left, compact. */
+.pg,
+.pg-narrow {
+  max-width: none;
+  margin: 0;
+  padding: 22px 28px 40px;
+}
+.page {
+  align-items: stretch;
+  max-width: 560px;
+  margin: 0;
+  padding: 22px 28px 40px;
+}
+.pg-title h1,
+.ptitle,
+.dev-words h1 {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+.back {
+  margin-bottom: 6px;
+  font-size: 12.5px;
+}
+.back .ic {
+  width: 14px;
+  height: 14px;
+}
+.label {
+  margin: 20px 2px 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+}
+/* Cards: white, a hairline, a breath of shadow, 12 round. */
+.grp-box,
+.wa-card,
+.launch-tile,
+.profile,
+.choice,
+.ver,
+.dev-card,
+.rows-card {
+  border: 1px solid var(--card-edge);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.set {
+  min-height: 48px;
+  gap: 12px;
+  padding: 8px 14px 8px 10px;
+  font-size: 13.5px;
+}
+/* A row's icon in a small grey tile, as draft 1's Settings has it. */
+.set .set-ic {
+  box-sizing: content-box;
+  width: 15px;
+  height: 15px;
+  padding: 7px;
+  border-radius: 8px;
+  background: var(--tile);
+}
+.set-danger .set-ic {
+  background: color-mix(in srgb, var(--danger) 10%, var(--tile));
+}
+.grp-box > * + * .set::before,
+.grp-box > .set + .set::before,
+.grp-box > * + .set::before {
+  left: 52px;
+}
+.set-value {
+  font-size: 12.5px;
+}
+.set-go {
+  width: 14px;
+  height: 14px;
+}
+/* Settings in two columns. */
+.cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 18px;
+  align-items: start;
+}
+.profile {
+  padding: 12px 14px;
+  gap: 12px;
+}
+.profile .circle {
+  width: 44px;
+  height: 44px;
+  font-size: 17px;
+}
+.profile-words b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.profile-words small {
+  font-size: 12px;
+}
+/* A destructive act as a red link (draft 1's Remove). */
+.link-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  margin-top: 22px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 500;
+}
+.link-danger .ic {
+  width: 14px;
+  height: 14px;
+}
+.link-danger:hover {
+  text-decoration: underline;
+}
+.dev-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 18px;
+}
+.dev-foot .link-danger {
+  margin-top: 8px;
+}
+/* Buttons: small and round. */
+.btn {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 13.5px;
+}
+.btn .ic {
+  width: 15px;
+  height: 15px;
+}
+.btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+.btn-quiet {
+  border-color: var(--card-edge);
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+.btn-main,
+.send {
+  box-shadow: 0 1px 2px rgba(33, 75, 61, 0.2);
+}
+/* Home: a thin ring, small words, a small Send, a quiet hint. */
+.mark,
+.mark[data-tone] {
+  width: 120px;
+  height: 120px;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--card-edge), 0 4px 16px -8px rgba(22, 24, 21, 0.15);
+}
+.mark-in .ic {
+  width: 36px;
+  height: 36px;
+}
+.ring {
+  inset: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - 20px);
+}
+.ring-track {
+  stroke: var(--brand);
+  stroke-opacity: 0.85;
+}
+.mark[data-tone="away"] .ring-track,
+.mark[data-tone="idle"] .ring-track {
+  stroke: var(--line);
+  stroke-opacity: 1;
+}
+.mark[data-tone="warn"] .ring-track {
+  stroke: var(--warn);
+}
+.home.queued .mark {
+  width: 96px;
+  height: 96px;
+}
+.home.queued .mark-in .ic {
+  width: 28px;
+  height: 28px;
+}
+.mark-words {
+  margin-top: 18px;
+  font-size: 18px;
+  font-weight: 650;
+}
+.send {
+  width: auto;
+  min-width: 120px;
+  height: 38px;
+  margin-top: 18px;
+  padding: 0 20px;
+  font-size: 13.5px;
+}
+.send .ic {
+  width: 15px;
+  height: 15px;
+}
+.drop-hint {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.drop-hint .ic {
+  width: 12px;
+  height: 12px;
+}
+.home.queued .drop-hint {
+  display: none;
+}
+.home-top .circle-btn .circle {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+.waiting {
+  width: min(520px, 100%);
+}
+.wa {
+  padding: 10px 14px;
+}
+.wa-th {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+.wa-t b {
+  font-size: 13.5px;
+}
+.wa-t > span {
+  font-size: 12px;
+}
+.wl b {
+  font-size: 13px;
+}
+/* Files: small square tiles, four to a row, the icon in a soft tile. */
+.launch {
+  grid-template-columns: repeat(auto-fill, minmax(116px, 128px));
+  gap: 10px;
+}
+.launch-tile {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 92px;
+  padding: 12px 10px;
+  text-align: center;
+}
+.launch-lead {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--brand-soft);
+}
+.launch-lead .ic {
+  width: 16px;
+  height: 16px;
+}
+.launch-lead .circle {
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
+}
+.launch-tile b {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.launch-side {
+  top: 8px;
+  right: 8px;
+}
+.launch-end {
+  width: 12px;
+  height: 12px;
+}
+/* Add a device: two small cards. */
+.choices {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
+  gap: 10px;
+}
+.choice {
+  height: 112px;
+  padding: 14px;
+}
+.choice-c {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+.choice-c .ic {
+  width: 18px;
+  height: 18px;
+}
+.choice b {
+  font-size: 13.5px;
+}
+/* A device's page. */
+.dev-hd {
+  gap: 14px;
+  margin-top: 8px;
+}
+.dev-hd .circle-xl {
+  width: 52px;
+  height: 52px;
+  font-size: 20px;
+  border-radius: 14px;
+}
+.dev-words .state {
+  font-size: 12.5px;
+}
+/* Sheets: white cards, quieter. */
+.sheet {
+  padding: 20px;
+  border: 1px solid var(--card-edge);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: 0 18px 48px -16px rgba(22, 24, 21, 0.3);
+  backdrop-filter: none;
+}
+.sh-words h2 {
+  font-size: 16px;
+}
+.sh-words p {
+  font-size: 13px;
+}
+.sh-hd > .circle.circle-lg,
+.sh-hd > .circle.circle-xl {
+  width: 52px;
+  height: 52px;
+  font-size: 20px;
+}
+.sh-hd > .tile-lg {
+  width: 52px;
+  height: 52px;
+}
+.sh-hd > .tile-lg .ic {
+  width: 22px;
+  height: 22px;
+}
+body:not(.setting-up) .scrim {
+  padding-left: calc(208px + 24px);
+}
+.selbar {
+  left: calc(50% + 104px);
+  border: 1px solid var(--card-edge);
+  background: var(--card);
+  box-shadow: 0 12px 32px -14px rgba(22, 24, 21, 0.3);
+}
+.toast {
+  border: 1px solid var(--card-edge);
+  background: var(--card);
+  box-shadow: 0 12px 32px -14px rgba(22, 24, 21, 0.3);
+  font-size: 13px;
+}
+/* Recently deleted and Waiting's grids: smaller. */
+.rdg {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 112px));
+  gap: 12px;
+}
+.wgrid {
+  grid-template-columns: repeat(auto-fill, 64px);
+}
+.wa-th.wa-cell {
+  width: 64px;
+  height: 64px;
+}
+.free {
+  font-size: 22px;
+}
+.empty-orb {
+  width: 56px;
+  height: 56px;
+}
+.empty-orb .ic {
+  width: 22px;
+  height: 22px;
+}
+/* Setting up: one white panel in the middle of the ground. */
+.setup-in {
+  width: min(460px, 100%);
+  padding: 40px 36px 32px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: var(--panel-shadow);
+}
+.appmark,
+.appmark svg {
+  width: 56px;
+  height: 56px;
+}
+.btn-start {
+  width: 100%;
+  max-width: 280px;
+}
+:root,
+[data-theme="light"] {
+  --panel-2: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(251, 250, 246, 0.9) 55%, rgba(246, 242, 232, 0.9) 100%);
+}
+/* An open folder's Lock under its name, not over its picture. */
+.launch-tile.launch-open {
+  height: auto;
+  min-height: 92px;
+}
+.launch-side:has(.btn) {
+  position: static;
+  margin-top: 2px;
+}
+[data-theme="dark"] {
+  --panel-2: linear-gradient(180deg, rgba(23, 28, 25, 0.94), rgba(20, 24, 22, 0.92));
+}

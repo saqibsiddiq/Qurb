@@ -23,18 +23,22 @@ async function drawSettings(main) {
       circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-xl circle-plain"),
       h("span", { class: "profile-words" }, h("b", {}, s.name), h("small", {}, "Name and picture")),
       icon("chevron-right", "set-go")),
+    // Two columns, as the desktop's draft 1 lays Settings out.
+    h("div", { class: "cols" },
+    h("div", { class: "col" },
     group("Manage storage",
       setting({ ic: "hard-drive", name: "This computer", value: st ? size(st.used) : null, onclick: () => go("storage") })),
+    group("Connection",
+      setting({ ic: "arrow-up-down", name: "Speed limit", value: speedWords(s), onclick: () => go("speed") }),
+      setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") }))),
+    h("div", { class: "col" },
     group("App",
       setting({ ic: "clock", name: "Activity", onclick: () => go("activity") }),
       setting({ ic: "bell", name: "Notifications", end: toggle(s.notifications, (on) => invoke("set_notifications", { on }), "Notifications") }),
       setting({ ic: "palette", name: "Theme", value: theme, onclick: themeSheet }),
       setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") }),
-      setting({ ic: "download", name: "Update", end: h("span", { id: "version-says", class: "chip chip-ok" }, " "), onclick: updateClicked })),
-    group("Connection",
-      setting({ ic: "arrow-up-down", name: "Speed limit", value: speedWords(s), onclick: () => go("speed") }),
-      setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") })),
-    h("button", { class: "big-btn big-red big-quit", onclick: () => invoke("quit") }, "Quit QurbSpace"));
+      setting({ ic: "download", name: "Update", end: h("span", { id: "version-says", class: "chip chip-ok" }, " "), onclick: updateClicked })))),
+    h("button", { class: "link-danger", onclick: () => invoke("quit") }, icon("x"), "Quit QurbSpace"));
   showUpdate();
 }
 
@@ -131,9 +135,10 @@ function askDownloads() {
 function themeSheet() {
   const box = sheet({ ic: "palette", title: "Theme" });
   const now = window.qurbTheme.chosen();
-  rounds(box, [["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([to, words]) => ({
-    ic: to === now ? "check" : "palette", words, act: () => { window.qurbTheme.choose(to); go("settings"); },
-  })));
+  // Rows, the chosen one ticked, as every choice in a sheet is.
+  box.append(h("div", { class: "grp-box" }, ...[["system", "As the system is"], ["light", "Light"], ["dark", "Dark"]].map(([to, words]) =>
+    setting({ ic: "palette", name: words, end: to === now ? icon("check", "set-tick") : h("span"), onclick: () => { box.close(); window.qurbTheme.choose(to); go("settings"); } }))));
+  icons(box);
 }
 
 /** This computer's picture, round, as its other devices show it. */
