@@ -56,13 +56,16 @@ function icons(root = document) {
   root.querySelectorAll("i[data-icon]").forEach((i) => i.replaceWith(icon(i.dataset.icon)));
 }
 
-/** Bytes, as a person reads them: 4.7 GB, 812 MB, 12 KB. */
+/** Bytes, as a person reads them: 4.7 GB, 812 MB, 12 KB. Counted in 1024s,
+ * as the phone (Words.size), the config file and `qurb` count them, so a
+ * file is the same size on every screen and a limit typed as "300 GB" reads
+ * back as 300 GB (found 2026-11-09: the window counted in 1000s). */
 function size(bytes) {
   const n = Number(bytes) || 0;
   const units = ["bytes", "KB", "MB", "GB", "TB"];
   let i = 0;
   let v = n;
-  while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return i === 0 ? `${n} bytes` : `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 

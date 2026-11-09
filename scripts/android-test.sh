@@ -103,6 +103,10 @@ if [[ -d $EXAMPLES ]]; then
     "$ADB" shell "mkdir -p /data/local/tmp/examples"
     for example in "$EXAMPLES"/*; do
         [[ -f $example && -x $example && $example != *.d ]] || continue
+        # Cargo keeps a copy of each under its hash too, one per build since;
+        # the tests find a helper by its plain name, and the copies filled the
+        # emulator's disk (2026-11-09).
+        [[ $(basename "$example") =~ -[0-9a-f]{16}$ ]] && continue
         "$ADB" push "$example" "/data/local/tmp/examples/$(basename "$example")" >/dev/null
         "$ADB" shell "chmod 755 /data/local/tmp/examples/$(basename "$example")"
     done

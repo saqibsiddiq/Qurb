@@ -5,6 +5,10 @@
 #   ./scripts/desktop-smoke.sh --no-build
 #   SMOKE_APP=.../qurb-desktop SMOKE_QURB=.../qurb ./scripts/desktop-smoke.sh --no-build
 #                                              # a release's programs, as packaged
+#   SMOKE_MODE=join|theme|full ./scripts/desktop-smoke.sh
+#                                              # set up by joining; the theme;
+#                                              # or every function, against a
+#                                              # second device that runs
 #
 # Sets a device up through the window, opens every place, adds a second device
 # by the code the window shows, and sends it a file -- through the real
@@ -100,7 +104,11 @@ export SMOKE_DRIVER=http://127.0.0.1:$port
 export SMOKE_APP=${SMOKE_APP:-$ROOT/target/release/qurb-desktop}
 export SMOKE_QURB=${SMOKE_QURB:-$ROOT/target/release/qurb}
 
-if python3 "$ROOT/scripts/desktop_smoke.py"; then
+# SMOKE_MODE=full: every function that needs no phone, against a second
+# device that runs (scripts/desktop_full.py).
+script=desktop_smoke.py
+[[ ${SMOKE_MODE:-} == full ]] && script=desktop_full.py
+if python3 "$ROOT/scripts/$script"; then
     # A person's folder is read-only until it is opened (src/mount.rs), and
     # rm cannot empty a folder it may not write.
     chmod -R u+w "$WORK"

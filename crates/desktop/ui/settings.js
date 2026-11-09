@@ -223,8 +223,7 @@ async function drawStorage(main) {
  * or one typed. The phone's Manage storage measures against it. */
 function limitSheet(limit, used, disk) {
   const box = sheet({ ic: "hard-drive", title: "Space for QurbSpace", sub: `It uses ${size(used)} of this ${size(disk)} disk` });
-  const GB = 1e9;
-  const sizes = [50, 100, 250, 500, 1000].map((n) => n * GB).filter((b) => b < disk && b > used);
+  const sizes = [50, 100, 250, 500, 1000].map((n) => n * GIB).filter((b) => b < disk && b > used);
   let chosen = limit;
   const says = h("p", { class: "sheet-note" });
   const field = h("input", { class: "field field-c", placeholder: "Or type one, like 300 GB", "aria-label": "Space for QurbSpace" });
@@ -324,7 +323,12 @@ function protectSheet(to, was) {
 
 /** The rates a person picks from, bytes a second; 0 for none. */
 const SPEEDS = [0, 1e6, 5e6, 10e6, 25e6];
-const speed = (rate) => (Number(rate) ? `${size(rate).replace(/\.0 /, " ")}/s` : "Off");
+/** A rate in megabytes a second, counted in 1000s as network speeds are
+ * (and as these were saved): 1 MB/s, 5 MB/s, 2.5 MB/s. */
+const speed = (rate) => {
+  const mb = Number(rate) / 1e6;
+  return mb ? `${mb >= 10 ? Math.round(mb) : +mb.toFixed(1)} MB/s` : "Off";
+};
 function speedWords(s) {
   const [up, down] = [Number(s.upload_limit ?? 0), Number(s.download_limit ?? 0)];
   return up || down ? [up ? `${speed(up)} up` : null, down ? `${speed(down)} down` : null].filter(Boolean).join(", ") : "Off";
