@@ -1313,3 +1313,63 @@ owner asked earlier that day.
 
 Checked in the fixtures, headless Chromium at 1120 × 720, all 32 screens,
 light and dark.
+
+### One stylesheet, written once (2026-11-09, last)
+
+The owner, on draft 1's look: "very unpleasant to look at … study the best
+practices of ui/ux and study the design of phone and website, spacing and
+components that will look pleasant on a desktop screen … dont leave even a
+single page undone". Three looks had been laid over each other in
+`crates/desktop/ui/app.css`, 3,880 lines of overrides, each later block
+undoing part of an earlier one. It is replaced by one stylesheet written from
+scratch, its sections in the sidebar's order; the functions are unchanged.
+
+What it takes from where:
+
+- **From the phone and the website.** The website's soft glow behind
+  everything, sidebar included; white cards with a hairline edge and a soft
+  two-layer shadow; the deep green the one colour; the website's buttons (40
+  high, 12 round, the green one a gradient with its shadow, the rest white
+  with a hairline); the phone's colours by role, light and dark; Inter.
+- **From desktop convention.** Body text 14.5px, titles 28 bold, labels 11.5
+  capitals; content 720 wide and centred (it was wide and to the left);
+  setting rows 56 high, an 18px icon in a 34px soft tile, hairlines from the
+  name rather than edge to edge; a 240px sidebar of frosted glass, the open
+  place a raised white pill with a green icon; sheets 420 wide and centred
+  over a light blurred dim; a toast as a dark pill at the page's foot.
+  Spacing on a 4px grid: 28 under a title, 32 between groups.
+- **Motion.** Short and easing out: a page fades in (200 ms); a sheet rises
+  and fades (280 ms); buttons and tiles lift 1 to 2px under the pointer and
+  press to 98%; a switch's knob springs. Nothing moves when the system asks
+  for less motion. A page fades only, with no transform left on it: a
+  transform held the floating bar of Recently deleted inside the page rather
+  than at the window's foot, found in this pass.
+
+Per place: Home's mark a white disc in a faint halo, its ring green when
+everything is synced and amber when something waits; the device's circle at
+the top right, out of the flow, so the mark and Send are centred in the
+window. A device's page has its circle, name and On (blue) or Off; Switch
+device at the left and Remove, red words, at the right. Settings is one
+column (the two of draft 1 are gone). Files and Add a device are tiles two to
+a row, an icon at the top and the name at the foot. This computer's storage
+is a card with the free space and its bar, and each part's row is drawn in
+its colour of the bar, so the bar needs no key. The limit sheet's sizes share
+rows evenly (two by two when there are four). Back up folders' rows are on a
+card, as every list is.
+
+Checked in the fixtures, on the owner's laptop, headless Chromium at
+1120 × 720: 40 screens (every place, sheet and state the fixtures reach)
+light and dark, and the foot of Settings, the unlock screen, the
+ask-to-open and two-versions sheets. Screenshots are taken with the
+fixtures' new `?still`, which turns motion off: Chromium's virtual clock
+does not run transitions, and without it a shot caught colours half-changed
+(Home's warning mark photographed green). The window was rebuilt and
+restarted; not looked at by me in the real window, only in the fixtures.
+
+Left undone, stated:
+
+- The folder views Files no longer reaches (a shared folder's own page, its
+  gallery, quick preview) are styled to the same rules but not photographed:
+  nothing in the window leads to them since Files became a launcher.
+- The phone has not been restyled to match; this is the desktop's alone.
+- The system's notifications are the desktop's own, unstyled by QurbSpace.

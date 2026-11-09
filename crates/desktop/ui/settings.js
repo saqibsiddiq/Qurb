@@ -23,21 +23,18 @@ async function drawSettings(main) {
       circle({ name: s.name, picture: s.picture, route: "direct" }, "circle-xl circle-plain"),
       h("span", { class: "profile-words" }, h("b", {}, s.name), h("small", {}, "Name and picture")),
       icon("chevron-right", "set-go")),
-    // Two columns, as the desktop's draft 1 lays Settings out.
-    h("div", { class: "cols" },
-    h("div", { class: "col" },
+    // One column, as the phone's: the groups read top to bottom.
     group("Manage storage",
       setting({ ic: "hard-drive", name: "This computer", value: st ? size(st.used) : null, onclick: () => go("storage") })),
     group("Connection",
       setting({ ic: "arrow-up-down", name: "Speed limit", value: speedWords(s), onclick: () => go("speed") }),
-      setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") }))),
-    h("div", { class: "col" },
+      setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") })),
     group("App",
       setting({ ic: "clock", name: "Activity", onclick: () => go("activity") }),
       setting({ ic: "bell", name: "Notifications", end: toggle(s.notifications, (on) => invoke("set_notifications", { on }), "Notifications") }),
       setting({ ic: "palette", name: "Theme", value: theme, onclick: themeSheet }),
       setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") }),
-      setting({ ic: "download", name: "Update", end: h("span", { id: "version-says", class: "chip chip-ok" }, " "), onclick: updateClicked })))),
+      setting({ ic: "download", name: "Update", end: h("span", { id: "version-says", class: "chip chip-ok" }, " "), onclick: updateClicked })),
     h("button", { class: "link-danger", onclick: () => invoke("quit") }, icon("x"), "Quit QurbSpace"));
   showUpdate();
 }
@@ -213,7 +210,10 @@ async function drawStorage(main) {
     h("div", { class: "grp-box grp-gap" },
       setting({ ic: "sliders-horizontal", name: "Space for QurbSpace", value: limit ? size(limit) : "No limit", onclick: () => limitSheet(limit, used, disk) })),
     h("div", { class: "grp-box" }, ...kinds.map((k) => {
-      const lead = k.lead ? icon(k.lead, "set-ic") : h("i", { class: "sw", style: { background: k.colour } });
+      // Each row in its part's colour of the bar, so the bar reads without
+      // a key: the icon in that colour, or a dot where there is no icon.
+      const lead = k.lead ? icon(k.lead, "set-ic") : h("span", { class: "sw" }, h("i", { style: { background: k.colour } }));
+      if (k.lead) lead.style.color = k.colour;
       return h(k.open ? "button" : "div", { class: "set", onclick: k.open },
         lead, h("span", { class: "set-name" }, k.name), h("span", { class: "set-value" }, size(k.bytes)),
         k.open ? icon("chevron-right", "set-go") : null);
@@ -382,14 +382,14 @@ async function listsBackup() {
   const anyOn = b.keepers.some((k) => k.on);
   put(body,
     b.folders.length
-      ? h("div", { class: "rows" }, label("Folders"), ...b.folders.map((f) => row({
+      ? [label("Folders"), h("div", { class: "grp-box rows-card" }, ...b.folders.map((f) => row({
         ic: f.refused ? tile("triangle-alert", "tile-warn") : "folder",
         name: f.name,
         title: f.path,
         sub: f.refused ? [f.refused] : [f.files ? `${count(f.files, "file")}` : "Not read yet", f.files ? size(f.size) : null],
         cls: f.refused ? "row-warn" : "",
         end: h("button", { class: "icon-btn", "aria-label": `Stop backing up ${f.name}`, title: "Stop backing up", onclick: () => removeBackupFolder(f) }, icon("x")),
-      })))
+      })))]
       : empty("hard-drive", "Folders of this computer, kept by your other computers"),
     label("Kept on"),
     b.keepers.length

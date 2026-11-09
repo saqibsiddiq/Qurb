@@ -86,4 +86,9 @@ photograph each screen beside its frame:
 `?removed`, `?removedby` and `?back` answer as after a device was removed
 here, removed this computer, or came back (decision 0084).
 
+`?still` turns transitions and animations off, everything drawn at its end.
+Headless Chromium's virtual clock does not run them: without it a screenshot
+catches a colour or a size at the first frame of its change (found
+2026-11-09, when Home's warning mark photographed green).
+
 Corner cut: `?then=` is `eval`. Fixtures only; nothing in `crates/` reads it.

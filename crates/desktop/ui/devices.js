@@ -20,11 +20,10 @@ function drawDevicePage(main, d) {
           h("p", { class: "state" }, d.route ? "On" : d.last_seen ? h("span", {}, "Off", h("small", {}, ago(d.last_seen))) : "Off")),
         h("button", { class: "icon-btn", "aria-label": `About ${d.name}`, onclick: () => aboutDevice(d) }, icon("info"))),
       h("div", { id: "page-list" }),
-      // What can be done to the device, as a card like those above it (the
-      // owner, 2026-11-09: the two solid bars "aren't good enough"):
-      // switching to another, then removing this one, in red.
-      // Switch device a quiet button, Remove a red link under it, as the
-      // desktop's draft 1 has them.
+      // What can be done to the device (the owner, 2026-11-09: the two
+      // solid bars "aren't good enough"): Switch device a quiet button at
+      // the left, Remove a quiet red one at the right, red only in its words
+      // until it is pointed at.
       h("div", { class: "dev-foot" },
         h("button", { class: "btn btn-quiet btn-sm", onclick: () => switchDevice((to) => go("device", to)) }, icon("arrow-up-down"), "Switch device"),
         h("button", { class: "link-danger", onclick: () => askToRemove(d) }, icon("trash-2"), d.relation === "guest" ? `Remove ${d.name}` : "Remove"))));

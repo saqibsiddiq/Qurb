@@ -1,7 +1,21 @@
-/* The desktop window, redesigned component by component with the owner
-   (docs/design/desktop.md), in the Android app's and the website's
-   language: one thing at a time, a great deal of room, few words, the deep
-   green the only colour, warm off-white and its dark twin. */
+/* QurbSpace's desktop window: one design, written once.
+
+   The owner, 2026-11-09, after three looks turned down: "study the best
+   practices of ui/ux and study the design of phone and website ... a really
+   eye-pleasing and super smooth application". This file replaces the 3,880
+   lines those looks had layered over each other (docs/design/redesign.md,
+   "One stylesheet, written once").
+
+   From the phone and the website: the soft glow behind everything, white
+   cards with a hairline edge and a soft shadow, the deep green the one
+   colour, Inter, round corners, the website's buttons. From desktop
+   convention: 14.5px text, 40px controls, 54px rows, content 720 wide and
+   centred, a 240px sidebar. Spacing on a 4px grid. Motion short and easing
+   out, and none when the system asks for less.
+
+   Sections: tokens, base, motion, the window, pages, cards and rows,
+   controls, sheets and toasts, circles, then each place in the sidebar's
+   order, then setting up. */
 
 @font-face {
   font-family: "Inter";
@@ -17,71 +31,106 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1EFF, U+20A0-20C0;
 }
 
-/* The tokens, exactly as docs/design/system/tokens.css writes them -- the
-   one place each colour is written; the phone's colors.xml copies them too.
-   The names this file used before are kept as aliases below. */
+/* ============================================================== tokens */
+
+/* The colours are the phone's (colors.xml, docs/design/system/tokens.css);
+   the materials and shadows are this window's. */
 :root,
 [data-theme="light"] {
-  --bg: #f6f6f3;
+  --bg: #f5f5f1;
   --surface: #ffffff;
-  --surface-2: #efefea;
-  --line: #e4e4de;
-  --ink: #161815;
-  --ink-2: #5c605a;
-  --ink-3: #8b8e87;
+  --surface-2: #f0f0eb;
+  --line: #e2e2dc;
+  --ink: #171916;
+  --ink-2: #565b55;
+  --ink-3: #868a83;
   --brand: #2f6b57;
   --brand-strong: #255848;
-  --brand-soft: #e6efea;
+  --brand-soft: #e5efe9;
   --on-brand: #ffffff;
   --online: #2f7de1;
-  --warn: #946a24;
-  --warn-soft: #f6eedb;
-  --danger: #b0443a;
-  --danger-soft: #f7e8e5;
-  --shadow-1: 0 1px 2px rgba(22, 24, 21, 0.05), 0 1px 1px rgba(22, 24, 21, 0.03);
-  --shadow-2: 0 2px 6px rgba(22, 24, 21, 0.06), 0 12px 32px -12px rgba(22, 24, 21, 0.16);
-  --scrim: rgba(22, 24, 21, 0.32);
+  --warn: #93691f;
+  --warn-soft: #f7efdc;
+  --danger: #b4463b;
+  --danger-soft: #f8e9e6;
+
+  --glow: 111, 175, 152;
+  --environment:
+    radial-gradient(55% 60% at 0% 0%, rgba(var(--glow), 0.16), transparent 70%),
+    radial-gradient(45% 50% at 100% 0%, rgba(200, 211, 218, 0.34), transparent 70%),
+    radial-gradient(60% 55% at 85% 105%, rgba(236, 224, 199, 0.46), transparent 70%);
+  --rail: rgba(250, 250, 247, 0.62);
+  --card: #ffffff;
+  --edge: rgba(23, 25, 22, 0.075);
+  --edge-strong: rgba(23, 25, 22, 0.13);
+  --tile: #f1f1ec;
+  --hover: rgba(23, 25, 22, 0.035);
+  --press: rgba(23, 25, 22, 0.065);
+  --shadow-card: 0 1px 2px rgba(23, 25, 22, 0.04), 0 8px 24px -14px rgba(23, 25, 22, 0.12);
+  --shadow-lift: 0 2px 4px rgba(23, 25, 22, 0.04), 0 16px 36px -16px rgba(23, 25, 22, 0.2);
+  --shadow-sheet: 0 2px 8px rgba(23, 25, 22, 0.06), 0 30px 70px -18px rgba(23, 25, 22, 0.3);
+  --shadow-brand: 0 1px 2px rgba(33, 75, 61, 0.25), 0 8px 20px -8px rgba(47, 107, 87, 0.45);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --scrim: rgba(24, 30, 27, 0.16);
+  --toast: #1d2320;
+  --toast-ink: #f2f5f2;
   color-scheme: light;
 }
 [data-theme="dark"] {
-  --bg: #0f1311;
-  --surface: #171c19;
-  --surface-2: #1e2420;
-  --line: #2a312d;
-  --ink: #ecf0ed;
-  --ink-2: #b5bdb8;
-  --ink-3: #848e88;
-  --brand: #55ab8b;
-  --brand-strong: #6bbf9f;
-  --brand-soft: #18271f;
-  --on-brand: #08110d;
+  --bg: #101412;
+  --surface: #181d1a;
+  --surface-2: #1f2521;
+  --line: #2b322e;
+  --ink: #ebefec;
+  --ink-2: #b2bab5;
+  --ink-3: #848d87;
+  --brand: #58ad8d;
+  --brand-strong: #6cc0a0;
+  --brand-soft: #1a2a22;
+  --on-brand: #ffffff;
   --online: #5b9bff;
-  --warn: #d9a64a;
-  --warn-soft: #2a2316;
-  --danger: #ef6b5d;
-  --danger-soft: #2b1715;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.35), 0 16px 40px -14px rgba(0, 0, 0, 0.7);
-  --scrim: rgba(0, 0, 0, 0.55);
+  --warn: #dba84d;
+  --warn-soft: #2b2417;
+  --danger: #ee6d60;
+  --danger-soft: #2d1816;
+
+  --environment:
+    radial-gradient(55% 60% at 0% 0%, rgba(var(--glow), 0.09), transparent 70%),
+    radial-gradient(45% 50% at 100% 0%, rgba(44, 58, 70, 0.28), transparent 70%),
+    radial-gradient(60% 55% at 85% 105%, rgba(62, 52, 36, 0.28), transparent 70%);
+  --rail: rgba(20, 25, 22, 0.6);
+  --card: #191e1b;
+  --edge: rgba(255, 255, 255, 0.065);
+  --edge-strong: rgba(255, 255, 255, 0.12);
+  --tile: #242b27;
+  --hover: rgba(255, 255, 255, 0.04);
+  --press: rgba(255, 255, 255, 0.075);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -16px rgba(0, 0, 0, 0.6);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.35), 0 18px 40px -18px rgba(0, 0, 0, 0.7);
+  --shadow-sheet: 0 2px 10px rgba(0, 0, 0, 0.45), 0 30px 80px -18px rgba(0, 0, 0, 0.8);
+  --shadow-brand: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 20px -8px rgba(0, 0, 0, 0.6);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --scrim: rgba(0, 0, 0, 0.5);
+  --toast: #edf1ee;
+  --toast-ink: #171916;
   color-scheme: dark;
 }
 :root {
+  --r-xs: 8px;
   --r-s: 10px;
-  --r-m: 14px;
-  --r-l: 18px;
-  --r-xl: 24px;
-  --r-full: 999px;
-  /* This file's earlier names for the same tokens. */
-  --raised: var(--surface);
-  --soft: var(--surface-2);
-  --mute: var(--ink-3);
+  --r-m: 12px;
+  --r-l: 16px;
+  --r-xl: 22px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --fast: 140ms;
+  --mid: 220ms;
+  /* Names the scripts still use in inline styles. */
   --green: var(--brand);
-  --green-2: var(--brand-strong);
-  --green-soft: var(--brand-soft);
   --blue: var(--online);
-  --red: var(--danger);
-  --shadow: var(--shadow-2);
 }
+
+/* ================================================================ base */
 
 * {
   box-sizing: border-box;
@@ -95,9 +144,10 @@ body {
   margin: 0;
 }
 body {
-  background: var(--bg);
+  background: var(--environment), var(--bg);
   color: var(--ink);
-  font: 400 14px/1.45 "Inter", system-ui, sans-serif;
+  font: 400 14.5px/1.45 "Inter", system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
   user-select: none;
   overflow: hidden;
@@ -107,54 +157,131 @@ button {
   color: inherit;
   cursor: pointer;
 }
+button:disabled {
+  cursor: default;
+}
 h1,
-p {
+h2,
+p,
+ol {
   margin: 0;
+}
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+  user-select: text;
+}
+::selection {
+  background: rgba(var(--glow), 0.32);
+}
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 .ic {
   width: 20px;
   height: 20px;
-  fill: currentColor;
   flex: none;
+  fill: currentColor;
+}
+.ic.flip {
+  transform: scaleX(-1);
+}
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-thumb {
+  border: 4px solid transparent;
+  border-radius: 999px;
+  background: rgba(128, 132, 126, 0.3) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 132, 126, 0.5) padding-box;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-/* ---------- The window ---------- */
+/* ============================================================== motion */
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+}
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes travel {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+@keyframes breathe {
+  50% {
+    box-shadow: 0 0 0 12px rgba(var(--glow), 0.14);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+/* ========================================================== the window */
 
 .win {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   height: 100%;
 }
-/* The sidebar, as D1 draws it: a tint of the soft surface, the mark and
-   name, and pills. */
+/* The sidebar: a pane of frosted glass over the glow. */
 .sb {
   display: flex;
   flex-direction: column;
-  padding: 24px 12px 16px;
-  background: color-mix(in srgb, var(--surface-2) 55%, var(--bg));
-  border-right: 1px solid var(--line);
+  padding: 24px 14px 14px;
+  border-right: 1px solid var(--edge);
+  background: var(--rail);
+  backdrop-filter: blur(30px) saturate(1.3);
 }
 .sb-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   padding: 0 12px 22px;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.sb-brand i {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--brand);
-  color: var(--on-brand);
-}
-.sb-brand i .ic {
-  width: 15px;
-  height: 15px;
+  letter-spacing: -0.025em;
 }
 .sb-nav {
   display: flex;
@@ -174,77 +301,1384 @@ p {
   font-size: 14px;
   font-weight: 500;
   text-align: left;
-  transition: color 0.2s, background 0.2s;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
 }
 .sb-nav button .ic {
-  width: 19px;
-  height: 19px;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+  transition: color var(--fast) var(--ease);
 }
 .sb-nav button:hover {
+  background: var(--hover);
   color: var(--ink);
-  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
 }
+.sb-nav button:active {
+  background: var(--press);
+}
+/* The open place: a raised white pill, its icon green. */
 .sb-nav button.on {
-  color: var(--brand);
-  background: var(--brand-soft);
+  background: var(--card);
+  color: var(--ink);
   font-weight: 600;
+  box-shadow: 0 0 0 1px var(--edge), 0 1px 3px rgba(23, 25, 22, 0.07);
+}
+.sb-nav button.on .ic {
+  color: var(--brand);
+}
+/* This computer, at the foot. */
+.sb-me {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  padding: 14px 12px 2px;
+  border-top: 1px solid var(--edge);
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.sb-me:empty {
+  display: none;
+}
+.sb-me .ic {
+  width: 16px;
+  height: 16px;
+}
+.sb-me span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .main {
   position: relative;
   overflow-y: auto;
-  outline: none;
+  scroll-behavior: smooth;
+}
+/* Every place fades in as it opens: opacity only, and nothing kept after,
+   since a transform left on the page would hold the bars that float at the
+   window's foot (Recently deleted's) inside it. */
+.main > * {
+  animation: fade-in 200ms var(--ease);
 }
 
-/* ---------- Home ---------- */
+/* =============================================================== pages */
+
+/* A page: 720 of content, centred, with room around it. */
+.pg,
+.page {
+  width: 100%;
+  max-width: 808px;
+  margin: 0 auto;
+  padding: 40px 44px 96px;
+}
+.page {
+  display: flex;
+  flex-direction: column;
+}
+.pg-hd {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 28px;
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+  height: 28px;
+  margin: 0 0 8px -8px;
+  padding: 0 10px 0 4px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 500;
+  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.back .ic {
+  width: 16px;
+  height: 16px;
+}
+.back:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.back-corner {
+  position: absolute;
+  top: 40px;
+  left: 36px;
+}
+.pg-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+}
+.pg-title h1,
+.ptitle {
+  overflow: hidden;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pg-title h1 {
+  flex: 1;
+  min-width: 0;
+}
+.pg-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pg-end:empty {
+  display: none;
+}
+.quiet-line,
+.pg-hd + div > .note:first-child {
+  margin: -18px 4px 24px;
+  color: var(--ink-3);
+  font-size: 14px;
+}
+.pg-hd + div > .note:first-child + .conflict {
+  margin-top: 0;
+}
+/* A group's label: small capitals over its card. */
+.label {
+  margin: 32px 4px 10px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+.pg-hd + .label,
+.pg-hd + div > .label:first-child,
+.pg-hd + div > .grp:first-child > .label,
+.quiet-line + .label,
+.grp-box + .grp > .label:first-child {
+  margin-top: 0;
+}
+.grp-box + .grp {
+  margin-top: 32px;
+}
+.label-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.note {
+  margin: 12px 4px 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.note b {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.note.warn {
+  color: var(--warn);
+}
+.oops {
+  margin: 20px 4px;
+  color: var(--warn);
+  font-size: 13.5px;
+}
+.quiet {
+  color: var(--ink-3);
+  font-size: 15px;
+}
+/* A page whose few things sit in the middle of the window. */
+.center-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 56px 40px;
+  text-align: center;
+}
+/* Nothing here: an orb, a few words, what to do. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 64px 24px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  text-align: center;
+}
+.empty p {
+  max-width: 340px;
+}
+.empty-orb {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--edge), var(--shadow-card);
+  color: var(--ink-3);
+}
+.empty-orb .ic {
+  width: 26px;
+  height: 26px;
+}
+.empty-orb.ok,
+.empty-orb.asking {
+  background: var(--brand-soft);
+  box-shadow: none;
+  color: var(--brand);
+}
+.empty-orb.warn {
+  background: var(--warn-soft);
+  box-shadow: none;
+  color: var(--warn);
+}
+.empty-orb.asking {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+/* A state said in the middle: the key's, a locked folder's. */
+.locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px 4px;
+  text-align: center;
+}
+.locked > .empty-orb {
+  margin-bottom: 8px;
+}
+.locked > p:not(.note) {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.locked h1 {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+.locked .note {
+  margin: 0;
+  font-size: 13.5px;
+}
+.locked .btn {
+  margin-top: 16px;
+}
+.main > .locked {
+  justify-content: center;
+  min-height: 100%;
+}
+
+/* ======================================================= cards and rows */
+
+/* A card: white, a hairline, a soft shadow. */
+.grp-box,
+.w-card,
+.wa-card {
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+.grp-gap {
+  margin-bottom: 16px;
+}
+/* One row of a card: its icon in a soft tile, its name, its value, then a
+   chevron, a switch or nothing; a hairline between rows, from the name. */
+.set {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 16px 10px 12px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 14.5px;
+  text-align: left;
+  transition: background var(--fast) var(--ease);
+}
+.grp-box > * + .set::before,
+.grp-box > .set + *::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 60px;
+  right: 0;
+  height: 1px;
+  background: var(--edge);
+}
+button.set:hover {
+  background: var(--hover);
+}
+button.set:active {
+  background: var(--press);
+}
+.set-ic {
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  padding: 8px;
+  border-radius: var(--r-s);
+  background: var(--tile);
+  color: var(--ink-2);
+}
+.set-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-value {
+  max-width: 55%;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-go {
+  width: 16px;
+  height: 16px;
+  margin-left: -4px;
+  color: var(--ink-3);
+  transition: transform var(--fast) var(--ease);
+}
+button.set:hover .set-go,
+button.profile:hover .set-go {
+  transform: translateX(2px);
+}
+.set-tick {
+  width: 18px;
+  height: 18px;
+  color: var(--brand);
+}
+.set-danger,
+.set-danger .set-ic {
+  color: var(--danger);
+}
+.set-danger .set-ic {
+  background: var(--danger-soft);
+}
+.set .btn-sm {
+  margin: -2px 0;
+}
+.set > small.note {
+  margin: 0;
+}
+/* A card inside a sheet: no shadow, already raised. */
+.sheet .grp-box,
+.grp-flat {
+  box-shadow: none;
+}
+.grp-flat {
+  margin-top: 4px;
+}
+/* A list of files or folders: rows that light up under the pointer. */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 14px 10px 10px;
+  border: 0;
+  border-radius: var(--r-m);
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  transition: background var(--fast) var(--ease);
+}
+button.row:hover {
+  background: var(--hover);
+}
+button.row:active {
+  background: var(--press);
+}
+.rows-card {
+  display: flex;
+  flex-direction: column;
+}
+.rows-card .row {
+  border-radius: 0;
+  padding-left: 12px;
+}
+.rows-card .row + .row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 66px;
+  right: 0;
+  height: 1px;
+  background: var(--edge);
+}
+.row-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.row-main b {
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-main small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+.row-go {
+  width: 16px;
+  height: 16px;
+  color: var(--ink-3);
+}
+.row-warn .row-main b {
+  color: var(--warn);
+}
+.w-bar {
+  display: block;
+  height: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+.w-bar i {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+}
+/* A tile: an icon in a soft rounded square, as on the phone. */
+.tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: var(--r-m);
+  background: var(--tile);
+  color: var(--ink-2);
+}
+.tile .ic {
+  width: 18px;
+  height: 18px;
+}
+.tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tile-lg {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.tile-lg .ic {
+  width: 24px;
+  height: 24px;
+}
+.tile-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.tile-ok {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+/* Where a file is, as a small icon at a row's end. */
+.where {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ink-3);
+}
+.where .ic {
+  width: 16px;
+  height: 16px;
+}
+.where.moving {
+  color: var(--brand);
+}
+.where.warn {
+  color: var(--warn);
+}
+.holders {
+  margin-top: 4px;
+}
+.holders .label {
+  margin-top: 20px;
+}
+.holders .row {
+  margin-top: 12px;
+  background: var(--warn-soft);
+}
+/* Folders, where a place still browses them: cards, a few to a row. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  text-align: left;
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lift);
+}
+.card:active {
+  transform: scale(0.99);
+}
+.card .tile {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.card-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.card-words b {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-words small {
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+.card-words small:empty {
+  display: none;
+}
+
+/* ============================================================ controls */
+
+/* Buttons, as the website draws them: 40 high, 12 round, a lift. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--r-m);
+  background: none;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), background var(--fast) var(--ease), filter var(--fast) var(--ease), border-color var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+.btn .ic {
+  width: 16px;
+  height: 16px;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 60ms;
+}
+.btn:disabled {
+  opacity: 0.45;
+}
+/* The one thing to do: green, a gradient as the website's. */
+.btn-main,
+.send {
+  border-color: var(--brand-strong);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brand) 86%, #fff), var(--brand));
+  color: var(--on-brand);
+  box-shadow: var(--shadow-brand), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.btn-main:hover:not(:disabled),
+.send:hover {
+  filter: brightness(1.06);
+}
+[data-theme="dark"] .btn-main,
+[data-theme="dark"] .send {
+  border-color: color-mix(in srgb, var(--brand) 70%, #000);
+  background: linear-gradient(180deg, #3f8a70, #33765f);
+}
+/* Everything else: white, a hairline. */
+.btn-quiet {
+  border-color: var(--edge-strong);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(23, 25, 22, 0.05), var(--highlight);
+}
+.btn-quiet:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ink) 18%, transparent);
+  box-shadow: 0 4px 12px -4px rgba(23, 25, 22, 0.14), var(--highlight);
+}
+[data-theme="dark"] .btn-quiet {
+  background: var(--surface-2);
+}
+.btn-soft {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.btn-soft:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+.btn-danger-solid {
+  border-color: color-mix(in srgb, var(--danger) 82%, #000);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 88%, #fff), var(--danger));
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(120, 30, 20, 0.25), 0 8px 20px -8px rgba(180, 70, 59, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.btn-danger-solid:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+[data-theme="dark"] .btn-danger-solid {
+  border-color: #a63d32;
+  background: linear-gradient(180deg, #d0564a, #b9463b);
+}
+.btn-blue-solid {
+  background: var(--online);
+  color: #fff;
+}
+.btn-red-words {
+  color: var(--danger);
+}
+.btn-sm {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--r-s);
+  font-size: 13px;
+}
+.btn-sm .ic {
+  width: 15px;
+  height: 15px;
+}
+.btn-wide {
+  width: 100%;
+}
+.btn-later {
+  min-width: 160px;
+  margin-top: 28px;
+}
+/* A destructive act, quiet until pointed at: Remove, Quit. */
+.link-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--r-m);
+  background: none;
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.link-danger .ic {
+  width: 16px;
+  height: 16px;
+}
+.link-danger:hover {
+  background: var(--danger-soft);
+}
+.link-danger:active {
+  border-color: color-mix(in srgb, var(--danger) 25%, transparent);
+}
+/* A way somewhere else, in green words. */
+.link {
+  align-self: center;
+  margin-top: 16px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--brand);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background var(--fast) var(--ease);
+}
+.link:hover {
+  background: var(--brand-soft);
+}
+.icon-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: none;
+  color: var(--ink-2);
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.icon-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.icon-btn:active {
+  background: var(--press);
+}
+.icon-btn .ic {
+  width: 18px;
+  height: 18px;
+}
+.icon-btn.armed {
+  width: auto;
+  padding: 0 12px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+/* A sheet's buttons: the quiet one, then the main one, of one width. */
+.acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+.acts-c {
+  justify-content: center;
+}
+.acts-2,
+.sheet .acts {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+}
+.sheet .acts .btn {
+  height: 42px;
+}
+/* Chips: a value or a state in a small pill. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.chip .ic {
+  width: 12px;
+  height: 12px;
+}
+.chip-ok {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.chip-do {
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 600;
+}
+.chip-wait {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.chip:empty,
+.chip:has(> :only-child:empty) {
+  display: none;
+}
+.chip-quiet > span {
+  color: var(--ink-3);
+}
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+/* A switch: a green track, a white knob that springs across. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 26px;
+  cursor: pointer;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background var(--mid) var(--ease);
+}
+.switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: transform 260ms var(--spring);
+}
+.switch:active span::after {
+  width: 23px;
+}
+.switch input:checked + span {
+  background: var(--brand);
+}
+.switch input:checked + span::after {
+  transform: translateX(16px);
+}
+.switch:active input:checked + span::after {
+  transform: translateX(13px);
+}
+.switch input:focus-visible + span {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+/* Fields: white, 12 round, a green ring with focus. */
+.field,
+.digits-in {
+  display: block;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--r-m);
+  background: var(--card);
+  box-shadow: inset 0 1px 2px rgba(23, 25, 22, 0.04);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+[data-theme="dark"] .field,
+[data-theme="dark"] .digits-in {
+  background: var(--surface-2);
+}
+textarea.field {
+  height: auto;
+  min-height: 116px;
+  padding: 12px 14px;
+  line-height: 1.55;
+  resize: none;
+}
+.field:focus,
+.digits-in:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px rgba(var(--glow), 0.22);
+}
+.field::placeholder,
+.digits-in::placeholder {
+  color: var(--ink-3);
+  opacity: 0.8;
+}
+.field:disabled,
+.digits-in:disabled {
+  opacity: 0.6;
+}
+.field-c {
+  margin-top: 12px;
+  text-align: center;
+}
+/* Six digits typed: large, spaced, in the middle. */
+.digits-in {
+  width: 260px;
+  height: 60px;
+  border-radius: var(--r-l);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  text-align: center;
+  text-indent: 0.32em;
+  font-variant-numeric: tabular-nums;
+}
+.digits-in::placeholder {
+  color: var(--line);
+  opacity: 1;
+}
+
+/* ================================================== sheets and toasts */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--scrim);
+  backdrop-filter: blur(2px) saturate(0.9);
+  animation: fade-in 180ms var(--ease) both;
+  transition: opacity 170ms var(--ease);
+}
+.scrim.gone {
+  opacity: 0;
+}
+.scrim.gone .sheet {
+  transform: translateY(6px) scale(0.98);
+  transition: transform 170ms var(--ease);
+}
+/* A sheet: a white card in the middle, its picture and title centred. */
+.sheet {
+  width: 420px;
+  max-width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 28px 24px 24px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-xl);
+  background: var(--card);
+  box-shadow: var(--shadow-sheet);
+  animation: rise 280ms var(--ease) both;
+}
+.sheet-wide {
+  width: 480px;
+}
+.sh-hd {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+  text-align: center;
+}
+.sh-hd > .circle {
+  width: 56px;
+  height: 56px;
+  font-size: 21px;
+}
+.sh-hd > .w-stack {
+  margin-left: 16px;
+}
+.sh-words {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.sh-words h2 {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+}
+.sh-words p {
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.sh-words .chips {
+  margin-top: 2px;
+}
+.sheet > .rows {
+  margin: 0 -8px;
+}
+.sheet > .label {
+  margin-top: 22px;
+}
+.sheet > .field + .note,
+.sheet > .field + .sheet-note {
+  min-height: 20px;
+  margin: 10px 4px 0;
+  text-align: center;
+}
+.sheet > .field + .note:empty {
+  min-height: 0;
+}
+.sheet-note {
+  margin-top: 14px;
+  color: var(--ink-3);
+  font-size: 13px;
+  text-align: center;
+}
+.sheet-note:empty {
+  display: none;
+}
+/* Who it is in a removal sheet, its rows, the toggle. */
+.sheet .grp-box .set {
+  min-height: 52px;
+}
+/* The key: its orb and words over its rows. */
+.key-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+  text-align: center;
+}
+.key-status h2 {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+}
+/* The 24 words, four columns, numbered. */
+.words {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 12px 0 0;
+  padding: 18px 18px 18px 40px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--surface-2);
+  font-size: 14px;
+  font-weight: 500;
+  user-select: text;
+}
+.grp-box > .words,
+.grp-box > div > .words {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--edge);
+  border-radius: 0;
+}
+.words li {
+  padding-left: 4px;
+}
+.words li::marker {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+/* A sheet's actions as the phone's: round buttons, a word under each. */
+.rounds {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: 12px 4px;
+  margin-top: 4px;
+}
+.round {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.round-c {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--tile);
+  color: var(--ink);
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.round-c .ic {
+  width: 20px;
+  height: 20px;
+}
+.round:hover .round-c {
+  background: var(--brand-soft);
+  color: var(--brand);
+  transform: translateY(-1px);
+}
+.round:active .round-c {
+  transform: scale(0.94);
+}
+.round-danger {
+  color: var(--danger);
+}
+.round-danger .round-c,
+.round-danger:hover .round-c {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+/* A toast: a dark pill over the page's foot. */
+.toast {
+  position: fixed;
+  left: calc(50% + 120px);
+  bottom: 28px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 300px));
+  padding: 11px 20px 11px 14px;
+  border-radius: 999px;
+  background: var(--toast);
+  color: var(--toast-ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, 0.45);
+  transform: translateX(-50%);
+  animation: bar-in var(--mid) var(--ease) both;
+  transition: opacity 300ms var(--ease), transform 300ms var(--ease);
+}
+body.setting-up .toast {
+  left: 50%;
+}
+.toast-ic {
+  width: 18px;
+  height: 18px;
+  color: #6fd3a8;
+}
+.toast-warn .toast-ic {
+  color: #f2b65c;
+}
+[data-theme="dark"] .toast-ic {
+  color: var(--brand);
+}
+[data-theme="dark"] .toast-warn .toast-ic {
+  color: #b77b1c;
+}
+.toast.gone {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+}
+/* Files held over the window. */
+.dropping {
+  position: fixed;
+  inset: 12px 12px 12px 252px;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  border: 2px dashed color-mix(in srgb, var(--brand) 60%, transparent);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--brand-soft) 86%, transparent);
+  backdrop-filter: blur(8px);
+  color: var(--brand);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.985);
+  transition: opacity var(--mid) var(--ease), transform var(--mid) var(--ease);
+}
+.dropping.on {
+  opacity: 1;
+  transform: none;
+}
+
+/* ============================================================ circles */
+
+/* A device as a circle: its picture or its first letter; a dot for on. */
+.circle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1;
+}
+.circle img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.circle-dot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+.circle-dot.on {
+  background: var(--online);
+}
+.circle-xs {
+  width: 18px;
+  height: 18px;
+  font-size: 9.5px;
+}
+.circle-xs .circle-dot,
+.circle-plain .circle-dot {
+  display: none;
+}
+.circle-md {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+.circle-lg {
+  width: 44px;
+  height: 44px;
+  font-size: 17px;
+}
+.circle-xl {
+  width: 64px;
+  height: 64px;
+  font-size: 25px;
+}
+.circle-xl .circle-dot {
+  width: 15px;
+  height: 15px;
+  border-width: 3px;
+}
+.circle-add {
+  background: var(--card);
+  box-shadow: inset 0 0 0 1.5px var(--edge-strong);
+  color: var(--ink-2);
+}
+.circle-add .ic {
+  width: 18px;
+  height: 18px;
+}
+.circle-btn {
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.circle-btn:hover {
+  transform: scale(1.06);
+}
+.circle-btn:active {
+  transform: scale(0.97);
+}
+.circle-btn .circle {
+  box-shadow: 0 0 0 3px var(--bg), 0 4px 12px -4px rgba(23, 25, 22, 0.25);
+}
+.circle-btn .circle-add {
+  box-shadow: inset 0 0 0 1.5px var(--edge-strong), 0 4px 12px -6px rgba(23, 25, 22, 0.2);
+}
+.circle-btn .circle-dot {
+  border-color: var(--bg);
+}
+
+/* ================================================================ home */
 
 .home {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 100%;
-  padding: 8px 36px 40px;
+  padding: 40px 32px;
 }
+/* The chosen device's circle, at the top right. */
 .home-top {
-  display: flex;
-  justify-content: flex-end;
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  z-index: 1;
 }
-/* In the middle of the window while it is the only thing there (the owner,
-   2026-11-03: off-centre at the frame's 108 from the top looked lopsided in
-   a larger window); at the top while Waiting shows under it. */
 .home-middle {
   display: flex;
   flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: 52px;
+  padding-bottom: 12px;
 }
-
-/* The status mark: the phone's, as large. */
+/* The status mark: a white disc in a faint green halo, its ring the state. */
 .mark {
   position: relative;
   display: grid;
   place-items: center;
+  flex: none;
   width: 168px;
   height: 168px;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--surface);
-  box-shadow: var(--shadow-2);
-  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--edge), 0 12px 32px -12px rgba(23, 25, 22, 0.2), 0 0 0 16px rgba(var(--glow), 0.07), 0 0 80px 24px rgba(var(--glow), 0.12);
+  transition: transform var(--mid) var(--ease), width var(--mid) var(--ease), height var(--mid) var(--ease), box-shadow var(--mid) var(--ease);
 }
 .mark:hover {
-  transform: scale(1.02);
+  transform: scale(1.025);
 }
 .mark:active {
   transform: scale(0.98);
 }
+.mark[data-tone="warn"] {
+  box-shadow: 0 0 0 1px var(--edge), 0 12px 32px -12px rgba(23, 25, 22, 0.2), 0 0 0 16px rgba(201, 150, 60, 0.08), 0 0 80px 24px rgba(201, 150, 60, 0.1);
+}
+.mark[data-tone="away"],
+.mark[data-tone="idle"] {
+  box-shadow: 0 0 0 1px var(--edge), 0 12px 32px -12px rgba(23, 25, 22, 0.2);
+}
 .ring {
   position: absolute;
-  inset: 8px;
-  width: calc(100% - 16px);
-  height: calc(100% - 16px);
+  inset: 12px;
+  width: calc(100% - 24px);
+  height: calc(100% - 24px);
   transform: rotate(-90deg);
 }
 .ring circle {
@@ -253,149 +1687,190 @@ p {
 }
 .ring-track {
   stroke: color-mix(in srgb, var(--brand) 22%, transparent);
+  transition: stroke var(--mid) var(--ease);
+}
+.mark[data-tone="ok"] .ring-track {
+  stroke: var(--brand);
+}
+.mark[data-tone="warn"] .ring-track {
+  stroke: color-mix(in srgb, var(--warn) 55%, transparent);
+}
+.mark[data-tone="away"] .ring-track,
+.mark[data-tone="idle"] .ring-track {
+  stroke: var(--line);
 }
 .ring-arc {
-  stroke: var(--green);
+  stroke: var(--brand);
   stroke-linecap: round;
   stroke-dasharray: 0 100;
-  transition: stroke-dasharray 0.6s ease;
+  transition: stroke-dasharray 0.6s var(--ease), opacity var(--mid) var(--ease);
 }
 .mark.spinning .ring {
-  animation: travel 1.4s linear infinite;
-}
-@keyframes travel {
-  from {
-    transform: rotate(-90deg);
-  }
-  to {
-    transform: rotate(270deg);
-  }
+  animation: travel 1.3s linear infinite;
 }
 .mark-in {
   display: grid;
   place-items: center;
-  color: var(--green);
+  color: var(--brand);
+  transition: color var(--mid) var(--ease);
 }
+/* No fade on the icon: Home draws it again every two seconds. */
 .mark-in .ic {
-  width: 52px;
-  height: 52px;
+  width: 50px;
+  height: 50px;
 }
 .mark[data-tone="warn"] .mark-in {
   color: var(--warn);
 }
 .mark[data-tone="away"] .mark-in,
 .mark[data-tone="idle"] .mark-in {
-  color: var(--mute);
+  color: var(--ink-3);
 }
 .mark-words {
-  margin-top: 26px;
-  font-size: 20px;
+  max-width: 520px;
+  margin-top: 32px;
+  font-size: 24px;
   font-weight: 650;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.022em;
+  line-height: 1.25;
   text-align: center;
 }
-
-/* Send: one wide green button, as on the phone. */
+.mark-quiet {
+  max-width: 420px;
+  margin-top: 8px;
+  color: var(--ink-3);
+  font-size: 14.5px;
+  text-align: center;
+}
 .send {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  width: min(360px, 100%);
+  min-width: 208px;
   height: 48px;
-  margin-top: 26px;
-  border: 0;
-  border-radius: var(--r-full);
-  background: var(--brand);
-  color: var(--on-brand);
+  margin-top: 28px;
+  padding: 0 28px;
+  border: 1px solid var(--brand-strong);
+  border-radius: 14px;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.005em;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 6px 16px -8px color-mix(in srgb, var(--brand) 70%, transparent);
-  transition: background 0.2s, transform 0.15s;
-}
-.send:hover {
-  background: var(--green-2);
-}
-.send:active {
-  transform: scale(0.98);
+  transition: transform var(--fast) var(--ease), filter var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
 }
 .send .ic {
   width: 18px;
   height: 18px;
 }
-
-/* Waiting, only while something is queued: option A (D2), from
-   components.css's .wl/.w/.th. */
-.waiting {
-  width: min(560px, 100%);
-  margin-top: 30px;
+.send:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-brand), 0 12px 28px -10px rgba(47, 107, 87, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
-.waiting:empty {
-  display: none;
+.send:active {
+  transform: scale(0.98);
+  transition-duration: 60ms;
+}
+.drop-hint {
+  position: absolute;
+  bottom: 28px;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ink-3);
+  font-size: 12.5px;
+}
+.drop-hint .ic {
+  width: 14px;
+  height: 14px;
+}
+/* With a queue: the mark smaller and higher, Waiting under it. */
+.home.queued .home-middle {
+  justify-content: flex-start;
+  padding-top: 8px;
 }
 .home.queued .mark {
   width: 128px;
   height: 128px;
 }
+.home.queued .ring {
+  inset: 9px;
+  width: calc(100% - 18px);
+  height: calc(100% - 18px);
+}
 .home.queued .mark-in .ic {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
 }
 .home.queued .mark-words {
-  margin-top: 18px;
+  margin-top: 24px;
+  font-size: 21px;
 }
 .home.queued .send {
-  margin-top: 20px;
+  margin-top: 22px;
+}
+.home.queued .drop-hint {
+  display: none;
+}
+.waiting {
+  width: min(580px, 100%);
+  margin-top: 40px;
+  animation: page-in 300ms var(--ease) both;
+}
+.waiting:empty {
+  display: none;
 }
 .wl {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  margin: 0 6px 10px;
+  margin: 0 4px 10px;
 }
 .wl b {
   font-size: 15px;
   font-weight: 650;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
 }
 .wl-all {
-  padding: 0;
+  padding: 4px 8px;
   border: 0;
+  border-radius: var(--r-xs);
   background: none;
   color: var(--brand);
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 600;
+  transition: background var(--fast) var(--ease);
 }
-.wa-card {
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--r-l);
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
+.wl-all:hover {
+  background: var(--brand-soft);
 }
+/* A Waiting row (option A): its picture with the device's face on its
+   corner, a title, one quiet line, how far. */
 .wa {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 18px 14px 14px;
   border: 0;
   background: none;
   text-align: left;
+  transition: background var(--fast) var(--ease);
 }
 .wa + .wa::before {
   content: "";
   position: absolute;
   top: 0;
   left: 78px;
-  right: 16px;
+  right: 0;
   height: 1px;
-  background: var(--line);
+  background: var(--edge);
 }
 .wa:hover {
-  background: color-mix(in srgb, var(--surface-2) 50%, transparent);
+  background: var(--hover);
 }
 .wa-th {
   position: relative;
@@ -404,45 +1879,43 @@ p {
   flex: none;
   width: 48px;
   height: 48px;
-  border-radius: 12px;
-  background: var(--surface-2);
+  border-radius: var(--r-m);
+  background: var(--tile);
   color: var(--ink-2);
 }
 .wa-th > img {
   width: 100%;
   height: 100%;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   object-fit: cover;
 }
 .wa-th > .ic {
   width: 20px;
   height: 20px;
 }
-.wa-th .w-ring {
-  border-radius: 12px;
-}
 .wa-play {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
+  pointer-events: none;
 }
 .wa-play::before {
   content: "";
   margin-left: 3px;
   border-top: 7px solid transparent;
   border-bottom: 7px solid transparent;
-  border-left: 11px solid rgba(255, 255, 255, 0.95);
+  border-left: 11px solid rgba(255, 255, 255, 0.96);
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35));
 }
 .circle.wa-face {
   position: absolute;
-  right: -5px;
-  bottom: -5px;
-  width: 22px;
-  height: 22px;
-  border: 2.5px solid var(--surface);
+  right: -6px;
+  bottom: -6px;
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--card);
   font-size: 10px;
-  box-shadow: none;
 }
 .wa-face .circle-dot {
   display: none;
@@ -460,9 +1933,8 @@ p {
   white-space: nowrap;
 }
 .wa-t b {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 600;
-  letter-spacing: -0.005em;
 }
 .wa-t > span {
   margin-top: 2px;
@@ -472,9 +1944,9 @@ p {
 .wa-t > span.wait {
   color: var(--warn);
 }
-.wa-bar {
-  height: 3px;
-  margin-top: 8px;
+.wa-t > .wa-bar {
+  height: 4px;
+  margin-top: 9px;
   overflow: hidden;
   border-radius: 2px;
   background: var(--surface-2);
@@ -484,10 +1956,10 @@ p {
   height: 100%;
   border-radius: 2px;
   background: var(--brand);
-  transition: width 0.6s ease;
+  transition: width 0.6s var(--ease);
 }
 .wa-end {
-  min-width: 36px;
+  min-width: 38px;
   color: var(--ink-2);
   font-size: 13px;
   font-weight: 600;
@@ -502,91 +1974,19 @@ p {
 .wa-end-ic.wait {
   color: var(--warn);
 }
-.w-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 600;
-}
-.badge {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 10px;
-  background: var(--brand-soft);
-  color: var(--brand);
-  font-size: 11.5px;
-  font-weight: 600;
-}
-/* One row for each device, as the phone's: a stack of previews, which way
-   and to whom, a number, a size, and what it waits on. */
-.w-card {
-  overflow: hidden;
-  margin-top: 6px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--raised);
-}
-.w-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 10px 14px;
-  border: 0;
-  background: none;
-  text-align: left;
-}
-.w-row + .w-row {
-  border-top: 1px solid var(--line);
-}
-.w-row:hover {
-  background: var(--soft);
-}
-.w-stack {
-  position: relative;
-  flex: none;
-  width: 60px;
-  height: 44px;
-}
-.w-pic {
-  position: absolute;
-  top: 2px;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  width: 40px;
-  height: 40px;
-  border: 2px solid var(--raised);
-  border-radius: 11px;
-  background: var(--soft);
-  color: var(--ink-2);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-}
-.w-pic img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.w-pic .ic {
-  width: 17px;
-  height: 17px;
-}
+/* How far one file has got: a ring over its picture. */
 .w-ring {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.35);
+  padding: 11px;
+  border-radius: inherit;
+  background: rgba(0, 0, 0, 0.34);
 }
 .w-ring circle {
   fill: none;
-  stroke-width: 2.5;
+  stroke-width: 2.6;
   transform: rotate(-90deg);
   transform-origin: center;
 }
@@ -597,1394 +1997,307 @@ p {
   stroke: #fff;
   stroke-linecap: round;
 }
-.w-who {
+/* A document drawn as a page of lines, its type on a tag. */
+.doc-face {
+  position: absolute;
+  inset: 0;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+  flex-direction: column;
+  gap: 13%;
+  padding: 22% 20%;
+  border: 1px solid var(--edge);
+  border-radius: inherit;
+  background: #fdfdfb;
 }
-.w-dir {
-  width: 14px;
-  height: 14px;
-  color: var(--mute);
+.doc-face i {
+  display: block;
+  height: 5%;
+  min-height: 3px;
+  border-radius: 2px;
+  background: #dadbd5;
 }
-.w-chips {
-  display: flex;
-  gap: 6px;
+.doc-face em {
+  position: absolute;
+  left: 12%;
+  bottom: 11%;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #fff;
+  font: 700 7.5px/1.35 "Inter", sans-serif;
+  font-style: normal;
+  letter-spacing: 0.02em;
 }
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 21px;
-  padding: 0 8px;
-  border-radius: 11px;
-  background: var(--soft);
+
+/* ===================================================== waiting in full */
+
+.wsect {
+  margin: 32px 4px 12px;
+}
+.wsect:first-child {
+  margin-top: 0;
+}
+.wsect b {
+  display: block;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+}
+.wsect span {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.wsect span.wait {
+  color: var(--warn);
+}
+.wgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 84px);
+  gap: 10px;
+}
+.wa-th.wa-cell {
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--edge);
+}
+.wa-cell > img,
+.wa-cell .w-ring {
+  border-radius: 14px;
+}
+.wa-cell .w-ring {
+  padding: 26px;
+}
+.wa-cell > .ic {
+  width: 26px;
+  height: 26px;
+}
+.wa-more {
   color: var(--ink-2);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
 }
-.chip .ic {
+.w-x {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  opacity: 0;
+  transition: background var(--fast) var(--ease), opacity var(--fast) var(--ease);
+}
+.wa-cell:hover .w-x,
+.w-x:focus-visible {
+  opacity: 1;
+}
+.w-x:hover {
+  background: var(--danger);
+}
+.w-x .ic {
   width: 12px;
   height: 12px;
 }
-.chip-wait {
-  background: color-mix(in srgb, var(--warn) 16%, var(--bg));
-  color: var(--warn);
-}
-.circle-xs {
-  width: 18px;
-  height: 18px;
-  font-size: 9px;
-}
-.circle-xs .circle-dot {
-  display: none;
-}
-.w-main {
+
+/* ====================================================== a device's page */
+
+.dev-hd {
   display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 4px 0 8px;
+}
+.dev-words {
   flex: 1;
-  flex-direction: column;
-  gap: 4px;
   min-width: 0;
 }
-.w-main b {
+.dev-words h1 {
   overflow: hidden;
-  font-weight: 500;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.w-main small {
-  color: var(--mute);
-  font-size: 12.5px;
-}
-.w-bar {
-  display: block;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--soft);
-  overflow: hidden;
-}
-.w-bar i {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  background: var(--green);
-  transition: width 0.6s ease;
-}
-.w-more {
-  padding: 6px 0;
-  border: 0;
-  background: none;
-  color: var(--green);
-  font-weight: 600;
-  font-size: 13px;
-}
-.icon-btn {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--mute);
-}
-.icon-btn:hover {
-  background: var(--soft);
-  color: var(--ink);
-}
-.icon-btn .ic {
-  width: 17px;
-  height: 17px;
-}
-
-/* A device as the phone draws it: a circle, its first letter, a dot. */
-.circle {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--green-soft);
-  border: 1px solid color-mix(in srgb, var(--green) 45%, transparent);
-  color: var(--green);
-  font-weight: 600;
-}
-.circle img {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.circle-dot {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 2px solid var(--bg);
-}
-.circle-dot.on {
-  background: var(--blue);
-}
-.circle-dot.off {
-  background: var(--red);
-}
-.circle-md {
-  width: 34px;
-  height: 34px;
+.dev-words .state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--ink-3);
   font-size: 14px;
 }
-.circle-md .circle-dot {
-  width: 10px;
-  height: 10px;
+.dev-words .state::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-3);
 }
-.circle-lg {
-  width: 44px;
-  height: 44px;
-  font-size: 17px;
+.dev-hd:has(.circle-dot.on) .state {
+  color: var(--online);
+  font-weight: 500;
 }
-.circle-xl {
-  width: 96px;
-  height: 96px;
-  font-size: 38px;
+.dev-hd:has(.circle-dot.on) .state::before {
+  background: var(--online);
 }
-.circle-xl .circle-dot {
-  width: 20px;
-  height: 20px;
-  border-width: 3px;
+.dev-words .state small {
+  margin-left: 8px;
+  font-size: 13px;
 }
-.circle-add {
-  border-style: dashed;
-  background: transparent;
-  color: var(--mute);
+#page-list {
+  align-self: stretch;
+  margin-top: 28px;
 }
-.circle-add .ic {
+#page-list > .label:first-child {
+  margin-top: 0;
+}
+/* Switch device and Remove, side by side under the cards. */
+.dev-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 28px;
+}
+.dev-foot .btn-sm {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--r-m);
+  font-size: 14px;
+}
+.dev-foot .btn-sm .ic {
   width: 16px;
   height: 16px;
 }
-
-/* The circle, and the panel that drops from it. */
-#home-circle {
-  position: relative;
-}
-.circle-btn {
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  transition: transform 0.2s;
-}
-.circle-btn:hover {
-  transform: scale(1.05);
-}
-/* Switch device: the phone's chooser, a card for each device. */
+/* The chooser: a card for each device, the chosen one ticked. */
 .dev-card {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
-  margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
-  background: var(--surface);
+  min-height: 60px;
+  padding: 10px 16px 10px 12px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--r-l);
+  background: var(--card);
   text-align: left;
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
-.dev-card .circle-md {
-  width: 40px;
-  height: 40px;
-  font-size: 16px;
+.dev-card + .dev-card {
+  margin-top: 8px;
 }
 .dev-card:hover {
-  border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--edge-strong));
+}
+.dev-card:active {
+  transform: scale(0.99);
 }
 .dev-card.on {
-  border-color: var(--green);
-  background: var(--green-soft);
+  border-color: var(--brand);
+  background: var(--brand-soft);
 }
 .dev-card b {
   flex: 1;
-  font-size: 15px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14.5px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .dev-card small {
   color: var(--ink-3);
   font-size: 12.5px;
 }
+.dev-card .circle-md {
+  width: 38px;
+  height: 38px;
+}
+.dev-card.on .circle-dot {
+  border-color: var(--brand-soft);
+}
 .dev-tick {
   width: 18px;
   height: 18px;
-  color: var(--green);
+  color: var(--brand);
 }
 .dev-add {
   border-style: dashed;
   background: none;
   color: var(--ink-2);
 }
-
-/* A device's page. */
-.page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: 664px;
-  margin: 0 auto;
-  padding: 20px 32px 40px;
-}
-/* Back: a chevron and the place it goes to, quiet (D3). */
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  margin: 0 0 10px -6px;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  color: var(--ink-3);
-  font-size: 13.5px;
+.dev-add b {
   font-weight: 500;
 }
-.back:hover {
-  color: var(--ink);
+.sheet > .label + .dev-card {
+  margin-top: 0;
 }
-.back .ic {
-  width: 16px;
-  height: 16px;
-}
-.page-hd {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin: 24px 0 30px;
-}
-.page-hd h1 {
-  margin-top: 8px;
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-}
-.state {
-  color: var(--mute);
-}
-.state.on {
-  color: var(--blue);
-}
-.page-list {
-  width: 100%;
-}
-/* The phone's header: circle, name and state, ⓘ at the end. */
-.dev-hd {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  align-self: stretch;
-  margin: 18px 0 0;
-}
-.dev-hd .circle-xl {
-  width: 72px;
-  height: 72px;
-  font-size: 26px;
-}
-.dev-hd .circle-xl .circle-dot {
-  width: 18px;
-  height: 18px;
-  border-width: 3px;
-}
-.dev-words {
-  flex: 1;
-}
-.dev-words h1 {
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.dev-words .state {
-  margin-top: 3px;
-  font-size: 14px;
-  color: var(--ink-3);
-}
-.dev-words .state small {
-  margin-left: 8px;
-}
-#page-list {
-  align-self: stretch;
-}
-/* Remove, Switch device and Quit: solid, full width, as the phone's
-   (the owner, 2026-11-03; components.css's .btn-danger-solid and
-   .btn-blue-solid). */
-.big-btn {
-  align-self: stretch;
-  height: 48px;
-  margin-top: 10px;
-  border: 0;
-  border-radius: var(--r-full);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  transition: filter 0.15s, transform 0.15s;
-}
-.big-btn:hover {
-  filter: brightness(1.06);
-}
-.big-btn:active {
-  transform: scale(0.99);
-}
-.big-red {
-  margin-top: 24px;
-  background: var(--danger);
-  color: #fff;
-}
-.big-blue {
-  background: var(--online);
-  color: #fff;
-}
-.remove {
-  margin-top: 36px;
-  padding: 12px 22px;
-  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
-  border-radius: 14px;
-  background: none;
-  color: var(--red);
-  font-weight: 600;
-}
-.remove:hover {
-  background: color-mix(in srgb, var(--red) 8%, transparent);
-}
-
-/* Files dragged over the window: one line, where they will go. */
-.dropping {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  border: 2px dashed var(--green);
-  border-radius: 14px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-.dropping.on {
-  opacity: 1;
-}
-.dropping span {
-  color: var(--green);
-  font-size: 24px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 26px;
-  z-index: 50;
-  translate: -50% 0;
-  padding: 11px 18px;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--bg);
-  font-weight: 500;
-  box-shadow: var(--shadow);
-  transition: opacity 0.4s;
-}
-.toast-warn {
-  background: var(--warn);
-  color: #fff;
-}
-.toast.gone {
-  opacity: 0;
-}
-
-
-
-/* ---------- Pages ---------- */
-
-h2 {
-  margin: 0;
-}
-input,
-textarea {
-  font: inherit;
-  color: inherit;
-  user-select: text;
-}
-.pg {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 20px 40px 60px;
-}
-/* D7 and after: 600 across, as a device's page. */
-.pg-narrow {
-  max-width: 680px;
-}
-.pg-hd {
-  margin-bottom: 22px;
-}
-.pg-hd .back {
-  margin-bottom: 10px;
-}
-.pg-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 40px;
-}
-.pg-title h1 {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.pg-end {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.label {
-  align-self: flex-start;
-  margin: 24px 4px 10px;
-  color: var(--ink-3);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-.note {
-  margin-top: 10px;
-  color: var(--mute);
-  font-size: 13px;
-}
-.note.warn,
-.oops {
-  color: var(--warn);
-}
-.oops {
-  padding: 20px 0;
-}
-
-/* A tile: an icon in a soft rounded square, as on the phone. */
-.tile {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--soft);
-  color: var(--ink-2);
-}
-.tile .ic {
-  width: 19px;
-  height: 19px;
-}
-.tile-lg {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-}
-.tile-lg .ic {
-  width: 26px;
-  height: 26px;
-}
-.tile-warn {
-  background: color-mix(in srgb, var(--warn) 14%, transparent);
-  color: var(--warn);
-}
-.tile-ok {
-  background: var(--green-soft);
-  color: var(--green);
-}
-
-/* Rows: plain, a tile, a name, a quieter line of parts with room between. */
-.rows {
-  display: flex;
-  flex-direction: column;
-}
-.row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  padding: 9px 10px;
-  margin: 0 -10px;
-  width: calc(100% + 20px);
-  border: 0;
-  border-radius: 14px;
-  background: none;
-  text-align: left;
-}
-button.row:hover,
-button.row:focus-visible {
-  background: var(--soft);
-  outline: none;
-}
-.row-main {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.row-main b {
-  overflow: hidden;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.row-main small {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  color: var(--mute);
-  font-size: 12.5px;
-}
-.row-go {
-  color: var(--mute);
-  width: 17px;
-  height: 17px;
-}
-.row-warn .row-main b {
-  color: var(--warn);
-}
-.where {
-  display: grid;
-  place-items: center;
-  color: var(--mute);
-}
-.where .ic {
-  width: 17px;
-  height: 17px;
-}
-.where.moving {
-  color: var(--green);
-  animation: pulse 1.6s ease-in-out infinite;
-}
-.where.warn {
-  color: var(--warn);
-}
-@keyframes pulse {
-  50% {
-    opacity: 0.4;
-  }
-}
-
-/* Folders and places, two to a row, as on the phone. */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 8px;
-}
-.card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--raised);
-  text-align: left;
-  transition: border-color 0.2s, transform 0.15s;
-}
-.card:hover {
-  border-color: color-mix(in srgb, var(--green) 45%, var(--line));
-}
-.card:active {
-  transform: scale(0.99);
-}
-.card-words {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.card-words b {
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.card-words small {
-  color: var(--mute);
-  font-size: 12.5px;
-}
-.card-words small:empty {
-  display: none;
-}
-
-/* Search. */
-.find {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 46px;
-  padding: 0 16px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--raised);
-  color: var(--mute);
-}
-.find:focus-within {
-  border-color: var(--green);
-}
-.find-in {
-  flex: 1;
-  border: 0;
-  outline: none;
-  background: none;
-}
-
-.chip {
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: var(--green-soft);
-  color: var(--green);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.chip-quiet {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--soft);
-  color: var(--ink-2);
-  font-weight: 500;
-}
-.chip-quiet span:not(:empty)::before {
-  content: "/ ";
-  color: var(--mute);
-}
-
-/* Nothing here. */
-.empty,
-.locked {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  padding: 60px 20px;
-  text-align: center;
-  color: var(--ink-2);
-}
-.locked h1 {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.empty-orb {
-  display: grid;
-  place-items: center;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--raised);
-  box-shadow: var(--shadow);
-  color: var(--mute);
-}
-.empty-orb .ic {
-  width: 30px;
-  height: 30px;
-}
-.empty-orb.ok {
-  /* D12's .shield: the soft green, no shadow. */
-  background: var(--brand-soft);
-  box-shadow: none;
-  color: var(--brand);
-}
-.empty-orb.warn {
-  background: var(--warn-soft);
-  box-shadow: none;
-  color: var(--warn);
-}
-.empty-orb.asking {
-  color: var(--green);
-  animation: breathe 2s ease-in-out infinite;
-}
-@keyframes breathe {
-  50% {
-    box-shadow: 0 0 0 10px var(--green-soft), var(--shadow);
-  }
-}
-
-/* The gallery: square pictures, edge to edge, as a phone's camera roll. */
-.gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 4px;
-}
-.pic {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 1;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: var(--soft);
-  color: var(--mute);
-  overflow: hidden;
-}
-.pic img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  animation: appear 0.3s ease both;
-}
-.pic:hover img,
-.pic:focus-visible img {
-  filter: brightness(0.92);
-}
-@keyframes appear {
-  from {
-    opacity: 0;
-  }
-}
-
-/* Settings: grouped rows, as the phone's. */
-.grp {
-  margin-top: 6px;
-}
-.grp-box {
-  border: 1px solid var(--line);
-  border-radius: var(--r-l);
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
-  overflow: hidden;
-}
-/* components.css's .row: 56 high, the line between rows starting after
-   the icon. */
-.set {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: 56px;
-  padding: 10px 16px;
-  border: 0;
-  background: none;
-  font-size: 15px;
-  text-align: left;
-}
-.grp-box > * + * .set::before,
-.grp-box > .set + .set::before,
-.grp-box > * + .set::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 52px;
-  right: 0;
-  height: 1px;
-  background: var(--line);
-}
-button.set:hover {
-  background: color-mix(in srgb, var(--surface-2) 50%, transparent);
-}
-.set-ic {
-  color: var(--ink-2);
-}
-.set-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.set-value {
-  max-width: 50%;
-  overflow: hidden;
-  color: var(--ink-3);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.set-go {
-  width: 16px;
-  height: 16px;
-  color: var(--mute);
-}
-.set-tick {
-  color: var(--green);
-}
-.set-danger,
-.set-danger .set-ic {
-  color: var(--red);
-}
-.switch {
-  position: relative;
-  flex: none;
-  width: 42px;
-  height: 24px;
-  cursor: pointer;
-}
-.switch input {
-  position: absolute;
-  opacity: 0;
-}
-.switch span {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: var(--line);
-  transition: background 0.2s;
-}
-.switch span::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.switch input:checked + span {
-  background: var(--green);
-}
-.switch input:checked + span::after {
-  transform: translateX(18px);
-}
-.switch input:focus-visible + span {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
-}
-
-/* Buttons: components.css's .btn -- 48 high, fully round. */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 48px;
-  padding: 0 22px;
-  border: 1px solid transparent;
-  border-radius: var(--r-full);
-  background: none;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  white-space: nowrap;
-  transition: background 0.2s, border-color 0.2s, filter 0.15s;
-}
-.btn .ic {
-  width: 18px;
-  height: 18px;
-}
-.btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.btn-main {
-  background: var(--brand);
-  color: var(--on-brand);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 6px 16px -8px color-mix(in srgb, var(--brand) 70%, transparent);
-}
-.btn-main:hover:not(:disabled) {
-  background: var(--brand-strong);
-}
-.btn-quiet {
-  border-color: var(--line);
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
-}
-.btn-quiet:hover:not(:disabled) {
-  background: var(--surface-2);
-}
-.btn-danger,
-.btn-danger-solid {
-  background: var(--danger);
-  color: #fff;
-}
-.btn-blue-solid {
-  background: var(--online);
-  color: #fff;
-}
-.btn-danger:hover:not(:disabled),
-.btn-danger-solid:hover:not(:disabled),
-.btn-blue-solid:hover:not(:disabled) {
-  filter: brightness(1.06);
-}
-.btn-sm {
-  height: 36px;
-  padding: 0 14px;
-  font-size: 13.5px;
-}
-.acts {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 18px;
-}
-.acts-c {
-  justify-content: center;
-}
-/* A sheet's two answers, side by side and equal (D21). */
-.sheet .acts,
-.acts-2 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-}
-.icon-btn.armed {
-  width: auto;
-  padding: 0 12px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--red) 12%, transparent);
-  color: var(--red);
-  font-weight: 600;
-  font-size: 12.5px;
-}
-.link {
-  margin-top: 14px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--brand);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-/* Fields. */
-.field {
-  width: 100%;
-  height: 46px;
-  margin-top: 14px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--raised);
-  outline: none;
-}
-textarea.field {
-  height: auto;
-  padding: 12px 14px;
-  resize: none;
-}
-.field:focus {
-  border-color: var(--green);
-}
-.fld {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 6px 16px;
-  border-top: 1px solid var(--line);
-}
-.fld:first-child {
-  border-top: 0;
-}
-.fld span {
-  width: 110px;
-  font-weight: 500;
-}
-.fld .field {
-  margin: 0;
-  border-color: transparent;
-  background: none;
-}
-.fld .field:focus {
-  border-color: var(--line);
-}
-
-/* A sheet over the window, and its scrim. */
-.scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: var(--scrim);
-  backdrop-filter: blur(2px);
-  animation: fade 0.18s ease both;
-}
-.scrim.gone {
-  opacity: 0;
-  transition: opacity 0.18s;
-}
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
-}
-/* components.css's .sheet: 380 across (420 wide), its picture, title and
-   words centred over what follows. */
-.sheet {
-  width: auto;
-  min-width: 260px;
-  max-width: min(380px, 100%);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  padding: 22px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-xl);
-  background: var(--surface);
-  box-shadow: var(--shadow-2);
-  animation: rise 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-.sheet-wide {
-  max-width: min(420px, 100%);
-}
-/* Over the window's main area, not the whole window: the sidebar stays
-   where it was (D4). */
-body:not(.setting-up) .scrim {
-  padding-left: calc(232px + 24px);
-}
-@keyframes rise {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-}
-.sh-hd {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 8px;
-  text-align: center;
-}
-.sh-hd > .tile-lg,
-.sh-hd > .circle {
-  width: 64px;
-  height: 64px;
-  margin-top: 4px;
-}
-.sh-hd > .tile-lg {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: var(--brand-soft);
-  color: var(--brand);
-}
-.sh-hd > .tile-lg .ic {
-  width: 30px;
-  height: 30px;
-}
-.sh-words {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.sh-words h2 {
-  overflow: hidden;
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-}
-.sh-words p {
-  color: var(--ink-2);
-  font-size: 14px;
-}
-.sheet .grp {
-  margin-top: 4px;
-}
-.rounds {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px 6px;
-  margin-top: 22px;
-}
-.round {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border: 0;
-  border-radius: 14px;
-  background: none;
-  font-size: 12.5px;
-  font-weight: 500;
-}
-.round-c {
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: var(--soft);
-  transition: background 0.2s, transform 0.15s;
-}
-.round:hover .round-c {
-  background: var(--green-soft);
-  color: var(--green);
-}
-.round:active .round-c {
-  transform: scale(0.94);
-}
-.round-danger {
-  color: var(--red);
-}
-.round-danger .round-c,
-.round-danger:hover .round-c {
-  background: color-mix(in srgb, var(--red) 12%, transparent);
-  color: var(--red);
-}
-.holders {
-  margin-top: 6px;
-}
-.holders .row {
-  margin-top: 12px;
-}
-
-/* Quick preview. */
-.peek {
-  position: fixed;
-  inset: 0;
-  z-index: 45;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  background: rgba(8, 10, 9, 0.94);
-  color: #fff;
-  animation: fade 0.15s ease both;
-}
-.peek-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 18px;
-}
-.peek-bar b {
-  flex: 1;
-  overflow: hidden;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.peek .icon-btn {
-  color: rgba(255, 255, 255, 0.75);
-}
-.peek .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-.btn-onpeek {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-.peek-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  min-height: 0;
-  padding: 0 80px 40px;
-}
-.peek-stage img {
-  max-width: 100%;
-  max-height: 100%;
-  border-radius: 6px;
-  object-fit: contain;
-}
-.peek-stage pre {
-  max-width: 760px;
-  max-height: 100%;
-  width: 100%;
-  overflow: auto;
-  padding: 28px;
-  border-radius: 14px;
-  background: var(--raised);
-  color: var(--ink);
-  font: 13px/1.6 ui-monospace, monospace;
-  white-space: pre-wrap;
-  user-select: text;
-}
-.peek-icon .ic {
-  width: 72px;
-  height: 72px;
-  opacity: 0.6;
-}
-.peek-nav {
-  position: absolute;
-  top: 50%;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  translate: 0 -50%;
-}
-.peek-nav:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-.peek-nav.prev {
-  left: 18px;
-}
-.peek-nav.next {
-  right: 18px;
-}
-.peek-nav.next .ic {
-  transform: scaleX(-1);
-}
-
-/* Two versions, side by side. */
-.conflict {
-  margin-top: 22px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: var(--raised);
-}
-.conflict-hd {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.vers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 6px;
-}
-.ver .label {
-  margin-top: 14px;
-}
-.ver-by {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.ver-by .ic {
-  width: 16px;
-  height: 16px;
-  color: var(--mute);
-}
-.ver-sub {
-  display: flex;
-  gap: 12px;
-  margin-top: 3px;
-  color: var(--mute);
-  font-size: 12.5px;
-}
-.ver-look {
-  display: grid;
-  place-items: center;
-  height: 150px;
-  margin-top: 10px;
-  border-radius: 12px;
-  background: var(--soft);
-  overflow: hidden;
-}
-.ver-look img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.ver-look pre {
-  align-self: start;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 12px;
-  overflow: hidden;
-  font: 12px/1.5 ui-monospace, monospace;
-  white-space: pre-wrap;
-}
-.ver-ic {
-  width: 36px;
-  height: 36px;
-  color: var(--mute);
-}
-
-/* A device's details, folded away. */
 .tech {
   width: 100%;
-  margin-top: 26px;
-  color: var(--mute);
+  margin-top: 16px;
+  color: var(--ink-3);
   font-size: 13px;
 }
 .tech summary {
   cursor: pointer;
-  font-weight: 500;
 }
 .tech dl {
   display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: 6px 12px;
-  margin: 12px 0 0;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 10px 0 0;
 }
 .tech dd {
   margin: 0;
-  color: var(--ink-2);
-  font-family: ui-monospace, monospace;
-  word-break: break-all;
+  overflow-wrap: anywhere;
   user-select: text;
-}
-.code {
-  margin: 10px 0 0;
-  padding: 12px;
-  border-radius: 12px;
-  background: var(--soft);
-  color: var(--ink-2);
-  font: 12px/1.5 ui-monospace, monospace;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
-}
-.page .btn-quiet {
-  margin-bottom: 8px;
 }
 
-/* Adding a device. */
-/* D19: two places, as Files' tiles, a big circle at the top. */
+/* ====================================================== adding a device */
+
+/* Two choices as tiles: an icon at the top, the words at the foot. */
 .choices {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  width: 100%;
-  margin-top: 0;
+  gap: 16px;
 }
 .choice {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
-  height: 132px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-l);
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
+  gap: 24px;
+  min-height: 148px;
+  padding: 20px;
+  border: 1px solid var(--edge);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
   text-align: left;
-  transition: border-color 0.2s;
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
 .choice:hover {
-  border-color: color-mix(in srgb, var(--brand) 50%, var(--line));
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--brand) 32%, var(--edge));
+  box-shadow: var(--shadow-lift);
+}
+.choice:active {
+  transform: scale(0.99);
 }
 .choice-c {
   display: grid;
   place-items: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   background: var(--brand-soft);
   color: var(--brand);
 }
@@ -1992,121 +2305,110 @@ body:not(.setting-up) .scrim {
   width: 24px;
   height: 24px;
 }
-.choice b {
-  font-size: 15.5px;
-  font-weight: 600;
+.choice-person .choice-c {
+  background: #f3e3ea;
+  color: #9a5473;
 }
-.choice small {
-  color: var(--ink-3);
-  font-size: 12.5px;
+[data-theme="dark"] .choice-person .choice-c {
+  background: #2d1d24;
+  color: #d796b2;
+}
+.choice b {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .choices + .link {
-  align-self: flex-start;
-  margin: 14px 0 0 4px;
-  font-size: 14px;
-  font-weight: 500;
+  display: block;
+  margin: 20px auto 0;
 }
+/* The code to scan: the QR on white, its six digits, how long it lasts. */
 .pair {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding-top: 10px;
   text-align: center;
 }
-.pair .tech {
-  max-width: 440px;
-  text-align: left;
+.center-page > .ptitle {
+  max-width: 100%;
+}
+.center-page > .pair > .empty-orb {
+  margin-top: 40px;
 }
 .qr {
   display: grid;
   place-items: center;
-  width: 216px;
-  height: 216px;
-  margin-top: 24px;
-  padding: 16px;
-  border-radius: var(--r-l);
+  width: 236px;
+  height: 236px;
+  margin-top: 32px;
+  padding: 18px;
+  border-radius: var(--r-xl);
   background: #fff;
   color: #111;
-  box-shadow: var(--shadow-2);
-  transition: opacity 0.3s;
+  box-shadow: 0 0 0 1px var(--edge), var(--shadow-lift);
+  animation: rise 320ms var(--ease) both;
+  transition: opacity var(--mid) var(--ease);
 }
 .qr svg {
   width: 100%;
   height: 100%;
 }
 .qr .ic {
-  width: 80px;
-  height: 80px;
-  opacity: 0.25;
+  width: 72px;
+  height: 72px;
+  opacity: 0.2;
 }
 .qr.dim {
   opacity: 0.25;
 }
 .digits {
-  margin-top: 22px;
-  font-size: 30px;
+  margin-top: 26px;
+  font-size: 32px;
   font-weight: 650;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
   font-variant-numeric: tabular-nums;
 }
 .digits.withdrawn {
-  color: var(--mute);
+  color: var(--ink-3);
   text-decoration: line-through;
+  text-decoration-thickness: 2px;
 }
 .count {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--ink-3);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 .count .ic {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
-.btn-later {
-  width: 200px;
-  margin-top: 22px;
-}
-/* A page with one thing on it, centred (D16, D17): title, then it. */
-.center-page {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100%;
-  padding: 24px;
-  text-align: center;
-}
-.ptitle {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-}
-.center-page .pair {
-  gap: 0;
-  padding: 0;
-}
-/* Six digits in boxes, to compare with the phone's (D18). */
+/* Six digits in boxes, to compare with the phone's. */
 .six {
   display: flex;
   justify-content: center;
   gap: 8px;
-  margin: 18px 0 12px;
+  margin: 0 0 14px;
 }
 .six span {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 54px;
-  border-radius: 12px;
+  width: 46px;
+  height: 58px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-m);
   background: var(--surface-2);
-  font-size: 24px;
+  font-size: 25px;
   font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.six span:nth-child(3) {
+  margin-right: 10px;
 }
 .sub-ic {
   display: flex;
@@ -2124,252 +2426,265 @@ body:not(.setting-up) .scrim {
   font-size: 14px;
 }
 .sub-quiet .ic {
-  width: 14px;
-  height: 14px;
   color: inherit;
 }
-.asking-box {
+/* Entering a code: the field, and under it what is happening. */
+.pg .pair {
+  padding-top: 24px;
+}
+.pg .pair .note {
+  margin-top: 16px;
+  font-size: 14px;
+}
+/* Waiting on a phone's yes: the phone in an orb, a ring travelling. */
+.asking-phone {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  margin-top: 14px;
-  padding: 20px 26px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: var(--raised);
-  box-shadow: var(--shadow);
-}
-.asking-box small {
-  color: var(--mute);
-}
-.asking-box .acts {
-  margin-top: 12px;
-}
-.digits-in {
-  width: 260px;
-  height: 64px;
-  margin-top: 20px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--raised);
-  outline: none;
-  font-size: 30px;
-  font-weight: 600;
-  letter-spacing: 0.3em;
+  gap: 6px;
+  padding-top: 8px;
   text-align: center;
-  font-variant-numeric: tabular-nums;
 }
-.digits-in:focus {
-  border-color: var(--green);
+.asking-phone h2 {
+  margin-top: 18px;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+}
+.asking-phone .note {
+  margin: 0;
+}
+.asking-orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.asking-orb .ic {
+  width: 28px;
+  height: 28px;
+}
+.asking-spin {
+  position: absolute;
+  inset: -6px;
+  border: 2.5px solid transparent;
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 1.1s linear infinite;
+}
+.arrived {
+  gap: 10px;
+  padding-top: 72px;
+}
+.pg .arrived .note {
+  margin: 0;
 }
 .arrived h1 {
   margin-top: 10px;
   font-size: 26px;
-  font-weight: 600;
-}
-.arrived .circle-xl {
-  animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  font-weight: 700;
+  letter-spacing: -0.022em;
 }
 .arrived .btn {
+  min-width: 160px;
   margin-top: 20px;
 }
 
-/* Settings' head: this computer as its devices see it. */
-.me {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin: 4px 0 10px;
-}
-.me h2 {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.circle-plain .circle-dot {
-  display: none;
-}
+/* ============================================================== files */
 
-/* Storage. */
-.used {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 0 6px;
-}
-.used-big {
-  font-size: 44px;
-  font-weight: 600;
-  letter-spacing: -0.04em;
-}
-.used .note {
-  margin: 0 0 14px;
-}
-.used .chips {
-  justify-content: center;
-  margin: 12px 0 16px;
-}
-.meter {
-  display: flex;
-  width: 100%;
-  height: 10px;
-  border-radius: 5px;
-  background: var(--soft);
-  overflow: hidden;
-}
-.meter i {
-  height: 100%;
-}
-.m-used,
-.d-used {
-  background: var(--green);
-}
-.m-free,
-.d-free {
-  background: color-mix(in srgb, var(--green) 35%, transparent);
-}
-.dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.limit {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 16px 14px;
-}
-.limit[hidden] {
-  display: none;
-}
-.track {
-  flex: 1;
-  accent-color: var(--green);
-}
-.track-v {
-  min-width: 62px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-/* The 24 words. */
-.words {
+/* Places as tiles, two to a row: an icon at the top, the name at the foot,
+   ↗ in the corner. */
+.launch {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px 14px;
-  margin: 0;
-  padding: 14px 16px 16px 40px;
-  border-top: 1px solid var(--line);
-  font-weight: 500;
-  user-select: text;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
-.words li::marker {
-  color: var(--mute);
-  font-size: 12px;
+.launch-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 132px;
+  padding: 20px;
+  border: 1px solid var(--edge);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
-
-/* Setting up: the whole window, one step at a time. */
-.setup:empty {
-  display: none;
+.launch-tile:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--brand) 32%, var(--edge));
+  box-shadow: var(--shadow-lift);
 }
-body.setting-up .win {
-  display: none;
+.launch-tile:active {
+  transform: scale(0.99);
 }
-.setup {
-  position: fixed;
-  inset: 0;
-  z-index: 35;
+.launch-lead {
   display: grid;
   place-items: center;
-  overflow-y: auto;
-  padding: 40px 24px;
-  background: var(--bg);
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
-.setup-in {
+.launch-lead .ic {
+  width: 24px;
+  height: 24px;
+}
+.launch-lead .circle {
+  width: 48px;
+  height: 48px;
+  font-size: 19px;
+}
+.launch-tile > b {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.launch-side {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  color: var(--ink-3);
+  transition: color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.launch-tile:hover .launch-side:not(:has(.btn)) {
+  color: var(--brand);
+  transform: translate(1px, -1px);
+}
+.launch-side:has(.btn) {
+  top: 16px;
+  right: 16px;
+}
+.launch-end {
+  width: 18px;
+  height: 18px;
+}
+/* A person's folder, open: green, with Lock. */
+.launch-open {
+  border-color: color-mix(in srgb, var(--brand) 45%, var(--edge));
+  background: linear-gradient(180deg, var(--brand-soft), var(--card) 75%);
+}
+.launch-open .launch-lead .circle {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+/* A gallery: square pictures, edge to edge. */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 4px;
+  overflow: hidden;
+  border-radius: var(--r-l);
+}
+.pic {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  transition: filter var(--fast) var(--ease);
+}
+.pic:hover {
+  filter: brightness(0.94);
+}
+.pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: fade-in 0.3s ease both;
+}
+/* Quick preview, over everything. */
+.peek {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
   display: flex;
   flex-direction: column;
+  background: rgba(12, 14, 13, 0.92);
+  backdrop-filter: blur(14px);
+  color: #fff;
+  animation: fade-in 180ms var(--ease) both;
+}
+.peek-bar {
+  display: flex;
   align-items: center;
   gap: 10px;
-  width: min(520px, 100%);
-  text-align: center;
-  animation: rise 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  padding: 14px 18px 14px 24px;
 }
-.setup-in > .back {
-  align-self: flex-start;
-}
-.setup-in h1 {
-  margin-top: 8px;
-  font-size: 28px;
+.peek-bar b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   font-weight: 600;
-  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.setup-in .acts {
-  align-self: stretch;
-  justify-content: center;
+.peek .icon-btn {
+  color: #fff;
 }
-.setup-in .acts .btn {
-  min-width: 200px;
+.peek .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
-.amounts {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 14px;
+.btn-onpeek {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
-.amount {
-  height: 42px;
-  padding: 0 18px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--raised);
-  font-weight: 600;
+.btn-onpeek:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
 }
-.amount.on {
-  border-color: var(--green);
-  background: var(--green-soft);
-  color: var(--green);
+.peek-stage {
+  position: relative;
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 0;
+  padding: 0 80px 32px;
 }
-.amount:disabled {
-  opacity: 0.4;
-  cursor: default;
+.peek-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--r-xs);
+  object-fit: contain;
+  animation: rise 240ms var(--ease) both;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .mark.spinning .ring,
-  .panel,
-  .sheet,
-  .scrim,
-  .peek,
-  .empty-orb.asking,
-  .where.moving,
-  .pic img,
-  .setup-in,
-  .arrived .circle-xl {
-    animation: none;
-  }
+.peek-stage pre {
+  max-width: 820px;
+  max-height: 100%;
+  overflow: auto;
+  padding: 22px 26px;
+  border-radius: var(--r-m);
+  background: #fbfbf8;
+  color: #222;
+  font: 13px/1.6 ui-monospace, monospace;
+  white-space: pre-wrap;
+  user-select: text;
 }
-
-[data-theme="dark"] .scrim {
-  background: rgba(0, 0, 0, 0.55);
+.peek-icon .ic {
+  width: 64px;
+  height: 64px;
+  opacity: 0.5;
 }
-[data-theme="dark"] .sheet {
-  border: 1px solid var(--line);
-}
-.sheet .round-c,
-.sheet .chip-quiet {
-  background: var(--soft);
-}
-
-/* Quick preview: a video, a song, a PDF. */
 .peek-video {
   max-width: 100%;
   max-height: 100%;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: #000;
 }
 .peek-audio {
@@ -2379,369 +2694,134 @@ body.setting-up .win {
   width: min(900px, 100%);
   height: 100%;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   background: #fff;
 }
-
-/* The speed limit: a row of rates for each way. */
-.speed {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
+.peek-nav {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: translateY(-50%);
+  transition: background var(--fast) var(--ease);
+}
+.peek-nav:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.peek-nav.prev {
+  left: 18px;
+}
+.peek-nav.next {
+  right: 18px;
+}
+.peek-nav.next .ic {
+  transform: scaleX(-1);
+}
+/* Two versions: side by side, then the three choices. */
+.conflict {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid var(--edge);
   border-radius: 18px;
-  background: var(--raised);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
 }
-.amounts-l {
-  justify-content: flex-start;
-  margin: 0;
-}
-.amount {
-  font-variant-numeric: tabular-nums;
-}
-.speed .amount {
-  height: 34px;
-  padding: 0 13px;
-  font-size: 13px;
-}
-
-/* An update waiting: one quiet line at the sidebar's foot. */
-.sb-update {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: auto;
-  padding: 10px 12px;
+.sheet .conflict {
+  margin-top: 0;
+  padding: 0;
   border: 0;
-  border-radius: 12px;
-  background: var(--green-soft);
-  color: var(--green);
-  font-weight: 600;
-  font-size: 13px;
-}
-.sb-update .ic {
-  width: 16px;
-  height: 16px;
-}
-
-/* Files as a launcher (the owner's review of 2026-11-03, F-5): a tile for
-   each place, each opening in the file manager. */
-.launch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-/* components.css's .place, two to a row (D5). */
-.launch-tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 116px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-l);
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
-  color: var(--brand);
-  cursor: pointer;
-}
-.launch-tile:hover {
-  border-color: color-mix(in srgb, var(--brand) 50%, var(--line));
-}
-.launch-tile b {
-  color: var(--ink);
-  font-size: 15.5px;
-  font-weight: 600;
-}
-.launch-lead .ic {
-  width: 26px;
-  height: 26px;
-}
-.launch-lead .circle {
-  width: 34px;
-  height: 34px;
-  font-size: 14px;
-}
-.launch-side {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  color: var(--ink-3);
-}
-.launch-side:has(.btn) {
-  top: 12px;
-  right: 12px;
-}
-.launch-end {
-  width: 16px;
-  height: 16px;
-}
-.launch-open {
-  border-color: var(--green);
-  background: var(--green-soft);
-}
-.launch-side .btn-sm {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.launch-side .btn-sm .ic {
-  width: 13px;
-  height: 13px;
-}
-/* Waiting on the phone's yes. */
-.asking-phone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px 0;
-  text-align: center;
-}
-.asking-phone h2 {
-  margin-top: 12px;
-  font-size: 17px;
-  font-weight: 600;
-}
-.asking-orb {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--green-soft);
-  color: var(--green);
-}
-.asking-orb .ic {
-  width: 26px;
-  height: 26px;
-}
-.asking-spin {
-  position: absolute;
-  inset: -6px;
-  border: 3px solid transparent;
-  border-top-color: var(--green);
-  border-radius: 50%;
-  animation: spin 1.1s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Settings in the phone's shape (S-1): this computer as one profile card. */
-.profile {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  margin-top: 10px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-l);
-  background: var(--surface);
-  box-shadow: var(--shadow-1);
-  text-align: left;
-}
-.profile .circle {
-  width: 60px;
-  height: 60px;
-  font-size: 22px;
-}
-.profile:hover {
-  border-color: color-mix(in srgb, var(--green) 40%, var(--line));
-}
-.profile-words {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-}
-.profile-words b {
-  font-size: 18px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-.profile-words small {
-  color: var(--ink-3);
-  font-size: 13.5px;
-}
-.chip-ok {
-  background: var(--green-soft);
-  color: var(--green);
-}
-.chip-do {
-  background: var(--green);
-  color: #fff;
-  font-weight: 600;
-}
-
-/* This computer's storage (S-2). */
-.disk {
-  margin: 0 0 18px;
-}
-/* D8: what is free, large, and of how much beside it. */
-.free {
-  margin-top: 4px;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.free small {
-  margin-left: 8px;
-  color: var(--ink-3);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0;
-}
-.disk-bar {
-  display: flex;
-  overflow: hidden;
-  height: 12px;
-  margin-top: 14px;
-  border-radius: 6px;
-  background: var(--surface-2);
-}
-.disk-bar i {
-  display: block;
-  height: 100%;
-}
-.sw {
-  display: inline-block;
-  flex: none;
-  width: 12px;
-  height: 12px;
-  margin: 0 4px;
-  border-radius: 4px;
-}
-.key-status {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin: 6px 0 18px;
-}
-.key-status h2 {
-  font-size: 18px;
-  font-weight: 600;
-}
-.w-pic-row {
-  position: relative;
-  top: 0;
-  flex: none;
+  background: none;
   box-shadow: none;
-  border-color: var(--line);
 }
-.btn-danger-quiet {
-  border: 0;
-  background: color-mix(in srgb, var(--red) 14%, var(--bg));
-  color: var(--red);
-  font-weight: 600;
-}
-
-/* Setting up and adding a device (P-1 to P-4). */
-.btn-wide {
-  min-width: 300px;
-}
-.choice-person .choice-c {
-  background: #f2e1e8;
-  color: #9b5574;
-}
-.asking-box .circle-xl {
-  margin-bottom: 8px;
-}
-.asking-box small {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.asking-box small .ic {
-  width: 14px;
-  height: 14px;
-}
-
-/* Activity, as the phone's (Y-1, Y-2). */
-.a-chips {
+.conflict-hd {
   display: flex;
-  gap: 8px;
-  margin: 6px 0 4px;
-}
-.a-chip {
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--raised);
-  color: var(--ink-2);
-  font-weight: 500;
+  gap: 14px;
+  margin-bottom: 16px;
 }
-.a-chip.on {
-  border-color: var(--green);
-  background: var(--green-soft);
-  color: var(--green);
-}
-.a-n {
-  padding: 0 6px;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--warn) 18%, var(--bg));
-  color: var(--warn);
-  font-size: 11px;
-}
-.a-badge {
-  position: absolute;
-  right: 2px;
-  bottom: -2px;
-  z-index: 5;
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--raised);
-  border-radius: 9px;
-  color: #fff;
-}
-.a-badge .ic {
-  width: 10px;
-  height: 10px;
-}
-.b-in { background: var(--blue); }
-.b-out { background: var(--blue); }
-.b-ok { background: var(--green); }
-.b-bad { background: var(--warn); }
-.b-quiet { background: #5c645f; }
-.a-who,
-.a-time {
-  color: var(--mute);
-  font-size: 12px;
-}
-.a-bad {
-  color: var(--warn);
-  font-size: 12px;
-}
-.a-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 40px);
-  gap: 8px;
-}
-.a-more {
-  color: var(--ink-2);
-  font-size: 11px;
-  font-weight: 600;
-}
-/* Two versions as a sheet (K-1). */
 .sheet .conflict-hd {
   display: none;
 }
+.vers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ver {
+  overflow: hidden;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--r-m);
+  background: var(--card);
+}
+.ver > .note {
+  margin: 16px;
+}
+.ver-look {
+  display: grid;
+  place-items: center;
+  height: 156px;
+  overflow: hidden;
+  background: #fbfbf8;
+  color: #333;
+}
+.ver-look img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ver-look pre {
+  align-self: start;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: hidden;
+  font: 12px/1.6 ui-monospace, monospace;
+  white-space: pre-wrap;
+}
+.ver-look .note {
+  margin: 0;
+}
+.ver-ic {
+  width: 36px;
+  height: 36px;
+  color: var(--ink-3);
+}
+.ver-gone {
+  background: #f8e1dd;
+}
+.ver-new {
+  background: #dcf0e4;
+}
+.ver-by {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--edge);
+  font-size: 13px;
+}
+.ver-by .ic {
+  width: 15px;
+  height: 15px;
+  color: var(--ink-3);
+}
+.ver-by b {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .ver-by small {
   margin-left: auto;
-  color: var(--mute);
+  color: var(--ink-3);
+  white-space: nowrap;
 }
 .keeps {
   display: flex;
@@ -2751,123 +2831,30 @@ body.setting-up .win {
 }
 .keeps .btn {
   width: 100%;
+  height: 44px;
 }
-/* The Waiting page (H-1). */
-.w-sect {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 22px 0 10px;
-}
-.w-sect .w-who {
-  flex: 1;
-}
-.w-grid {
-  grid-template-columns: repeat(auto-fill, 56px);
-}
-.w-grid .w-pic {
-  width: 56px;
-  height: 56px;
-}
-.w-x {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border: 0;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-}
-.w-x .ic {
-  width: 11px;
-  height: 11px;
-}
-/* The ring over a moving file's picture, 26 across as D2's. */
-.wa-th .w-ring {
-  padding: 11px;
-}
-/* A chevron pointing back: the set has only the right one. */
-.ic.flip {
-  transform: scaleX(-1);
-}
-.dev-hd .icon-btn .ic {
-  width: 20px;
-  height: 20px;
-}
-/* The Waiting page (D10): a section for each of Home's rows, its files as
-   72-wide previews, seven to a row. */
-.wsect {
-  margin: 28px 4px 12px;
-}
-.wsect b {
-  display: block;
-  font-size: 16px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-.wsect span {
-  display: block;
-  margin-top: 3px;
-  color: var(--ink-3);
-  font-size: 13px;
-}
-.wsect span.wait {
-  color: var(--warn);
-}
-.wgrid {
-  display: grid;
-  grid-template-columns: repeat(7, 72px);
-  gap: 10px;
-}
-.wa-th.wa-cell {
-  width: 72px;
-  height: 72px;
-  border-radius: 14px;
-}
-.wa-cell > img,
-.wa-cell .w-ring {
-  border-radius: 14px;
-}
-.wa-cell .w-ring {
-  padding: 23px;
-}
-.wa-more {
-  color: var(--ink-2);
-  font-size: 13px;
-  font-weight: 600;
-}
-.wa-cell .w-x {
-  top: 5px;
-  right: 5px;
-}
-/* Recently deleted (D13, D13b): the files in a grid, five to a row. */
-.quiet-line {
-  margin: -14px 0 0;
-  color: var(--ink-3);
-  font-size: 14px;
-}
+
+/* =================================================== recently deleted */
+
 .rdg {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 18px 14px;
 }
 .rd {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
   padding: 0;
   border: 0;
   background: none;
+  color: inherit;
   text-align: left;
 }
 .rd small {
   overflow: hidden;
-  padding: 0 2px;
+  padding: 0 4px;
   color: var(--ink-2);
   font-size: 12.5px;
   text-overflow: ellipsis;
@@ -2880,10 +2867,19 @@ body.setting-up .win {
   width: 100%;
   aspect-ratio: 1;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-l);
+  background: var(--card);
   color: var(--ink-3);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+button.rd:hover .rd-th {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+button.rd:active .rd-th {
+  transform: scale(0.98);
 }
 .rd-th > img {
   position: absolute;
@@ -2893,17 +2889,30 @@ body.setting-up .win {
   object-fit: cover;
 }
 .rd-th > .ic {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
 }
 .rd-th .wa-play::before {
   border-top-width: 10px;
   border-bottom-width: 10px;
   border-left-width: 16px;
 }
+.rd-th .doc-face {
+  border: 0;
+}
+.rd-th .doc-face em {
+  font-size: 10px;
+}
 .rd.sel .rd-th {
-  outline: 3px solid var(--brand);
-  outline-offset: -3px;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand), var(--shadow-card);
+}
+.rd.sel .rd-th > img {
+  transform: scale(0.94);
+  border-radius: 10px;
+}
+.rd-th > img {
+  transition: transform var(--mid) var(--ease), border-radius var(--mid) var(--ease);
 }
 .rd-days {
   position: absolute;
@@ -2931,950 +2940,531 @@ body.setting-up .win {
   border-radius: 12px;
   background: var(--brand);
   color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: background var(--fast) var(--ease), transform 220ms var(--spring);
 }
 .rd-tick.off {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.18);
+  transform: scale(0.92);
 }
 .rd-tick .ic {
   width: 13px;
   height: 13px;
 }
-.label-who {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .sel-x {
   margin-left: -8px;
 }
-/* The bar at the foot, over the page, centred on the main area. */
+.pg:has(.selbar) {
+  padding-bottom: 120px;
+}
+/* The bar at the foot: Restore and Delete, floating over the page. */
 .selbar {
   position: fixed;
-  left: calc(50% + 116px);
-  bottom: 24px;
+  left: calc(50% + 120px);
+  bottom: 28px;
   z-index: 10;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px;
+  border: 1px solid var(--edge);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-sheet);
   transform: translateX(-50%);
-  border: 1px solid var(--line);
-  border-radius: var(--r-full);
-  background: var(--surface);
-  box-shadow: var(--shadow-2);
+  animation: bar-in 260ms var(--ease) both;
 }
-.btn-red-words {
-  color: var(--danger);
-}
-/* A document's face (components.css's .th.doc): lines on white, its type
-   on a tag at the foot. */
-.doc-face {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14%;
-  padding: 22% 18%;
-  background: #fff;
-}
-.doc-face i {
-  display: block;
-  height: 6%;
-  min-height: 3px;
-  border-radius: 2px;
-  background: #d7d8d2;
-}
-.doc-face em {
-  position: absolute;
-  left: 12%;
-  bottom: 12%;
-  padding: 1px 4px;
-  border-radius: 3px;
-  color: #fff;
-  font: 700 7.5px/1.3 "Inter", sans-serif;
-  font-style: normal;
-}
-.rd-th .doc-face em {
-  font-size: 10px;
-}
-.wa-th .doc-face {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px 9px;
-  gap: 3.5px;
-}
-.wa-th .doc-face i {
-  height: 3px;
-}
-.wa-th.wa-cell .doc-face {
-  border-radius: 14px;
-}
-/* D2: with a queue, the mark sits 36 from the top. */
-.home.queued .home-middle {
-  flex: none;
-  justify-content: flex-start;
-  margin-top: -16px;
-  padding-bottom: 0;
-}
-/* A card inside a sheet: no shadow of its own (D21). */
-.grp-flat {
-  margin-top: 18px;
-  box-shadow: none;
-}
-.sheet-note {
-  margin-top: 12px;
-  color: var(--ink-2);
-  font-size: 13px;
-  text-align: center;
-}
-.set-warn .set-ic {
-  color: var(--warn);
-}
-.mark-quiet {
-  margin-top: 8px;
-  color: var(--ink-3);
-  font-size: 14px;
-  text-align: center;
-}
-.mark[data-tone="idle"] .ring-track {
-  stroke: var(--line);
-}
-.sh-hd > .circle.circle-lg,
-.sh-hd > .circle.circle-xl {
-  width: 64px;
-  height: 64px;
-  font-size: 24px;
-}
-/* D16: the app's mark, as the sidebar's, large. */
-.appmark {
-  display: grid;
-  place-items: center;
-  width: 80px;
-  height: 80px;
-  border-radius: 24px;
-  background: var(--brand);
-  color: var(--on-brand);
-  box-shadow: 0 12px 30px -10px color-mix(in srgb, var(--brand) 70%, transparent);
-}
-.appmark .ic {
-  width: 38px;
-  height: 38px;
-}
-.appmark + .ptitle {
-  margin-top: 22px;
-}
-.quiet {
-  margin-top: 8px;
-  color: var(--ink-3);
-  font-size: 14px;
-}
-.btn-start {
-  width: 300px;
-  margin-top: 30px;
-}
-.btn-start + .link {
-  margin-top: 14px;
-}
-/* D16's spacing is its own, not the setup column's gap. */
-.setup-in:has(> .appmark) {
-  gap: 0;
-}
-.setup-in > .appmark + .ptitle {
-  margin-top: 22px;
-  font-weight: 700;
-}
-/* Two versions (D15): each a card -- its text, then whose -- and the lines
-   the other lacks marked. In a sheet, no frame around the two. */
-.sheet .conflict {
-  margin-top: 12px;
-  padding: 0;
-  border: 0;
-  background: none;
-}
-.sheet .conflict-hd {
-  display: none;
-}
-.ver {
-  overflow: hidden;
-  border: 1px solid var(--line);
+.selbar .btn {
+  height: 40px;
+  padding: 0 18px;
   border-radius: var(--r-m);
-  background: var(--surface);
+  font-size: 13.5px;
 }
-.ver .ver-look {
-  margin-top: 0;
-  border-radius: 0;
-  background: #fbfbf8;
-  color: #333;
-}
-.ver .ver-by {
-  padding: 10px 12px;
-  font-size: 13px;
-}
-.ver-by b {
-  font-weight: 500;
-}
-.ver-gone {
-  background: #f7e1dd;
-}
-.ver-new {
-  background: #dff1e6;
-}
-.btn-soft {
-  background: var(--brand-soft);
-  color: var(--brand);
-}
-.ver-by b,
-.ver-by small {
-  white-space: nowrap;
-}
-.ver-by b {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Big buttons on a page that is not a column (Settings' Quit): as wide as
-   the cards above them, the words centred, as Remove and Switch device. */
-.pg .big-btn {
+
+/* =========================================================== settings */
+
+/* This computer, as one card: its circle, its name. */
+.profile {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 16px;
   width: 100%;
+  padding: 16px 18px 16px 16px;
+  border: 1px solid var(--edge);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  color: var(--ink);
+  text-align: left;
+  transition: box-shadow var(--fast) var(--ease), transform var(--fast) var(--ease);
 }
-.big-quit {
-  margin-top: 28px;
+.profile:hover {
+  box-shadow: var(--shadow-lift);
 }
-/* Space for QurbSpace: sizes as round choices, two to a row, the chosen
-   one green; a typed size under them. */
-.grp-gap {
-  margin-bottom: 14px;
+.profile:active {
+  transform: scale(0.995);
 }
-.limits {
+.profile .circle {
+  width: 56px;
+  height: 56px;
+  font-size: 22px;
+}
+.profile-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.profile-words b {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-words small {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.pg .link-danger:last-child {
+  margin: 28px 0 0 -4px;
+}
+/* What this computer keeps: how much is left, a bar of what fills it. */
+.disk {
+  margin: 0 0 24px;
+  padding: 22px 22px 20px;
+  border: 1px solid var(--edge);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+}
+.free {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.free small {
+  margin-left: 8px;
+  color: var(--ink-3);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.disk-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  margin-top: 16px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.disk-bar i {
+  display: block;
+  height: 100%;
+  transition: width 0.6s var(--ease);
+}
+/* A part's colour in the bar, as a dot in a tile where a part has no icon;
+   the icons of the others take their colours. */
+.sw {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-s);
+  background: var(--tile);
+}
+.sw i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.disk + .grp-box {
+  margin-bottom: 16px;
+}
+/* Space for QurbSpace: sizes to pick, three to a row, or two when there
+   are four; a short last row shares its width. */
+.limits {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 18px;
 }
 .limit {
+  flex: 1 1 calc(33.333% - 8px);
   height: 44px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-full);
-  background: var(--surface);
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--r-m);
+  background: var(--card);
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
-  transition: border-color 0.15s, background 0.15s;
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.limits:has(> :nth-child(4):last-child) .limit {
+  flex-basis: calc(50% - 8px);
 }
 .limit:hover {
-  border-color: color-mix(in srgb, var(--brand) 50%, var(--line));
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--edge-strong));
 }
 .limit.on {
   border-color: var(--brand);
   background: var(--brand-soft);
   color: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand);
 }
-.field-c {
-  margin-top: 12px;
-  border-radius: var(--r-full);
-  text-align: center;
-}
-
-/* ======================================================================
-   The look of the phone and the website (the owner, 2026-11-09; the
-   Figma foundations of that day): frosted glass over a faint glow, the
-   website's soft deep shadows. Last in the file, so it governs every page.
-   ====================================================================== */
-:root,
-[data-theme="light"] {
-  --glass-frosted: rgba(255, 255, 255, 0.65);
-  --glass-elevated: rgba(252, 252, 250, 0.97);
-  --glass-edge: rgba(255, 255, 255, 0.7);
-  --glass-clear: rgba(255, 255, 255, 0.36);
-  --hairline: rgba(22, 24, 21, 0.07);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  --shadow-card: 0 1px 2px rgba(22, 24, 21, 0.04), 0 10px 30px rgba(22, 24, 21, 0.06);
-  --shadow-sheet: 0 2px 8px rgba(22, 24, 21, 0.07), 0 28px 70px rgba(22, 24, 21, 0.18);
-  --shadow-mark: 0 6px 20px rgba(22, 24, 21, 0.07), 0 18px 48px rgba(22, 24, 21, 0.08);
-  --shadow-press: 0 1px 2px rgba(33, 75, 61, 0.25), 0 6px 18px rgba(47, 107, 87, 0.18);
-  --glow: 111, 175, 152;
-  --environment:
-    radial-gradient(62% 58% at 6% 2%, rgba(var(--glow), 0.26), transparent 72%),
-    radial-gradient(48% 52% at 94% 10%, rgba(196, 208, 216, 0.42), transparent 70%),
-    radial-gradient(72% 62% at 78% 108%, rgba(234, 222, 196, 0.55), transparent 70%),
-    radial-gradient(42% 42% at 28% 88%, rgba(var(--glow), 0.12), transparent 70%);
-}
-[data-theme="dark"] {
-  --glass-frosted: rgba(32, 34, 31, 0.62);
-  --glass-elevated: rgba(30, 32, 29, 0.97);
-  --glass-edge: rgba(255, 255, 255, 0.08);
-  --glass-clear: rgba(255, 255, 255, 0.03);
-  --hairline: rgba(236, 237, 232, 0.08);
-  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.25);
-  --shadow-sheet: 0 2px 8px rgba(0, 0, 0, 0.4), 0 28px 70px rgba(0, 0, 0, 0.6);
-  --shadow-mark: 0 6px 20px rgba(0, 0, 0, 0.35), 0 18px 48px rgba(0, 0, 0, 0.35);
-  --shadow-press: 0 6px 18px rgba(0, 0, 0, 0.35);
-  --environment:
-    radial-gradient(62% 58% at 6% 2%, rgba(var(--glow), 0.12), transparent 72%),
-    radial-gradient(48% 52% at 94% 10%, rgba(40, 52, 62, 0.35), transparent 70%),
-    radial-gradient(72% 62% at 78% 108%, rgba(58, 50, 36, 0.4), transparent 70%);
-}
-/* The page behind everything. */
-body {
-  background: var(--environment), var(--bg);
-  background-attachment: fixed;
-}
-/* The sidebar: clear glass, the name alone (no mark, as the phone's Home). */
-.sb {
-  background: var(--glass-clear);
-  border-right: 1px solid var(--hairline);
-}
-.sb-brand {
-  padding-left: 12px;
-  font-size: 16px;
-  letter-spacing: -0.015em;
-}
-/* Frosted cards: every group of rows, tile and card. */
-.grp-box,
-.wa-card,
-.launch-tile,
-.profile,
-.choice,
-.ver,
-.disk-card {
-  border: 1px solid var(--glass-edge);
-  background: var(--glass-frosted);
-  box-shadow: var(--shadow-card), var(--highlight);
-}
-.launch-tile.launch-open {
-  border-color: var(--brand);
-  background: var(--brand-soft);
-}
-.dev-card {
-  border-color: var(--glass-edge);
-  background: var(--glass-frosted);
-}
-.dev-card.on {
-  border-color: var(--brand);
-  background: var(--brand-soft);
-}
-.dev-add {
-  border: 1px dashed var(--line);
-  background: none;
-}
-/* Sheets, the bar at Recently deleted's foot, toasts: elevated glass. */
-.sheet,
-.selbar {
-  border: 1px solid var(--glass-edge);
-  background: var(--glass-elevated);
-  box-shadow: var(--shadow-sheet), var(--highlight);
-  backdrop-filter: blur(40px) saturate(1.2);
-}
-.toast {
-  display: inline-flex;
+/* The speed limit: each way, a row of choices. */
+.speed {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 20px;
-  border: 1px solid var(--glass-edge);
-  background: var(--glass-elevated);
-  color: var(--ink);
-  box-shadow: var(--shadow-sheet), var(--highlight);
-  backdrop-filter: blur(40px) saturate(1.2);
+  gap: 14px;
+  min-height: 64px;
+  padding: 12px 16px 12px 12px;
 }
-.toast-warn {
-  background: var(--glass-elevated);
-  color: var(--warn);
+.speed + .speed::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 60px;
+  right: 0;
+  height: 1px;
+  background: var(--edge);
 }
-/* Home's mark: a white disc in a faint green halo. */
-.mark {
-  background: var(--surface);
-  box-shadow: var(--shadow-mark), var(--highlight), 0 0 0 16px rgba(var(--glow), 0.1), 0 0 60px 24px rgba(var(--glow), 0.14);
+.amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.mark[data-tone="away"],
-.mark[data-tone="idle"],
-.mark[data-tone="warn"] {
-  box-shadow: var(--shadow-mark), var(--highlight);
-}
-/* Buttons: the website's. */
-.btn-main,
-.send {
-  box-shadow: var(--shadow-press), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-.btn-quiet {
-  border-color: var(--hairline);
-  background: var(--glass-frosted);
-  box-shadow: 0 1px 2px rgba(22, 24, 21, 0.05), var(--highlight);
-}
-.btn-quiet:hover:not(:disabled) {
-  background: var(--surface);
-}
-/* Fields: glass, round, green when they have focus. */
-.field,
-.digits-in {
-  border: 1px solid var(--line);
-  background: var(--glass-frosted);
-}
-.field:focus,
-.digits-in:focus {
-  border-color: var(--brand);
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(var(--glow), 0.18);
-}
-/* A device's page: its actions as a card (the owner, 2026-11-09). */
-.dev-acts {
-  align-self: stretch;
-  margin-top: 24px;
-}
-.dev-acts .set-danger .set-name {
+.amount {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--edge-strong);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: 13px;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
-/* The QR: on white always, its shadow the card's. */
-.qr {
+.amount:hover {
+  border-color: color-mix(in srgb, var(--ink) 22%, transparent);
+  color: var(--ink);
+}
+.amount.on {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 600;
+}
+/* The key's page: its state in the middle of a card. */
+.pg-hd + div > .locked:first-child {
+  padding: 28px 24px;
+  border: 1px solid var(--edge);
+  border-radius: 18px;
+  background: var(--card);
   box-shadow: var(--shadow-card);
 }
-.toast-ic {
-  width: 18px;
-  height: 18px;
-  color: var(--brand);
-}
-.toast-warn .toast-ic {
-  color: var(--warn);
-}
-/* Setting up: the same glow behind it. */
-.setup {
-  background: var(--environment), var(--bg);
-}
-/* The app's mark, drawn: its own tile, so the frame round it goes. */
-.appmark {
-  background: none;
-  box-shadow: 0 12px 30px -10px rgba(47, 107, 87, 0.6);
-  overflow: hidden;
-}
-.appmark svg {
-  width: 80px;
-  height: 80px;
-}
-.rows-card .row {
-  border-radius: 0;
-}
-.back-corner {
-  position: absolute;
-  top: 22px;
-  left: 144px;
-}
-.center-page {
-  position: relative;
+.pg-hd + div > .locked:first-child + .grp > .label {
+  margin-top: 32px;
 }
 
-/* ======================================================================
-   The desktop's draft 1 (Figma, 2026-10-24), chosen by the owner on
-   2026-11-09 over the glass of that day: two floating white panels -- the
-   sidebar and the page -- on a mint-to-cream ground; compact, quiet type;
-   small icons in small grey tiles; content laid out wide and to the left.
-   Only the look: every function is the app's as it is.
-   ====================================================================== */
-:root,
-[data-theme="light"] {
-  --ground: linear-gradient(160deg, #dcebe3 0%, #e9f1ec 38%, #f4f2ea 72%, #f5efe3 100%);
-  --panel: rgba(255, 255, 255, 0.92);
-  --panel-2: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(251, 250, 246, 0.86));
-  --panel-edge: rgba(22, 24, 21, 0.06);
-  --panel-shadow: 0 1px 2px rgba(22, 24, 21, 0.04), 0 8px 24px -12px rgba(22, 24, 21, 0.12);
-  --card: #ffffff;
-  --card-edge: rgba(22, 24, 21, 0.08);
-  --card-shadow: 0 1px 2px rgba(22, 24, 21, 0.04);
-  --tile: #f2f3ef;
-}
-[data-theme="dark"] {
-  --ground: linear-gradient(160deg, #0f1a15 0%, #111513 45%, #15140f 100%);
-  --panel: rgba(23, 28, 25, 0.94);
-  --panel-2: linear-gradient(180deg, rgba(23, 28, 25, 0.94), rgba(20, 24, 22, 0.92));
-  --panel-edge: rgba(255, 255, 255, 0.06);
-  --panel-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
-  --card: #1c221f;
-  --card-edge: rgba(255, 255, 255, 0.07);
-  --card-shadow: none;
-  --tile: #252c28;
-}
-body,
-.setup {
-  background: var(--ground);
-  font-size: 13.5px;
-}
-/* The window: two panels with a gap, inset from its edges. */
-.win {
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 8px;
-  padding: 8px;
-}
-.sb {
-  padding: 16px 10px 12px;
-  border: 1px solid var(--panel-edge);
-  border-radius: 14px;
-  background: var(--panel);
-  box-shadow: var(--panel-shadow);
-}
-.sb-brand {
-  padding: 0 10px 18px;
-  font-size: 14px;
-  font-weight: 650;
-}
-.sb-nav button {
-  height: 32px;
-  gap: 10px;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-.sb-nav button .ic {
-  width: 16px;
-  height: 16px;
-}
-.sb-me {
+/* =========================================================== activity */
+
+/* Which: segmented chips. */
+.a-chips {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: auto;
-  padding: 0 10px;
-  color: var(--ink-3);
-  font-size: 12px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -8px 0 4px;
 }
-.sb-me .ic {
-  width: 14px;
-  height: 14px;
-}
-.main {
-  border: 1px solid var(--panel-edge);
-  border-radius: 14px;
-  background: var(--panel-2);
-  box-shadow: var(--panel-shadow);
-}
-/* Pages: wide and to the left, compact. */
-.pg,
-.pg-narrow {
-  max-width: none;
-  margin: 0;
-  padding: 22px 28px 40px;
-}
-.page {
-  align-items: stretch;
-  max-width: 560px;
-  margin: 0;
-  padding: 22px 28px 40px;
-}
-.pg-title h1,
-.ptitle,
-.dev-words h1 {
-  font-size: 20px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
-}
-.back {
-  margin-bottom: 6px;
-  font-size: 12.5px;
-}
-.back .ic {
-  width: 14px;
-  height: 14px;
-}
-.label {
-  margin: 20px 2px 8px;
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-}
-/* Cards: white, a hairline, a breath of shadow, 12 round. */
-.grp-box,
-.wa-card,
-.launch-tile,
-.profile,
-.choice,
-.ver,
-.dev-card,
-.rows-card {
-  border: 1px solid var(--card-edge);
-  border-radius: 12px;
-  background: var(--card);
-  box-shadow: var(--card-shadow);
-}
-.set {
-  min-height: 48px;
-  gap: 12px;
-  padding: 8px 14px 8px 10px;
-  font-size: 13.5px;
-}
-/* A row's icon in a small grey tile, as draft 1's Settings has it. */
-.set .set-ic {
-  box-sizing: content-box;
-  width: 15px;
-  height: 15px;
-  padding: 7px;
-  border-radius: 8px;
-  background: var(--tile);
-}
-.set-danger .set-ic {
-  background: color-mix(in srgb, var(--danger) 10%, var(--tile));
-}
-.grp-box > * + * .set::before,
-.grp-box > .set + .set::before,
-.grp-box > * + .set::before {
-  left: 52px;
-}
-.set-value {
-  font-size: 12.5px;
-}
-.set-go {
-  width: 14px;
-  height: 14px;
-}
-/* Settings in two columns. */
-.cols {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 18px;
-  align-items: start;
-}
-.profile {
-  padding: 12px 14px;
-  gap: 12px;
-}
-.profile .circle {
-  width: 44px;
-  height: 44px;
-  font-size: 17px;
-}
-.profile-words b {
-  font-size: 15px;
-  font-weight: 600;
-}
-.profile-words small {
-  font-size: 12px;
-}
-/* A destructive act as a red link (draft 1's Remove). */
-.link-danger {
+.a-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  align-self: flex-start;
-  margin-top: 22px;
-  padding: 4px 2px;
-  border: 0;
-  background: none;
-  color: var(--danger);
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--edge-strong);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink-2);
   font-size: 13px;
   font-weight: 500;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease);
 }
-.link-danger .ic {
-  width: 14px;
-  height: 14px;
+.a-chip:hover {
+  border-color: color-mix(in srgb, var(--ink) 22%, transparent);
+  color: var(--ink);
 }
-.link-danger:hover {
-  text-decoration: underline;
-}
-.dev-foot {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  margin-top: 18px;
-}
-.dev-foot .link-danger {
-  margin-top: 8px;
-}
-/* Buttons: small and round. */
-.btn {
-  height: 38px;
-  padding: 0 16px;
-  font-size: 13.5px;
-}
-.btn .ic {
-  width: 15px;
-  height: 15px;
-}
-.btn-sm {
-  height: 32px;
-  padding: 0 12px;
-  font-size: 12.5px;
-}
-.btn-quiet {
-  border-color: var(--card-edge);
-  background: var(--card);
-  box-shadow: var(--card-shadow);
-}
-.btn-main,
-.send {
-  box-shadow: 0 1px 2px rgba(33, 75, 61, 0.2);
-}
-/* Home: a thin ring, small words, a small Send, a quiet hint. */
-.mark,
-.mark[data-tone] {
-  width: 120px;
-  height: 120px;
-  background: var(--card);
-  box-shadow: 0 0 0 1px var(--card-edge), 0 4px 16px -8px rgba(22, 24, 21, 0.15);
-}
-.mark-in .ic {
-  width: 36px;
-  height: 36px;
-}
-.ring {
-  inset: 10px;
-  width: calc(100% - 20px);
-  height: calc(100% - 20px);
-}
-.ring-track {
-  stroke: var(--brand);
-  stroke-opacity: 0.85;
-}
-.mark[data-tone="away"] .ring-track,
-.mark[data-tone="idle"] .ring-track {
-  stroke: var(--line);
-  stroke-opacity: 1;
-}
-.mark[data-tone="warn"] .ring-track {
-  stroke: var(--warn);
-}
-.home.queued .mark {
-  width: 96px;
-  height: 96px;
-}
-.home.queued .mark-in .ic {
-  width: 28px;
-  height: 28px;
-}
-.mark-words {
-  margin-top: 18px;
-  font-size: 18px;
-  font-weight: 650;
-}
-.send {
-  width: auto;
-  min-width: 120px;
-  height: 38px;
-  margin-top: 18px;
-  padding: 0 20px;
-  font-size: 13.5px;
-}
-.send .ic {
-  width: 15px;
-  height: 15px;
-}
-.drop-hint {
-  position: absolute;
-  bottom: 24px;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: var(--ink-3);
-  font-size: 11.5px;
-}
-.drop-hint .ic {
-  width: 12px;
-  height: 12px;
-}
-.home.queued .drop-hint {
-  display: none;
-}
-.home-top .circle-btn .circle {
-  width: 32px;
-  height: 32px;
-  font-size: 13px;
-}
-.waiting {
-  width: min(520px, 100%);
-}
-.wa {
-  padding: 10px 14px;
-}
-.wa-th {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-}
-.wa-t b {
-  font-size: 13.5px;
-}
-.wa-t > span {
-  font-size: 12px;
-}
-.wl b {
-  font-size: 13px;
-}
-/* Files: small square tiles, four to a row, the icon in a soft tile. */
-.launch {
-  grid-template-columns: repeat(auto-fill, minmax(116px, 128px));
-  gap: 10px;
-}
-.launch-tile {
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 92px;
-  padding: 12px 10px;
-  text-align: center;
-}
-.launch-lead {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  background: var(--brand-soft);
-}
-.launch-lead .ic {
-  width: 16px;
-  height: 16px;
-}
-.launch-lead .circle {
-  width: 32px;
-  height: 32px;
-  font-size: 13px;
-}
-.launch-tile b {
-  font-size: 12.5px;
+.a-chip.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
   font-weight: 600;
 }
-.launch-side {
-  top: 8px;
-  right: 8px;
+.a-n {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--warn);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
 }
-.launch-end {
-  width: 12px;
-  height: 12px;
+.a-chips + div > .label:first-child {
+  margin-top: 24px;
 }
-/* Add a device: two small cards. */
-.choices {
-  grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
-  gap: 10px;
+.a-chips + div > .empty {
+  padding-top: 72px;
 }
-.choice {
-  height: 112px;
-  padding: 14px;
+.w-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 68px;
+  padding: 12px 16px 12px 14px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+  transition: background var(--fast) var(--ease);
 }
-.choice-c {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+.w-row + .w-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 80px;
+  right: 0;
+  height: 1px;
+  background: var(--edge);
 }
-.choice-c .ic {
+.w-row:hover {
+  background: var(--hover);
+}
+/* Up to three previews, fanned. */
+.w-stack {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 44px;
+}
+.w-pic {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-m);
+  background: var(--tile);
+  color: var(--ink-2);
+  box-shadow: 0 0 0 2px var(--card);
+}
+.w-pic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.w-pic .ic {
   width: 18px;
   height: 18px;
 }
-.choice b {
-  font-size: 13.5px;
-}
-/* A device's page. */
-.dev-hd {
-  gap: 14px;
-  margin-top: 8px;
-}
-.dev-hd .circle-xl {
-  width: 52px;
-  height: 52px;
-  font-size: 20px;
-  border-radius: 14px;
-}
-.dev-words .state {
-  font-size: 12.5px;
-}
-/* Sheets: white cards, quieter. */
-.sheet {
-  padding: 20px;
-  border: 1px solid var(--card-edge);
-  border-radius: 18px;
-  background: var(--card);
-  box-shadow: 0 18px 48px -16px rgba(22, 24, 21, 0.3);
-  backdrop-filter: none;
-}
-.sh-words h2 {
-  font-size: 16px;
-}
-.sh-words p {
-  font-size: 13px;
-}
-.sh-hd > .circle.circle-lg,
-.sh-hd > .circle.circle-xl {
-  width: 52px;
-  height: 52px;
-  font-size: 20px;
-}
-.sh-hd > .tile-lg {
-  width: 52px;
-  height: 52px;
-}
-.sh-hd > .tile-lg .ic {
-  width: 22px;
-  height: 22px;
-}
-body:not(.setting-up) .scrim {
-  padding-left: calc(208px + 24px);
-}
-.selbar {
-  left: calc(50% + 104px);
-  border: 1px solid var(--card-edge);
-  background: var(--card);
-  box-shadow: 0 12px 32px -14px rgba(22, 24, 21, 0.3);
-}
-.toast {
-  border: 1px solid var(--card-edge);
-  background: var(--card);
-  box-shadow: 0 12px 32px -14px rgba(22, 24, 21, 0.3);
-  font-size: 13px;
-}
-/* Recently deleted and Waiting's grids: smaller. */
-.rdg {
-  grid-template-columns: repeat(auto-fill, minmax(96px, 112px));
-  gap: 12px;
-}
-.wgrid {
-  grid-template-columns: repeat(auto-fill, 64px);
-}
-.wa-th.wa-cell {
+.w-pic-row {
+  position: relative;
   width: 64px;
   height: 64px;
+  box-shadow: 0 0 0 1px var(--edge);
 }
-.free {
-  font-size: 22px;
-}
-.empty-orb {
-  width: 56px;
-  height: 56px;
-}
-.empty-orb .ic {
+.w-pic-row .ic {
   width: 22px;
   height: 22px;
 }
-/* Setting up: one white panel in the middle of the ground. */
-.setup-in {
-  width: min(460px, 100%);
-  padding: 40px 36px 32px;
-  border: 1px solid var(--panel-edge);
-  border-radius: 18px;
-  background: var(--panel);
-  box-shadow: var(--panel-shadow);
+.a-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 64px);
+  justify-content: center;
+  gap: 8px;
 }
-.appmark,
+.a-more {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.a-badge {
+  position: absolute;
+  left: 30px;
+  bottom: -4px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--card);
+  border-radius: 10px;
+  color: #fff;
+}
+.a-badge .ic {
+  width: 11px;
+  height: 11px;
+}
+.b-in {
+  background: var(--online);
+}
+.b-out,
+.b-ok {
+  background: var(--brand);
+}
+.b-bad {
+  background: var(--warn);
+}
+.b-quiet {
+  background: var(--ink-3);
+}
+.w-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.w-main b {
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.w-main small {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.w-main small.a-bad {
+  color: var(--warn);
+}
+.a-time {
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.w-card + .acts,
+div:has(> .w-card) + .acts {
+  margin-top: 28px;
+}
+
+/* ========================================================= setting up */
+
+body.setting-up .win {
+  display: none;
+}
+.setup:empty {
+  display: none;
+}
+.setup {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 48px 24px;
+  background: var(--environment), var(--bg);
+}
+.setup-in {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(420px, 100%);
+  text-align: center;
+  animation: page-in 320ms var(--ease) both;
+}
+.setup-in:has(> .appmark) {
+  gap: 0;
+}
+.setup-in > .back {
+  align-self: center;
+  margin: 0 0 8px;
+}
+.setup-in h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+.setup-in > .empty-orb + h1 {
+  margin-top: 6px;
+}
+.setup-in .note {
+  margin: 0;
+  font-size: 14px;
+}
+.setup-in .field,
+.setup-in .digits-in {
+  margin-top: 10px;
+}
+.setup-in .link {
+  margin-top: 4px;
+}
+.setup-in .acts {
+  justify-content: center;
+  margin-top: 12px;
+}
+.setup-in .acts .btn {
+  min-width: 220px;
+  height: 46px;
+  border-radius: 14px;
+  font-size: 15px;
+}
+/* The welcome: the app's mark, its name, one line, Start. */
+.appmark {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  overflow: hidden;
+  border-radius: 26px;
+  box-shadow: 0 18px 40px -14px rgba(47, 107, 87, 0.6), 0 0 0 1px rgba(23, 25, 22, 0.04);
+  animation: rise 420ms var(--ease) both;
+}
 .appmark svg {
-  width: 56px;
-  height: 56px;
+  width: 88px;
+  height: 88px;
+}
+.appmark + .ptitle {
+  margin-top: 28px;
+  font-size: 32px;
+}
+.ptitle + .quiet {
+  margin-top: 8px;
 }
 .btn-start {
-  width: 100%;
-  max-width: 280px;
+  width: 280px;
+  height: 48px;
+  margin-top: 36px;
+  border-radius: 14px;
+  font-size: 15px;
 }
-:root,
-[data-theme="light"] {
-  --panel-2: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(251, 250, 246, 0.9) 55%, rgba(246, 242, 232, 0.9) 100%);
+.btn-start + .link {
+  margin-top: 14px;
 }
-/* An open folder's Lock under its name, not over its picture. */
-.launch-tile.launch-open {
-  height: auto;
-  min-height: 92px;
+.btn-start ~ .note:empty {
+  display: none;
 }
-.launch-side:has(.btn) {
-  position: static;
-  margin-top: 2px;
-}
-[data-theme="dark"] {
-  --panel-2: linear-gradient(180deg, rgba(23, 28, 25, 0.94), rgba(20, 24, 22, 0.92));
+.btn-start ~ .note {
+  margin-top: 12px;
 }

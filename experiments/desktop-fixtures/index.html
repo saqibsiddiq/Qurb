@@ -34,6 +34,15 @@ const FRESH = `?t=${Date.now()}`;
   style.href = REAL + "app.css" + FRESH;
   document.head.append(style);
 
+  // `?still`: no transitions or animations, everything at its end. A
+  // headless screenshot's clock does not run them, and would otherwise show
+  // a colour or a size halfway through changing.
+  if (new URLSearchParams(location.search).has("still")) {
+    const still = document.createElement("style");
+    still.textContent = "*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important}";
+    document.head.append(still);
+  }
+
   // The real page's own script tags are taken out and run after the stub, in
   // their order: the window's scripts read `window.__TAURI__` as they start.
   // The head's too: theme.js sets the theme before anything draws.
