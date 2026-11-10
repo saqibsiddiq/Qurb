@@ -2315,7 +2315,12 @@ pub fn open_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
     };
     let (store_dir, key) = hosted.with_store(|store| Ok((store.root().to_path_buf(), store.chunk_key()))).map_err(failed)?;
     crate::mount::mount(&store_dir, key, id, at.clone(), contents, opened_dir(&id)).map_err(failed)?;
-    reveal(&at)
+    // Opened at the phone's own folder, the one the tile is named after,
+    // rather than a level above it (the owner, 2026-11-10: "when clicked on
+    // sakib ... it must open the sakib folder directly"). This computer's
+    // and an earlier phone's are a level up.
+    let phone = at.join(qurb_cli::layout::folder_name(&name));
+    reveal(if person == OWNER && phone.is_dir() { &phone } else { &at })
 }
 
 /// Lock a person's folder: forgotten until asked again, and what was opened
