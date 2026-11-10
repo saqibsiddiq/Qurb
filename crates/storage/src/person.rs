@@ -65,6 +65,41 @@ fn merged(db: &Db, name: &str, ids: &[DeviceId]) -> Result<Vec<(String, Shown)>>
     Ok(out)
 }
 
+/// Every folder of one device's folder, each with the folders and files in
+/// it, its paths from the device's folder down ("" its top): read once, for
+/// a mounted folder to answer each look from rather than reading everything
+/// kept for the device again for each (2026-11-10: a file manager opening a
+/// folder of the S23's, thousands of files kept, looked up each name in it,
+/// and each look read all of them).
+pub fn tree(db: &Db, device: &DeviceFolder) -> Result<std::collections::HashMap<String, (Vec<String>, Vec<Shown>)>> {
+    let (name, ids) = device;
+    let mut dirs: std::collections::HashMap<String, (std::collections::BTreeSet<String>, Vec<Shown>)> =
+        std::collections::HashMap::new();
+    dirs.entry(String::new()).or_default();
+    for (shown, mut file) in merged(db, name, ids)? {
+        let Some(inside) = shown.strip_prefix(name.as_str()).and_then(|r| r.strip_prefix('/')) else { continue };
+        let (parent, file_name) = inside.rsplit_once('/').unwrap_or(("", inside));
+        // Each folder above it, named in its own parent.
+        let mut at = parent;
+        while !at.is_empty() {
+            let (up, folder) = at.rsplit_once('/').unwrap_or(("", at));
+            if !dirs.entry(up.to_string()).or_default().0.insert(folder.to_string()) {
+                break;
+            }
+            at = up;
+        }
+        file.name = file_name.to_string();
+        dirs.entry(parent.to_string()).or_default().1.push(file);
+    }
+    Ok(dirs
+        .into_iter()
+        .map(|(dir, (folders, mut files))| {
+            files.sort_by(|a, b| a.name.cmp(&b.name));
+            (dir, (folders.into_iter().collect(), files))
+        })
+        .collect())
+}
+
 /// The folders and files at `dir` of a person's folder made of `devices`.
 pub fn listing(db: &Db, devices: &[DeviceFolder], dir: &str) -> Result<(Vec<String>, Vec<Shown>)> {
     let dir = dir.trim_matches('/');

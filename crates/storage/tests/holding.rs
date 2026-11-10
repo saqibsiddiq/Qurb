@@ -266,3 +266,35 @@ fn a_file_sent_here_is_not_waiting_for_this_device() {
     assert!(phone.outgoing().is_empty(), "{:?}", phone.outgoing());
     assert!(phone.store.db().awaiting_collection().unwrap().is_empty());
 }
+
+/// A phone's folder read once as a tree answers every folder as reading it
+/// folder by folder does (`qurb_storage::person::tree`, which a mounted
+/// folder answers from).
+#[test]
+fn a_phones_folder_read_once_is_the_same_as_folder_by_folder() {
+    let mut desktop = Device::new();
+    let phone = Device::phone();
+    let owner = phone.id();
+    for (i, path) in [
+        ".qurb-outside/whatsapp/Media/WhatsApp Images/IMG-1.jpg",
+        ".qurb-outside/whatsapp/Media/WhatsApp Images/IMG-2.jpg",
+        ".qurb-outside/whatsapp/Databases/msgstore.db.crypt14",
+        ".qurb-outside/storage/DCIM/Camera/PXL_1.jpg",
+        "notes.txt",
+    ]
+    .iter()
+    .enumerate()
+    {
+        hold(&mut desktop, &owner, path, &noisy(1_000 + i * 10, i as u32 + 1));
+    }
+    let folder = ("sakib".to_string(), vec![owner]);
+    let tree = qurb_storage::person::tree(desktop.store.db(), &folder).unwrap();
+    for dir in tree.keys() {
+        let inside = if dir.is_empty() { "sakib".to_string() } else { format!("sakib/{dir}") };
+        let (folders, files) = qurb_storage::person::listing(desktop.store.db(), std::slice::from_ref(&folder), &inside).unwrap();
+        let (tree_folders, tree_files) = &tree[dir];
+        assert_eq!(&folders, tree_folders, "folders in {dir:?}");
+        assert_eq!(&files, tree_files, "files in {dir:?}");
+    }
+    assert!(tree.len() > 3, "too few folders: {:?}", tree.keys());
+}

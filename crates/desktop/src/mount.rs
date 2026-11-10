@@ -98,6 +98,7 @@ mod linux {
             opened,
             uid: unsafe { libc::getuid() },
             gid: unsafe { libc::getgid() },
+            tree: Mutex::new(None),
         };
         // fusermount3 mounts only where the user may write; a placeholder is
         // kept read-only so that nothing put in it is taken for kept.
@@ -224,7 +225,16 @@ mod linux {
         opened: PathBuf,
         uid: u32,
         gid: u32,
+        /// A phone's folders, read once and kept for [`TREE_FOR`].
+        tree: Mutex<Option<(std::time::Instant, std::sync::Arc<Tree>)>>,
     }
+
+    type Tree = std::collections::HashMap<String, (Vec<String>, Vec<qurb_storage::person::Shown>)>;
+
+    /// How long a phone's folders, once read, answer looks before being read
+    /// again: long enough for a file manager's every look at a folder, short
+    /// enough for a file backed up meanwhile to show.
+    const TREE_FOR: Duration = Duration::from_secs(30);
 
     impl Folder {
         /// The folder's key while it is open; reading counts as using it.
@@ -240,18 +250,28 @@ mod linux {
             let mut found: Vec<Node> = Vec::new();
             match &self.contents {
                 Contents::Phone(folder) => {
-                    // The phone's folder is the top: what it holds at `dir`
-                    // is what `listing` holds under its name.
-                    let inner = if dir.is_empty() { folder.0.clone() } else { format!("{}/{dir}", folder.0) };
-                    let (folders, files) = qurb_storage::person::listing(store.db(), std::slice::from_ref(folder), &inner)
-                        .map_err(|_| Errno::EIO)?;
-                    found.extend(folders.into_iter().map(|f| Node {
-                        path: join(&f), dir: true, size: 0, modified: 0, content: None, sealed: None, disk: None,
-                    }));
-                    found.extend(files.into_iter().map(|f| Node {
-                        path: join(&f.name), dir: false, size: f.size, modified: f.modified_at,
-                        content: Some(f.content), sealed: None, disk: None,
-                    }));
+                    // The phone's folder is the top, its folders read once.
+                    let mut held = self.tree.lock().map_err(|_| Errno::EIO)?;
+                    let tree = match held.as_ref() {
+                        Some((read, tree)) if read.elapsed() < TREE_FOR => tree.clone(),
+                        _ => {
+                            let tree = std::sync::Arc::new(
+                                qurb_storage::person::tree(store.db(), folder).map_err(|_| Errno::EIO)?,
+                            );
+                            *held = Some((std::time::Instant::now(), tree.clone()));
+                            tree
+                        }
+                    };
+                    drop(held);
+                    if let Some((folders, files)) = tree.get(dir) {
+                        found.extend(folders.iter().map(|f| Node {
+                            path: join(f), dir: true, size: 0, modified: 0, content: None, sealed: None, disk: None,
+                        }));
+                        found.extend(files.iter().map(|f| Node {
+                            path: join(&f.name), dir: false, size: f.size, modified: f.modified_at,
+                            content: Some(f.content), sealed: None, disk: None,
+                        }));
+                    }
                 }
                 Contents::Guest => {
                     let key = qurb_storage::sealed::FolderKey::from_bytes(key);
