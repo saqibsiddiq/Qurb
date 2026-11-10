@@ -1894,6 +1894,8 @@ pub struct Person {
     size: String,
     /// Their phones, by the names the folder shows them under.
     devices: Vec<String>,
+    /// The picture their phone chose, as a `data:` address, or none.
+    picture: Option<String>,
     /// How many of those are phones in use: one set up again is one phone,
     /// though it keeps a folder for what was kept before.
     phones: usize,
@@ -2085,9 +2087,22 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
     // Each content once: the same file kept twice for a phone is stored once.
     let ids: Vec<qurb_sync::DeviceId> = phones.iter().map(|(_, p)| p.id).collect();
     let (files, bytes) = hosted.with_store(|store| Ok(store.db().held_once(&ids)?)).map_err(failed)?;
+    // Named and pictured as the owner's phone in use names itself -- the
+    // owner's test of 2026-11-10: the phone says *sakib*, with a picture, and
+    // the folder said *Saqib*, the login's name, with a letter. The login's
+    // name only while no phone is paired.
+    let phone = phones.iter().map(|(_, d)| d).find(|d| d.kind.as_deref() == Some("phone") && d.replaced_by.is_none());
+    let picture_of = |id: &qurb_sync::DeviceId| {
+        hosted
+            .with_store(|store| Ok(store.db().peer_profile(id)?.and_then(|p| p.picture)))
+            .ok()
+            .flatten()
+            .map(|bytes| picture_address(&bytes))
+    };
     let mut people = vec![Person {
         id: OWNER.to_string(),
-        name: owner_name(),
+        name: phone.map(|d| d.name.trim().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(owner_name),
+        picture: phone.and_then(|d| picture_of(&d.id)),
         relation: "owner",
         state: folder_state(&owner),
         sealed: false,
@@ -2114,9 +2129,11 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
         let (count, kept) = hosted
             .with_store(|store| Ok((store.db().kept_names(&person)?.len() as u64, store.db().kept_for_person(&person)?)))
             .map_err(failed)?;
+        let picture = picture_of(&theirs[0].id);
         people.push(Person {
             id: person.to_hex(),
             name: theirs[0].name.clone(),
+            picture,
             relation: "guest",
             state: folder_state(&person),
             sealed: true,

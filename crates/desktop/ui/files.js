@@ -71,7 +71,8 @@ function launchTile(lead, name, onclick, end, cls = "") {
 
 /** A person's folder: its lock while locked; open, green, with *Lock*. */
 function personTile(p) {
-  const face = h("span", { class: "circle circle-md" }, (p.name || "?").trim()[0].toUpperCase());
+  // Their phone's picture where it chose one, as it shows itself.
+  const face = circle({ name: p.name, picture: p.picture }, "circle-md circle-plain");
   if (p.state === "open") {
     return launchTile(face, p.name, () => openPerson(p),
       h("button", { class: "btn btn-quiet btn-sm", onclick: async (e) => {

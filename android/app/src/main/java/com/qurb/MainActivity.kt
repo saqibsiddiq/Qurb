@@ -382,6 +382,19 @@ class MainActivity : AppCompatActivity() {
                 SyncWorker.running(this@MainActivity).collect { workerRunning(it) }
             }
         }
+        // While on screen, a pass as it opens and one every half minute: a
+        // computer's ask -- to open this person's folder, or a send waiting --
+        // is heard by a pass, and with background sync off nothing else ran
+        // one: the owner had to tap the circle to see his laptop's ask (the
+        // owner's test of 2026-11-10). Off the screen, nothing here runs.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    if (!syncing) sync(quiet = true)
+                    kotlinx.coroutines.delay(ON_SCREEN_EVERY_MS)
+                }
+            }
+        }
         continueSending(intent)
         fromNotice(intent)
         fromSetup(intent)
@@ -1404,6 +1417,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private companion object {
+        /** How often a pass runs while the app is on screen. */
+        private const val ON_SCREEN_EVERY_MS = 30_000L
         /** Whether notifications were asked for on first opening (item 11). */
         const val NOTIFY_PREFS = "notify"
         const val ASKED_TO_NOTIFY = "asked"
