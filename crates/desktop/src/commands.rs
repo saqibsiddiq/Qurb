@@ -1921,37 +1921,32 @@ pub struct PersonFile {
     modified_at: i64,
 }
 
-/// The owner's folder is asked for as this, rather than by an identifier.
+/// The owner's folders are asked for as this, rather than by an identifier:
+/// all of them, or one phone's as `owner:<its id>`.
 const OWNER: &str = "owner";
+
+/// Whether a folder asked for is the owner's: all of their phones', or one.
+fn is_owner(person: &str) -> bool {
+    person == OWNER || person.starts_with("owner:")
+}
+
+/// The owner's phones' folders a request names: one phone's, for
+/// `owner:<id>`, or all of them.
+fn owner_folders_of(hosted: &Hosted, person: &str) -> Result<Vec<qurb_storage::person::DeviceFolder>, String> {
+    let all = owner_folders(&owner_phones(hosted)?);
+    Ok(match person.strip_prefix("owner:") {
+        Some(id) => all.into_iter().filter(|(_, ids)| ids.first().map(|d| d.to_hex()).as_deref() == Some(id)).collect(),
+        None => all,
+    })
+}
 
 /// What a person's folder is filed under: the owner's under this computer's
 /// own device, a guest's under their person (decision 0060).
 fn person_of(hosted: &Hosted, id: &str) -> Result<qurb_sync::DeviceId, String> {
-    if id == OWNER {
+    if is_owner(id) {
         return hosted.with_store(|store| Ok(store.device_id()?)).map_err(failed);
     }
     qurb_sync::DeviceId::from_hex(id).ok_or_else(|| "no such person".to_string())
-}
-
-/// The owner's name for their folder: the first word of the login's full
-/// name, else the login, capitalised.
-fn owner_name() -> String {
-    let user = std::env::var("USER").unwrap_or_default();
-    let full = std::fs::read_to_string("/etc/passwd").ok().and_then(|passwd| {
-        passwd
-            .lines()
-            .find(|line| line.split(':').next() == Some(user.as_str()))
-            .and_then(|line| line.split(':').nth(4))
-            .and_then(|gecos| gecos.split(',').next())
-            .and_then(|name| name.split_whitespace().next())
-            .map(str::to_string)
-    });
-    let name = full.unwrap_or(user);
-    let mut chars = name.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars).collect(),
-        None => "You".to_string(),
-    }
 }
 
 /// The owner's phones whose files are kept here, each under the name its
@@ -2047,6 +2042,7 @@ pub fn place_people(hosted: &Hosted) {
 
 fn lay_out(hosted: &Hosted, people: &[Person]) {
     let Some(dir) = qurb_cli::layout::people_dir(&hosted.root()) else { return };
+    crate::mount::clear_stale(&dir);
     // The person's own folders under their phones' names, one each, renamed
     // when a phone is (the owner's list of 2026-11-01, item 2); another
     // person's under theirs, sealed.
@@ -2084,14 +2080,6 @@ fn lay_out(hosted: &Hosted, people: &[Person]) {
 fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
     let owner = person_of(hosted, OWNER)?;
     let phones = owner_phones(hosted)?;
-    // Each content once: the same file kept twice for a phone is stored once.
-    let ids: Vec<qurb_sync::DeviceId> = phones.iter().map(|(_, p)| p.id).collect();
-    let (files, bytes) = hosted.with_store(|store| Ok(store.db().held_once(&ids)?)).map_err(failed)?;
-    // Named and pictured as the owner's phone in use names itself -- the
-    // owner's test of 2026-11-10: the phone says *sakib*, with a picture, and
-    // the folder said *Saqib*, the login's name, with a letter. The login's
-    // name only while no phone is paired.
-    let phone = phones.iter().map(|(_, d)| d).find(|d| d.kind.as_deref() == Some("phone") && d.replaced_by.is_none());
     let picture_of = |id: &qurb_sync::DeviceId| {
         hosted
             .with_store(|store| Ok(store.db().peer_profile(id)?.and_then(|p| p.picture)))
@@ -2099,18 +2087,30 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
             .flatten()
             .map(|bytes| picture_address(&bytes))
     };
-    let mut people = vec![Person {
-        id: OWNER.to_string(),
-        name: phone.map(|d| d.name.trim().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(owner_name),
-        picture: phone.and_then(|d| picture_of(&d.id)),
-        relation: "owner",
-        state: folder_state(&owner),
-        sealed: false,
-        files: Some(files),
-        size: big(bytes),
-        phones: owner_folders(&phones).len(),
-        devices: owner_folders(&phones).into_iter().map(|(name, _)| name).collect(),
-    }];
+    // One folder for each of the owner's phones, named as the phone is, with
+    // its picture: ~/qurb holds Shared and a folder for each phone (the
+    // owner, 2026-11-10: "sakib should be the folder in which the phone is
+    // backing up everything, if another phone device adds ... another folder
+    // named after that device"). An earlier setup of a phone is inside its
+    // folder; this computer's own vault is not shown.
+    let mut people = Vec::new();
+    for (name, ids) in owner_folders(&phones) {
+        let Some(root) = ids.first().copied() else { continue };
+        // Each content once: the same file kept twice for a phone is stored once.
+        let (files, bytes) = hosted.with_store(|store| Ok(store.db().held_once(&ids)?)).map_err(failed)?;
+        people.push(Person {
+            id: format!("owner:{}", root.to_hex()),
+            name: name.clone(),
+            picture: picture_of(&root),
+            relation: "owner",
+            state: folder_state(&owner),
+            sealed: false,
+            files: Some(files),
+            size: big(bytes),
+            phones: 1,
+            devices: vec![name],
+        });
+    }
 
     // A guest's devices, gathered under their person.
     let devices = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)).map_err(failed)?;
@@ -2159,11 +2159,11 @@ pub fn person_folder(hosted: Host<'_>, person: String, dir: String) -> Answer<Pe
     let key = qurb_peer::openings::key(&id).ok_or("the folder has just locked itself")?;
     let dir = dir.trim_matches('/');
 
-    if person == OWNER {
+    if is_owner(&person) {
         // One folder per phone, each phone's files as the phone sees them
         // too (`qurb_storage::person`).
         let phones = owner_phones(&hosted)?;
-        let named = owner_folders(&phones);
+        let named = owner_folders_of(&hosted, &person)?;
         let (folders, shown) = hosted
             .with_store(|store| Ok(qurb_storage::person::listing(store.db(), &named, dir)?))
             .map_err(failed)?;
@@ -2235,9 +2235,9 @@ pub fn find_people(hosted: Host<'_>, text: String) -> Answer<Vec<FoundKept>> {
     for person in everyone(&hosted)? {
         let id = person_of(&hosted, &person.id)?;
         let Some(key) = qurb_peer::openings::key(&id) else { continue };
-        if person.id == OWNER {
+        if is_owner(&person.id) {
             let phones = owner_phones(&hosted)?;
-            let named = owner_folders(&phones);
+            let named = owner_folders_of(&hosted, &person.id)?;
             let shown = hosted
                 .with_store(|store| Ok(qurb_storage::person::search(store.db(), &named, &needle, FOUND_MOST)?))
                 .map_err(failed)?;
@@ -2299,28 +2299,16 @@ pub fn open_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
     if !at.is_dir() {
         std::fs::create_dir_all(&at).map_err(|e| format!("could not make {}: {e}", at.display()))?;
     }
-    let contents = if person == OWNER {
-        let phones = owner_phones(&hosted)?;
-        // This computer's own private files, ordinary files on its disk (F-4).
-        let own = hosted
-            .with_store(|store| Ok(store.db().folder_entries_under("")?))
-            .map_err(failed)?
-            .into_iter()
-            .filter(|e| e.private && root.join(&e.path).is_file())
-            .map(|e| (e.path.clone(), root.join(&e.path), e.size, e.mtime_ns / 1_000_000_000))
-            .collect();
-        crate::mount::Contents::Owner(owner_folders(&phones), own)
+    let contents = if is_owner(&person) {
+        // One phone's folder, its files at the top.
+        let folder = owner_folders_of(&hosted, &person)?.into_iter().next().ok_or("no such phone")?;
+        crate::mount::Contents::Phone(folder)
     } else {
         crate::mount::Contents::Guest
     };
     let (store_dir, key) = hosted.with_store(|store| Ok((store.root().to_path_buf(), store.chunk_key()))).map_err(failed)?;
     crate::mount::mount(&store_dir, key, id, at.clone(), contents, opened_dir(&id)).map_err(failed)?;
-    // Opened at the phone's own folder, the one the tile is named after,
-    // rather than a level above it (the owner, 2026-11-10: "when clicked on
-    // sakib ... it must open the sakib folder directly"). This computer's
-    // and an earlier phone's are a level up.
-    let phone = at.join(qurb_cli::layout::folder_name(&name));
-    reveal(if person == OWNER && phone.is_dir() { &phone } else { &at })
+    reveal(&at)
 }
 
 /// Lock a person's folder: forgotten until asked again, and what was opened
@@ -2341,7 +2329,7 @@ pub fn lock_person_folder(hosted: Host<'_>, person: String) -> Answer<()> {
 pub fn open_person_file(hosted: Host<'_>, person: String, device: Option<String>, path: String) -> Answer<()> {
     let id = person_of(&hosted, &person)?;
     let key = qurb_peer::openings::key(&id).ok_or("the folder is locked")?;
-    if person != OWNER {
+    if !is_owner(&person) {
         return open_sealed(&hosted, &id, key, &path);
     }
     let phone = device.ok_or("which phone's file?")?;

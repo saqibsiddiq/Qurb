@@ -21,17 +21,16 @@ use std::path::{Path, PathBuf};
 
 /// What a mounted folder shows.
 pub enum Contents {
-    /// The owner's: each phone's folder, as `qurb_storage::person` lists it,
-    /// and *This computer*: this computer's own private files (F-4), which
-    /// are ordinary files on its disk, each `(path shown, where it is, size,
-    /// modified)`.
-    Owner(Vec<qurb_storage::person::DeviceFolder>, Vec<(String, PathBuf, u64, i64)>),
+    /// One of the owner's phones: its folder, as `qurb_storage::person`
+    /// lists it, shown at the top -- ~/qurb holds a folder for each phone
+    /// (the owner, 2026-11-10). This computer's own vault is not shown.
+    Phone(qurb_storage::person::DeviceFolder),
     /// A guest's, sealed under their key.
     Guest,
 }
 
 #[cfg(target_os = "linux")]
-pub use linux::{any, mount, unmount};
+pub use linux::{any, clear_stale, mount, unmount};
 
 #[cfg(not(target_os = "linux"))]
 pub fn mount(_: &Path, _: qurb_storage::ChunkKey, _: qurb_sync::DeviceId, _: PathBuf, _: Contents, _: PathBuf) -> anyhow::Result<()> {
@@ -46,6 +45,9 @@ pub fn any() -> bool {
     false
 }
 
+#[cfg(not(target_os = "linux"))]
+pub fn clear_stale(_: &Path) {}
+
 #[cfg(target_os = "linux")]
 mod linux {
     use super::{Contents, Path, PathBuf};
@@ -59,9 +61,6 @@ mod linux {
     use std::ffi::OsStr;
     use std::sync::{Mutex, OnceLock};
     use std::time::{Duration, UNIX_EPOCH};
-
-    /// This computer's own private files' folder, in its owner's (F-4).
-    const THIS_COMPUTER: &str = "This computer";
 
     /// How long the kernel may keep what it was told about a file or folder.
     const TTL: Duration = Duration::from_secs(2);
@@ -134,6 +133,26 @@ mod linux {
     /// Whether any person's folder is mounted now.
     pub fn any() -> bool {
         mounts().lock().map(|m| !m.is_empty()).unwrap_or(true)
+    }
+
+    /// Mounts left in `dir` by a QurbSpace that stopped without unmounting:
+    /// killed, crashed or replaced by an update. The kernel keeps the mount
+    /// and every look at the folder fails, "Transport endpoint is not
+    /// connected" (found 2026-11-10). Lazily unmounted, so the folder is a
+    /// placeholder again. Not ours to touch while this process mounts it.
+    pub fn clear_stale(dir: &Path) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let gone = matches!(std::fs::metadata(&path), Err(e) if e.raw_os_error() == Some(libc::ENOTCONN));
+            if !gone {
+                continue;
+            }
+            match std::process::Command::new("fusermount3").arg("-uz").arg(&path).status() {
+                Ok(s) if s.success() => tracing::info!(at = %path.display(), "a folder left mounted cleared"),
+                other => tracing::warn!(at = %path.display(), result = ?other, "could not clear a folder left mounted"),
+            }
+        }
     }
 
     /// Unmount `person`'s folder, if it is mounted.
@@ -220,32 +239,12 @@ mod linux {
             let join = |name: &str| if dir.is_empty() { name.to_string() } else { format!("{dir}/{name}") };
             let mut found: Vec<Node> = Vec::new();
             match &self.contents {
-                Contents::Owner(named, local) => {
-                    let (folders, files) = qurb_storage::person::listing(store.db(), named, dir).map_err(|_| Errno::EIO)?;
-                    // This computer's own, beside the phones' at the top.
-                    let mut sub = std::collections::BTreeSet::new();
-                    for (shown, at, size, modified) in local {
-                        let shown = format!("{THIS_COMPUTER}/{shown}");
-                        let rest = match dir {
-                            "" => shown.as_str(),
-                            _ => match shown.strip_prefix(dir).and_then(|r| r.strip_prefix('/')) {
-                                Some(rest) => rest,
-                                None => continue,
-                            },
-                        };
-                        match rest.split_once('/') {
-                            Some((folder, _)) => {
-                                sub.insert(folder.to_string());
-                            }
-                            None => found.push(Node {
-                                path: join(rest), dir: false, size: *size, modified: *modified,
-                                content: None, sealed: None, disk: Some(at.clone()),
-                            }),
-                        }
-                    }
-                    found.extend(sub.into_iter().filter(|f| !folders.contains(f)).map(|f| Node {
-                        path: join(&f), dir: true, size: 0, modified: 0, content: None, sealed: None, disk: None,
-                    }));
+                Contents::Phone(folder) => {
+                    // The phone's folder is the top: what it holds at `dir`
+                    // is what `listing` holds under its name.
+                    let inner = if dir.is_empty() { folder.0.clone() } else { format!("{}/{dir}", folder.0) };
+                    let (folders, files) = qurb_storage::person::listing(store.db(), std::slice::from_ref(folder), &inner)
+                        .map_err(|_| Errno::EIO)?;
                     found.extend(folders.into_iter().map(|f| Node {
                         path: join(&f), dir: true, size: 0, modified: 0, content: None, sealed: None, disk: None,
                     }));

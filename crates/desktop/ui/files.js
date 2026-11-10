@@ -158,7 +158,7 @@ async function drawFound(body, text) {
 
 /** A file of a person's folder, as quick preview and the gallery see it. */
 function personItem(person, f) {
-  const own = person === "owner";
+  const own = String(person).startsWith("owner");
   return {
     name: base(f.name),
     here: true,
