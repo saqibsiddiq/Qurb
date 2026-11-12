@@ -33,6 +33,8 @@ keep everything in Shared: yes to both.
   alone (`layout::mounted`).
 - **One locked folder per person.** This computer's own private files appear
   in its owner's folder as *This computer*, read from where they are on disk.
+  **Superseded 2026-11-10 by [0085](0085-a-folder-for-each-phone.md):** a
+  folder for each phone instead, and *This computer* not shown.
 - **A computer keeps everything** (F-3): the daemon no longer drops local
   copies to stay under a size, so the folder the file manager shows is always
   whole. The limit stays a phone's. The phone's Manage storage measures a
@@ -45,6 +47,8 @@ keep everything in Shared: yes to both.
 - **Your folder is one placeholder under your name** (amended the same
   night): opening it mounted `~/qurb/<your name>` while the placeholders were
   one per phone, and failed "No such file or directory".
+  **Superseded 2026-11-10 by [0085](0085-a-folder-for-each-phone.md):** one
+  folder a phone, named as the phone is, and mounted there.
 
 ## Consequences
 

@@ -2049,15 +2049,13 @@ fn lay_out(hosted: &Hosted, people: &[Person]) {
     let mut notes: Vec<(String, String)> = Vec::new();
     for p in people {
         match p.relation {
-            // One folder under the owner's name, where it is mounted when
-            // opened, each phone's folder and This computer's inside (decision
-            // 0083). It was one placeholder a phone, and opening mounted a
-            // folder that did not exist -- "No such file or directory", the
-            // owner's test of 2026-11-03.
+            // One folder for each of the owner's phones, named as the phone
+            // is, where that phone's folder is mounted when opened (decision
+            // 0085). This computer's own vault is not shown.
             "owner" => notes.push((
                 p.name.clone(),
                 format!(
-                    "{name}\n\nYour phones' backups, WhatsApp and Private Vault, kept here encrypted. \
+                    "{name}\n\nThis phone's backups, WhatsApp and Private Vault, kept here encrypted. \
                      They open with a yes on your phone.\n\nOpen QurbSpace, choose Files, then {name}.\n",
                     name = p.name
                 ),

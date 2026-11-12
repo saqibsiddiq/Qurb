@@ -525,13 +525,20 @@ the computer uses.
 whose phones' vaults it keeps, and each guest. `~/qurb` holds them:
 `~/qurb/Shared` is the synced folder — a folder of the old shape at `~/qurb`
 is moved there once, index and all, before anything watches it
-(`qurb_cli::layout`) — and `~/qurb/<person>` is a read-only placeholder for
-each, holding one note, since their files open only inside Qurb. In the
+(`qurb_cli::layout`) — and beside it a read-only placeholder for each of the
+owner's phones, named as the phone is, and for each guest, holding one note
+([decisions/0085](decisions/0085-a-folder-for-each-phone.md)). This
+computer's own vault is not shown there. In the
 window's Files each is locked until a yes on one of that person's phones,
 asked and answered as a guest's folder is; open, `qurb_storage::person` maps
 what is kept for each phone to where a person looks for it (*WhatsApp*, each
 backed-up folder, *Private Vault*), and a phone set up again keeps its own
-folder, *…, earlier* (`Db::earlier_selves`). A phone of the owner's reaches
+folder, *…, earlier* (`Db::earlier_selves`). One yes on any of the owner's
+phones still opens every one of the owner's phone folders: the ask names no
+phone, a gap 0085 states. An open folder is read once into a tree
+(`person::tree`) and answered from for thirty seconds, and a folder left
+mounted by a QurbSpace that stopped is unmounted when the folders are laid
+out (`mount::clear_stale`). A phone of the owner's reaches
 its own folder there with `Request::Kept`, answered to that phone only,
 fetching through the ordinary manifest and chunks — content kept for its
 earlier self included, and for no other device. The owner's folder is not
@@ -870,9 +877,9 @@ qurb/
 │   │   ├── src/platform.rs  what differs between systems, said once: Windows'
 │   │   │                    places under Linux's names, opening a folder
 │   │   ├── src/profiles.rs  which folders exist, so commands need no path
-│   │   ├── src/layout.rs    `~/qurb` by person: `Shared`, the synced folder,
-│   │   │                    moved there once, and a read-only placeholder
-│   │   │                    for each person (0067)
+│   │   ├── src/layout.rs    `~/qurb`: `Shared`, the synced folder, moved
+│   │   │                    there once, and a read-only placeholder for
+│   │   │                    each phone and guest (0067, 0085)
 │   │   ├── src/qr.rs        a pairing code a camera can read
 │   │   ├── src/send.rs      what sending some files and folders actually sends
 │   │   ├── src/status.rs    what the daemon is doing now, on a watch channel
@@ -887,9 +894,9 @@ qurb/
 │   │   ├── src/session.rs   unmade or running, and the phrase in between
 │   │   ├── src/stream.rs    large media from a person's folder, played from
 │   │   │                    the store over 127.0.0.1, never written out
-│   │   ├── src/mount.rs     a person's folder mounted at ~/qurb/<person> while
-│   │   │                    open (FUSE, read-only, Linux), for the file
-│   │   │                    manager (0083)
+│   │   ├── src/mount.rs     a phone's or guest's folder mounted at
+│   │   │                    ~/qurb/<name> while open (FUSE, read-only,
+│   │   │                    Linux), for the file manager (0083, 0085)
 │   │   ├── src/notify.rs    the three things worth interrupting somebody about
 │   │   ├── src/commands.rs  every question the window may ask
 │   │   ├── src/autostart.rs starting at login, hidden: the freedesktop
