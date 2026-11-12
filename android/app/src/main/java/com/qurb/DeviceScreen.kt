@@ -175,6 +175,17 @@ class DeviceScreen(app: MainActivity, private var peer: PeerInfo) : Screen(app) 
                     app.madeChange()
                 }
             })
+            // The folders and WhatsApp read now, not only at night while
+            // charging: a photo taken today otherwise waited for the next
+            // charge, and *Back up now* was on a screen nothing opened any
+            // more (the owner's test of 2026-11-10).
+            if (state.keeps) {
+                kit.setting(card, R.drawable.ic_refresh_cw, "Back up now",
+                    WhatsApp.lastRun(app)?.let { (at, _) -> "Last ${Words.ago(at)}" } ?: "") {
+                    WhatsApp.runNow(app)
+                    app.say("Backing up on Wi-Fi")
+                }
+            }
         } else {
             // Another person's computer: the vault sealed there, as before.
             kit.setting(card, R.drawable.ic_lock_keyhole, "Private Vault", on = state.keeps, onChange = { on ->

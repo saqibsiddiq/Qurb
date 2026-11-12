@@ -630,7 +630,7 @@ impl Engine {
                 // does. On 2026-10-12 a phone that went away part-way through
                 // its WhatsApp backup left 5,027 of them in a laptop's history
                 // (decision 0062).
-                let detail = e.to_string();
+                let detail = said(&e);
                 let held = matches!(action, Action::Hold { .. });
                 if !held && !self.store().db().failed_last_with(action.path(), &detail).unwrap_or(false) {
                     crate::note(
@@ -1195,3 +1195,31 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// A failure as a person reads it in Activity. Most say what they are; one
+/// said a hash: a file the other device no longer had -- changed or deleted
+/// there before it came, as a send whose file went before it was collected
+/// does -- read "fetching content failed: peer does not have content e5d6..."
+/// on the owner's S23 (2026-11-10). The log keeps the error as it was.
+fn said(e: &crate::Error) -> String {
+    let gone = match e {
+        crate::Error::ContentUnavailable { .. } => true,
+        crate::Error::Source { detail } => detail.contains("does not have content"),
+        _ => false,
+    };
+    if gone {
+        "No longer on the other device".to_string()
+    } else {
+        e.to_string()
+    }
+}
+
+#[cfg(test)]
+mod words {
+    #[test]
+    fn a_file_gone_from_the_other_device_is_said_plainly() {
+        let gone = crate::Error::Source { detail: "peer does not have content e5d6dd9d".into() };
+        assert_eq!(super::said(&gone), "No longer on the other device");
+        let other = crate::Error::Source { detail: "connection lost".into() };
+        assert_eq!(super::said(&other), "fetching content failed: connection lost");
+    }
+}
