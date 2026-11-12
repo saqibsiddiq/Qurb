@@ -111,22 +111,42 @@ computer, are pass 4's.
 
 ### Pass 4: the Galaxy S23 and the laptop
 
-Under way, with the owner. The laptop on the day's build (`target/release`,
-replacing the installed AppImage of 2026-11-01 with the owner's yes); the S23
-on 0.2.0-beta.8, installed over wireless debugging with its data kept.
-Background sync on the S23 is set to *Off*, so it syncs when asked or when
-it notices a change, and only while QurbSpace is on screen.
+With the owner, 2026-11-09 to 2026-11-10. The laptop on the day's build
+(`target/release`, replacing the installed AppImage with the owner's yes);
+the S23 on 0.2.0-beta.8 builds, installed over wireless debugging with its
+data kept. Background sync on the S23 is set to *Off*. The phone's side was
+driven over adb where the owner asked, and stopped whenever he was using
+the phone.
 
-1. **Home on both** -- each sees the other. Passed, and found *Found and
-   fixed*, 4: four WhatsApp backups waiting at 99%.
-2. **The laptop sends to the phone** -- `qurb send` from the laptop's folder;
-   collected by the phone while QurbSpace was open (the laptop's activity
-   says *sent*). Passed.
-3. to 9. **Not run yet** (paused at 23:00 for the owner): the phone sending
-   to the laptop; a phone folder backed up after choosing it on the laptop;
-   the owner's folder asked for and opened on the laptop; the space limit
-   seen on the phone; the phone's Recently deleted; the scanner; the phone's
-   Activity.
+1. **Home on both** -- each sees the other. Passed; found *Found and fixed*,
+   4.
+2. **The laptop sends to the phone** -- `qurb send` from the laptop. The
+   first try was misread: the laptop's *sent* means queued (*collected* is
+   the event for a send taken), and it was never collected -- the open app
+   did not sync (*Found and fixed*, 6), and the file, in a temporary folder,
+   went with the reboot; the phone's Activity then showed the raw error of
+   *Found and fixed*, 9. Done again on 2026-11-10: collected twenty seconds
+   after it was sent, nothing tapped; in Received; its text as sent. Passed.
+3. **The phone sends to the laptop** -- a photo, in the laptop's
+   Downloads/qurb at 18:08. Passed.
+4. **A phone folder backed up** -- a screenshot taken: not read until the
+   night's run, by design (decision 0063), and with no way to start one by
+   hand (*Found and fixed*, 8).
+5. **The owner's folder opened on the laptop** -- asked, approved on the
+   phone, opened. Found *Found and fixed*, 5 to 7 and 10 to 11.
+6. **The space limit on the phone** -- *28.1 GB used, 10.9 GB free of 39.0
+   GB*, the laptop's own figures. Passed.
+7. **Recently deleted on the phone** -- a received file deleted, shown in
+   Recently deleted, restored alone, back in Received. Passed.
+8. **The scanner on the S23** -- *Point at the code*, the torch offered: the
+   reader is there. Passed.
+9. **The phone's Activity** -- the day's sends, the arrival, the deletion,
+   the earlier failure. Passed.
+
+Not seen yet: opening the phone's folder after it was made fast (*Found and
+fixed*, 11), which needs the owner's yes on the phone; and the fix of *Found
+and fixed*, 4, live, which needs WhatsApp to rewrite its backups after a
+night's run.
 
 ### Found and fixed
 
@@ -160,18 +180,43 @@ it notices a change, and only while QurbSpace is on screen.
    night's run from adb; the fix itself is shown by a test, not yet seen on
    the phone.
 
+5. **The owner's folder was named after the laptop's login** (`ebc1076`),
+   "Saqib" with a letter, while the phone calls itself "sakib" and has a
+   picture. Then, at the owner's word (`999486a`), `~/qurb` holds Shared and
+   a folder for each phone, named as the phone is, its picture on its tile,
+   its backups at its top; *This computer* (the laptop's own vault) no longer
+   shown, its files left in the vault.
+6. **The phone heard the laptop's ask only when the circle was tapped**
+   (`ebc1076`): with background sync off nothing ran a pass while the app
+   was open. Now a pass runs as it opens and every half minute while on
+   screen; the send of pass 4, 2, was collected that way.
+7. **A person's folder opened a level above the phone's** (`26aeef3`), then
+   made unnecessary by 5.
+8. **No way to start a backup by hand** (`7b4e553`): *Back up now* is on the
+   phone's device page again, with when the last run was.
+9. **A file gone from the other device read as a hash** (`7b4e553`): now
+   *No longer on the other device*.
+10. **A folder left mounted by a QurbSpace that stopped** failed every look,
+    "Transport endpoint is not connected" (`999486a`); cleared when the
+    folders are laid out.
+11. **Opening the phone's folder was very slow** (`1e1af78`): each look the
+    file manager made read everything kept for the phone again. Read once
+    into a tree, kept for thirty seconds.
+
 ### Found, and left
+
+- **The installed app cannot open the folder.** The AppImage updated itself
+  to 0.2.0-beta.5, the latest published, which knows the index only to
+  version 28; the builds since 2026-11-03 moved it to 32. At login it fails
+  ("could not start: opening ~/qurb/Shared"). A release from the current code
+  ends it; publishing one is the owner's.
+- **One yes opens all the owner's phones' folders.** Each phone opening only
+  its own needs the ask to name the phone, on both sides.
 
 - **Scanning needs Google Play services.** A phone without them (de-Googled,
   some Huawei) can pair only by the six digits, on the same Wi-Fi. Bundling
   the reader would fix it at the cost of the APK's size (decision 0039 left
   the scanner's weight unmeasured): the owner's call.
-- **There is no way to start a backup by hand.** *Back up now* is on the
-  phone's Backups screen, which nothing opens any more; WhatsApp's folder is
-  listed only at night, while charging, on Wi-Fi.
-- **With background sync off, opening the app does not sync.** The phone
-  syncs when the circle is tapped, when pulled down, or after a change of
-  its own; a send waiting on the laptop is collected only then.
 - **A camera refused once cannot be allowed from the scanner.** It says
   *Camera not allowed* and offers the six digits; allowing it means the
   system's settings.
