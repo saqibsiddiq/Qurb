@@ -473,27 +473,38 @@ async fn a_guests_folder_opens_at_the_computer_only_with_its_key() {
     assert!(qurb_peer::openings::key(&person).is_none(), "the key outlived the lock");
 }
 
-/// The owner's folder (decision 0067): asked for at the computer, and
-/// opened by a yes from one of the owner's own phones, which sends no key --
-/// the computer holds the same one. A guest's yes does not open it, and the
-/// owner's phone is not asked about a guest's folder.
+/// A phone's folder of the owner's (decisions 0067, 0085): asked for at the
+/// computer, and opened by a yes from that phone, which sends no key -- the
+/// computer holds the same one. Neither a guest's yes nor another of the
+/// owner's phones' opens it, and the owner's phone is not asked about a
+/// guest's folder.
 #[tokio::test(flavor = "multi_thread")]
-async fn the_owners_folder_opens_with_a_yes_from_the_owners_phone() {
+async fn a_phones_folder_opens_with_a_yes_from_that_phone_only() {
     let host = Device::new(42);
     let phone = Device::new(42);
+    let other = Device::new(42);
     let guest = Device::new(7);
     host.engine.store().db().trust_peer(&phone.id(), phone.identity.fingerprint().as_bytes(), "S23").unwrap();
+    host.engine.store().db().trust_peer(&other.id(), other.identity.fingerprint().as_bytes(), "Tab").unwrap();
     welcome(&host, &guest).await;
 
-    let owner = host.id();
+    let owner = phone.id();
     assert!(!qurb_peer::openings::is_open(&owner));
     qurb_peer::openings::ask(&owner);
-    let addr = host.serve(&[phone.identity.fingerprint(), guest.identity.fingerprint()]);
+    let addr = host.serve(&[phone.identity.fingerprint(), other.identity.fingerprint(), guest.identity.fingerprint()]);
 
     // The guest is not asked about the owner's folder, and cannot open it.
     let theirs = PeerClient::connect(addr, &guest.identity, host.identity.fingerprint()).await.unwrap();
     assert_eq!(theirs.asks().await.unwrap(), None, "a guest was asked about the owner's folder");
     theirs.close();
+
+    // Nor is the owner's other phone, whose yes opens nothing of this one's.
+    let tab = PeerClient::connect(addr, &other.identity, host.identity.fingerprint()).await.unwrap();
+    assert_eq!(tab.asks().await.unwrap(), None, "another phone was asked about this phone's folder");
+    let nonce = qurb_peer::openings::asking(&owner).unwrap();
+    assert!(!tab.unlock(nonce, [0; 32]).await.unwrap(), "another phone's yes opened it");
+    tab.close();
+    assert!(!qurb_peer::openings::is_open(&owner));
 
     let mine = PeerClient::connect(addr, &phone.identity, host.identity.fingerprint()).await.unwrap();
     let nonce = mine.asks().await.unwrap().expect("the ask did not reach the owner's phone");

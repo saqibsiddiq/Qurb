@@ -152,6 +152,8 @@ warm page cache, everything kept locally: 74,745 entries in 2.90 s the first
 walk and 2.00 s the second; the folder's top level (*Android*, *DCIM*,
 *Download*, *Movies*, *Music*, *Pictures*, *Private Vault*, *WhatsApp*,
 *log*) in 0.1 ms. No figure was taken before the fix to compare against.
+The approval appeared on the phone without the circle being tapped (the
+owner's word): *Found and fixed*, 6, seen.
 
 Not seen yet: the fix of *Found and fixed*, 4, live, which needs WhatsApp to
 rewrite its backups after a night's run.
@@ -210,6 +212,9 @@ rewrite its backups after a night's run.
 11. **Opening the phone's folder was very slow** (`1e1af78`): each look the
     file manager made read everything kept for the phone again. Read once
     into a tree, kept for thirty seconds.
+12. **One yes opened all the owner's phones' folders** (decision 0085): now
+    each phone's folder opens only with that phone's yes. Shown by a test
+    with two phones; the owner has one.
 
 ### Found, and left
 
@@ -218,8 +223,6 @@ rewrite its backups after a night's run.
   version 28; the builds since 2026-11-03 moved it to 32. At login it fails
   ("could not start: opening ~/qurb/Shared"). A release from the current code
   ends it; publishing one is the owner's.
-- **One yes opens all the owner's phones' folders.** Each phone opening only
-  its own needs the ask to name the phone, on both sides.
 
 - **Scanning needs Google Play services.** A phone without them (de-Googled,
   some Huawei) can pair only by the six digits, on the same Wi-Fi. Bundling

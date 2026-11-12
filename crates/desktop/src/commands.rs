@@ -1587,10 +1587,9 @@ pub fn peek(hosted: Host<'_>, path: String) -> Answer<Peek> {
 /// folder is open: served from the store, with no copy anywhere.
 #[tauri::command(async)]
 pub fn peek_kept(hosted: Host<'_>, device: String, path: String) -> Answer<Peek> {
-    let id = person_of(&hosted, OWNER)?;
     let (kind, mime) = peek_type(&path).ok_or("quick preview shows pictures, text, video, songs and PDFs")?;
-    qurb_peer::openings::key(&id).ok_or("the folder is locked")?;
     let phone = own_phone(&hosted, &device)?;
+    let id = phone_folder_open(&hosted, &phone.id)?;
     if !qurb_sync::is_safe_path(&path) {
         return Err("that is not a file of the folder".to_string());
     }
@@ -1645,16 +1644,6 @@ fn own_phone(hosted: &Host<'_>, phone: &str) -> Result<qurb_cli::Device, String>
         return Err(format!("{} is another person's device", device.name));
     }
     Ok(device)
-}
-
-/// A phone's backups are the owner's folder's, opened only with a phone's
-/// yes (decision 0067).
-fn owner_folder_open(hosted: &Hosted) -> Result<(), String> {
-    let owner = person_of(hosted, OWNER)?;
-    match qurb_peer::openings::key(&owner) {
-        Some(_) => Ok(()),
-        None => Err("your folder is locked: open it in Files, and approve on your phone".to_string()),
-    }
 }
 
 /// Where a phone's chosen folder is kept in its vault.
@@ -1737,8 +1726,8 @@ const THUMBNAIL_FROM: usize = 128 << 10;
 #[tauri::command(async)]
 pub fn backed_up_preview(hosted: Host<'_>, phone: String, path: String, small: bool) -> Answer<Preview> {
     let none = Preview { kind: "none", data: String::new() };
-    owner_folder_open(&hosted)?;
     let device = own_phone(&hosted, &phone)?;
+    phone_folder_open(&hosted, &device.id)?;
     if !qurb_sync::is_safe_path(&path) {
         return Err("that is not a file of the folder".to_string());
     }
@@ -1940,13 +1929,48 @@ fn owner_folders_of(hosted: &Hosted, person: &str) -> Result<Vec<qurb_storage::p
     })
 }
 
-/// What a person's folder is filed under: the owner's under this computer's
-/// own device, a guest's under their person (decision 0060).
+/// What a person's folder is filed under: one of the owner's phones' under
+/// that phone, whose yes alone opens it (decision 0085); a guest's under their
+/// person (decision 0060).
 fn person_of(hosted: &Hosted, id: &str) -> Result<qurb_sync::DeviceId, String> {
     if is_owner(id) {
-        return hosted.with_store(|store| Ok(store.device_id()?)).map_err(failed);
+        let folder = owner_folders_of(hosted, id)?;
+        return match (id == OWNER, folder.first()) {
+            (false, Some(folder)) => approver(hosted, folder),
+            _ => Err("which phone's folder?".to_string()),
+        };
     }
     qurb_sync::DeviceId::from_hex(id).ok_or_else(|| "no such person".to_string())
+}
+
+/// The phone whose yes opens a folder of the owner's: the one in use now, the
+/// folder's newest identity or whatever has replaced it since -- a phone set
+/// up again that has had nothing kept here yet is not in the folder, but it
+/// is the phone (decision 0085).
+fn approver(hosted: &Hosted, folder: &qurb_storage::person::DeviceFolder) -> Result<qurb_sync::DeviceId, String> {
+    let mut at = *folder.1.first().ok_or("no such phone")?;
+    let devices = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)).map_err(failed)?;
+    for _ in 0..devices.len() {
+        match devices.iter().find(|d| d.id == at).and_then(|d| d.replaced_by) {
+            Some(later) => at = later,
+            None => break,
+        }
+    }
+    Ok(at)
+}
+
+/// The phone whose yes opens `phone`'s folder, if it is open now -- its
+/// backups are seen only then (decisions 0067, 0085).
+fn phone_folder_open(hosted: &Hosted, phone: &qurb_sync::DeviceId) -> Result<qurb_sync::DeviceId, String> {
+    let folder = owner_folders(&owner_phones(hosted)?)
+        .into_iter()
+        .find(|(_, ids)| ids.contains(phone))
+        .ok_or("that phone keeps nothing here")?;
+    let id = approver(hosted, &folder)?;
+    match qurb_peer::openings::key(&id) {
+        Some(_) => Ok(id),
+        None => Err(format!("{}'s folder is locked: open it in Files, and approve on that phone", folder.0)),
+    }
 }
 
 /// The owner's phones whose files are kept here, each under the name its
@@ -2076,7 +2100,6 @@ fn lay_out(hosted: &Hosted, people: &[Person]) {
 }
 
 fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
-    let owner = person_of(hosted, OWNER)?;
     let phones = owner_phones(hosted)?;
     let picture_of = |id: &qurb_sync::DeviceId| {
         hosted
@@ -2094,6 +2117,7 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
     let mut people = Vec::new();
     for (name, ids) in owner_folders(&phones) {
         let Some(root) = ids.first().copied() else { continue };
+        let approver = approver(hosted, &(name.clone(), ids.clone()))?;
         // Each content once: the same file kept twice for a phone is stored once.
         let (files, bytes) = hosted.with_store(|store| Ok(store.db().held_once(&ids)?)).map_err(failed)?;
         people.push(Person {
@@ -2101,7 +2125,7 @@ fn everyone(hosted: &Hosted) -> Answer<Vec<Person>> {
             name: name.clone(),
             picture: picture_of(&root),
             relation: "owner",
-            state: folder_state(&owner),
+            state: folder_state(&approver),
             sealed: false,
             files: Some(files),
             size: big(bytes),
@@ -2240,7 +2264,7 @@ pub fn find_people(hosted: Host<'_>, text: String) -> Answer<Vec<FoundKept>> {
                 .with_store(|store| Ok(qurb_storage::person::search(store.db(), &named, &needle, FOUND_MOST)?))
                 .map_err(failed)?;
             found.extend(shown.into_iter().map(|f| FoundKept {
-                person: OWNER.to_string(),
+                person: person.id.clone(),
                 file: PersonFile {
                     name: f.name,
                     path: f.path,
@@ -2332,6 +2356,9 @@ pub fn open_person_file(hosted: Host<'_>, person: String, device: Option<String>
     }
     let phone = device.ok_or("which phone's file?")?;
     let phone = own_phone(&hosted, &phone)?;
+    if !owner_folders_of(&hosted, &person)?.iter().any(|(_, ids)| ids.contains(&phone.id)) {
+        return Err("that file is not in the folder".to_string());
+    }
     if !qurb_sync::is_safe_path(&path) {
         return Err("that is not a file of the folder".to_string());
     }
@@ -2444,12 +2471,17 @@ pub struct PhoneDeleted {
 /// phone, whose Recently deleted keeps them. `None` while locked.
 #[tauri::command(async)]
 pub fn phone_deleted(hosted: Host<'_>) -> Answer<Option<Vec<PhoneDeleted>>> {
-    let owner = person_of(&hosted, OWNER)?;
-    if !qurb_peer::openings::is_open(&owner) {
+    // Only the phones whose folders are open (decision 0085).
+    let phones = owner_phones(&hosted)?;
+    let mut ids: Vec<qurb_sync::DeviceId> = Vec::new();
+    for folder in owner_folders(&phones) {
+        if qurb_peer::openings::is_open(&approver(&hosted, &folder)?) {
+            ids.extend(folder.1);
+        }
+    }
+    if ids.is_empty() {
         return Ok(None);
     }
-    let phones = owner_phones(&hosted)?;
-    let ids: Vec<qurb_sync::DeviceId> = phones.iter().map(|(_, d)| d.id).collect();
     let since = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)

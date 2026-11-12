@@ -4,8 +4,9 @@
 owner's word during the S23 pass ([testing.md](../testing.md), pass 4).
 Tried on the owner's laptop and S23: the folder opens straight at the phone's
 contents. Amends [0083](0083-files-open-in-the-file-manager.md) and
-[0067](0067-a-folder-for-each-person.md). **Per-phone approval is not built:**
-see *Left undone*.
+[0067](0067-a-folder-for-each-person.md). Per-phone approval built
+2026-11-12: shown by a test; on the S23, the only phone, only its own yes can
+be seen.
 
 ## What was asked
 
@@ -40,10 +41,31 @@ only, yes.
   measured: the owner's report is the evidence of the slowness, and the
   owner's look after the change has not happened yet.
 
+- **Each phone opens only its own folder** (2026-11-12). An ask for a
+  phone's folder is filed under that phone -- the one in use now, following a
+  folder's newest identity to whatever replaced it -- and the computer
+  answers *Asks* and *Unlock* from one of the owner's phones about that
+  phone's own folder only, knowing the phone by its certificate. No change to
+  the wire: the phone never named a folder, and still does not need to.
+  Another phone of the owner's is not asked, and its yes opens nothing
+  (`a_phones_folder_opens_with_a_yes_from_that_phone_only` in
+  `crates/peer/tests/guests.rs`). A phone's previews, files, search results
+  and Recently deleted show on the computer only while that phone's folder is
+  open. The phone asks "Open this phone's folder on …?".
+
+  It was one yes for all, filed under the computer: until then any of the
+  owner's phones approving opened every one of them.
+
 ## Left undone
 
-- **One yes still opens all the owner's phones' folders.** The ask carries no
-  phone, so any of the owner's phones approving opens every one of them. Each
-  phone opening only its own needs the ask to name the phone, on both the
-  desktop and the phone: a protocol change, not yet made.
-- The folder speed after the change has not been seen by the owner.
+- A guest's folder is still one for all their phones, sealed with their
+  person's key, and any of their phones opens it; the phone's question says
+  "this phone's folder" there too, which is not quite so for a guest with
+  two phones.
+- A phone folder whose phone is gone for good -- removed, never set up again
+  -- can no longer be opened: no phone is left to say yes. Before, any other
+  of the owner's phones could.
+
+Measured 2026-11-12 on the owner's laptop, with everything kept locally and
+the page cache warm: the S23's folder, 74,745 entries, walked in 2.0 to 2.9 s
+([testing.md](../testing.md), pass 4). No figure was taken before the change.

@@ -140,7 +140,7 @@ object Notices {
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.qurb_glyph)
             .setColor(ContextCompat.getColor(context, R.color.green))
-            .setContentTitle("${ask.name} asks to open your folder")
+            .setContentTitle("${ask.name} asks to open this phone's folder")
             .setContentText("Only if you asked there")
             .setAutoCancel(true)
             .setContentIntent(opening(context, ASKED_ID, null))

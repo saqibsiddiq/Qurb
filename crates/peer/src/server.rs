@@ -729,14 +729,15 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
         // A guest asking whether this computer wants to open its folder here,
         // and answering with the folder's key once its person approved
         // (decision 0060). Only about its own person. One of this computer's
-        // own person's phones too (decision 0067): the owner's folder, filed
-        // under this computer's own device.
+        // own person's phones too (decision 0067), about its own folder only:
+        // a phone's folder is filed under that phone, and no other phone's yes
+        // opens it (decision 0085).
         Request::Asks => match (&owner, other_person) {
             (Some(device), true) => {
                 let person = store.db().person_of(device)?.unwrap_or(*device);
                 Response::Asks { opening: crate::openings::asking(&person) }
             }
-            (Some(_), false) => Response::Asks { opening: crate::openings::asking(&store.device_id()?) },
+            (Some(device), false) => Response::Asks { opening: crate::openings::asking(device) },
             _ => Response::NotFound,
         },
         Request::Unlock { nonce, key } => match (&owner, other_person) {
@@ -754,10 +755,11 @@ fn answer(store: &mut Store, request: &Request, asker: Option<Fingerprint>) -> R
                     false => Response::NotFound,
                 }
             }
-            // The owner's folder is not sealed: this computer holds the same
-            // key, so the phone's yes is all there is to check, and the key
-            // it sends is none (decision 0067).
-            (Some(_), false) => match crate::openings::unlock(&store.device_id()?, nonce, [0; 32], |_| true) {
+            // The owner's phone's folder is not sealed: this computer holds
+            // the same key, so the phone's yes is all there is to check, and
+            // the key it sends is none (decision 0067). Its own folder only
+            // (decision 0085).
+            (Some(device), false) => match crate::openings::unlock(device, nonce, [0; 32], |_| true) {
                 true => Response::Noted,
                 false => Response::NotFound,
             },

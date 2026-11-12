@@ -1018,7 +1018,7 @@ class MainActivity : AppCompatActivity() {
         // when it is locked there (crates/desktop, stream.rs).
         kit.sheet()
             .mark(R.drawable.ic_lock_keyhole, fill = R.color.green_soft, tint = R.color.green)
-            .title("Open your folder on ${ask.name}?", centred = true)
+            .title("Open this phone's folder on ${ask.name}?", centred = true)
             .line("It locks itself after 10 minutes unused")
             .warning("Only if you asked at ${ask.name}", R.drawable.ic_info, compact = true)
             .buttons("Open", secondary = "Not now", onSecondary = {
@@ -1032,7 +1032,7 @@ class MainActivity : AppCompatActivity() {
                     say("Set a screen lock on this phone first, so it can confirm it's you.")
                     return@buttons
                 }
-                ScreenLock.confirm(this, "Open your folder on ${ask.name}", "Confirm it's you") { yes ->
+                ScreenLock.confirm(this, "Open this phone's folder on ${ask.name}", "Confirm it's you") { yes ->
                     askShown = null
                     if (!yes) {
                         engine.declineOpen(ask.fingerprint)

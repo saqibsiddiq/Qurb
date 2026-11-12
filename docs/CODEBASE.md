@@ -533,9 +533,10 @@ window's Files each is locked until a yes on one of that person's phones,
 asked and answered as a guest's folder is; open, `qurb_storage::person` maps
 what is kept for each phone to where a person looks for it (*WhatsApp*, each
 backed-up folder, *Private Vault*), and a phone set up again keeps its own
-folder, *…, earlier* (`Db::earlier_selves`). One yes on any of the owner's
-phones still opens every one of the owner's phone folders: the ask names no
-phone, a gap 0085 states. An open folder is read once into a tree
+folder, *…, earlier* (`Db::earlier_selves`). Each phone's folder is filed in
+`qurb_peer::openings` under that phone, so only its own yes opens it: the
+computer answers a phone's `Asks` and `Unlock` about that phone's folder
+alone (0085). An open folder is read once into a tree
 (`person::tree`) and answered from for thirty seconds, and a folder left
 mounted by a QurbSpace that stopped is unmounted when the folders are laid
 out (`mount::clear_stale`). A phone of the owner's reaches
