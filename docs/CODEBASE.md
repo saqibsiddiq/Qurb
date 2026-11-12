@@ -811,6 +811,9 @@ qurb/
 │   │   ├── src/openings.rs  a person's folder opened at the computer with a
 │   │   │                    yes from their phone: asks and keys, in memory;
 │   │   │                    a guest's (0060) and the owner's (0067)
+│   │   ├── src/pause.rs     paused by the person, or held off mobile data:
+│   │   │                    no pass, and a connection closed at its next
+│   │   │                    request, as if the device were off (0086)
 │   │   ├── src/server.rs    serves a store, read-only
 │   │   ├── src/client.rs    asks for trees, manifests, chunks
 │   │   ├── src/ranged.rs    part of a file on another device, read as a
@@ -871,7 +874,9 @@ qurb/
 │   │   │                    stop if the folder is moved or deleted; sync now
 │   │   │                    when the window asks
 │   │   ├── src/awake.rs     the computer kept from suspending while it
-│   │   │                    collects, on mains power
+│   │   │                    collects, on mains power, unless turned off
+│   │   ├── src/reset.rs     this computer reset: marked by the window, finished
+│   │   │                    at the next start before the index opens (0086)
 │   │   ├── src/lock.rs      one daemon per folder, enforced not assumed
 │   │   ├── src/disk.rs      a filesystem's size and free space, and whether
 │   │   │                    it may be written: Linux and Windows
@@ -888,7 +893,9 @@ qurb/
 │   │   │                    history, outgoing, search — all read-only
 │   │   ├── src/setup.rs     creating a device, joining one, describing a folder
 │   │   │                    — one definition, used by the terminal and the window
-│   │   └── src/config.rs    a flat file meant to be edited by hand
+│   │   └── src/config.rs    a flat file meant to be edited by hand: the
+│   │                        settings the window changes too, pause, staying
+│   │                        awake, quiet notifications, updates (0086)
 │   │
 │   ├── desktop/           The desktop application: the daemon in a window.
 │   │   ├── src/main.rs      opens the window, and the daemon if there is one
@@ -989,7 +996,16 @@ qurb/
 │       │                  SettingsScreen.kt   four short groups: this phone (name,
 │       │                                      identity, key), storage, the app,
 │       │                                      connection
-│       │                  AdvancedScreen.kt   rendezvous, relay, version
+│       │                  AdvancedScreen.kt   meeting point, relay, version, a
+│       │                                      report, resetting the phone
+│       │                  Controls.kt         the person's controls, kept and said
+│       │                                      to the engine before each sync:
+│       │                                      pause, mobile data, backups,
+│       │                                      notification kinds, updates, app
+│       │                                      lock, received files (0086)
+│       │                  ControlSheets.kt    their sheets, a report, the reset
+│       │                  ReceivedOut.kt      a file sent here saved to Downloads
+│       │                                      or a chosen folder too (0086)
 │       │                  Backups.kt          a backup's state for its card, and
 │       │                                      WhatsApp's details and setting up
 │       │                  FoldersScreen.kt    Folders: which of the phone's
@@ -1306,7 +1322,8 @@ for the workspace as it stands.
 | Read-only serving | a peer can ask, never tell — with one exception below |
 | The file list in frames | `TreeStream`: the same list as `Tree`, sent as length-prefixed frames of about 1 MiB, at most 1 GiB in all, so a library too large for one 64 MiB message still syncs; asked first, `Tree` when a peer does not answer it — [0065](decisions/0065-the-scale-qurb-is-built-for.md) |
 | A device set up again is one device | the same person's, same name and kind, paired after the older was last seen: listed as the newer, which offers to remove the older and says what is kept for it — the owner's item 6, 2026-10-14 |
-| Awake while collecting | while a plan brings content in, on mains power, GNOME's and logind's sleep inhibitors are held (`awake.rs`), bound to Qurb's own life — the owner's item 1, 2026-10-14 |
+| Awake while collecting | while a plan brings content in, on mains power, GNOME's and logind's sleep inhibitors are held (`awake.rs`), bound to Qurb's own life — the owner's item 1, 2026-10-14; *Stay awake to collect* in the window's Settings turns it off (0086) |
+| Pausing | `qurb_peer::pause`, process-wide: paused until a time or until resumed, or held off mobile data on the phone. Paused, a device runs no pass and the server closes another device's connection at its next request, so the other side sees it off rather than failing file by file (`tests/pause.rs`). The computer's is in its config file, read at each pass; the phone's in the app's settings, said to the engine before each sync — [0086](decisions/0086-the-persons-controls.md) |
 | Requests answered in parallel | the index is asked under the store's lock, the bytes read after it is let go (`Store::locate`, `ChunkReader`), so requests made at once are read at once — [0064](decisions/0064-many-small-files-quickly.md) |
 | Vault authorisation | tree, manifest and chunk requests all check the asker's scope |
 | Delivery reports | `Got`: the receiver says it holds it, so the sender can stop calling it undelivered |
@@ -1689,7 +1706,7 @@ network. iOS needs Xcode, which needs a Mac. See
 | Locked | a key protected by a passphrase is unlocked in the window; at login the window shows itself to ask |
 | Pairing | show a code — QR and six digits, the whole code folded away — or enter one, six digits or the whole code, joining as the sixth digit is typed; with a countdown; a device asking is approved by the number both screens show ([0053](decisions/0053-approval-same-key-and-safe-copies.md), [0066](decisions/0066-six-digits-to-pair.md)) |
 | Sending | a sheet — what, to which device, then the file travelling there and landing — from Home, a file, a device, or files dropped anywhere on the window |
-| Notifications | three things only: a file sent to you, one collected, one that failed |
+| Notifications | three things only: a file sent to you, one collected, one that failed; each can be turned off alone (0086) |
 | Transfer progress | a panel that appears while something moves or waits: both directions, live, with the time left |
 | Cancelling a send | before it is collected, from the window or `qurb cancel`; never after |
 | Conflicts | attention on Home and Files, reviewed in a sheet: both versions, who made each and when, previewed when here (an image, or a text's start); keep one, the other, or both |
@@ -1701,6 +1718,7 @@ network. iOS needs Xcode, which needs a Mac. See
 | Gallery and quick preview | a folder mostly of pictures, the phone's camera folder included, as a grid of the pictures' own thumbnails; Space shows the picture, text, video, song or PDF under the pointer, large, the arrow keys moving through the folder. Video, songs and PDFs are served to the window from 127.0.0.1 at a token (`peek`, `peek_kept`, `src/stream.rs`, which serves files on disk as well as from the store) |
 | Search | one field over the shared folder, the Vault, and every person's folder open at the time (`find_people`); a locked one is not searched, and said so |
 | Speed limit | one rate up, one down, for the whole process (`qurb_peer::limit`), settings `upload-limit` and `download-limit`, applied at once from the window ([0076](decisions/0076-a-computer-backs-up-its-folders-and-holds-back-its-speed.md)) |
+| The person's controls | since 2026-11-12, both apps: pause sync (an hour, until 8:00, until resumed), each kind of notification alone, updates installing themselves or waiting for a yes, a report saved locally, resetting the device; the computer also *Stay awake to collect*, the phone mobile data (off, no backups, everything), backups nightly or every six hours, an app lock and where received files are saved. Recently deleted in the window's Settings as on the phone, and *Meeting point* on both — [0086](decisions/0086-the-persons-controls.md) |
 | A computer's own folders, backed up | folders outside the synced one kept in this computer's vault under `.qurb-outside/folders/`, read where they lie (`qurb_cli::backup`, setting `backup-folders`), and so kept by the computers chosen to keep its vault; shown on those in the owner's folder ([0076](decisions/0076-a-computer-backs-up-its-folders-and-holds-back-its-speed.md)) |
 
 ### Designed but not built

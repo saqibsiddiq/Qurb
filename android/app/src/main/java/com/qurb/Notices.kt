@@ -69,7 +69,9 @@ object Notices {
         if (newest > seen) prefs.edit().putLong(SEEN, newest).apply()
         if (seen < 0 || onScreen || !enabled(context) || !permitted(context)) return
 
-        val worth = history.filter { it.id > seen }.sortedBy { it.id }.mapNotNull { h -> say(h)?.let { h to it } }
+        // Each kind can be turned off alone (decision 0086).
+        val worth = history.filter { it.id > seen && Controls.wants(context, kindOf(it)) }
+            .sortedBy { it.id }.mapNotNull { h -> say(h)?.let { h to it } }
         if (worth.isEmpty()) return
         channel(context)
         for ((h, said) in worth.takeLast(AT_ONCE)) {
@@ -127,7 +129,7 @@ object Notices {
      */
     @SuppressLint("MissingPermission") // permitted() is asked first
     fun asked(context: Context, engine: Qurb) {
-        if (onScreen || !permitted(context)) return
+        if (onScreen || !permitted(context) || !Controls.wants(context, "asks")) return
         val ask = runCatching { engine.openAsks() }.getOrNull()?.firstOrNull() ?: return
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         // Once an ask: a phone syncing every quarter of an hour would
@@ -151,6 +153,13 @@ object Notices {
 
     /** A notification's one button, when it has one (Notifications draft 1). */
     enum class Action { OPEN, TRY_AGAIN }
+
+    /** Which of [Controls.KINDS] an entry would be said as. */
+    private fun kindOf(h: Happening): String = when (h.kind) {
+        "received" -> "received"
+        "collected" -> "delivered"
+        else -> "problems"
+    }
 
     /** What a notification says: its title, a line, and a button. */
     data class Said(val title: String, val words: String, val action: Action? = null)

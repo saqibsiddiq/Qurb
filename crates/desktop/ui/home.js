@@ -69,6 +69,9 @@ function markFor(s) {
     if (gone) return { icon: "lock-keyhole", words: `${gone.name} was removed`, quiet: Number(gone.size) > 0 ? "Its files stay here, locked, until it's added again" : null, tone: "idle", again: true };
     return { icon: "plus", words: "Add a device", tone: "idle" };
   }
+  // Paused by the person (decision 0086): said first, and a click opens
+  // the sheet that resumes it.
+  if (s.paused_until != null) return { icon: "pause", words: "Paused", quiet: Number(s.paused_until) > 4e9 ? null : pausedWords(s.paused_until), tone: "away", resume: true };
   const moving = s.incoming[0] ?? s.outgoing[0];
   if (moving) {
     const done = Math.min(1, Number(moving.done) / Number(moving.size || 1));
@@ -127,6 +130,7 @@ async function listsHome() {
 function markClicked() {
   if (HOME.summary?.peers === 0) { go("add"); return; }
   if (HOME.mark?.go === "conflicts") { conflictsSheet(); return; }
+  if (HOME.mark?.resume) { pauseSheet(HOME.summary.paused_until); return; }
   if (HOME.mark?.go) { go(HOME.mark.go); return; }
   invoke("sync_now").catch(() => {});
   const mark = $("home-mark");

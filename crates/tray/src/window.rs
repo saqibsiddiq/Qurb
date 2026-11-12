@@ -171,7 +171,7 @@ pub fn show(root: PathBuf, watcher: Watcher) -> anyhow::Result<()> {
             crate::ui::devices(&status),
         ));
         state.set_opacity(match status.state {
-            State::Alone => 0.6,
+            State::Alone | State::Paused => 0.6,
             _ => 1.0,
         });
 

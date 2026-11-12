@@ -27,7 +27,8 @@ pub struct UpdateState {
     current: String,
     /// "idle", "checking", "downloading", "ready" (fetched, to install),
     /// "installed" (in place, taking over at the next start), "manual" (a
-    /// newer one exists; this install cannot replace itself), or "failed".
+    /// newer one exists; this install cannot replace itself), "available" (a
+    /// newer one exists, and the person asked to be asked first), or "failed".
     state: &'static str,
     /// The newer version, when there is one.
     version: Option<String>,
@@ -70,8 +71,17 @@ fn replaceable() -> bool {
     !cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some()
 }
 
-/// Look now, and fetch what is found. Never fails: how it went is the state.
-pub async fn look(app: AppHandle) {
+/// Whether the person asked for updates to wait for a yes (decision 0086).
+fn asks_first(app: &AppHandle) -> bool {
+    use tauri::Manager;
+    app.try_state::<std::sync::Arc<crate::session::Hosted>>()
+        .and_then(|hosted| qurb_cli::Config::load(&qurb_cli::store_dir(&hosted.root())).ok())
+        .is_some_and(|c| c.ask_before_update)
+}
+
+/// Look now, and fetch what is found -- or, with `fetch` false, only say
+/// that it is there. Never fails: how it went is the state.
+pub async fn look(app: AppHandle, fetch: bool) {
     set(|h| {
         h.state.state = "checking";
         h.state.error = None;
@@ -96,6 +106,12 @@ pub async fn look(app: AppHandle) {
     if !replaceable() {
         return set(|h| {
             h.state.state = "manual";
+            h.state.version = Some(version);
+        });
+    }
+    if !fetch {
+        return set(|h| {
+            h.state.state = "available";
             h.state.version = Some(version);
         });
     }
@@ -188,7 +204,9 @@ fn restart_when_quiet(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
             tokio::time::sleep(QUIET_LOOK).await;
-            if state(&app).state != "installed" {
+            // Asked first: put in place only with the yes, and then restarted
+            // by it (decision 0086).
+            if state(&app).state != "installed" || asks_first(&app) {
                 continue;
             }
             let shown = app.get_webview_window("main").and_then(|w| w.is_visible().ok()).unwrap_or(true);
@@ -214,7 +232,7 @@ pub fn watch(app: AppHandle) {
         loop {
             let busy = matches!(state(&app).state, "downloading" | "installed" | "ready");
             if !busy {
-                look(app.clone()).await;
+                look(app.clone(), !asks_first(&app)).await;
             }
             tokio::time::sleep(EVERY).await;
         }

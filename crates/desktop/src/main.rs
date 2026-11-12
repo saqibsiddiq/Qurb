@@ -71,6 +71,13 @@ fn run() -> Result<()> {
     if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR") {
         let _ = std::fs::remove_dir_all(std::path::PathBuf::from(runtime).join("qurb-open"));
     }
+    // A reset asked for by the last run, finished before anything opens the
+    // index (decision 0086).
+    match qurb_cli::reset::finish_pending() {
+        Ok(Some(root)) => tracing::info!(root = %root.display(), "this computer was reset"),
+        Ok(None) => {}
+        Err(e) => tracing::error!(error = %format!("{e:#}"), "could not finish resetting this computer"),
+    }
     // `~/qurb` holds people's folders (decision 0067): one set up before is
     // moved into `~/qurb/Shared` here, once, before anything watches it.
     let root = qurb_cli::layout::settle(directory());
@@ -206,6 +213,12 @@ fn run() -> Result<()> {
             commands::show_file,
             commands::show_root,
             commands::set_notifications,
+            commands::set_paused,
+            commands::set_stay_awake,
+            commands::set_quiet,
+            commands::set_ask_before_update,
+            commands::reset_device,
+            commands::save_report,
             commands::devices,
             commands::activity,
             commands::outgoing,

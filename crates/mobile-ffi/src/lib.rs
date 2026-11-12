@@ -2537,6 +2537,35 @@ impl Qurb {
         Ok(self.engine()?.store().db().set_outside_offered(unmetered)?)
     }
 
+    /// Pause syncing until `until`, a Unix time, or `i64::MAX` for until
+    /// resumed; 0 resumes (decision 0086). Paused, a pass does nothing and a
+    /// computer's connection is closed at its next request, as if the phone
+    /// were off. The app keeps the setting and says it again at each start.
+    pub fn set_paused(&self, until: i64) {
+        qurb_peer::pause::set(until.max(0));
+    }
+
+    /// Hold off syncing on the network the phone is on now: mobile data,
+    /// when the person said not to use it (decision 0086).
+    pub fn set_held(&self, held: bool) {
+        qurb_peer::pause::hold(held);
+    }
+
+    /// Tell each of this person's computers, and each computer this phone
+    /// visits, that this phone removed it, within `seconds` each: before the
+    /// phone is reset (decision 0086). Best effort: one that cannot be
+    /// reached hears at its next request -- of a phone that is no longer
+    /// there, so it sees it away instead.
+    pub fn leave(&self, seconds: u32) {
+        let Ok(peers) = self.peers() else { return };
+        for peer in peers.into_iter().filter(|p| p.kind.as_deref() != Some("phone")) {
+            if let Ok(folder) = self.open_kept_folder(peer.fingerprint.clone(), seconds) {
+                folder.goodbye();
+            }
+            self.kept_open.lock().expect("kept_open poisoned").remove(&peer.fingerprint);
+        }
+    }
+
     /// Which of `sources` this phone has sent to `to` before, with the name
     /// each went under and when: asked before sending, so that the app can say
     /// so and the person choose (decision 0059). A send of the same file
@@ -3042,6 +3071,10 @@ impl Qurb {
             conflicts: 0,
             timed_out: false,
         };
+        // Paused, or held off mobile data (decision 0086): no pass at all.
+        if qurb_peer::pause::paused() {
+            return Ok(outcome);
+        }
 
         let peers: Vec<qurb_peer::Fingerprint> = {
             let engine = self.engine()?;

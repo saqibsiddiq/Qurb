@@ -45,6 +45,7 @@ pub mod local;
 pub mod nat;
 pub mod openings;
 pub mod pairing;
+pub mod pause;
 pub mod ranged;
 pub mod server;
 pub mod short;

@@ -58,7 +58,8 @@ class HomeScreen(app: MainActivity) : Screen(app) {
             views.refresh.isRefreshing = false
             app.sync()
         }
-        views.mark.setOnClickListener { app.sync() }
+        // Paused: the tap asks to resume rather than syncing (decision 0086).
+        views.mark.setOnClickListener { if (Controls.pausedUntil(app) != null) ControlSheets(app).pause { refresh() } else app.sync() }
         views.add.setOnClickListener { app.pair() }
     }
 
@@ -153,6 +154,11 @@ class HomeScreen(app: MainActivity) : Screen(app) {
                 views.stateLine.visibility = View.VISIBLE
             }
             chosen == null -> hero(StatusMark.Look.FIRST, R.drawable.mark_plus, "Add a device")
+            Controls.pausedUntil(app) != null -> {
+                hero(StatusMark.Look.OFF, R.drawable.mark_pause, "Paused")
+                views.stateLine.text = Controls.pausedWords(Controls.pausedUntil(app))
+                views.stateLine.visibility = View.VISIBLE
+            }
             app.syncing -> hero(StatusMark.Look.SYNCING, R.drawable.mark_refresh_cw, "Syncing")
             state.conflicts.isNotEmpty() -> {
                 hero(StatusMark.Look.NEEDS_YOU, R.drawable.mark_git_compare, "Two versions")

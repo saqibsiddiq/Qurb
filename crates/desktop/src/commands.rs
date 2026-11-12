@@ -63,6 +63,8 @@ pub struct Summary {
     /// Files this device is serving to a device that asked for them. Not
     /// removed when they finish -- see `updated`.
     outgoing: Vec<InFlight>,
+    /// Paused until this Unix time, `i64::MAX` for until resumed.
+    paused_until: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -231,6 +233,15 @@ pub struct Settings {
     /// This computer's picture, as its paired devices are shown it: a
     /// `data:` address, or none.
     picture: Option<String>,
+    /// Paused until this Unix time, `i64::MAX` for until resumed; none
+    /// when syncing (decision 0086).
+    paused_until: Option<i64>,
+    /// Kept awake while collecting, plugged in.
+    stay_awake: bool,
+    /// The notification kinds turned off: received, delivered, problems.
+    quiet: Vec<String>,
+    /// Updates wait for a yes.
+    ask_before_update: bool,
 }
 
 /// What screen the window should be on.
@@ -510,6 +521,10 @@ pub fn settings(hosted: Host<'_>) -> Answer<Settings> {
         upload_limit: config.upload_limit.to_string(),
         download_limit: config.download_limit.to_string(),
         picture: picture.as_deref().map(picture_address),
+        paused_until: qurb_peer::pause::until(),
+        stay_awake: config.stay_awake,
+        quiet: config.quiet,
+        ask_before_update: config.ask_before_update,
     })
 }
 
@@ -1097,6 +1112,7 @@ pub fn summary(hosted: Host<'_>) -> Answer<Summary> {
                 Some(RecentFile { path: r.path, at: unix(r.at)?, from_peer: r.from_peer })
             })
             .collect(),
+        paused_until: qurb_peer::pause::until(),
         incoming: status.incoming.into_iter().map(in_flight).collect(),
         outgoing: status.outgoing.into_iter().map(in_flight).collect(),
     })
@@ -2538,10 +2554,139 @@ pub fn show_root(hosted: Host<'_>) -> Answer<()> {
 /// Whether this desktop raises its three notifications.
 #[tauri::command(async)]
 pub fn set_notifications(hosted: Host<'_>, on: bool) -> Answer<()> {
+    change_config(&hosted, |config| config.notifications = on)
+}
+
+/// One setting changed in the config file, which is the setting.
+fn change_config(hosted: &Hosted, change: impl FnOnce(&mut qurb_cli::Config)) -> Answer<()> {
     let dir = qurb_cli::store_dir(&hosted.root());
     let mut config = qurb_cli::Config::load(&dir).map_err(failed)?;
-    config.notifications = on;
+    change(&mut config);
     config.save(&dir).map_err(failed)
+}
+
+/// Pause syncing until `until`, a Unix time, or `i64::MAX` for until resumed;
+/// 0 resumes (decision 0086). At once: the daemon reads it again at its next
+/// pass, and the server closes other devices' connections from now.
+#[tauri::command(async)]
+pub fn set_paused(hosted: Host<'_>, until: i64) -> Answer<()> {
+    // A time past a century from now -- the window's "until I resume", as
+    // large a number as it can carry -- is until resumed.
+    let until = match until {
+        u if u > 4_000_000_000 => qurb_peer::pause::UNTIL_RESUMED,
+        u => u.max(0),
+    };
+    change_config(&hosted, |config| config.paused_until = until)?;
+    qurb_peer::pause::set(until);
+    if until == 0 {
+        hosted.sync_now();
+    }
+    Ok(())
+}
+
+/// Whether this computer is kept awake while it collects, plugged in.
+#[tauri::command(async)]
+pub fn set_stay_awake(hosted: Host<'_>, on: bool) -> Answer<()> {
+    change_config(&hosted, |config| config.stay_awake = on)
+}
+
+/// Which kinds of notification are turned off.
+#[tauri::command(async)]
+pub fn set_quiet(hosted: Host<'_>, quiet: Vec<String>) -> Answer<()> {
+    if let Some(odd) = quiet.iter().find(|k| !qurb_cli::config::NOTICE_KINDS.contains(&k.as_str())) {
+        return Err(format!("{odd} is not a kind of notification"));
+    }
+    change_config(&hosted, |config| config.quiet = quiet)
+}
+
+/// Whether an update waits for a yes.
+#[tauri::command(async)]
+pub fn set_ask_before_update(hosted: Host<'_>, on: bool) -> Answer<()> {
+    change_config(&hosted, |config| config.ask_before_update = on)
+}
+
+/// Reset this computer (decision 0086): every paired device told it was
+/// removed, then the window restarts, and the start finishes it before
+/// anything opens the index -- the key forgotten, the store and its backups
+/// deleted (`qurb_cli::reset`). The shared folder's files stay.
+#[tauri::command(async)]
+pub async fn reset_device(app: tauri::AppHandle, hosted: Host<'_>) -> Answer<()> {
+    if hosted.is_running() {
+        let peers = hosted.with_store(|store| Ok(store.db().trusted_peers()?)).map_err(failed)?;
+        hosted
+            .with_store_mut(|store| {
+                for peer in &peers {
+                    store.remove_device(&peer.device_id, &peer.name, true)?;
+                }
+                Ok(())
+            })
+            .map_err(failed)?;
+        // The daemon's next look at who is trusted says goodbye to those
+        // connected (a best effort, three seconds each); the rest are told
+        // at their next request, as any removed device is.
+        hosted.nudge();
+        tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+    }
+    crate::mount::unmount_all();
+    qurb_cli::reset::mark(&hosted.root()).map_err(failed)?;
+    let _ = crate::autostart::config_dir().map(|dir| crate::autostart::disable(&dir));
+    app.restart()
+}
+
+/// A report for when something is wrong (decision 0086): this build, the
+/// computer, the settings, the devices, the last of what happened, and the
+/// last three days of the window's log, written to a file in Downloads and
+/// shown there. Sent nowhere: the person attaches it where they choose.
+#[tauri::command(async)]
+pub fn save_report(hosted: Host<'_>) -> Answer<String> {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let _ = writeln!(out, "QurbSpace report, written at Unix time {now}\n");
+    let _ = writeln!(out, "{}", qurb_cli::version().replacen("qurb ", &format!("window {} · engine ", env!("CARGO_PKG_VERSION")), 1));
+    if let Ok(uname) = std::process::Command::new("uname").arg("-srm").output() {
+        let _ = writeln!(out, "{}", String::from_utf8_lossy(&uname.stdout).trim());
+    }
+    let dir = qurb_cli::store_dir(&hosted.root());
+    if let Ok(config) = std::fs::read_to_string(qurb_cli::Config::path(&dir)) {
+        let _ = writeln!(out, "\n== Settings\n{}", config.lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()).collect::<Vec<_>>().join("\n"));
+    }
+    if let Some(status) = hosted.status() {
+        let _ = writeln!(
+            out,
+            "\n== Now\n{}, {} of {} devices reachable, problem: {}",
+            status.state.summary(),
+            status.peers_reachable,
+            status.peers,
+            status.problem.as_deref().unwrap_or("none")
+        );
+    }
+    if let Ok(devices) = hosted.with_store(|store| Ok(View::new(store, 0).devices()?)) {
+        let _ = writeln!(out, "\n== Devices");
+        for d in devices {
+            let _ = writeln!(out, "{} ({:?}, {}), paired {}", d.name, d.relation, d.kind.as_deref().unwrap_or("?"), d.paired_at);
+        }
+    }
+    if let Ok(rows) = hosted.with_store(|store| Ok(View::new(store, 0).activity(200, None)?)) {
+        let _ = writeln!(out, "\n== Activity, newest first");
+        for r in rows {
+            let _ = writeln!(out, "{} {:?} {} {}", r.at, r.kind, r.path.as_deref().unwrap_or(""), r.detail.as_deref().unwrap_or(""));
+        }
+    }
+    let log = std::process::Command::new("journalctl")
+        .args(["--user", "--no-pager", "-o", "short-iso", "--since", "-3 days", "-n", "5000", "-t", "qurb-desktop"])
+        .output();
+    let _ = writeln!(out, "\n== Log, the last three days");
+    match log {
+        Ok(log) if !log.stdout.is_empty() => out.push_str(&String::from_utf8_lossy(&log.stdout)),
+        _ => out.push_str("(no log found in the journal)\n"),
+    }
+    let downloads = qurb_cli::profiles::user_downloads().map_err(failed)?;
+    std::fs::create_dir_all(&downloads).map_err(failed)?;
+    let file = downloads.join(format!("qurbspace-report-{now}.txt"));
+    std::fs::write(&file, out).map_err(failed)?;
+    let _ = qurb_cli::platform::open(&downloads);
+    Ok(file.display().to_string())
 }
 
 #[tauri::command(async)]
@@ -3302,7 +3447,7 @@ pub fn update_state(app: tauri::AppHandle) -> crate::updates::UpdateState {
 /// Look for an update now, rather than at the next six-hourly look.
 #[tauri::command(async)]
 pub async fn update_now(app: tauri::AppHandle) -> crate::updates::UpdateState {
-    crate::updates::look(app.clone()).await;
+    crate::updates::look(app.clone(), true).await;
     crate::updates::state(&app)
 }
 

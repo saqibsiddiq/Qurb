@@ -75,12 +75,14 @@ pub fn watch(hosted: Arc<Hosted>) {
 
             // Turned off in Settings: history still advances past what was
             // not said, so turning them back on does not announce the backlog.
-            let wanted = qurb_cli::Config::load(&qurb_cli::store_dir(&hosted.root()))
-                .map(|c| c.notifications)
-                .unwrap_or(true);
+            let (wanted, quiet) = qurb_cli::Config::load(&qurb_cli::store_dir(&hosted.root()))
+                .map(|c| (c.notifications, c.quiet))
+                .unwrap_or((true, Vec::new()));
             if !wanted {
                 continue;
             }
+            // Each kind can be turned off alone (decision 0086).
+            let kind_on = |row: &Activity| !quiet.iter().any(|q| Some(q.as_str()) == kind_of(row));
 
             let named = |id: &qurb_sync::DeviceId| {
                 devices.iter().find(|d| &d.id == id).map(|d| d.name.clone())
@@ -88,6 +90,7 @@ pub fn watch(hosted: Arc<Hosted>) {
 
             for notice in fresh
                 .iter()
+                .filter(|row| kind_on(row))
                 .filter_map(|row| worth_saying(row, row.device.as_ref().and_then(named)))
                 .take(AT_ONCE)
             {
@@ -106,6 +109,16 @@ fn latest(hosted: &Hosted) -> Option<i64> {
         .ok()?
         .first()
         .map(|row| row.id)
+}
+
+/// Which of `qurb_cli::config::NOTICE_KINDS` an event would be said as.
+fn kind_of(row: &Activity) -> Option<&'static str> {
+    match row.kind {
+        Event::Received => Some("received"),
+        Event::Collected => Some("delivered"),
+        Event::Failed => Some("problems"),
+        _ => None,
+    }
 }
 
 /// What to say about one event, if anything.

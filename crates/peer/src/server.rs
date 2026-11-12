@@ -327,6 +327,11 @@ async fn serve_connection_inner(
                 connection.close(0u32.into(), b"no longer trusted");
                 break;
             }
+            // Paused here: as if this device were off (decision 0086).
+            if crate::pause::paused() {
+                connection.close(0u32.into(), b"paused");
+                break;
+            }
             if !told {
                 told = true;
                 if let Some(watcher) = &watcher {

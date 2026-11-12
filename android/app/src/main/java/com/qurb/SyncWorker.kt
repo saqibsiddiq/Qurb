@@ -54,7 +54,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
     override suspend fun doWork(): Result {
         // Updates first, set up or not (decision 0078): a phone that cannot
         // get past setting up is the one that most needs a newer build.
-        Updates.run(applicationContext, install = !Notices.onScreen)
+        Updates.run(applicationContext, install = !Notices.onScreen && Controls.autoUpdate(applicationContext))
         if (!Engine.isSetUp(applicationContext)) return Result.success()
 
         val started = System.currentTimeMillis()
@@ -80,7 +80,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // counts what is waiting, so they go in this pass. Briefly; a
             // large first backup carries on over the following passes and the
             // nightly run. Its failure is not the sync's.
-            if (Engine.unmetered(applicationContext)) {
+            if (Controls.backupsAllowedNow(applicationContext)) {
                 runCatching { Folders.run(applicationContext, engine, FOLDERS_SECONDS) }
                     .onFailure { Log.w(TAG, "backing up the chosen folders failed", it) }
             }
@@ -190,6 +190,7 @@ class SyncWorker(context: Context, params: WorkerParameters) :
             // connection: say so, with the way to carry on.
             // What is worth telling the person, now nobody is looking.
             Notices.tell(applicationContext, engine)
+            ReceivedOut.save(applicationContext, engine)
             Notices.asked(applicationContext, engine)
 
             if (long || elsewhere || forOthers < LONG_PASS_BYTES) {

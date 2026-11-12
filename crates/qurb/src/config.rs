@@ -56,7 +56,22 @@ pub struct Config {
     /// Folders of this computer, outside the synced one, kept in its own
     /// vault and so by the devices that keep that (`crate::backup`).
     pub backup_folders: Vec<PathBuf>,
+    /// Paused until this Unix time, or [`qurb_peer::pause::UNTIL_RESUMED`];
+    /// 0 when syncing (decision 0086). A time passed is the same as 0.
+    pub paused_until: i64,
+    /// Whether the computer is kept from idling to sleep while it collects,
+    /// plugged in (`crate::awake`). On unless turned off.
+    pub stay_awake: bool,
+    /// The kinds of notification turned off, of [`NOTICE_KINDS`]; the rest
+    /// are raised while `notifications` is on.
+    pub quiet: Vec<String>,
+    /// Whether an update waits for a yes rather than installing itself.
+    pub ask_before_update: bool,
 }
+
+/// What the desktop notifies about, each of which can be turned off alone:
+/// a file sent here, one sent from here collected, something that failed.
+pub const NOTICE_KINDS: [&str; 3] = ["received", "delivered", "problems"];
 
 /// Where a file somebody sends this device is put.
 ///
@@ -183,6 +198,10 @@ impl Default for Config {
             upload_limit: 0,
             download_limit: 0,
             backup_folders: Vec::new(),
+            paused_until: 0,
+            stay_awake: true,
+            quiet: Vec::new(),
+            ask_before_update: false,
         }
     }
 }
@@ -282,6 +301,36 @@ impl Config {
                 folders.split(';').map(str::trim).filter(|f| !f.is_empty()).map(expand_home).collect();
         }
 
+        if let Some(paused) = settings.remove("paused") {
+            config.paused_until = match paused.as_str() {
+                "" | "no" => 0,
+                "until-resumed" => qurb_peer::pause::UNTIL_RESUMED,
+                time => time
+                    .parse()
+                    .with_context(|| format!("{}: paused is empty, `until-resumed` or a Unix time", path.display()))?,
+            };
+        }
+        if let Some(on) = settings.remove("stay-awake") {
+            config.stay_awake = match on.as_str() {
+                "on" | "" => true,
+                "off" => false,
+                other => anyhow::bail!("{}: stay-awake is `on` or `off`, not `{other}`", path.display()),
+            };
+        }
+        if let Some(quiet) = settings.remove("quiet") {
+            config.quiet = quiet.split(',').map(str::trim).filter(|k| !k.is_empty()).map(String::from).collect();
+            if let Some(odd) = config.quiet.iter().find(|k| !NOTICE_KINDS.contains(&k.as_str())) {
+                anyhow::bail!("{}: quiet lists {}, not `{odd}`", path.display(), NOTICE_KINDS.join(", "));
+            }
+        }
+        if let Some(updates) = settings.remove("updates") {
+            config.ask_before_update = match updates.as_str() {
+                "auto" | "" => false,
+                "ask" => true,
+                other => anyhow::bail!("{}: updates is `auto` or `ask`, not `{other}`", path.display()),
+            };
+        }
+
         // Unknown keys are reported rather than ignored. A misspelled setting
         // that silently does nothing is a bad afternoon.
         if let Some(unknown) = settings.keys().next() {
@@ -337,7 +386,19 @@ impl Config {
              \n\
              # Folders of this computer, outside this one, backed up to the\n\
              # devices that keep its own files (`qurb holders`), separated by ;\n\
-             backup-folders = {}\n",
+             backup-folders = {}\n\
+             \n\
+             # Syncing paused: empty, `until-resumed`, or until a Unix time.\n\
+             paused = {}\n\
+             \n\
+             # Kept awake while collecting, plugged in: `on` or `off`.\n\
+             stay-awake = {}\n\
+             \n\
+             # Notifications not raised, of: received, delivered, problems.\n\
+             quiet = {}\n\
+             \n\
+             # An update installs itself (`auto`) or waits for a yes (`ask`).\n\
+             updates = {}\n",
             self.signal,
             self.name,
             self.port,
@@ -348,6 +409,14 @@ impl Config {
             human_size(self.upload_limit),
             human_size(self.download_limit),
             self.backup_folders.iter().map(|f| f.display().to_string()).collect::<Vec<_>>().join("; "),
+            match self.paused_until {
+                0 => String::new(),
+                qurb_peer::pause::UNTIL_RESUMED => "until-resumed".to_string(),
+                time => time.to_string(),
+            },
+            if self.stay_awake { "on" } else { "off" },
+            self.quiet.join(", "),
+            if self.ask_before_update { "ask" } else { "auto" },
         );
         std::fs::write(Self::path(store_dir), text)
             .with_context(|| format!("writing {}", Self::path(store_dir).display()))
@@ -431,6 +500,10 @@ mod tests {
             upload_limit: 2 << 20,
             download_limit: 0,
             backup_folders: vec!["/home/someone/Pictures".into(), "/srv/work files".into()],
+            paused_until: qurb_peer::pause::UNTIL_RESUMED,
+            stay_awake: false,
+            quiet: vec!["delivered".into(), "problems".into()],
+            ask_before_update: true,
         };
         config.save(dir.path()).unwrap();
 
@@ -445,6 +518,10 @@ mod tests {
         assert_eq!(loaded.notifications, config.notifications);
         assert_eq!((loaded.upload_limit, loaded.download_limit), (config.upload_limit, config.download_limit));
         assert_eq!(loaded.backup_folders, config.backup_folders);
+        assert_eq!(loaded.paused_until, config.paused_until);
+        assert_eq!(loaded.stay_awake, config.stay_awake);
+        assert_eq!(loaded.quiet, config.quiet);
+        assert_eq!(loaded.ask_before_update, config.ask_before_update);
     }
 
     #[test]

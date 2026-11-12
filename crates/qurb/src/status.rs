@@ -32,6 +32,9 @@ pub enum State {
     Alone,
     /// Something went wrong that the user may need to act on.
     Problem,
+    /// Syncing paused by the person, for a while or until they resume
+    /// (decision 0086).
+    Paused,
 }
 
 impl State {
@@ -43,6 +46,7 @@ impl State {
             State::Working => "syncing",
             State::Alone => "no devices reachable",
             State::Problem => "needs attention",
+            State::Paused => "paused",
         }
     }
 }

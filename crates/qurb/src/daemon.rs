@@ -272,6 +272,9 @@ impl Daemon {
     /// Carries who, never what, and is best effort throughout: a peer that
     /// never hears it syncs on its own schedule, exactly as before.
     async fn announce_news(&self, connector: &Connector, peers: &Peers, except: Option<Fingerprint>) {
+        if qurb_peer::pause::paused() {
+            return;
+        }
         // On the local network first, because it needs nobody's permission and
         // reaches every device on this Wi-Fi at once. A device that hears it
         // syncs within a second, with no server involved.
@@ -295,6 +298,9 @@ impl Daemon {
     /// while anything is outstanding, because the recipient may have been
     /// unreachable for every previous one.
     fn announce_deliveries(&self, engine: &Engine, connector: &Connector, peers: &Peers) {
+        if qurb_peer::pause::paused() {
+            return;
+        }
         let waiting = match engine.store().awaiting_collection() {
             Ok(devices) if !devices.is_empty() => devices,
             Ok(_) => return,
@@ -949,6 +955,8 @@ impl Daemon {
     /// [`limit`]: Self::limit
     fn refresh_rates(&self) {
         let Ok(config) = Config::load(&self.store_dir) else { return };
+        // Paused or not, read fresh as the rates are (decision 0086).
+        qurb_peer::pause::set(config.paused_until);
         let rates = (config.upload_limit, config.download_limit);
         if qurb_peer::limit::rates() != rates {
             tracing::info!(up = rates.0, down = rates.1, "bytes a second allowed now, 0 for any");
@@ -1040,6 +1048,13 @@ impl Daemon {
     ) {
         self.refresh_downloads(engine);
         self.refresh_rates();
+        // Paused: nothing read, sent or fetched, as if this computer were off
+        // (decision 0086). Other devices' connections are closed by the
+        // server at their next request.
+        if qurb_peer::pause::paused() {
+            self.report(|status| status.state = crate::status::State::Paused);
+            return;
+        }
         self.back_up_folders(engine);
         let mut reached = 0usize;
         // Set by whichever peer brought something new, so the others can be
@@ -1285,7 +1300,9 @@ impl Daemon {
             qurb_sync::Action::Resurrect { .. } | qurb_sync::Action::Conflict { .. } => true,
             qurb_sync::Action::Merge { .. } | qurb_sync::Action::Offer { .. } | qurb_sync::Action::Restored { .. } => false,
         });
-        let _awake = brings.then(|| crate::awake::Awake::while_collecting(&format!("Collecting from {from}")));
+        // Unless the person turned it off (decision 0086).
+        let stay_awake = Config::load(&self.store_dir).map(|c| c.stay_awake).unwrap_or(true);
+        let _awake = (brings && stay_awake).then(|| crate::awake::Awake::while_collecting(&format!("Collecting from {from}")));
 
         let outcome = tokio::task::block_in_place(|| {
             let mut source = qurb_peer::NetworkSource::new(&client, &reader).for_peer(peer_device);

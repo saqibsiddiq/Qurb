@@ -184,6 +184,9 @@ object Engine {
      *  the folder pages' places (FolderPage.kt). */
     fun openNow(context: Context): Qurb = handle ?: kotlinx.coroutines.runBlocking { open(context) }
 
+    /** The engine if it is open, without opening it. */
+    fun current(): Qurb? = handle
+
     suspend fun open(context: Context): Qurb = withContext(Dispatchers.IO) {
         // Already open: the ordinary case, and it has to cost nothing, because
         // every screen asks. Before this returned early, every refresh fetched
@@ -232,6 +235,9 @@ object Engine {
                         context.contentResolver, android.provider.Settings.Secure.ANDROID_ID,
                     )
                 }.getOrNull()?.let { id -> runCatching { it.setInstallId(id) } }
+                // Paused, or held off mobile data, from the first moment
+                // (decision 0086).
+                Controls.apply(context, it)
                 handle = it
             }
         }
@@ -397,8 +403,9 @@ object Engine {
      * of metered, which is Wi-Fi unless the person marked it otherwise.
      */
     fun noteNetwork(context: Context) {
-        val unmetered = unmetered(context)
-        runCatching { handle?.setUnmetered(unmetered) }
+        // With what the person chose for mobile data, and any pause
+        // (decision 0086).
+        handle?.let { Controls.apply(context, it) }
     }
 
     /** Whether the phone is on a network that does not count what it uses: Wi-Fi, in practice. */

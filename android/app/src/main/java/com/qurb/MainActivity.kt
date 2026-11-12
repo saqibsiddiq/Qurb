@@ -309,6 +309,30 @@ class MainActivity : AppCompatActivity() {
         textSaver.launch(name)
     }
 
+    /** What to do once a folder for received files is picked (decision 0086). */
+    private var onReceivedFolder: (() -> Unit)? = null
+
+    private val receivedFolderPicker = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { tree ->
+        val then = onReceivedFolder
+        onReceivedFolder = null
+        if (tree == null) return@registerForActivityResult
+        runCatching {
+            contentResolver.takePersistableUriPermission(
+                tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+            )
+        }
+        Controls.setReceived(this, Controls.RECEIVED_FOLDER, tree.toString())
+        then?.invoke()
+    }
+
+    /** Pick the folder files sent to this phone are also saved into. */
+    fun pickReceivedFolder(then: () -> Unit) {
+        onReceivedFolder = then
+        receivedFolderPicker.launch(null)
+    }
+
     /** Files waiting for a folder to be saved into, while the picker is open. */
     private var pendingSaveAll: List<FileEntry> = emptyList()
 
@@ -503,10 +527,42 @@ class MainActivity : AppCompatActivity() {
         if (::views.isInitialized) outState.putInt(TAB, views.tabs.selectedItemId)
     }
 
+    /** App lock (decision 0086): confirmed since the app last came to the front. */
+    private var unlocked = false
+    /** When the app last went away; the lock asks again after [LOCK_AFTER_MS]. */
+    private var awayAt = 0L
+    /** The screen lock is being asked now; its own page pauses this one. */
+    private var confirming = false
+
+    /**
+     * Ask for the screen lock before showing anything, when the person turned
+     * App lock on and the app has been away a minute or more. Hidden until
+     * then; refused, the app closes. Returns whether it is asking.
+     */
+    private fun lockIfAsked(): Boolean {
+        if (!Controls.appLock(this) || !ScreenLock.available(this) || confirming) return confirming
+        if (unlocked && System.currentTimeMillis() - awayAt < LOCK_AFTER_MS) return false
+        unlocked = false
+        confirming = true
+        views.root.alpha = 0f
+        ScreenLock.confirm(this, "Open QurbSpace", "Confirm it's you") { yes ->
+            confirming = false
+            if (yes) {
+                unlocked = true
+                awayAt = System.currentTimeMillis()
+                views.root.alpha = 1f
+            } else {
+                finish()
+            }
+        }
+        return true
+    }
+
     override fun onResume() {
         super.onResume()
         Notices.onScreen = true
         if (!::views.isInitialized) return
+        if (lockIfAsked()) return
         current?.refresh()
         updateDock()
         catchUp()
@@ -528,6 +584,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         Notices.onScreen = false
+        if (!confirming && unlocked) awayAt = System.currentTimeMillis()
     }
 
     private fun screenFor(tab: Int): Screen = screens.getOrPut(tab) {
@@ -915,7 +972,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 // On screen, so nothing is raised; what was shown here is
                 // marked as seen, and not announced later.
-                withContext(Dispatchers.IO) { Notices.tell(this@MainActivity, engine) }
+                withContext(Dispatchers.IO) {
+                    Notices.tell(this@MainActivity, engine)
+                    ReceivedOut.save(this@MainActivity, engine)
+                }
                 // A computer asking to open this phone's folder there, and
                 // what one did with a yes sent it.
                 heard()
@@ -1419,6 +1479,8 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         /** How often a pass runs while the app is on screen. */
         private const val ON_SCREEN_EVERY_MS = 30_000L
+        /** How long the app may be away before App lock asks again. */
+        private const val LOCK_AFTER_MS = 60_000L
         /** Whether notifications were asked for on first opening (item 11). */
         const val NOTIFY_PREFS = "notify"
         const val ASKED_TO_NOTIFY = "asked"

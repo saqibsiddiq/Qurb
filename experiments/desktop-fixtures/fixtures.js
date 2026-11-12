@@ -163,6 +163,11 @@ const ANSWERS = {
     phone_holds_key: true,
     upload_limit: String(fixtureRates.up),
     download_limit: String(fixtureRates.down),
+    // Decision 0086: ?paused shows a pause until resumed.
+    paused_until: params.has("paused") ? 9223372036854775807 : null,
+    stay_awake: true,
+    quiet: ["delivered"],
+    ask_before_update: false,
   }),
   update_state: () => ({ current: "0.2.0-beta.1", state: params.has("update") ? "installed" : "idle", version: params.has("update") ? "0.2.0-beta.2" : null, progress: null, error: null }),
   update_now: () => ({ current: "0.2.0-beta.1", state: "idle", version: null, progress: null, error: null }),
@@ -194,6 +199,12 @@ const ANSWERS = {
   save_settings: () => null,
   set_privacy: () => null,
   set_notifications: () => null,
+  set_paused: () => null,
+  set_stay_awake: () => null,
+  set_quiet: () => null,
+  set_ask_before_update: () => null,
+  save_report: () => "/home/saqib/Downloads/qurbspace-report.txt",
+  reset_device: () => null,
   starts_at_login: () => true,
   set_starts_at_login: () => null,
   quit: () => null,
@@ -295,6 +306,7 @@ const ANSWERS = {
     const s = STATES[STATE] ?? STATES.synced;
     return {
       state: s.state,
+      paused_until: params.has("paused") ? 9223372036854775807 : null,
       root: "/home/saqib/qurb",
       identity: "cfe05b03",
       peers: s.peers,

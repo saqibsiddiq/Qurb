@@ -17,6 +17,7 @@ pub mod lock;
 pub mod platform;
 pub mod profiles;
 pub mod qr;
+pub mod reset;
 pub mod send;
 pub mod setup;
 pub mod status;

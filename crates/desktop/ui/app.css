@@ -468,6 +468,22 @@ textarea {
 .note.warn {
   color: var(--attention);
 }
+/* A second yes before something that cannot be undone: Reset. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 2px 0;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--green);
+}
 .oops {
   margin: 16px 2px;
   color: var(--attention);

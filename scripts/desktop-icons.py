@@ -26,7 +26,7 @@ ICONS = """
     shield-check download upload x chevron-right chevron-down arrow-left
     refresh-cw rotate-ccw circle-alert triangle-alert hard-drive whatsapp
     ellipsis qr-code keyboard wifi bell palette sliders-horizontal key-round
-    info external-link git-compare camera copy pencil link save
+    info external-link git-compare camera copy pencil link save pause
 """.split()
 
 

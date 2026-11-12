@@ -117,6 +117,18 @@ def settings_and_key(window):
     call_js(window, "set_notifications", {"on": False})
     assert call_js(window, "settings", {})["notifications"] is False
     call_js(window, "set_notifications", {"on": True})
+    # Each kind alone, staying awake, updates asked first (decision 0086).
+    call_js(window, "set_quiet", {"quiet": ["delivered"]})
+    assert call_js(window, "settings", {})["quiet"] == ["delivered"]
+    call_js(window, "set_quiet", {"quiet": []})
+    call_js(window, "set_stay_awake", {"on": False})
+    assert call_js(window, "settings", {})["stay_awake"] is False
+    call_js(window, "set_stay_awake", {"on": True})
+    call_js(window, "set_ask_before_update", {"on": True})
+    assert call_js(window, "settings", {})["ask_before_update"] is True
+    call_js(window, "set_ask_before_update", {"on": False})
+    report = call_js(window, "save_report", {})
+    assert os.path.exists(report) and "== Settings" in read(report), f"no report at {report}"
 
     autostart = os.path.join(os.environ["XDG_CONFIG_HOME"], "autostart")
     call_js(window, "set_starts_at_login", {"on": False})
@@ -193,6 +205,21 @@ def both_ways(window, other):
     held = call_js(window, "details", {"path": "from-there.txt"})["holders"]
     assert "Lab other" in held, f"holders: {held}"
     return held
+
+
+def pausing(window, other):
+    """Paused, nothing crosses either way; resumed, it does (decision 0086)."""
+    call_js(window, "set_paused", {"until": 2**53 - 1})
+    assert call_js(window, "settings", {})["paused_until"], "not paused"
+    write(path_of(window, "while-paused.txt"), "made while paused\n")
+    write(other.path("while-paused-there.txt"), "made there while paused\n")
+    time.sleep(20)
+    assert read(other.path("while-paused.txt")) is None, "a file left while paused"
+    assert read(path_of(window, "while-paused-there.txt")) is None, "a file came while paused"
+    call_js(window, "set_paused", {"until": 0})
+    assert call_js(window, "settings", {})["paused_until"] is None, "still paused"
+    wait("the paused file on the other device", lambda: read(other.path("while-paused.txt")) == "made while paused\n", 120)
+    wait("the other device's file here", lambda: read(path_of(window, "while-paused-there.txt")) == "made there while paused\n", 120)
 
 
 def free_and_fetch(window):
@@ -425,7 +452,7 @@ def main():
         smoke.set_up(window)
         rename(window, "Lab laptop", signal)
         words = settings_and_key(window)
-        say("1. set up; renamed; notifications, start at login, picture, space limit, the 24 words")
+        say("1. set up; renamed; notifications and their kinds, stay awake, updates, a report, start at login, picture, space limit, the 24 words")
 
         folder, named = smoke.pair(window)
         other = Other(folder)
@@ -437,6 +464,8 @@ def main():
 
         holders = both_ways(window, other)
         say(f"3. a file each way; its details name {', '.join(holders)} as holding it")
+        pausing(window, other)
+        say("3b. paused: nothing crossed either way for 20 s; resumed, both files crossed")
         free_and_fetch(window)
         say("4. a local copy freed, and fetched back")
         deleting(window, other)

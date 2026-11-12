@@ -200,23 +200,34 @@ object WhatsApp {
      * a periodic request runs straight away, beside the first run [runNow]
      * starts, and two ran together on the emulator.
      */
-    fun schedule(context: Context) {
-        val request = PeriodicWorkRequestBuilder<Nightly>(24, TimeUnit.HOURS)
-            .setInitialDelay(12, TimeUnit.HOURS)
+    fun schedule(context: Context, changed: Boolean = false) {
+        // Or every six hours, charging or not; and on mobile data too where
+        // the person allowed backups there (decision 0086).
+        val often = Controls.backupTiming(context) == Controls.BACKUP_OFTEN
+        val request = PeriodicWorkRequestBuilder<Nightly>(if (often) 6L else 24L, TimeUnit.HOURS)
+            .setInitialDelay(if (often) 1L else 12L, TimeUnit.HOURS)
             .setConstraints(
                 Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.UNMETERED)
-                    .setRequiresCharging(true)
+                    .setRequiredNetworkType(network(context))
+                    .setRequiresCharging(!often)
                     .build()
             )
             .build()
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(NIGHTLY, ExistingPeriodicWorkPolicy.KEEP, request)
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            NIGHTLY,
+            if (changed) ExistingPeriodicWorkPolicy.UPDATE else ExistingPeriodicWorkPolicy.KEEP,
+            request,
+        )
     }
+
+    /** Wi-Fi, or any network where the person allowed backups on mobile data. */
+    private fun network(context: Context) =
+        if (Controls.mobileData(context) == Controls.MOBILE_ALL) NetworkType.CONNECTED else NetworkType.UNMETERED
 
     /** Once, now, on Wi-Fi: *Back up now*, and the first run after setting up. */
     fun runNow(context: Context) {
         val request = OneTimeWorkRequestBuilder<Nightly>()
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(network(context)).build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(NOW, ExistingWorkPolicy.KEEP, request)
     }
@@ -238,7 +249,7 @@ object WhatsApp {
 
     private fun carryOn(context: Context) {
         val request = OneTimeWorkRequestBuilder<Nightly>()
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(network(context)).build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(MORE, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
@@ -252,6 +263,8 @@ object WhatsApp {
      */
     class Nightly(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
+            // Paused: the run waits for the next (decision 0086).
+            if (Controls.pausedUntil(applicationContext) != null) return Result.success()
             val run = runCatching { run(applicationContext) }
                 .onFailure { Log.w(TAG, "the backup did not run", it) }
                 .getOrNull()

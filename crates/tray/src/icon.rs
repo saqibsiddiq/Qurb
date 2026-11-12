@@ -44,7 +44,7 @@ impl From<qurb_cli::status::State> for Look {
         match state {
             Starting | Working => Look::Working,
             UpToDate => Look::Settled,
-            Alone => Look::Alone,
+            Alone | Paused => Look::Alone,
             Problem => Look::Problem,
         }
     }

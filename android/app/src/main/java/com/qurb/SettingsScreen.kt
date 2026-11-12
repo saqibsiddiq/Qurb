@@ -136,16 +136,27 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
             }
         }
 
+        val sheets = ControlSheets(app)
         kit.label(page, "App")
         card = kit.card(page)
         kit.setting(card, R.drawable.ic_clock, "Activity") { app.push(ActivityScreen(app)) }
-        kit.setting(card, R.drawable.ic_bell, "Notifications",
-            on = Notices.enabled(app) && Notices.permitted(app), onChange = { on ->
-                Notices.setEnabled(app, on)
-                if (on && !Notices.permitted(app)) app.askToNotify()
-                refresh()
-            })
+        // Each kind alone, in a sheet (decision 0086).
+        kit.setting(card, R.drawable.ic_bell, "Notifications", sheets.noticeWords()) { sheets.notifications { refresh() } }
         kit.setting(card, R.drawable.ic_palette, "Theme", Appearance.chosen(app).words) { chooseTheme() }
+        kit.setting(card, R.drawable.ic_download, "Received files", sheets.receivedWords()) { sheets.received { refresh() } }
+        if (ScreenLock.available(app)) {
+            kit.setting(card, R.drawable.ic_lock_keyhole, "App lock", on = Controls.appLock(app), onChange = { on ->
+                if (!on) {
+                    Controls.setAppLock(app, false)
+                    return@setting
+                }
+                // Confirmed once now, so that turning it on proves it works.
+                ScreenLock.confirm(app, "Turn on App lock", "Confirm it's you") { yes ->
+                    Controls.setAppLock(app, yes)
+                    if (!yes) refresh()
+                }
+            })
+        }
         // Update, where Version was (SE-5): up to date, or the new one, a tap
         // installing it (decision 0078). The version itself is in Advanced.
         val update = Updates.state(app)
@@ -165,9 +176,17 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
             }
         }
         if (update is Updates.State.Ready) row.value.setTextColor(kit.color(R.color.green))
+        kit.setting(card, R.drawable.ic_download, "Auto-update", on = Controls.autoUpdate(app), onChange = { on ->
+            Controls.setAutoUpdate(app, on)
+        })
 
         kit.label(page, "Connection")
         card = kit.card(page)
+        kit.setting(card, R.drawable.ic_pause, "Pause sync", Controls.pausedWords(Controls.pausedUntil(app))) {
+            sheets.pause { refresh() }
+        }
+        kit.setting(card, R.drawable.ic_cell_signal, "Mobile data", sheets.mobileWords()) { sheets.mobileData { refresh() } }
+        kit.setting(card, R.drawable.ic_hard_drive, "Backups", sheets.backupWords()) { sheets.backups { refresh() } }
         kit.setting(card, R.drawable.ic_history, "Background sync",
             SyncWorker.words(SyncWorker.every(app))) { background() }
         kit.setting(card, R.drawable.ic_link, "Advanced") { app.push(AdvancedScreen(app)) }

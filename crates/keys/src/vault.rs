@@ -89,6 +89,19 @@ impl Vault {
         self.path.exists()
     }
 
+    /// Forget the key here: the file, and the keystore's copy where it is
+    /// kept there. Gone for good unless another device or the 24 words have
+    /// it -- what resetting a device is for (decision 0086).
+    pub fn erase(&self) -> Result<()> {
+        if self.protection().ok() == Some(Protection::Keystore) {
+            protection::keystore_remove(&self.path)?;
+        }
+        match std::fs::remove_file(&self.path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(Error::Io { path: self.path.clone(), source: e }),
+            _ => Ok(()),
+        }
+    }
+
     /// Load the key, generating one on first use.
     pub fn open_or_create(&self) -> Result<Opened> {
         self.open_or_create_with(Protection::File, None)

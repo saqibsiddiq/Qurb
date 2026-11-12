@@ -25,16 +25,21 @@ async function drawSettings(main) {
       icon("chevron-right", "set-go")),
     // One column, as the phone's: the groups read top to bottom.
     group("Manage storage",
-      setting({ ic: "hard-drive", name: "This computer", value: st ? size(st.used) : null, onclick: () => go("storage") })),
+      setting({ ic: "hard-drive", name: "This computer", value: st ? size(st.used) : null, onclick: () => go("storage") }),
+      // Where the phone has it (decision 0086's tidy-up).
+      setting({ ic: "trash-2", name: "Recently deleted", onclick: () => go("deleted") })),
     group("Connection",
+      setting({ ic: "pause", name: "Pause sync", value: pausedWords(s.paused_until), onclick: () => pauseSheet(s.paused_until) }),
       setting({ ic: "arrow-up-down", name: "Speed limit", value: speedWords(s), onclick: () => go("speed") }),
+      setting({ ic: "laptop", name: "Stay awake to collect", end: toggle(s.stay_awake, (on) => invoke("set_stay_awake", { on }), "Stay awake to collect") }),
       setting({ ic: "link", name: "Advanced", onclick: () => go("advanced") })),
     group("App",
       setting({ ic: "clock", name: "Activity", onclick: () => go("activity") }),
-      setting({ ic: "bell", name: "Notifications", end: toggle(s.notifications, (on) => invoke("set_notifications", { on }), "Notifications") }),
+      setting({ ic: "bell", name: "Notifications", value: noticeWords(s), onclick: () => noticeSheet(s) }),
       setting({ ic: "palette", name: "Theme", value: theme, onclick: themeSheet }),
       setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") }),
-      setting({ ic: "download", name: "Update", end: h("span", { id: "version-says", class: "chip chip-ok" }, " "), onclick: updateClicked })),
+      setting({ ic: "download", name: "Update", end: h("span", { id: "version-says", class: "chip chip-ok" }, " "), onclick: updateClicked }),
+      setting({ ic: "download", name: "Auto-update", end: toggle(!s.ask_before_update, (on) => invoke("set_ask_before_update", { on: !on }), "Auto-update") })),
     h("button", { class: "link-danger", onclick: () => invoke("quit") }, icon("x"), "Quit QurbSpace"));
   showUpdate();
 }
@@ -57,6 +62,7 @@ function updateWords(u) {
     case "installed":
     case "ready": return "Restart";
     case "manual": return `${u.version} out`;
+    case "available": return u.version;
     case "failed": return "Couldn't check";
     default: return "Up to date";
   }
@@ -70,7 +76,7 @@ async function showUpdate() {
   // The chip says where it stands; ready, it is the button (N-2). Without
   // anybody pressing it the update is put in place once the window is
   // closed and nothing moves (updates.rs).
-  const ready = u?.state === "installed" || u?.state === "ready";
+  const ready = u?.state === "installed" || u?.state === "ready" || u?.state === "available";
   says.className = `chip ${ready ? "chip-do" : u?.state === "manual" || u?.state === "failed" ? "chip-wait" : "chip-ok"}`;
 }
 
@@ -127,6 +133,70 @@ function askDownloads() {
     note: "Err" in at ? at.Err : "Where files sent to this computer go",
     save: (downloads) => saveSettings({ downloads }),
   });
+}
+
+// ---------- Pause, notifications (decision 0086) ----------
+
+/** When a pause ends, in a few words; null while syncing. */
+function pausedWords(until) {
+  if (until == null) return null;
+  // Until resumed is the largest time there is; anything past a century
+  // from now is that.
+  if (Number(until) > 4e9) return "Paused";
+  const at = new Date(Number(until) * 1000);
+  const today = at.toDateString() === new Date().toDateString();
+  return `Until ${at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}${today ? "" : " tomorrow"}`;
+}
+
+/** Pause for an hour, until tomorrow morning, or until resumed; or resume. */
+function pauseSheet(until) {
+  const box = sheet({ ic: "pause", title: until == null ? "Pause sync" : "Sync is paused", sub: until == null ? "Nothing is sent or received until it ends" : pausedWords(until) });
+  const set = async (to) => {
+    box.close();
+    try { await invoke("set_paused", { until: to }); } catch (e) { toast(String(e), true); }
+    if (place === "settings") go("settings");
+    liveHome();
+  };
+  const morning = new Date();
+  morning.setDate(morning.getDate() + 1);
+  morning.setHours(8, 0, 0, 0);
+  if (until != null) {
+    box.append(actions(btn("Resume", () => set(0), "btn-main")));
+    return;
+  }
+  box.append(h("div", { class: "pills" },
+    h("button", { class: "pill", onclick: () => set(Math.floor(Date.now() / 1000) + 3600) }, "1 hour"),
+    h("button", { class: "pill", onclick: () => set(Math.floor(morning.getTime() / 1000)) }, "Until 8:00"),
+    // As a number the window can carry: the engine takes anything past now
+    // a century on as "until resumed".
+    h("button", { class: "pill", onclick: () => set(Number.MAX_SAFE_INTEGER) }, "Until I resume")));
+}
+
+const NOTICE_KINDS = [["received", "Files received", "download"], ["delivered", "Delivered", "check"], ["problems", "Problems", "circle-alert"]];
+
+function noticeWords(s) {
+  if (!s.notifications) return "Off";
+  const on = NOTICE_KINDS.filter(([k]) => !s.quiet.includes(k)).length;
+  return on === NOTICE_KINDS.length ? "All" : `${on} of ${NOTICE_KINDS.length}`;
+}
+
+/** All on or off, and each kind alone, as the phone's sheet has them. */
+function noticeSheet(s) {
+  const box = sheet({ ic: "bell", title: "Notifications", onclose: () => go("settings") });
+  const quiet = new Set(s.quiet);
+  const kinds = h("div", { class: "grp-box" }, ...NOTICE_KINDS.map(([k, name, ic]) => setting({ ic, name, end: toggle(!quiet.has(k), async (on) => {
+    on ? quiet.delete(k) : quiet.add(k);
+    await invoke("set_quiet", { quiet: [...quiet] });
+    s.quiet = [...quiet];
+  }, name) })));
+  kinds.hidden = !s.notifications;
+  box.append(
+    h("div", { class: "grp-box grp-gap" }, setting({ ic: "bell", name: "Notifications", end: toggle(s.notifications, async (on) => {
+      await invoke("set_notifications", { on });
+      s.notifications = on;
+      kinds.hidden = !on;
+    }, "Notifications") })),
+    kinds);
 }
 
 function themeSheet() {
@@ -292,7 +362,6 @@ async function drawKey(main) {
     group("Your 24 words",
       setting({ ic: "key-round", name: "Show them", end: btn("Show", (e) => showWords(e.currentTarget), "btn-quiet btn-sm") }),
       words),
-    group("Identity", setting({ ic: "info", name: sec.identity })),
     sec.events.length ? label("Paired and removed") : null,
     sec.events.length ? h("div", { class: "rows" }, ...sec.events.slice(0, 8).map((r) => row({
       ic: r.kind === "removed" ? "x" : "monitor-smartphone", name: r.device ?? r.detail ?? "", sub: [r.kind === "removed" ? "Removed" : "Paired", ago(r.at)],
@@ -449,7 +518,32 @@ async function drawAdvanced(main) {
         ic: "cloud", title: "Relay", value: s.relay ?? "", placeholder: "None",
         save: (v) => saveSettings({ relay: v }) }) })),
     group("App",
-      setting({ ic: "info", name: "Version", value: s.version.split(" · ")[0].replace("window ", "") })));
+      setting({ ic: "info", name: "Version", value: s.version.split(" · ")[0].replace("window ", "") }),
+      setting({ ic: "file-text", name: "Save a report", onclick: saveReport })),
+    h("button", { class: "link-danger", onclick: resetSheet }, icon("rotate-ccw"), "Reset this computer"));
+}
+
+/** A report for when something is wrong, saved to Downloads (decision 0086). */
+async function saveReport() {
+  const box = sheet({ ic: "file-text", title: "Save a report?", sub: "Version, settings, devices, recent activity and the log. File names are in it. It is saved to Downloads and sent nowhere." });
+  box.append(actions(btn("Cancel", () => box.close(), "btn-quiet"), btn("Save", async () => {
+    box.close();
+    try { await invoke("save_report"); toast("Saved to Downloads"); } catch (e) { toast(String(e), true); }
+  }, "btn-main")));
+}
+
+/** QurbSpace leaves this computer, after a second yes (decision 0086). */
+function resetSheet() {
+  const box = sheet({ ic: "rotate-ccw", title: "Reset this computer?", sub: "Your devices are told it left. Its key, devices and the backups kept here are deleted. Files in Shared stay." });
+  const sure = h("label", { class: "check" }, h("input", { type: "checkbox" }), "I have my 24 words, or another device has the key");
+  const go_ = btn("Reset", async () => {
+    go_.disabled = true;
+    go_.textContent = "Resetting…";
+    try { await invoke("reset_device"); } catch (e) { toast(String(e), true); go_.disabled = false; go_.textContent = "Reset"; }
+  }, "btn-danger-solid");
+  go_.disabled = true;
+  sure.querySelector("input").addEventListener("change", (e) => { go_.disabled = !e.target.checked; });
+  box.append(sure, actions(btn("Cancel", () => box.close(), "btn-quiet"), go_));
 }
 
 /** The phone's key sheet (K-4): safe or not, where this computer keeps it,

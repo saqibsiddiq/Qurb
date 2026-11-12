@@ -4,6 +4,36 @@ What has been tested end to end, how, under what conditions, and what it
 found. Newest first. Each run says what it could not reach and why: a
 function not listed under *Tested* has not been.
 
+## 2026-11-12: the person's controls (decision 0086)
+
+**Conditions.** The owner's laptop, release builds at the commit that adds
+them. The window driven as in pass 2 below, in a home of its own.
+
+- `SMOKE_MODE=full ./scripts/desktop-smoke.sh`: all twelve steps pass, and
+  the new ones. Step 1 sets and reads back each notification kind, staying
+  awake and updates asked first, and saves a report and reads it. Step 3b
+  pauses the laptop until resumed, writes a file on each side, and waits 20 s:
+  neither crossed. Resumed, both crossed. No command failed.
+- `cargo test` for `qurb-cli`, `qurb-peer`, `qurb-desktop`, `qurb-keys`,
+  `qurb-mobile`, `qurb-tray`: all pass. New: the pause module, a paused
+  device refusing another's requests and answering again once resumed
+  (`crates/peer/tests/pause.rs`), the computer's reset deleting the store, the
+  key and the placeholders and leaving Shared's files
+  (`qurb_cli::reset`), and the config's new settings round-tripping.
+- The window's new rows and sheets looked at in the fixtures (`?paused` for
+  Home and Settings while paused).
+- The phone app builds. **Its new settings have not been run:** the S23 was
+  not reachable over wireless debugging when the build was made.
+
+**Found and fixed.** The window drew nothing at its first run: the
+notification kinds' list was named `KINDS`, as a list in `core.js` already
+is, and the second declaration stopped `settings.js` loading. The full
+window test found it at its first step. Renamed.
+
+**Not tested:** the computer's reset end to end (the restart between its
+halves); every phone control (pause, mobile data, backups, notification
+kinds, auto-update, app lock, received files, report, reset).
+
 ## 2026-11-09: every function, from start to end
 
 Asked by the owner: "lets check if the entire product is working as

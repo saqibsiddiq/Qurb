@@ -76,7 +76,7 @@ private fun network(detail: String): String {
 
         lower.contains("signalling") || lower.contains("rendezvous") ->
             "Could not reach the rendezvous service.\n\n" +
-                "Check the address under Rendezvous service, and that `qurb signal` " +
+                "Check the address under Settings, Advanced, Meeting point, and that `qurb signal` " +
                 "is running on that machine. From a phone it must be the computer's " +
                 "address on your network, not localhost."
 

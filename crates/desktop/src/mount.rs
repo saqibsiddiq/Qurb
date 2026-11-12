@@ -30,7 +30,7 @@ pub enum Contents {
 }
 
 #[cfg(target_os = "linux")]
-pub use linux::{any, clear_stale, mount, unmount};
+pub use linux::{any, clear_stale, mount, unmount, unmount_all};
 
 #[cfg(not(target_os = "linux"))]
 pub fn mount(_: &Path, _: qurb_storage::ChunkKey, _: qurb_sync::DeviceId, _: PathBuf, _: Contents, _: PathBuf) -> anyhow::Result<()> {
@@ -39,6 +39,9 @@ pub fn mount(_: &Path, _: qurb_storage::ChunkKey, _: qurb_sync::DeviceId, _: Pat
 
 #[cfg(not(target_os = "linux"))]
 pub fn unmount(_: &qurb_sync::DeviceId) {}
+
+#[cfg(not(target_os = "linux"))]
+pub fn unmount_all() {}
 
 #[cfg(not(target_os = "linux"))]
 pub fn any() -> bool {
@@ -153,6 +156,14 @@ mod linux {
                 Ok(s) if s.success() => tracing::info!(at = %path.display(), "a folder left mounted cleared"),
                 other => tracing::warn!(at = %path.display(), result = ?other, "could not clear a folder left mounted"),
             }
+        }
+    }
+
+    /// Unmount every folder mounted now.
+    pub fn unmount_all() {
+        let people: Vec<DeviceId> = mounts().lock().map(|m| m.keys().copied().collect()).unwrap_or_default();
+        for person in people {
+            unmount(&person);
         }
     }
 

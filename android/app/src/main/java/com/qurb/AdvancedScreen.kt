@@ -58,7 +58,7 @@ class AdvancedScreen(app: MainActivity) : Screen(app) {
 
         kit.label(page, "Connection")
         card = kit.card(page)
-        kit.setting(card, R.drawable.ic_link, "Rendezvous", Engine.signalUrl(app).ifEmpty { "None" }) { editSignal() }
+        kit.setting(card, R.drawable.ic_link, "Meeting point", Engine.signalUrl(app).ifEmpty { "None" }) { editSignal() }
         kit.setting(card, R.drawable.ic_cloud, "Relay", when (val relay = Engine.relayAddress(app)) {
             null -> "Auto"
             "off" -> "Off"
@@ -76,7 +76,11 @@ class AdvancedScreen(app: MainActivity) : Screen(app) {
             text = "$version\n$engine"
             maxLines = 3
         }
-
+        // For when something is wrong, and for leaving (decision 0086).
+        val sheets = ControlSheets(app)
+        kit.setting(card, R.drawable.ic_file_text, "Save a report") { sheets.report() }
+        card = kit.card(page, top = 24)
+        kit.setting(card, R.drawable.ic_rotate_ccw, "Reset this phone") { sheets.reset() }
     }
 
     private fun field(start: String, hint: String): EditText = EditText(app).apply {
@@ -129,7 +133,7 @@ class AdvancedScreen(app: MainActivity) : Screen(app) {
     private fun editSignal() {
         val input = field(Engine.signalUrl(app), "wss://…")
         kit.sheet()
-            .title("Rendezvous")
+            .title("Meeting point")
             .text("How two devices find each other when they're not on the same network. Run " +
                 "`qurb signal` on a server of your own and enter the address it prints. It never sees your files.")
             .view(input, top = 14)
