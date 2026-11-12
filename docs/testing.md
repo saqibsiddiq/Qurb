@@ -143,10 +143,18 @@ the phone.
 9. **The phone's Activity** -- the day's sends, the arrival, the deletion,
    the earlier failure. Passed.
 
-Not seen yet: opening the phone's folder after it was made fast (*Found and
-fixed*, 11), which needs the owner's yes on the phone; and the fix of *Found
-and fixed*, 4, live, which needs WhatsApp to rewrite its backups after a
-night's run.
+**2026-11-12, after the fixes.** The S23 on the build of 2026-11-12 (with
+*Back up now*), installed with its data kept; the laptop on `7b4e553`'s
+build. The owner asked for *sakib* in the laptop's Files with QurbSpace open
+on the phone, and approved; the folder was mounted 31 s after the phone app
+was opened. Read through the mount from the laptop with Python's `os.walk`,
+warm page cache, everything kept locally: 74,745 entries in 2.90 s the first
+walk and 2.00 s the second; the folder's top level (*Android*, *DCIM*,
+*Download*, *Movies*, *Music*, *Pictures*, *Private Vault*, *WhatsApp*,
+*log*) in 0.1 ms. No figure was taken before the fix to compare against.
+
+Not seen yet: the fix of *Found and fixed*, 4, live, which needs WhatsApp to
+rewrite its backups after a night's run.
 
 ### Found and fixed
 
