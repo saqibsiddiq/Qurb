@@ -89,6 +89,24 @@ files.
     the phone. **Sent nowhere.** File names are in it, and the sheet says so.
 11. The tidy-ups as asked.
 
+## How they look
+
+Revised 2026-11-13, at the owner's word ("lets fix the ui of all the new
+settings"). The first build put each sheet's choices side by side as three
+buttons, as the Theme sheet has its three short words. At a phone's width
+"Until I resume", "No backups", "Everything", "QurbSpace" and "Downloads"
+broke mid-word (seen on the emulator). Now each choice sheet is as the app's
+other sheets are: its mark and title at the top, then one row per choice
+(`Kit.choice`). Each row has an icon in a tile, green for the chosen one,
+and a tick on that one. The words are longer where that makes them plain:
+*Until 8:00 tomorrow*, *Without backups*, *Nightly, while charging*,
+*QurbSpace only*, *Also in Downloads*, *Also in a folder…*. The chosen
+folder's own name is shown in Settings. In the Notifications sheet the
+switch for all of them stands apart from the kinds it governs. *Reset this
+phone* is red. Settings' rows no longer share an icon: *Received files*
+has the folder-in mark and *Auto-update* the circling arrows. The window's
+pause sheet is rows too, and its *Auto-update* has its own icon.
+
 ## Consequences
 
 - A paused computer still answers pairing; it is not a privacy mode.

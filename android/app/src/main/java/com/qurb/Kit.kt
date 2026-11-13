@@ -1732,6 +1732,57 @@ class Sheet(private val app: AppCompatActivity, private val kit: Kit) {
         return this
     }
 
+    /**
+     * One of a few settings to choose between (decision 0086): the option
+     * row's shape, its icon in a tile -- green for the one chosen, quiet for
+     * the rest -- and a tick, not an arrow, on the chosen one. Closes the
+     * sheet, then does it.
+     */
+    fun choice(@DrawableRes icon: Int, label: String, chosen: Boolean, onTap: () -> Unit): Sheet {
+        val row = LinearLayout(app).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = ContextCompat.getDrawable(app, R.drawable.row_bg)
+            minimumHeight = kit.dp(60)
+            setPadding(kit.dp(8), 0, kit.dp(12), 0)
+            contentDescription = if (chosen) "$label, chosen" else label
+            setOnClickListener {
+                dialog.dismiss()
+                onTap()
+            }
+        }
+        val tile = FrameLayout(app).apply {
+            background = ContextCompat.getDrawable(app, if (chosen) R.drawable.tile_soft else R.drawable.tile_quiet)
+        }
+        tile.addView(ImageView(app).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(kit.color(if (chosen) R.color.green else R.color.text_2))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(kit.dp(24), kit.dp(24), Gravity.CENTER))
+        row.addView(tile, LinearLayout.LayoutParams(kit.dp(40), kit.dp(40)).apply { marginEnd = kit.dp(14) })
+        row.addView(TextView(app).apply {
+            text = label
+            setTextAppearance(R.style.Text_Name)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (chosen) {
+            row.addView(ImageView(app).apply {
+                setImageResource(R.drawable.ic_check)
+                imageTintList = ColorStateList.valueOf(kit.color(R.color.green))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(kit.dp(22), kit.dp(22)))
+        }
+        val first = body.getTag(R.id.sheet_actions) == null
+        body.setTag(R.id.sheet_actions, true)
+        body.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply {
+                topMargin = kit.dp(if (first) 14 else 4)
+                marginStart = -kit.dp(8)
+                marginEnd = -kit.dp(8)
+            })
+        return this
+    }
+
     fun onDismiss(then: () -> Unit): Sheet {
         dialog.setOnDismissListener { then() }
         return this

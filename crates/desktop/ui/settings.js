@@ -39,7 +39,7 @@ async function drawSettings(main) {
       setting({ ic: "palette", name: "Theme", value: theme, onclick: themeSheet }),
       setting({ ic: "refresh-cw", name: "Start at login", end: toggle(atLogin, (on) => invoke("set_starts_at_login", { on }), "Start at login") }),
       setting({ ic: "download", name: "Update", end: h("span", { id: "version-says", class: "chip chip-ok" }, " "), onclick: updateClicked }),
-      setting({ ic: "download", name: "Auto-update", end: toggle(!s.ask_before_update, (on) => invoke("set_ask_before_update", { on: !on }), "Auto-update") })),
+      setting({ ic: "history", name: "Auto-update", end: toggle(!s.ask_before_update, (on) => invoke("set_ask_before_update", { on: !on }), "Auto-update") })),
     h("button", { class: "link-danger", onclick: () => invoke("quit") }, icon("x"), "Quit QurbSpace"));
   showUpdate();
 }
@@ -164,12 +164,13 @@ function pauseSheet(until) {
     box.append(actions(btn("Resume", () => set(0), "btn-main")));
     return;
   }
-  box.append(h("div", { class: "pills" },
-    h("button", { class: "pill", onclick: () => set(Math.floor(Date.now() / 1000) + 3600) }, "1 hour"),
-    h("button", { class: "pill", onclick: () => set(Math.floor(morning.getTime() / 1000)) }, "Until 8:00"),
+  // One row each, as the phone's sheet has them.
+  box.append(h("div", { class: "grp-box grp-gap" },
+    setting({ ic: "clock", name: "1 hour", onclick: () => set(Math.floor(Date.now() / 1000) + 3600) }),
+    setting({ ic: "history", name: "Until 8:00 tomorrow", onclick: () => set(Math.floor(morning.getTime() / 1000)) }),
     // As a number the window can carry: the engine takes anything past now
     // a century on as "until resumed".
-    h("button", { class: "pill", onclick: () => set(Number.MAX_SAFE_INTEGER) }, "Until I resume")));
+    setting({ ic: "pause", name: "Until I resume", onclick: () => set(Number.MAX_SAFE_INTEGER) })));
 }
 
 const NOTICE_KINDS = [["received", "Files received", "download"], ["delivered", "Delivered", "check"], ["problems", "Problems", "circle-alert"]];

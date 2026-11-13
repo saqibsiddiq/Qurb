@@ -19,19 +19,18 @@ import kotlinx.coroutines.withContext
 class ControlSheets(private val app: MainActivity) {
     private val kit get() = app.kit
 
-    /** A row of choices, the chosen one green, as the Theme sheet has them. */
-    private fun choose(title: String, choices: List<Pair<String, String>>, chosen: String, picked: (String) -> Unit) {
-        val sheet = kit.sheet().title(title)
-        val row = LinearLayout(app).apply { orientation = LinearLayout.HORIZONTAL }
-        for ((key, words) in choices) {
-            row.addView(kit.button(words, if (key == chosen) Kit.Style.PRIMARY else Kit.Style.SECONDARY) {
-                sheet.dismiss()
-                picked(key)
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                if (row.childCount > 0) marginStart = kit.dp(8)
-            })
-        }
-        sheet.view(row, top = 16).show()
+    /** One way to choose. */
+    private class Choice(val key: String, val icon: Int, val words: String)
+
+    /**
+     * A sheet of choices, one row each with its icon, the chosen one ticked:
+     * as the app's other sheets, its mark and title at the top. Three buttons
+     * side by side broke their words on a phone's width.
+     */
+    private fun choose(mark: Int, title: String, choices: List<Choice>, chosen: String, picked: (String) -> Unit) {
+        val sheet = kit.sheet().mark(mark, R.color.green_soft, R.color.green).title(title, centred = true)
+        for (c in choices) sheet.choice(c.icon, c.words, c.key == chosen) { picked(c.key) }
+        sheet.show()
     }
 
     /** Pause for an hour, until the morning, or until resumed; or resume. */
@@ -57,7 +56,11 @@ class ControlSheets(private val app: MainActivity) {
             set(java.util.Calendar.SECOND, 0)
         }.timeInMillis / 1000
         val now = System.currentTimeMillis() / 1000
-        choose("Pause sync", listOf("hour" to "1 hour", "morning" to "Until 8:00", "resume" to "Until I resume"), "") { key ->
+        choose(R.drawable.ic_pause, "Pause sync", listOf(
+            Choice("hour", R.drawable.ic_clock, "1 hour"),
+            Choice("morning", R.drawable.ic_history, "Until 8:00 tomorrow"),
+            Choice("resume", R.drawable.ic_pause, "Until I resume"),
+        ), "") { key ->
             Controls.pause(app, when (key) {
                 "hour" -> now + 3600
                 "morning" -> morning
@@ -70,23 +73,29 @@ class ControlSheets(private val app: MainActivity) {
     fun mobileWords(): String = when (Controls.mobileData(app)) {
         Controls.MOBILE_OFF -> "Off"
         Controls.MOBILE_ALL -> "Everything"
-        else -> "No backups"
+        else -> "Without backups"
     }
 
     /** Nothing, all but backups, or everything on mobile data. */
     fun mobileData(then: () -> Unit) =
-        choose("Mobile data", listOf(Controls.MOBILE_OFF to "Off", Controls.MOBILE_NO_BACKUPS to "No backups", Controls.MOBILE_ALL to "Everything"),
-            Controls.mobileData(app)) {
+        choose(R.drawable.ic_cell_signal, "Mobile data", listOf(
+            Choice(Controls.MOBILE_OFF, R.drawable.ic_cloud_off, "Off"),
+            Choice(Controls.MOBILE_NO_BACKUPS, R.drawable.ic_cell_signal, "Without backups"),
+            Choice(Controls.MOBILE_ALL, R.drawable.ic_hard_drive, "Everything"),
+        ), Controls.mobileData(app)) {
             Controls.setMobileData(app, it)
             Engine.noteNetwork(app)
             then()
         }
 
-    fun backupWords(): String = if (Controls.backupTiming(app) == Controls.BACKUP_OFTEN) "Every 6 h" else "Nightly"
+    fun backupWords(): String = if (Controls.backupTiming(app) == Controls.BACKUP_OFTEN) "Every 6 hours" else "Nightly"
 
     /** Each night while charging, or every six hours. */
     fun backups(then: () -> Unit) =
-        choose("Backups", listOf(Controls.BACKUP_NIGHTLY to "Nightly", Controls.BACKUP_OFTEN to "Every 6 h"), Controls.backupTiming(app)) {
+        choose(R.drawable.ic_hard_drive, "Backups", listOf(
+            Choice(Controls.BACKUP_NIGHTLY, R.drawable.ic_clock, "Nightly, while charging"),
+            Choice(Controls.BACKUP_OFTEN, R.drawable.ic_refresh_cw, "Every 6 hours"),
+        ), Controls.backupTiming(app)) {
             Controls.setBackupTiming(app, it)
             then()
         }
@@ -99,12 +108,14 @@ class ControlSheets(private val app: MainActivity) {
 
     /** All on or off, and each kind alone. */
     fun notifications(then: () -> Unit) {
-        val box = LinearLayout(app).apply {
+        fun group() = LinearLayout(app).apply {
             orientation = LinearLayout.VERTICAL
             background = ContextCompat.getDrawable(app, R.drawable.group_quiet)
             setPadding(0, kit.dp(4), 0, kit.dp(4))
         }
-        val kinds = LinearLayout(app).apply { orientation = LinearLayout.VERTICAL }
+        // The switch for all of them, apart from the kinds it governs.
+        val box = group()
+        val kinds = group()
         val names = mapOf(
             "received" to (R.drawable.ic_download to "Files received"),
             "delivered" to (R.drawable.ic_circle_check to "Delivered"),
@@ -122,20 +133,31 @@ class ControlSheets(private val app: MainActivity) {
             if (now && !Notices.permitted(app)) app.askToNotify()
             kinds.visibility = if (now) android.view.View.VISIBLE else android.view.View.GONE
         })
-        box.addView(kinds)
-        kit.sheet().title("Notifications").view(box, top = 16).show().onDismiss(then)
+        kit.sheet()
+            .mark(R.drawable.ic_bell, R.color.green_soft, R.color.green)
+            .title("Notifications", centred = true)
+            .view(box, top = 16)
+            .view(kinds, top = 10)
+            .show()
+            .onDismiss(then)
     }
 
     fun receivedWords(): String = when (Controls.received(app)) {
         Controls.RECEIVED_DOWNLOADS -> "Downloads"
-        Controls.RECEIVED_FOLDER -> "Folder"
+        // The folder's own name: "primary:Documents/Sent" is "Sent".
+        Controls.RECEIVED_FOLDER -> Controls.receivedFolder(app)
+            ?.let { runCatching { android.provider.DocumentsContract.getTreeDocumentId(android.net.Uri.parse(it)) }.getOrNull() }
+            ?.substringAfter(':')?.substringAfterLast('/')?.ifEmpty { "Phone" } ?: "Folder"
         else -> "QurbSpace"
     }
 
     /** Kept in QurbSpace only, or also saved to Downloads or a chosen folder. */
     fun received(then: () -> Unit) =
-        choose("Received files", listOf(Controls.RECEIVED_KEEP to "QurbSpace", Controls.RECEIVED_DOWNLOADS to "Downloads", Controls.RECEIVED_FOLDER to "Folder…"),
-            Controls.received(app)) { key ->
+        choose(R.drawable.ic_folder_input, "Received files", listOf(
+            Choice(Controls.RECEIVED_KEEP, R.drawable.ic_lock_keyhole, "QurbSpace only"),
+            Choice(Controls.RECEIVED_DOWNLOADS, R.drawable.ic_download, "Also in Downloads"),
+            Choice(Controls.RECEIVED_FOLDER, R.drawable.ic_folder_open, "Also in a folder…"),
+        ), Controls.received(app)) { key ->
             if (key == Controls.RECEIVED_FOLDER) app.pickReceivedFolder(then)
             else {
                 Controls.setReceived(app, key)

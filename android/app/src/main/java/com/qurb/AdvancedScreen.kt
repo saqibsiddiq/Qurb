@@ -80,7 +80,11 @@ class AdvancedScreen(app: MainActivity) : Screen(app) {
         val sheets = ControlSheets(app)
         kit.setting(card, R.drawable.ic_file_text, "Save a report") { sheets.report() }
         card = kit.card(page, top = 24)
-        kit.setting(card, R.drawable.ic_rotate_ccw, "Reset this phone") { sheets.reset() }
+        // In red, as the app's other actions that cannot be undone.
+        kit.setting(card, R.drawable.ic_rotate_ccw, "Reset this phone") { sheets.reset() }.apply {
+            name.setTextColor(kit.color(R.color.error))
+            icon.imageTintList = android.content.res.ColorStateList.valueOf(kit.color(R.color.error))
+        }
     }
 
     private fun field(start: String, hint: String): EditText = EditText(app).apply {

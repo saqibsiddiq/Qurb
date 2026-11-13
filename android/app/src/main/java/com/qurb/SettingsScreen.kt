@@ -143,7 +143,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
         // Each kind alone, in a sheet (decision 0086).
         kit.setting(card, R.drawable.ic_bell, "Notifications", sheets.noticeWords()) { sheets.notifications { refresh() } }
         kit.setting(card, R.drawable.ic_palette, "Theme", Appearance.chosen(app).words) { chooseTheme() }
-        kit.setting(card, R.drawable.ic_download, "Received files", sheets.receivedWords()) { sheets.received { refresh() } }
+        kit.setting(card, R.drawable.ic_folder_input, "Received files", sheets.receivedWords()) { sheets.received { refresh() } }
         if (ScreenLock.available(app)) {
             kit.setting(card, R.drawable.ic_lock_keyhole, "App lock", on = Controls.appLock(app), onChange = { on ->
                 if (!on) {
@@ -176,7 +176,7 @@ class SettingsScreen(app: MainActivity) : Screen(app) {
             }
         }
         if (update is Updates.State.Ready) row.value.setTextColor(kit.color(R.color.green))
-        kit.setting(card, R.drawable.ic_download, "Auto-update", on = Controls.autoUpdate(app), onChange = { on ->
+        kit.setting(card, R.drawable.ic_refresh_cw, "Auto-update", on = Controls.autoUpdate(app), onChange = { on ->
             Controls.setAutoUpdate(app, on)
         })
 
